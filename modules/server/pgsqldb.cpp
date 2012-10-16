@@ -27,25 +27,66 @@
 #include <stdio.h>
 #include <libpq-fe.h>
 
+// Min/max numbner of connections
+#define MIN_CONNECTIONS 1
+#define MAX_CONNECTIONS 10
+
 using namespace TelEngine;
 namespace { // anonymous
 
-static ObjList s_conns;
-Mutex s_conmutex(false,"PgSQL::conn");
+class PGConn;                            // A database connection
+class PgAccount;                         // Database account holding the connection(s)
+
+static ObjList s_accounts;
+Mutex s_conmutex(false,"PgSQL::acc");
 static unsigned int s_failedConns;
 
-class PgConn : public RefObject, public Mutex
+// A database connection
+class PgConn : public String
 {
+    friend class PgAccount;
 public:
-    PgConn(const NamedList* sect);
+    PgConn(PgAccount* account = 0);
     ~PgConn();
+    inline bool isBusy() const
+	{ return m_busy; }
+    inline void setBusy(bool busy)
+	{ m_busy = busy; }
+    // Test if the connection is still OK
+    inline bool testDb() const
+	{ return m_conn && (CONNECTION_OK == PQstatus(m_conn)); }
+    bool initDb();
+    void dropDb();
+    // Perform the query, fill the message with data
+    // Return number of rows, -1 for non-retryable errors and -2 to retry
+    int queryDb(const char* query, Message* dest);
+    virtual void destruct();
+private:
+    // Init DB connection
+    bool initDbInternal(int retry);
+    // Perform the query, fill the message with data
+    // Return number of rows, -1 for non-retryable errors and -2 to retry
+    int queryDbInternal(const char* query, Message* dest);
+
+    PgAccount* m_account;
+    bool m_busy;
+    PGconn* m_conn;
+};
+
+// Database account holding the connection(s)
+class PgAccount : public RefObject, public Mutex
+{
+    friend class PgConn;
+public:
+    PgAccount(const NamedList& sect);
+    // Try to initialize DB connections. Return true if at least one of them is active
+    bool initDb();
+    // Make a query
+    int queryDb(const char* query, Message* dest);
+    bool hasConn();
     virtual const String& toString() const
 	{ return m_name; }
     virtual void destroyed();
-
-    bool ok();
-    int queryDb(const char* query, Message* dest = 0);
-    bool initDb(int retry = 0);
 
     inline unsigned int total()
 	{ return m_totalQueries; }
@@ -55,28 +96,29 @@ public:
 	{ return m_errorQueries; }
     inline unsigned int queryTime()
         { return (unsigned int) m_queryTime; }
-    inline void setConn(bool conn = true)
-	{ m_hasConn = conn; }
-    inline bool hasConn()
-	{ return m_hasConn; }
+
+protected:
+    inline void incErrorQueriesSafe() {
+	    Lock mylock(m_statsMutex);
+	    m_errorQueries++;
+	}
 
 private:
     void dropDb();
-    bool testDb();
-    bool startDb();
-    int queryDbInternal(const char* query, Message* dest);
-    String m_name,m_connection;
+
+    String m_name;
+    String m_connection;
     String m_encoding;
     int m_retry;
     u_int64_t m_timeout;
-    PGconn *m_conn;
-
+    PgConn* m_connPool;
+    unsigned int m_connPoolSize;
     // stat counters
+    Mutex* m_statsMutex;
     unsigned int m_totalQueries;
     unsigned int m_failedQueries;
     unsigned int m_errorQueries;
     u_int64_t m_queryTime;
-    bool m_hasConn;
 };
 
 class PgModule : public Module
@@ -107,175 +149,175 @@ public:
 };
 
 
-PgConn::PgConn(const NamedList* sect)
-    : Mutex(true,"PgConn"),
-      m_name(*sect), m_conn(0),
-      m_totalQueries(0), m_failedQueries(0),
-      m_errorQueries(0), m_queryTime(0), m_hasConn(false)
+//
+// PgConn
+//
+PgConn::PgConn(PgAccount* account)
+    : m_account(account), m_busy(false),
+    m_conn(0)
 {
-    m_connection = sect->getValue("connection");
-    if (m_connection.null()) {
-	// build connection string from pieces
-	String tmp = sect->getValue("host","localhost");
-	m_connection << "host='" << tmp << "'";
-	tmp = sect->getValue("port");
-	if (tmp)
-	    m_connection << " port='" << tmp << "'";
-	tmp = sect->getValue("database","yate");
-	m_connection << " dbname='" << tmp << "'";
-	tmp = sect->getValue("user","postgres");
-	m_connection << " user='" << tmp << "'";
-	tmp = sect->getValue("password");
-	if (tmp)
-	    m_connection << " password='" << tmp << "'";
-    }
-    m_timeout = (u_int64_t)1000 * sect->getIntValue("timeout",10000);
-    if (m_timeout < 500000)
-	m_timeout = 500000;
-    m_retry = sect->getIntValue("retry",5);
-    m_encoding = sect->getValue("encoding");
 }
 
 PgConn::~PgConn()
 {
-}
-
-void PgConn::destroyed()
-{
-    s_conmutex.lock();
-    s_conns.remove(this,false);
-    s_conmutex.unlock();
     dropDb();
-    Debug(&module,DebugInfo,"Database account '%s' destroyed",m_name.c_str());
 }
 
-// initialize the database connection and handler data
-bool PgConn::initDb(int retry)
+// Initialize the database connection and handler data
+bool PgConn::initDb()
 {
-    Lock lock(this);
-    // allow specifying the raw connection string
-    Debug(&module,DebugAll,"Initiating connection \"%s\" retry %d",m_connection.c_str(),retry);
-    u_int64_t timeout = Time::now() + m_timeout;
-    m_conn = PQconnectStart(m_connection.c_str());
-    if (!m_conn) {
-	Debug(&module,DebugGoOn,"Could not start connection for '%s'",m_name.c_str());
-	return false;
-    }
-    PQsetnonblocking(m_conn,1);
-    Thread::msleep(1);
-    PostgresPollingStatusType polling = PGRES_POLLING_OK;
-    while (Time::now() < timeout) {
-	if (PGRES_POLLING_WRITING == polling || PGRES_POLLING_READING == polling) {
-	    // the Postgres library should have done all this internally...
-	    SOCKET s = PQsocket(m_conn);
-	    struct timeval tm;
-	    Time::toTimeval(&tm,Thread::idleUsec());
-	    fd_set fs;
-	    FD_ZERO(&fs);
-	    FD_SET(s,&fs);
-	    ::select(s+1,
-		((PGRES_POLLING_READING == polling) ? &fs : 0),
-		((PGRES_POLLING_WRITING == polling) ? &fs : 0),
-		0,&tm);
-	    if (!FD_ISSET(s,&fs))
-		continue;
-	}
-	polling = PQconnectPoll(m_conn);
-	switch (PQstatus(m_conn)) {
-	    case CONNECTION_BAD:
-		Debug(&module,DebugWarn,"Connection for '%s' failed: %s",m_name.c_str(),PQerrorMessage(m_conn));
-		dropDb();
-		return false;
-	    case CONNECTION_OK:
-		Debug(&module,DebugAll,"Connection for '%s' succeeded",m_name.c_str());
-		if (m_encoding && PQsetClientEncoding(m_conn,m_encoding))
-		    Debug(&module,DebugWarn,"Failed to set encoding '%s' on connection '%s'",
-			m_encoding.c_str(),m_name.c_str());
-		return true;
-	    default:
-		break;
-	}
-	Thread::idle();
-    }
-    Debug(&module,DebugWarn,"Connection timed out for '%s'",m_name.c_str());
-    dropDb();
-    return false;
-}
-
-// drop the connection
-void PgConn::dropDb()
-{
-    if (!m_conn)
-	return;
-    Lock mylock(this);
-    if (!m_conn)
-	return;
-    PGconn* tmp = m_conn;
-    m_conn = 0;
-    mylock.drop();
-    PQfinish(tmp);
-}
-
-// test it the connection is still OK
-bool PgConn::testDb()
-{
-    return m_conn && (CONNECTION_OK == PQstatus(m_conn));
-}
-
-// public, thread safe version
-bool PgConn::ok()
-{
-    Lock mylock(this,m_timeout);
-    return mylock.locked() && testDb();
-}
-
-// try to get up the connection, retry if we have to
-bool PgConn::startDb()
-{
-    setConn(true);
     if (testDb())
 	return true;
-    for (int i = 0; i < m_retry; i++) {
-	if (initDb(i))
+    int retry = m_account->m_retry;
+    for (int i = 0; i < retry; i++) {
+	if (initDbInternal(i + 1))
 	    return true;
 	Thread::yield();
 	if (testDb())
 	    return true;
     }
-    setConn(false);
     return false;
 }
 
-// perform the query, fill the message with data
-//  return number of rows, -1 for non-retryable errors and -2 to retry
+// Drop the connection
+void PgConn::dropDb()
+{
+    if (!m_conn)
+	return;
+    PGconn* tmp = m_conn;
+    m_conn = 0;
+    XDebug(&module,DebugAll,"Connection '%s' dropped [%p]",c_str(),m_account);
+    PQfinish(tmp);
+}
+
+// Perform the query, fill the message with data
+// Return number of rows, -1 for non-retryable errors and -2 to retry
+int PgConn::queryDb(const char* query, Message* dest)
+{
+    int retry = m_account->m_retry;
+    for (int i = 0; i < retry; i++) {
+	XDebug(&module,DebugAll,"Connection '%s' performing query (retry=%d): %s [%p]",
+	    c_str(),i + 1,query,m_account);
+	int res = queryDbInternal(query,dest);
+	if (res > -2)
+	    return res;
+    }
+    return -2;
+}
+
+void PgConn::destruct()
+{
+    dropDb();
+    String::destruct();
+}
+
+// Init DB connection
+bool PgConn::initDbInternal(int retry)
+{
+    dropDb();
+    // Allow specifying the raw connection string
+    Debug(&module,DebugAll,"'%s' intializing connection \"%s\" retry %d [%p]",
+	c_str(),m_account->m_connection.c_str(),retry,m_account);
+    u_int64_t timeout = Time::now() + m_account->m_timeout;
+    m_conn = PQconnectStart(m_account->m_connection.c_str());
+    if (!m_conn) {
+	Debug(&module,DebugGoOn,"Could not start connection for '%s' [%p]",c_str(),m_account);
+	return false;
+    }
+    PQsetnonblocking(m_conn,1);
+    Thread::msleep(1);
+    PostgresPollingStatusType polling = PGRES_POLLING_OK;
+    struct timeval tm;
+    Time::toTimeval(&tm,Thread::idleUsec());
+    while (Time::now() < timeout) {
+	if (PGRES_POLLING_WRITING == polling || PGRES_POLLING_READING == polling) {
+	    // The Postgres library should have done all this internally...
+	    Socket sock(PQsocket(m_conn));
+	    bool ok = sock.canSelect();
+	    bool fatal = false;
+	    if (ok) {
+		ok = false;
+		bool* readOk = (PGRES_POLLING_READING == polling) ? &ok : 0;
+		bool* writeOk = (PGRES_POLLING_WRITING == polling) ? &ok : 0;
+		if (!sock.select(readOk,writeOk,0,&tm)) {
+		    if (sock.canRetry()) {
+			Thread::idle();
+			ok = false;
+		    }
+		    else {
+		        fatal = true;
+			Debug(&module,DebugWarn,
+			    "Connection for '%s' failed: socket select failed [%p]",
+			    c_str(),m_account);
+		    }
+		}
+		
+	    }
+	    else {
+		fatal = true;
+		Debug(&module,DebugWarn,
+		    "Connection for '%s' failed: socket not selectable [%p]",
+		    c_str(),m_account);
+	    }
+	    sock.detach();
+	    if (fatal) {
+		dropDb();
+		return false;
+	    }
+	    if (!ok)
+		continue;
+	}
+	polling = PQconnectPoll(m_conn);
+	switch (PQstatus(m_conn)) {
+	    case CONNECTION_BAD:
+		Debug(&module,DebugWarn,"Connection for '%s' failed: %s [%p]",
+		    c_str(),PQerrorMessage(m_conn),m_account);
+		dropDb();
+		return false;
+	    case CONNECTION_OK:
+		Debug(&module,DebugAll,"Connection for '%s' succeeded [%p]",c_str(),m_account);
+		if (m_account->m_encoding && PQsetClientEncoding(m_conn,m_account->m_encoding))
+		    Debug(&module,DebugWarn,
+			"Failed to set encoding '%s' on connection '%s' [%p]",
+			m_account->m_encoding.c_str(),c_str(),m_account);
+		return true;
+	    default:
+		break;
+	}
+	Thread::idle();
+	if (Thread::check(false))
+	    return false;
+    }
+    Debug(&module,DebugWarn,"Connection for '%s' timed out [%p]",c_str(),m_account);
+    dropDb();
+    return false;
+}
+
+// Perform the query, fill the message with data
+// Return number of rows, -1 for non-retryable errors and -2 to retry
 int PgConn::queryDbInternal(const char* query, Message* dest)
 {
-    Lock mylock(this,m_timeout);
-    if (!mylock.locked()) {
-	Debug(&module,DebugWarn,"Failed to lock '%s' for " FMT64U " usec",
-	    m_name.c_str(),m_timeout);
+    if (!initDb())
+	// no retry - initDb already tried and failed...
 	return -1;
-    }
-    if (!startDb())
-	// no retry - startDb already tried and failed...
-	return -1;
-
-    u_int64_t timeout = Time::now() + m_timeout;
+    u_int64_t timeout = Time::now() + m_account->m_timeout;
     if (!PQsendQuery(m_conn,query)) {
 	// a connection failure cannot be detected at this point so any
 	//  error must be caused by the query itself - bad syntax or so
-	Debug(&module,DebugWarn,"Query \"%s\" for '%s' failed: %s",
-	    query,m_name.c_str(),PQerrorMessage(m_conn));
-	dest->setParam("error",PQerrorMessage(m_conn));
+	Debug(&module,DebugWarn,"Query '%s' for '%s' failed: %s [%p]",
+	    query,c_str(),PQerrorMessage(m_conn),m_account);
+	if (dest)
+	    dest->setParam("error",PQerrorMessage(m_conn));
 	// non-retryable, query should be fixed
 	return -1;
     }
 
     if (PQflush(m_conn)) {
-	Debug(&module,DebugWarn,"Flush for '%s' failed: %s",
-	    m_name.c_str(),PQerrorMessage(m_conn));
+	Debug(&module,DebugWarn,"Flush for '%s' failed: %s [%p]",
+	    c_str(),PQerrorMessage(m_conn),m_account);
 	dropDb();
-	dest->setParam("error",PQerrorMessage(m_conn));
+	if (dest)
+	    dest->setParam("error",PQerrorMessage(m_conn));
 	return -2;
     }
 
@@ -290,7 +332,8 @@ int PgConn::queryDbInternal(const char* query, Message* dest)
 	PGresult* res = PQgetResult(m_conn);
 	if (!res) {
 	    // last result already received and processed - exit successfully
-	    Debug(&module,DebugAll,"Query for '%s' returned %d rows, %d affected",m_name.c_str(),totalRows,affectedRows);
+	    Debug(&module,DebugAll,"Query for '%s' returned %d rows, %d affected [%p]",
+		c_str(),totalRows,affectedRows,m_account);
 	    if (dest) {
 		dest->setParam("rows",String(totalRows));
 		dest->setParam("affected",String(affectedRows));
@@ -315,14 +358,18 @@ int PgConn::queryDbInternal(const char* query, Message* dest)
 				if (column)
 				    column->set(new String(PQfname(res,k)));
 				else {
-				    Debug(&module,DebugGoOn,"No array column for %d",k);
+				    Debug(&module,DebugGoOn,
+					"Query '%s' for '%s': No array column for %d [%p]",
+					query,c_str(),k,m_account);
 				    continue;
 				}
 				for (int j = 0; j < rows; j++) {
 				    column = column->next();
 				    if (!column) {
 					// Stop now: we won't get the next row
-					Debug(&module,DebugGoOn,"No array row %d in column %d",j + 1,k);
+					Debug(&module,DebugGoOn,
+					    "Query '%s' for '%s': No array row %d in column %d [%p]",
+					    query,c_str(),j + 1,k,m_account);
 					break;
 				    }
 				    // skip over NULL values
@@ -352,17 +399,91 @@ int PgConn::queryDbInternal(const char* query, Message* dest)
 		// data transfers - ignore them
 		break;
 	    default:
-		Debug(&module,DebugWarn,"Query error: %s",PQresultErrorMessage(res));
-		dest->setParam("error",PQresultErrorMessage(res));
-		m_errorQueries++;
+		Debug(&module,DebugWarn,"Query '%s' for '%s' error: %s [%p]",
+		    query,c_str(),PQresultErrorMessage(res),m_account);
+		if (dest)
+		    dest->setParam("error",PQresultErrorMessage(res));
+		m_account->incErrorQueriesSafe();
 		module.changed();
 	}
 	PQclear(res);
     }
-    Debug(&module,DebugWarn,"Query timed out for '%s'",m_name.c_str());
-    dest->setParam("error","query timeout");
+    Debug(&module,DebugWarn,"Query timed out for '%s' [%p]",c_str(),m_account);
+    if (dest)
+	dest->setParam("error","query timeout");
     dropDb();
     return -2;
+}
+
+
+//
+// PgAccount
+//
+PgAccount::PgAccount(const NamedList& sect)
+    : Mutex(true,"PgAccount"),
+      m_name(sect),
+      m_connPool(0), m_connPoolSize(0),
+      m_statsMutex(&s_conmutex),
+      m_totalQueries(0), m_failedQueries(0),
+      m_errorQueries(0), m_queryTime(0)
+{
+    m_connection = sect.getValue("connection");
+    if (m_connection.null()) {
+	// build connection string from pieces
+	String tmp = sect.getValue("host","localhost");
+	m_connection << "host='" << tmp << "'";
+	tmp = sect.getValue("port");
+	if (tmp)
+	    m_connection << " port='" << tmp << "'";
+	tmp = sect.getValue("database","yate");
+	m_connection << " dbname='" << tmp << "'";
+	tmp = sect.getValue("user","postgres");
+	m_connection << " user='" << tmp << "'";
+	tmp = sect.getValue("password");
+	if (tmp)
+	    m_connection << " password='" << tmp << "'";
+    }
+    m_timeout = (u_int64_t)1000 * sect.getIntValue("timeout",10000);
+    if (m_timeout < 500000)
+	m_timeout = 500000;
+    m_retry = sect.getIntValue("retry",5);
+    m_encoding = sect.getValue("encoding");
+    m_connPoolSize = sect.getIntValue("poolsize",MIN_CONNECTIONS,MIN_CONNECTIONS,MAX_CONNECTIONS);
+    m_connPool = new PgConn[m_connPoolSize];
+    for (unsigned int i = 0; i < m_connPoolSize; i++) {
+	m_connPool[i].m_account = this;
+	m_connPool[i].assign(m_name + "." + String(i + 1));
+    }
+    Debug(&module,DebugInfo,"Database account '%s' created poolsize=%u [%p]",
+	m_name.c_str(),m_connPoolSize,this);
+}
+
+// Init the connections the connection
+bool PgAccount::initDb()
+{
+    bool ok = false;
+    for (unsigned int i = 0; i < m_connPoolSize; i++)
+	ok = m_connPool[i].initDb() || ok;
+    return ok;
+}
+
+void PgAccount::destroyed()
+{
+    s_conmutex.lock();
+    s_accounts.remove(this,false);
+    s_conmutex.unlock();
+    dropDb();
+    if (m_connPool)
+	delete[] m_connPool;
+    m_connPoolSize = 0;
+    Debug(&module,DebugInfo,"Database account '%s' destroyed [%p]",m_name.c_str(),this);
+}
+
+// drop the connection
+void PgAccount::dropDb()
+{
+    for (unsigned int i = 0; i < m_connPoolSize; i++)
+	m_connPool[i].dropDb();
 }
 
 static bool failure(Message* m)
@@ -372,39 +493,92 @@ static bool failure(Message* m)
     return false;
 }
 
-int PgConn::queryDb(const char* query, Message* dest)
+int PgAccount::queryDb(const char* query, Message* dest)
 {
     if (TelEngine::null(query))
 	return -1;
     Debug(&module,DebugAll,"Performing query \"%s\" for '%s'",
 	query,m_name.c_str());
-    m_totalQueries++;
-    module.changed();
+    // Use a while() to break to the end to update statistics
+    int res = -1;
     u_int64_t start = Time::now();
-    for (int i = 0; i < m_retry; i++) {
-	int res = queryDbInternal(query,dest);
-	if (res > -2) {
-	    if (res < 0) {
-		failure(dest);
-		m_failedQueries++;
-		module.changed();
-	    }
-	    // ok or non-retryable error, get out of here
-	    u_int64_t finish = Time::now() - start;
-	    m_queryTime += finish;
-	    module.changed();
-	    return res;
+    while (true) {
+	Lock mylock(this,m_timeout);
+	if (!mylock.locked()) {
+	    Debug(&module,DebugWarn,"Failed to lock '%s' for " FMT64U " usec",
+		m_name.c_str(),m_timeout);
+	    break;
 	}
+	// Find a non busy connection
+	PgConn* conn = 0;
+	PgConn* notConnected = 0;
+	for (unsigned int i = 0; i < m_connPoolSize; i++) {
+	    if (m_connPool[i].isBusy())
+		continue;
+	    if (m_connPool[i].testDb()) {
+		conn = &(m_connPool[i]);
+		break;
+	    }
+	    if (!notConnected)
+		notConnected = &(m_connPool[i]);
+        }
+	if (!conn)
+	    conn = notConnected;
+	if (!conn) {
+	    // Wait for a connection to become non-busy
+	    // Round up the number of intervals to wait
+	    unsigned int n = (m_timeout + 999999) / Thread::idleUsec();
+	    for (unsigned int i = 0; i < n; i++) {
+		for (unsigned int j = 0; j < m_connPoolSize; j++) {
+		    if (!m_connPool[j].isBusy() && m_connPool[j].testDb()) {
+			conn = &(m_connPool[j]);
+			break;
+		    }
+		}
+		if (conn || Thread::check(false))
+		    break;
+		Thread::idle();
+	    }
+	}
+	if (conn)
+	    conn->setBusy(true);
+	else
+	    Debug(&module,DebugWarn,"Account '%s' failed to pick a connection [%p]",m_name.c_str(),this);
+	mylock.drop();
+	if (conn) {
+	    res = conn->queryDb(query,dest);
+	    conn->setBusy(false);
+	}
+	break;
     }
-    failure(dest);
-    return -2;
+    Lock stats(m_statsMutex);
+    m_totalQueries++;
+    if (res > -2) {
+	if (res < 0)
+	    m_failedQueries++;
+	u_int64_t finish = Time::now() - start;
+	m_queryTime += finish;
+    }
+    stats.drop();
+    module.changed();
+    if (res < 0)
+	failure(dest);
+    return res;
 }
 
-static PgConn* findDb(const String& account)
+bool PgAccount::hasConn()
+{
+    for (unsigned int i = 0; i < m_connPoolSize; i++)
+	if (m_connPool[i].testDb())
+	    return true;
+    return false;
+}
+
+static PgAccount* findDb(const String& account)
 {
     if (account.null())
 	return 0;
-    return static_cast<PgConn*>(s_conns[account]);
+    return static_cast<PgAccount*>(s_accounts[account]);
 }
 
 bool PgHandler::received(Message& msg)
@@ -413,13 +587,14 @@ bool PgHandler::received(Message& msg)
     if (TelEngine::null(str))
 	return false;
     s_conmutex.lock();
-    RefPointer<PgConn> db = findDb(*str);
+    RefPointer<PgAccount> db = findDb(*str);
     s_conmutex.unlock();
     if (!db)
 	return false;
     str = msg.getParam("query");
     if (!TelEngine::null(str))
 	db->queryDb(*str,&msg);
+    db = 0;
     msg.setParam("dbtype","pgsqldb");
     return true;
 }
@@ -433,7 +608,7 @@ PgModule::PgModule()
 PgModule::~PgModule()
 {
     Output("Unloading module PostgreSQL");
-    s_conns.clear();
+    s_accounts.clear();
 }
 
 void PgModule::statusModule(String& str)
@@ -445,7 +620,7 @@ void PgModule::statusModule(String& str)
 void PgModule::statusParams(String& str)
 {
     s_conmutex.lock();
-    str.append("conns=",",") << s_conns.count();
+    str.append("conns=",",") << s_accounts.count();
     str.append("failed=",",") << s_failedConns;
     s_conmutex.unlock();
 }
@@ -453,12 +628,12 @@ void PgModule::statusParams(String& str)
 void PgModule::statusDetail(String& str)
 {
     s_conmutex.lock();
-    for (unsigned int i = 0; i < s_conns.count(); i++) {
-	PgConn* conn = static_cast<PgConn*>(s_conns[i]);
-	str.append(conn->toString().c_str(),",") << "=" << conn->total() << "|" << conn->failed()
-			<< "|" << conn->errorred() << "|";
-	if (conn->total() - conn->failed() > 0)
-	    str << (conn->queryTime() / (conn->total() - conn->failed()) / 1000); //miliseconds
+    for (ObjList* o = s_accounts.skipNull(); o; o = o->skipNext()) {
+	PgAccount* acc = static_cast<PgAccount*>(o->get());
+	str.append(acc->toString().c_str(),",") << "=" << acc->total() << "|" << acc->failed()
+	    << "|" << acc->errorred() << "|";
+	if (acc->total() - acc->failed() > 0)
+	    str << (acc->queryTime() / (acc->total() - acc->failed()) / 1000); //miliseconds
         else
 	    str << "0";
     }
@@ -479,32 +654,33 @@ void PgModule::initialize()
 	NamedList* sec = cfg.getSection(i);
 	if (!sec || (*sec == "general"))
 	    continue;
-	PgConn* conn = new PgConn(sec);
-	if (sec->getBoolValue("autostart",true))
-	    conn->initDb();
+	PgAccount* acc = new PgAccount(*sec);
+	if (sec->getBoolValue("autostart",true) && !acc->initDb())
+	    TelEngine::destruct(acc);
 	s_conmutex.lock();
-	if (conn->ok())
-	    s_conns.insert(conn);
+	if (acc)
+	    s_accounts.insert(acc);
 	else
 	    s_failedConns++;
 	s_conmutex.unlock();
     }
-
 }
 
 void PgModule::genUpdate(Message& msg)
 {
     unsigned int index = 0;
-    for (ObjList* o = s_conns.skipNull(); o; o = o->next()) {
-	PgConn* conn = static_cast<PgConn*>(o->get());
-	msg.setParam(String("database.") << index,conn->toString());
-	msg.setParam(String("total.") << index,String(conn->total()));
-	msg.setParam(String("failed.") << index,String(conn->failed()));
-	msg.setParam(String("errorred.") << index,String(conn->errorred()));
-	msg.setParam(String("hasconn.") << index,String::boolText(conn->hasConn()));
-	msg.setParam(String("querytime.") << index,String(conn->queryTime()));
+    s_conmutex.lock();
+    for (ObjList* o = s_accounts.skipNull(); o; o = o->skipNext()) {
+	PgAccount* acc = static_cast<PgAccount*>(o->get());
+	msg.setParam(String("database.") << index,acc->toString());
+	msg.setParam(String("total.") << index,String(acc->total()));
+	msg.setParam(String("failed.") << index,String(acc->failed()));
+	msg.setParam(String("errorred.") << index,String(acc->errorred()));
+	msg.setParam(String("hasconn.") << index,String::boolText(acc->hasConn()));
+	msg.setParam(String("querytime.") << index,String(acc->queryTime()));
 	index++;
     }
+    s_conmutex.unlock();
     msg.setParam("count",String(index));
 }
 }; // anonymous namespace

@@ -1,4 +1,4 @@
-yate (4.2.1~svn5295) UNRELEASED; urgency=low
+yate (4.2.1~svn5296) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -127,8 +127,10 @@ yate (4.2.1~svn5295) UNRELEASED; urgency=low
     Exclusive flag from configuration or routing.  + Honor the requested
     ISDN circuit code if possible before trying other circuits.  +
     Constified a method.
+  * Updated to SVN revision 5296: + Multiple database connections can
+    now be configured for a postgres account.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 16 Oct 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 17 Oct 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

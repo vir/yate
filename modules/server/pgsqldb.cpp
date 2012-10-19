@@ -27,10 +27,6 @@
 #include <stdio.h>
 #include <libpq-fe.h>
 
-// Min/max numbner of connections
-#define MIN_CONNECTIONS 1
-#define MAX_CONNECTIONS 10
-
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -448,7 +444,7 @@ PgAccount::PgAccount(const NamedList& sect)
 	m_timeout = 500000;
     m_retry = sect.getIntValue("retry",5);
     m_encoding = sect.getValue("encoding");
-    m_connPoolSize = sect.getIntValue("poolsize",MIN_CONNECTIONS,MIN_CONNECTIONS,MAX_CONNECTIONS);
+    m_connPoolSize = sect.getIntValue("poolsize",1,1);
     m_connPool = new PgConn[m_connPoolSize];
     for (unsigned int i = 0; i < m_connPoolSize; i++) {
 	m_connPool[i].m_account = this;
@@ -503,7 +499,7 @@ int PgAccount::queryDb(const char* query, Message* dest)
     int res = -1;
     u_int64_t start = Time::now();
     while (true) {
-	Lock mylock(this,m_timeout);
+	Lock mylock(this,(long)m_timeout);
 	if (!mylock.locked()) {
 	    Debug(&module,DebugWarn,"Failed to lock '%s' for " FMT64U " usec",
 		m_name.c_str(),m_timeout);
@@ -527,7 +523,7 @@ int PgAccount::queryDb(const char* query, Message* dest)
 	if (!conn) {
 	    // Wait for a connection to become non-busy
 	    // Round up the number of intervals to wait
-	    unsigned int n = (m_timeout + 999999) / Thread::idleUsec();
+	    unsigned int n = (unsigned int)((m_timeout + 999999) / Thread::idleUsec());
 	    for (unsigned int i = 0; i < n; i++) {
 		for (unsigned int j = 0; j < m_connPoolSize; j++) {
 		    if (!m_connPool[j].isBusy() && m_connPool[j].testDb()) {

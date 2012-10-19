@@ -43,6 +43,5 @@
 ;encoding=
 
 ; poolsize: int: Number of connections to establish for this account
-; If not set or empty, it will create only one connection
-; Minimum number of connections is 1, maximum is 10
+; Minimum number of connections is 1
 ;poolsize=1

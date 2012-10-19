@@ -44,8 +44,5 @@
 ;password=
 
 ; poolsize: int: Number of connections to establish for this account
-; If not set or empty, it will create only one connection
-; Minimum number of connections is 1, maximum is 10
-; The value is clamped to interval margins, e.g. poolsize=0 creates 1 connection,
-;  poolsize=12 creates 10 connections
+; Minimum number of connections is 1
 ;poolsize=1

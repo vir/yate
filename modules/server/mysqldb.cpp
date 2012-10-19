@@ -40,9 +40,6 @@
 #define mysql_library_end mysql_server_end
 #endif
 
-#define MIN_CONNECTIONS		1
-#define MAX_CONNECTIONS 	10
-
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -435,7 +432,8 @@ int MyConn::queryDbInternal(DbQuery* query)
 MyAcct::MyAcct(const NamedList* sect)
     : String(*sect),
       Mutex(true,"MySQL::acct"),
-      m_queueSem(MAX_CONNECTIONS,"MySQL::queue"),
+      m_poolSize(sect->getIntValue("poolsize",1,1)),
+      m_queueSem(m_poolSize,"MySQL::queue"),
       m_queueMutex(false,"MySQL::queue"),
       m_totalQueries(0), m_failedQueries(0), m_errorQueries(0),
       m_queryTime(0), m_failedConns(0),
@@ -456,11 +454,6 @@ MyAcct::MyAcct(const NamedList* sect)
     m_compress = sect->getBoolValue("compress");
     m_encoding = sect->getValue("encoding");
 
-    m_poolSize = sect->getIntValue("poolsize",MIN_CONNECTIONS);
-    if (m_poolSize < MIN_CONNECTIONS)
-	m_poolSize = MIN_CONNECTIONS;
-    else if (m_poolSize > MAX_CONNECTIONS)
-	m_poolSize = MAX_CONNECTIONS;
     Debug(&module, DebugNote, "For account '%s' connection pool size is %d",
 	c_str(),m_poolSize);
     

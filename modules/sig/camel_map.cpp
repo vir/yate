@@ -1909,7 +1909,7 @@ static bool decodeCallNumber(const Parameter* param, MapCamelType* type, AsnTag&
 	qualifier = data[index];
 	index++;
     }
-    bool odd = (data[index] & 0x80) == 1;
+    bool odd = (data[index] & 0x80) != 0;
     unsigned char nai = data[index] & 0x7f;
     index++;
     unsigned char plan = (data[index] >> 4) & 7;

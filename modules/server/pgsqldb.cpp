@@ -27,10 +27,6 @@
 #include <stdio.h>
 #include <libpq-fe.h>
 
-// Min/max numbner of connections
-#define MIN_CONNECTIONS 1
-#define MAX_CONNECTIONS 10
-
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -448,7 +444,7 @@ PgAccount::PgAccount(const NamedList& sect)
 	m_timeout = 500000;
     m_retry = sect.getIntValue("retry",5);
     m_encoding = sect.getValue("encoding");
-    m_connPoolSize = sect.getIntValue("poolsize",MIN_CONNECTIONS,MIN_CONNECTIONS,MAX_CONNECTIONS);
+    m_connPoolSize = sect.getIntValue("poolsize",1,1);
     m_connPool = new PgConn[m_connPoolSize];
     for (unsigned int i = 0; i < m_connPoolSize; i++) {
 	m_connPool[i].m_account = this;

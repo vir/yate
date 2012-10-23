@@ -1909,7 +1909,7 @@ static bool decodeCallNumber(const Parameter* param, MapCamelType* type, AsnTag&
 	qualifier = data[index];
 	index++;
     }
-    bool odd = (data[index] & 0x80) == 1;
+    bool odd = (data[index] & 0x80) != 0;
     unsigned char nai = data[index] & 0x7f;
     index++;
     unsigned char plan = (data[index] >> 4) & 7;
@@ -2270,7 +2270,7 @@ static const Capability s_mapCapab[] = {
     {"TraceSubscriber",          {"activateTraceMode", "deactivateTraceMode", ""}},
     {"Services",                 {"registerSS", "eraseSS", "activateSS", "deactivateSS", "interrogateSS", "registerPassword", "getPassword", 
 				    "processUnstructuredSS-Request", "unstructuredSS-Request", "unstructuredSS-Notify", ""}},
-    {"Miscellaneous",            {"sendIMSI", "readyForSM", "setReportingState", ""}},
+    {"Miscellaneous",            {"sendIMSI", "readyForSM", "setReportingState", "sendParameters", ""}},
     {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
     {"Charging",                 {""}},
     {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", "mo-forwardSM", "mt-forwardSM",

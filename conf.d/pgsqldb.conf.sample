@@ -42,3 +42,7 @@
 
 ; password: string: Password to authenticate the user to the database server
 ;password=
+
+; poolsize: int: Number of connections to establish for this account
+; Minimum number of connections is 1
+;poolsize=1

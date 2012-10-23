@@ -22,7 +22,7 @@ P=/var/run/yate
 
 case "$1" in
     configure)
-        if ! getent passwd pyicqt >/dev/null; then
+        if ! getent passwd yate >/dev/null; then
             echo "Creating user 'yate' and group 'yate'..."
             addgroup --system yate
             adduser --system --ingroup yate --home $H --gecos "YATE daemon" --shell /bin/sh --disabled-password yate

@@ -1,4 +1,4 @@
-yate (4.2.1~svn5299) UNRELEASED; urgency=low
+yate (4.2.1~svn5302) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -132,8 +132,11 @@ yate (4.2.1~svn5299) UNRELEASED; urgency=low
   * Updated to SVN revision 5299: + Removed max connections limit.  +
     Fixed VC++ conversion warning.  + Fixed bug: properly interpret
     odd/even indicator in the decoder for phone numbers.
+  * Updated to SVN revision 5302: + User creation fixed  + Fixed minor
+    one-time memory leak.  + Validate and attempt to fix the Q.931 codes
+    returned by OpenH323.  + Removed a leftover development change.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 20 Oct 2012 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 24 Oct 2012 02:19:22 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

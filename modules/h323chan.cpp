@@ -1117,7 +1117,6 @@ bool YateH323EndPoint::initInternal(bool reg, const NamedList* params)
     SetSilenceDetectionMode(static_cast<H323AudioCodec::SilenceDetectionMode>
 	(params ? params->getIntValue("silencedetect",dict_silence,H323AudioCodec::NoSilenceDetection)
 	: H323AudioCodec::NoSilenceDetection));
-signallingChannelCallTimeout = 5000;
     // Init authenticators
     m_authMethods.clear();
     m_authUseAll = false;

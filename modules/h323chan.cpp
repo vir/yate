@@ -35,6 +35,7 @@
 #include <h323caps.h>
 #include <ptclib/delaychan.h>
 #include <gkserver.h>
+#include <q931.h>
 
 /* For some reason the Windows version of OpenH323 #undefs the version.
  * You need to put a openh323version.h file somewhere in your include path,
@@ -186,6 +187,8 @@ static const TokenDict dict_errors[] = {
     { "congestion", H323Connection::EndedByRemoteCongestion },
     { "offline", H323Connection::EndedByHostOffline },
     { "timeout", H323Connection::EndedByDurationLimit },
+    { "noanswer", H323Connection::EndedByNoAnswer },
+    { "noanswer", H323Connection::EndedByCallerAbort },
     { 0 , 0 },
 };
 
@@ -532,6 +535,7 @@ public:
     bool adjustCapabilities();
     void answerCall(AnswerCallResponse response, bool autoEarly = false);
     static BOOL decodeCapability(const H323Capability& capability, const char** dataFormat, int* payload = 0, String* capabName = 0);
+    unsigned int fixQ931Cause() const;
     inline bool hasRemoteAddress() const
 	{ return m_passtrough && (m_remotePort > 0); }
     inline bool nativeRtp() const
@@ -1113,6 +1117,7 @@ bool YateH323EndPoint::initInternal(bool reg, const NamedList* params)
     SetSilenceDetectionMode(static_cast<H323AudioCodec::SilenceDetectionMode>
 	(params ? params->getIntValue("silencedetect",dict_silence,H323AudioCodec::NoSilenceDetection)
 	: H323AudioCodec::NoSilenceDetection));
+signallingChannelCallTimeout = 5000;
     // Init authenticators
     m_authMethods.clear();
     m_authUseAll = false;
@@ -2032,8 +2037,9 @@ void YateH323Connection::OnEstablished()
 void YateH323Connection::OnCleared()
 {
     int reason = GetCallEndReason();
+    unsigned int q931 = fixQ931Cause();
     const char* rtext = CallEndReasonText(reason);
-    const char* error = lookup(GetQ931Cause(),q931_errors);
+    const char* error = lookup(q931,q931_errors);
     if (!error)
 	error = lookup(reason,dict_errors);
     Debug(this,DebugInfo,"YateH323Connection::OnCleared() error: '%s' reason: %s (%d) [%p]",
@@ -2044,7 +2050,8 @@ void YateH323Connection::OnCleared()
 	m_chan = 0;
 	lock.drop();
 	Channel::paramMutex().lock();
-	tmp->parameters().setParam("cause_q931",String(GetQ931Cause()));
+	if (q931)
+	    tmp->parameters().setParam("cause_q931",String(q931));
 	Channel::paramMutex().unlock();
 	tmp->disconnect(error ? error : rtext,tmp->parameters());
 	tmp->finish();
@@ -2182,7 +2189,6 @@ H323Channel* YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 	}
 
 	if (dir == H323Channel::IsReceiver) {
-		
 	    if (format && (m_remoteFormats.find(format) < 0)) {
 		TelEngine::Lock lck(s_cfgMutex);
 		if (s_cfg.getBoolValue("codecs",format,true))
@@ -2413,7 +2419,23 @@ int YateH323Connection::rtpDtmfPayload(bool local)
     return payload;
 }
 
-YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel( 
+// Return a proper Q.931 / Q.850 cause code, zero if unknown / unsupported
+unsigned int YateH323Connection::fixQ931Cause() const
+{
+    unsigned int q931 = GetQ931Cause();
+    if (1 <= q931 && q931 <= 127)
+	return q931;
+    // let's guess...
+    switch (GetCallEndReason()) {
+	case EndedByNoAnswer:
+	    return Q931::NoAnswer;
+	default:
+	    return 0;
+    }
+}
+
+
+YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel(
     YateH323Connection& connection,
     const H323Capability& capability,
     Directions direction, 
@@ -2869,7 +2891,7 @@ void YateH323Chan::hangup(bool dropChan, bool clearCall)
 	if (reason == H323Connection::NumCallEndReasons)
 	    reason = m_reason;
 	else
-	    err = lookup(tmp->GetQ931Cause(),q931_errors);
+	    err = lookup(tmp->fixQ931Cause(),q931_errors);
 	if (!err)
 	    err = lookup(reason,dict_errors);
 	const char* txt = CallEndReasonText(reason);

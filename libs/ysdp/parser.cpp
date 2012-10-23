@@ -90,6 +90,7 @@ const TokenDict SDPParser::s_rtpmap[] = {
     { "H261/90000",   31 },
     { "H263/90000",   34 },
     { "H263-1998/90000", 107 },
+    { "h263-1998/90000", 107 }, // lower-cased version especially for sipdroid
     { "MPV/90000",    32 },
     { "MP2T/90000",   33 },
     { "MP4V-ES/90000",98 },

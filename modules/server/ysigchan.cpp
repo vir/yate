@@ -4764,6 +4764,7 @@ IsupDecodeHandler::IsupDecodeHandler(bool decode)
 void IsupDecodeHandler::destruct()
 {
     SignallingEngine::destruct(m_isup);
+    MessageHandler::destruct();
 }
 
 bool IsupDecodeHandler::received(Message& msg)

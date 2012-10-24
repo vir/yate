@@ -1,4 +1,4 @@
-yate (4.2.1~svn5302) UNRELEASED; urgency=low
+yate (4.2.1~svn5309) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -135,8 +135,16 @@ yate (4.2.1~svn5302) UNRELEASED; urgency=low
   * Updated to SVN revision 5302: + User creation fixed  + Fixed minor
     one-time memory leak.  + Validate and attempt to fix the Q.931 codes
     returned by OpenH323.  + Removed a leftover development change.
+  * Updated to SVN revision 5309: + Added settings for some H.323
+    timeouts, some may be too tight by OpenH323 default.  + Fixed
+    minimum timeouts in sample config comments.  + Fixed one-time memory
+    leak.  + Fixed a one time memory leak.  + Worked around a possible
+    endless loop at MGCP library shutdown.  + Support appending to raw
+    and .lbc wave files.  + Support for multiplexing both recorded
+    parties into a single file or stream.  + Added SCCP and GTT name to
+    the sccp.route message.  + Fixed naming of GTT components.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 24 Oct 2012 02:19:22 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 25 Oct 2012 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

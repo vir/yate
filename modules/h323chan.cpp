@@ -461,6 +461,8 @@ public:
 protected:
     virtual void OnRegistrationReject();
     bool initInternal(bool reg, const NamedList* params);
+    void initTimeout(PTimeInterval& interval, const String& name,
+	const NamedList& params, long minVal, long maxVal = 600000);
     void setCodecs();
     bool internalGkClient(YateGkRegThread* thread, int mode, const PString& name);
     void internalGkNotify(bool registered, const char* reason = 0, const char* error = 0);
@@ -1105,6 +1107,19 @@ void YateH323EndPoint::OnRegistrationReject()
     internalGkNotify(false,"Registration failed","noauth");
 }
 
+void YateH323EndPoint::initTimeout(PTimeInterval& interval, const String& name,
+    const NamedList& params, long minVal, long maxVal)
+{
+    long int msec = params.getIntValue(name);
+    if (msec <= 0)
+	return;
+    if (msec < minVal)
+	msec = minVal;
+    else if (msec > maxVal)
+	msec = maxVal;
+    interval = msec;
+}
+
 bool YateH323EndPoint::initInternal(bool reg, const NamedList* params)
 {
     Lock lck(m_mutex);
@@ -1117,6 +1132,11 @@ bool YateH323EndPoint::initInternal(bool reg, const NamedList* params)
     SetSilenceDetectionMode(static_cast<H323AudioCodec::SilenceDetectionMode>
 	(params ? params->getIntValue("silencedetect",dict_silence,H323AudioCodec::NoSilenceDetection)
 	: H323AudioCodec::NoSilenceDetection));
+    if (params) {
+	initTimeout(controlChannelStartTimeout,YSTRING("timeout_control"),*params,10000);
+	initTimeout(signallingChannelCallTimeout,YSTRING("timeout_answer"),*params,5000);
+	initTimeout(capabilityExchangeTimeout,YSTRING("timeout_capabilities"),*params,1000,120000);
+    }
     // Init authenticators
     m_authMethods.clear();
     m_authUseAll = false;

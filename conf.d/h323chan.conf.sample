@@ -172,11 +172,11 @@ gw = false
 ;bind_maxport=65535
 
 ; timeout_control: integer: Control channel start timeout in msec
-; Valid range 5000 to 600000 (5s to 10m), library default 2m
+; Valid range 10000 to 600000 (10s to 10m), library default 2m
 ;timeout_control=120000
 
 ; timeout_answer: integer: Answer timeout (maximum time until CONNECT) in msec
-; Valid range 10000 to 600000 (10s to 10m), library default 1m
+; Valid range 5000 to 600000 (5s to 10m), library default 1m
 ;timeout_answer=60000
 
 ; timeout_capabilities: integer: Capability exchange timeout in msec

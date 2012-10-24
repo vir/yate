@@ -977,6 +977,12 @@ public:
 
     /**
      * Repeatedly calls @ref receive() until the calling thread terminates
+     * @param addr The sender's address if received any data
+     */
+    void runReceive(SocketAddr& addr);
+
+    /**
+     * Repeatedly calls @ref receive() until the calling thread terminates
      */
     void runReceive();
 

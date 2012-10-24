@@ -1720,7 +1720,7 @@ bool SCCPUser::managementNotify(SCCP::Type type, NamedList& params)
  */
 
 GTT::GTT(const NamedList& config)
-    : SignallingComponent(config,&config,"ss7-gtt"),
+    : SignallingComponent(config.safe("GTT"),&config,"ss7-gtt"),
       m_sccp(0)
 {
 }

@@ -4977,7 +4977,8 @@ bool SCCPUserDummy::managementNotify(SCCP::Type type, NamedList &params)
  */
 
 GTTranslator::GTTranslator(const NamedList& params)
-    : GTT(params)
+    : SignallingComponent(params.safe("GTT"),&params,"ss7-gtt"),
+      GTT(params)
 {
     DDebug(this,DebugAll,"Crated Global Title Translator [%p]",this);
 }
@@ -4994,6 +4995,9 @@ NamedList* GTTranslator::routeGT(const NamedList& gt, const String& prefix)
     // if exists return the cached translation of th GT
     // if not exists send it for translation
     Message* msg = new Message("sccp.route");
+    const char* name = sccp() ? sccp()->toString().c_str() : (const char*)0;
+    msg->addParam("component",name,false);
+    msg->addParam("translator",toString(),false);
     msg->copyParam(gt,YSTRING("HopCounter"));
     msg->copyParam(gt,YSTRING("MessageReturn"));
     msg->copySubParams(gt,prefix + ".");

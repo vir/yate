@@ -5045,10 +5045,10 @@ public:
 
     /**
      * Attach a SCCP to us
-     *  @param sccp Pointer to the SCCP to use
+     * @param sccp Pointer to the SCCP to use
      */
     virtual void attach(SCCP* sccp);
-    
+
     /**
      * Request to update Translations tables.
      * Called when a remote pointcode or ssn has become reachable / unreachable
@@ -5056,6 +5056,13 @@ public:
      */
     virtual void updateTables(const NamedList& params)
 	{ }
+
+    /**
+     * Retrieve the SCCP attached to this translator
+     * @return Pointer to the attached SCCP
+     */
+    inline SCCP* sccp() const
+	{ return m_sccp; }
 
 protected:
     virtual void destroyed();

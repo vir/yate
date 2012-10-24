@@ -33,7 +33,7 @@ class WaveSource : public ThreadedSource
 {
 public:
     static WaveSource* create(const String& file, CallEndpoint* chan,
-	bool autoclose = true, bool autorepeat = false, const NamedString* param = 0);
+	bool autoclose, bool autorepeat, const NamedString* param);
     ~WaveSource();
     virtual void run();
     virtual void cleanup();
@@ -69,7 +69,8 @@ public:
 	Au,
 	Ilbc,
     };
-    WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen, const char* format = 0, const NamedString* param = 0);
+    WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen,
+	const char* format, bool append, const NamedString* param);
     ~WaveConsumer();
     virtual bool setFormat(const DataFormat& format);
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
@@ -83,6 +84,7 @@ private:
     Stream* m_stream;
     bool m_swap;
     bool m_locked;
+    bool m_created;
     Header m_header;
     unsigned m_total;
     unsigned m_maxlen;
@@ -93,7 +95,7 @@ private:
 class WaveChan : public Channel
 {
 public:
-    WaveChan(const String& file, bool record, unsigned maxlen, bool autorepeat, const char* format = 0, const NamedString* param = 0);
+    WaveChan(const String& file, bool record, unsigned maxlen, const NamedList& msg, const NamedString* param = 0);
     ~WaveChan();
     bool attachSource(const char* source);
     bool attachConsumer(const char* consumer);
@@ -166,6 +168,19 @@ typedef struct {
 } AuHeader;
 
 #define ILBC_HEADER_LEN 9
+
+static const char* ilbcFormat(Stream& stream)
+{
+    char header[ILBC_HEADER_LEN+1];
+    if (stream.readData(&header,ILBC_HEADER_LEN) == ILBC_HEADER_LEN) {
+	header[ILBC_HEADER_LEN] = '\0';
+	if (::strcmp(header,"#!iLBC20\n") == 0)
+	    return "ilbc20";
+	else if (::strcmp(header,"#!iLBC30\n") == 0)
+	    return "ilbc30";
+    }
+    return 0;
+}
 
 
 WaveSource* WaveSource::create(const String& file, CallEndpoint* chan, bool autoclose, bool autorepeat, const NamedString* param)
@@ -322,19 +337,13 @@ void WaveSource::detectWavFormat()
 
 void WaveSource::detectIlbcFormat()
 {
-    char header[ILBC_HEADER_LEN+1];
-    if (m_stream->readData(&header,ILBC_HEADER_LEN) == ILBC_HEADER_LEN) {
-	header[ILBC_HEADER_LEN] = '\0';
-	if (::strcmp(header,"#!iLBC20\n") == 0) {
-	    m_format = "ilbc20";
-	    return;
-	}
-	else if (::strcmp(header,"#!iLBC30\n") == 0) {
-	    m_format = "ilbc30";
-	    return;
-	}
+    const char* fmt = ilbcFormat(*m_stream);
+    if (fmt) {
+	m_format = fmt;
+	return;
     }
     Debug(DebugMild,"Invalid iLBC file, assuming raw signed linear");
+    m_stream->seek(0);
 }
 
 bool WaveSource::computeDataRate()
@@ -498,12 +507,13 @@ void WaveSource::notify(WaveSource* source, const char* reason)
 }
 
 
-WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen, const char* format, const NamedString* param)
-    : m_chan(chan), m_stream(0), m_swap(false), m_locked(false), m_header(None),
+WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen,
+    const char* format, bool append, const NamedString* param)
+    : m_chan(chan), m_stream(0), m_swap(false), m_locked(false), m_created(true), m_header(None),
       m_total(0), m_maxlen(maxlen), m_time(0)
 {
-    Debug(&__plugin,DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u,\"%s\",%p) [%p]",
-	file.c_str(),chan,maxlen,format,param,this);
+    Debug(&__plugin,DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u,\"%s\",%s,%p) [%p]",
+	file.c_str(),chan,maxlen,format,String::boolText(append),param,this);
     s_mutex.lock();
     s_writing++;
     s_mutex.unlock();
@@ -539,20 +549,47 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 	m_format = "ilbc30";
     else if (file.endsWith(".g729"))
 	m_format = "g729";
-    else if (file.endsWith(".lbc"))
-	m_header=Ilbc;
+    else if (file.endsWith(".lbc")) {
+	m_header = Ilbc;
+	if (!m_format.startsWith("ilbc"))
+	    m_locked = false;
+    }
     else if (file.endsWith(".au"))
-	m_header=Au;
+	m_header = Au;
     else if (!file.endsWith(".slin"))
 	Debug(DebugMild,"Unknown format for recorded file '%s', assuming signed linear",file.c_str());
     if (m_stream)
 	return;
     m_stream = new File;
-    if (!static_cast<File*>(m_stream)->openPath(file,true,false,true,false,true,s_pubReadable)) {
+    if (!static_cast<File*>(m_stream)->openPath(file,true,append,true,append,true,s_pubReadable)) {
 	Debug(DebugWarn,"Creating '%s': error %d: %s",
 	    file.c_str(), m_stream->error(), ::strerror(m_stream->error()));
 	delete m_stream;
 	m_stream = 0;
+	return;
+    }
+    if (append && m_stream->seek(Stream::SeekEnd) > 0) {
+	// remember to skip writing the header when appending to non-empty file
+	m_created = false;
+	switch (m_header) {
+	    // TODO: Au
+	    case Ilbc:
+		if (m_stream->seek(0) == 0) {
+		    const char* fmt = ilbcFormat(*m_stream);
+		    m_stream->seek(Stream::SeekEnd);
+		    if (fmt) {
+			if (m_format != fmt)
+			    Debug(DebugInfo,"Detected format %s for file '%s'",fmt,file.c_str());
+			m_locked = true;
+			m_format = fmt;
+		    }
+		    else
+			Debug(DebugMild,"Could not detect iLBC format of '%s'",file.c_str());
+		}
+		break;
+	    default:
+		break;
+	}
     }
 }
 
@@ -626,6 +663,10 @@ bool WaveConsumer::setFormat(const DataFormat& format)
 	case Ilbc:
 	    if ((format == "ilbc20") || (format == "ilbc30"))
 		ok = true;
+	    else if (!m_format.startsWith("ilbc")) {
+		m_format = "ilbc20";
+		Debug(DebugNote,"WaveConsumer switching to default '%s'",m_format.c_str());
+	    }
 	    break;
 	case Au:
 	    if ((format.find("mulaw") >= 0) || (format.find("alaw") >= 0) || (format.find("slin") >= 0))
@@ -649,17 +690,19 @@ unsigned long WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	if (!m_time)
 	    m_time = Time::now();
 	if (m_stream) {
-	    switch (m_header) {
-		case Ilbc:
-		    writeIlbcHeader();
-		    break;
-		case Au:
-		    writeAuHeader();
-		    break;
-		default:
-		    break;
+	    if (m_created) {
+		m_created = false;
+		switch (m_header) {
+		    case Ilbc:
+			writeIlbcHeader();
+			break;
+		    case Au:
+			writeAuHeader();
+			break;
+		    default:
+			break;
+		}
 	    }
-	    m_header = None;
 	    if (m_swap) {
 		unsigned int n = data.length();
 		DataBlock swapped(0,n);
@@ -761,16 +804,17 @@ void Disconnector::run()
 }
 
 
-WaveChan::WaveChan(const String& file, bool record, unsigned maxlen, bool autorepeat, const char* format, const NamedString* param)
+WaveChan::WaveChan(const String& file, bool record, unsigned maxlen, const NamedList& msg, const NamedString* param)
     : Channel(__plugin)
 {
     Debug(this,DebugAll,"WaveChan::WaveChan(%s) [%p]",(record ? "record" : "play"),this);
     if (record) {
-	setConsumer(new WaveConsumer(file,this,maxlen,format,param));
+	setConsumer(new WaveConsumer(file,this,maxlen,msg.getValue("format"),
+	    msg.getBoolValue("append"),param));
 	getConsumer()->deref();
     }
     else {
-	setSource(WaveSource::create(file,this,true,autorepeat,param));
+	setSource(WaveSource::create(file,this,true,msg.getBoolValue("autorepeat"),param));
 	getSource()->deref();
     }
 }
@@ -894,7 +938,7 @@ bool AttachHandler::received(Message &msg)
     // if single attach was requested we can return true if everything is ok
     bool ret = msg.getBoolValue("single");
 
-    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     if (!ch) {
 	if (!src.null())
 	    Debug(DebugWarn,"Wave source '%s' attach request with no data channel!",src.c_str());
@@ -917,7 +961,8 @@ bool AttachHandler::received(Message &msg)
     }
 
     if (!cons.null()) {
-	WaveConsumer* c = new WaveConsumer(cons,ch,maxlen,msg.getValue("format"),msg.getParam("consumer"));
+	WaveConsumer* c = new WaveConsumer(cons,ch,maxlen,msg.getValue("format"),
+	    msg.getBoolValue("append"),msg.getParam("consumer"));
 	c->setNotify(msg.getValue("notify_consumer",notify));
 	ch->setConsumer(c);
 	c->deref();
@@ -1023,8 +1068,8 @@ bool RecordHandler::received(Message &msg)
     const char* notify = msg.getValue("notify");
     unsigned int maxlen = msg.getIntValue("maxlen");
 
-    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
-    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
+    RefPointer<DataEndpoint> de = YOBJECT(DataEndpoint,msg.userData());
     if (ch && !de)
 	de = ch->setEndpoint();
 
@@ -1036,15 +1081,17 @@ bool RecordHandler::received(Message &msg)
 	return false;
     }
 
+    bool append = msg.getBoolValue("append");
+    const char* format = msg.getValue("format");
     if (!c1.null()) {
-	WaveConsumer* c = new WaveConsumer(c1,ch,maxlen,msg.getValue("format"),msg.getParam("call"));
+	WaveConsumer* c = new WaveConsumer(c1,ch,maxlen,format,append,msg.getParam("call"));
 	c->setNotify(msg.getValue("notify_call",notify));
 	de->setCallRecord(c);
 	c->deref();
     }
 
     if (!c2.null()) {
-	WaveConsumer* c = new WaveConsumer(c2,ch,maxlen,msg.getValue("format"),msg.getParam("peer"));
+	WaveConsumer* c = new WaveConsumer(c2,ch,maxlen,format,append,msg.getParam("peer"));
 	c->setNotify(msg.getValue("notify_peer",notify));
 	de->setPeerRecord(c);
 	c->deref();
@@ -1075,7 +1122,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     if (ch) {
 	Debug(this,DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
 	    dest.matchString(2).c_str());
-	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"),msg.getValue("format"),msg.getParam("callto"));
+	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg,msg.getParam("callto"));
 	c->initChan();
 	if (meth)
 	    c->attachSource(msg.getValue("source"));
@@ -1122,7 +1169,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     }
     m = "call.execute";
     m.setParam("callto",callto);
-    WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"),msg.getValue("format"));
+    WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg);
     c->initChan();
     if (meth)
 	c->attachSource(msg.getValue("source"));

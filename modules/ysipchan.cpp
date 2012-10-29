@@ -1053,6 +1053,9 @@ public:
     bool socketSsl(Socket** sock, bool server, const String& context = String::empty());
 protected:
     virtual void genUpdate(Message& msg);
+    // Setup a listener from config
+    void setupListener(const String& name, const NamedList& params, bool isGeneral,
+	const NamedList& defs = NamedList::empty());
 private:
     // Add status methods
     void msgStatusAccounts(Message& msg);
@@ -8083,15 +8086,7 @@ void SIPDriver::initialize()
     NamedList* def = general;
     if (!def)
 	def = &dummy;
-    NamedList* generalListener = s_cfg.getSection("listener general");
-    if (generalListener) {
-	bool enabled = generalListener->getBoolValue("enable",true);
-	m_endpoint->setupUdpTransport("general",enabled,*generalListener,*def);
-    }
-    else if (general)
-	m_endpoint->setupUdpTransport("general",true,*general,*def);
-    else
-	m_endpoint->setupUdpTransport("general",true,*def);
+    setupListener("general",*def,true);
     // Setup listeners
     unsigned int n = s_cfg.sections();
     for (unsigned int i = 0; i < n; i++) {
@@ -8100,32 +8095,8 @@ void SIPDriver::initialize()
 	if (!name.startSkip("listener ",false))
 	    continue;
 	name.trimBlanks();
-	if (!name || name == YSTRING("general"))
-	    continue;
-	const String& type = (*nl)[YSTRING("type")];
-	int proto = ProtocolHolder::lookupProtoAny(type);
-	if (proto == ProtocolHolder::Unknown) {
-	    proto = ProtocolHolder::Udp;
-	    Debug(this,DebugNote,"Invalid listener type '%s' in section '%s': defaults to %s",
-		type.c_str(),nl->c_str(),ProtocolHolder::lookupProtoName(proto,false));
-	}
-	bool enabled = nl->getBoolValue(YSTRING("enable"),true);
-	switch (proto) {
-	    case ProtocolHolder::Udp:
-		m_endpoint->cancelListener(name,"Type changed");
-		m_endpoint->setupUdpTransport(name,enabled,*nl,*def);
-		break;
-	    case ProtocolHolder::Tcp:
-	    case ProtocolHolder::Tls:
-		m_endpoint->setupUdpTransport(name,false,NamedList::empty(),
-		    NamedList::empty(),"Type changed");
-		m_endpoint->setupListener(proto,name,enabled,*nl);
-		break;
-	    default:
-		if (enabled)
-		    Debug(this,DebugNote,"Unknown listener type '%s' in section '%s'",
-			type.c_str(),nl->c_str());
-	}
+	if (name && name != YSTRING("general"))
+	    setupListener(name,*nl,false,*def);
     }
     // Remove deleted listeners
     m_endpoint->initializing(false);
@@ -8141,6 +8112,37 @@ void SIPDriver::genUpdate(Message& msg)
 	msg.setParam("failed_auths",String(m_endpoint->failedAuths()));
 	msg.setParam("transaction_timeouts",String(m_endpoint->timedOutTrs()));
 	msg.setParam("bye_timeouts",String(m_endpoint->timedOutByes()));
+    }
+}
+
+// Setup a listener from config
+void SIPDriver::setupListener(const String& name, const NamedList& params,
+    bool isGeneral, const NamedList& defs)
+{
+    const String& type = params[YSTRING("type")];
+    int proto = ProtocolHolder::lookupProtoAny(type);
+    if (proto == ProtocolHolder::Unknown) {
+	proto = ProtocolHolder::Udp;
+	if (!isGeneral || type)
+	    Debug(this,DebugConf,"Invalid listener type '%s' in section '%s': defaults to %s",
+		type.c_str(),params.c_str(),ProtocolHolder::lookupProtoName(proto,false));
+    }
+    bool enabled = isGeneral || params.getBoolValue(YSTRING("enable"),true);
+    switch (proto) {
+	case ProtocolHolder::Udp:
+	    m_endpoint->cancelListener(name,"Type changed");
+	    m_endpoint->setupUdpTransport(name,enabled,params,defs);
+	    break;
+	case ProtocolHolder::Tcp:
+	case ProtocolHolder::Tls:
+	    m_endpoint->setupUdpTransport(name,false,NamedList::empty(),
+		NamedList::empty(),"Type changed");
+	    m_endpoint->setupListener(proto,name,enabled,params);
+	    break;
+	default:
+	    if (enabled)
+		Debug(this,DebugNote,"Unknown listener type '%s' in section '%s'",
+		    type.c_str(),params.c_str());
     }
 }
 

@@ -1938,9 +1938,10 @@ public:
      *  and results are pushed back on stack
      * @param oper Function to evaluate
      * @param context Pointer to arbitrary object passed from evaluation methods
+     * @param thisObj Object that should act as "this" for the function call
      * @return True if evaluation succeeded
      */
-    virtual bool runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    virtual bool runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context, JsObject* thisObj = 0);
 
     /**
      * Retrieve the name of the N-th formal argument

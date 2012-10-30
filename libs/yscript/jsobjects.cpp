@@ -286,7 +286,7 @@ bool JsObject::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* 
 	return runNative(stack,oper,context);
     JsFunction* jf = YOBJECT(JsFunction,param);
     if (jf)
-	return jf->runDefined(stack,oper,context);
+	return jf->runDefined(stack,oper,context,this);
     return false;
 }
 

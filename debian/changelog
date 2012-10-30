@@ -1,4 +1,4 @@
-yate (4.2.1~svn5310) UNRELEASED; urgency=low
+yate (4.2.1~svn5312) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -147,8 +147,11 @@ yate (4.2.1~svn5310) UNRELEASED; urgency=low
     Moved listener general config in 'general' section. Allow it to be
     an udp/tcp/tls listener. Removed 'listener general' section from
     config.
+  * Updated to SVN revision 5312: + Improved scripting debugging.  +
+    Fixed handling "this" in constructors.  + Fixed calling object
+    member functions.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 30 Oct 2012 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 31 Oct 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

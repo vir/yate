@@ -184,7 +184,7 @@ private:
     bool jumpRelative(long int offset, GenObject* context) const;
     bool jumpAbsolute(long int index, GenObject* context) const;
     bool callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
-	JsFunction* func, bool constr) const;
+	JsFunction* func, bool constr, JsObject* thisObj = 0) const;
     bool callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
 	long int retIndex, JsFunction* func, ObjList& args,
 	JsObject* thisObj, JsObject* scopeObj) const;
@@ -1762,16 +1762,41 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	case OpcReturn:
 	    {
 		ExpOperation* op = popValue(stack,context);
+		ExpOperation* thisObj = 0;
 		bool ok = false;
 		while (ExpOperation* drop = popAny(stack)) {
 		    ok = drop->opcode() == OpcFunc;
 		    long int lbl = drop->number();
+		    if (ok && (lbl < -1)) {
+			lbl = -lbl;
+			XDebug(this,DebugInfo,"Returning this=%p from constructor '%s'",
+			    thisObj,drop->name().c_str());
+			if (thisObj) {
+			    TelEngine::destruct(op);
+			    op = thisObj;
+			    thisObj = 0;
+			}
+		    }
+		    if (drop->opcode() == OpcPush) {
+			ExpWrapper* wrap = YOBJECT(ExpWrapper,drop);
+			if (wrap && wrap->name() == YSTRING("()")) {
+			    JsObject* jso = YOBJECT(JsObject,wrap->object());
+			    if (jso) {
+				wrap = YOBJECT(ExpWrapper,jso->params().getParam(YSTRING("this")));
+				if (wrap) {
+				    TelEngine::destruct(thisObj);
+				    thisObj = wrap->clone(wrap->name());
+				}
+			    }
+			}
+		    }
 		    TelEngine::destruct(drop);
 		    if (ok) {
 			ok = jumpAbsolute(lbl,context);
 			break;
 		    }
 		}
+		TelEngine::destruct(thisObj);
 		if (!ok) {
 		    TelEngine::destruct(op);
 		    return gotError("Return outside function call",oper.lineNumber());
@@ -2067,12 +2092,14 @@ bool JsCode::jumpAbsolute(long int index, GenObject* context) const
     return true;
 }
 
-bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context, JsFunction* func, bool constr) const
+bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
+    JsFunction* func, bool constr, JsObject* thisObj) const
 {
     if (!(func && context))
 	return false;
-    XDebug(this,DebugInfo,"JsCode::callFunction(%p,%lu,%p) in %s'%s'",
-	&stack,oper.number(),context,(constr ? "constructor " : ""),func->toString().c_str());
+    XDebug(this,DebugInfo,"JsCode::callFunction(%p,%lu,%p) in %s'%s' this=%p",
+	&stack,oper.number(),context,(constr ? "constructor " : ""),
+	func->toString().c_str(),thisObj);
     JsRunner* runner = static_cast<JsRunner*>(context);
     long int index = runner->m_index;
     if (!m_linked.length()) {
@@ -2092,8 +2119,13 @@ bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* c
 	Debug(this,DebugWarn,"Oops! Could not find return point!");
 	return false;
     }
-    ExpOperation* op = constr ? popOne(stack) : 0;
-    JsObject* thisObj = YOBJECT(JsObject,op);
+    ExpOperation* op = 0;
+    if (constr) {
+	index = -index;
+	op = popOne(stack);
+	if (op && !thisObj)
+	    thisObj = YOBJECT(JsObject,op);
+    }
     if (thisObj && !thisObj->ref())
 	thisObj = 0;
     TelEngine::destruct(op);
@@ -2106,7 +2138,7 @@ bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* c
 	long int retIndex, JsFunction* func, ObjList& args,
 	JsObject* thisObj, JsObject* scopeObj) const
 {
-    pushOne(stack,new ExpOperation(OpcFunc,0,retIndex,true));
+    pushOne(stack,new ExpOperation(OpcFunc,oper.name(),retIndex,true));
     if (scopeObj)
 	pushOne(stack,new ExpWrapper(scopeObj,"()"));
     JsObject* ctxt = JsObject::buildCallContext(func->mutex(),thisObj);
@@ -2235,7 +2267,7 @@ JsFunction::JsFunction(Mutex* mtx)
 }
 
 JsFunction::JsFunction(Mutex* mtx, const char* name, ObjList* args, long int lbl, ScriptCode* code)
-    : JsObject(mtx,String("[function ") + name + "()]",true),
+    : JsObject(mtx,String("[function ") + name + "()]",false),
       m_label(lbl), m_code(code)
 {
     init();
@@ -2281,21 +2313,30 @@ bool JsFunction::runNative(ObjList& stack, const ExpOperation& oper, GenObject* 
     return true;
 }
 
-bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context)
+bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context, JsObject* thisObj)
 {
-    XDebug(DebugAll,"JsFunction::runDefined() in '%s' [%p]",toString().c_str(),this);
+    XDebug(DebugAll,"JsFunction::runDefined() in '%s' this=%p [%p]",
+	toString().c_str(),thisObj,this);
+    JsObject* newObj = 0;
     JsObject* proto = YOBJECT(JsObject,getField(stack,"prototype",context));
     if (proto) {
 	// found prototype, build object
-	JsObject* obj = proto->runConstructor(stack,oper,context);
-	if (!obj)
+	newObj = proto->runConstructor(stack,oper,context);
+	if (!newObj)
 	    return false;
-	ExpEvaluator::pushOne(stack,new ExpWrapper(obj,oper.name()));
+	ExpEvaluator::pushOne(stack,new ExpWrapper(newObj,oper.name()));
+	thisObj = newObj;
     }
     JsCode* code = YOBJECT(JsCode,m_code);
-    XDebug(DebugAll,"JsFunction::runDefined code=%p proto=%p [%p]",code,proto,this);
-    if (code)
-	return code->callFunction(stack,oper,context,this,(proto != 0));
+    XDebug(DebugAll,"JsFunction::runDefined code=%p proto=%p %s=%p [%p]",
+	code,proto,(newObj ? "new" : "this"),thisObj,this);
+    if (code) {
+	if (!code->callFunction(stack,oper,context,this,(proto != 0),thisObj))
+	    return false;
+	if (newObj && newObj->ref())
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(newObj,oper.name()));
+	return true;
+    }
     return proto || runNative(stack,oper,context);
 }
 

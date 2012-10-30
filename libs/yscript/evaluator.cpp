@@ -891,11 +891,12 @@ ExpOperation* ExpEvaluator::popAny(ObjList& stack)
     stack.remove(o,false);
 #ifdef DEBUG
 #ifdef XDEBUG
-    Debug(DebugAll,"popAny: %p%s%s",o,
+    Debug(DebugAll,"popAny: %p%s%s '%s'",o,
 	(YOBJECT(ExpFunction,o) ? " function" : ""),
-	(YOBJECT(ExpWrapper,o) ? " wrapper" : ""));
+	(YOBJECT(ExpWrapper,o) ? " wrapper" : ""),
+	(o ? o->name().safe() : (const char*)0));
 #else
-    Debug(DebugAll,"popAny: %p",o);
+    Debug(DebugAll,"popAny: %p '%s'",o,(o ? o->name().safe() : (const char*)0));
 #endif
 #endif
     return o;

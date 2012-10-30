@@ -269,7 +269,7 @@ JsObject* JsObject::runConstructor(ObjList& stack, const ExpOperation& oper, Gen
 {
     if (!ref())
 	return 0;
-    JsObject* obj = clone();
+    JsObject* obj = clone("[object " + oper.name() + "]");
     obj->params().addParam(new ExpWrapper(this,protoName()));
     return obj;
 }

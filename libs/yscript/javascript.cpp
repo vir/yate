@@ -923,6 +923,7 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	return true;
     }
     const char* saved = expr;
+    unsigned int savedLine = m_lineNo;
     Opcode op = ExpEvaluator::getOperator(expr,s_instr);
     switch ((JsOpcode)op) {
 	case (JsOpcode)OpcNone:
@@ -949,6 +950,7 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    return parseIf(expr,nested);
 	case OpcElse:
 	    expr = saved;
+	    m_lineNo = savedLine;
 	    return false;
 	case OpcSwitch:
 	    return parseSwitch(expr,nested);
@@ -957,29 +959,37 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	case OpcWhile:
 	    return parseWhile(expr,nested);
 	case OpcCase:
-	    if (!ParseNested::parseInner(nested,OpcCase,expr))
+	    if (!ParseNested::parseInner(nested,OpcCase,expr)) {
+		m_lineNo = savedLine;
 		return gotError("case not inside switch",saved);
+	    }
 	    if (skipComments(expr) != ':')
 		return gotError("Expecting ':'",expr);
 	    expr++;
 	    break;
 	case OpcDefault:
-	    if (!ParseNested::parseInner(nested,OpcDefault,expr))
+	    if (!ParseNested::parseInner(nested,OpcDefault,expr)) {
+		m_lineNo = savedLine;
 		return gotError("Unexpected default instruction",saved);
+	    }
 	    if (skipComments(expr) != ':')
 		return gotError("Expecting ':'",expr);
 	    expr++;
 	    break;
 	case OpcBreak:
-	    if (!ParseNested::parseInner(nested,OpcBreak,expr))
+	    if (!ParseNested::parseInner(nested,OpcBreak,expr)) {
+		m_lineNo = savedLine;
 		return gotError("Unexpected break instruction",saved);
+	    }
 	    if (skipComments(expr) != ';')
 		return gotError("Expecting ';'",expr);
 	    expr++;
 	    break;
 	case OpcCont:
-	    if (!ParseNested::parseInner(nested,OpcCont,expr))
+	    if (!ParseNested::parseInner(nested,OpcCont,expr)) {
+		m_lineNo = savedLine;
 		return gotError("Unexpected continue instruction",saved);
+	    }
 	    if (skipComments(expr) != ';')
 		return gotError("Expecting ';'",expr);
 	    expr++;
@@ -1108,9 +1118,10 @@ bool JsCode::parseIf(const char*& expr, GenObject* nested)
 	return gotError("Expecting ')'",expr);
     ExpOperation* cond = addOpcode((Opcode)OpcJumpFalse,++m_label);
     expr++;
-    if (!getOneInstruction(++expr,nested))
+    if (!getOneInstruction(expr,nested))
 	return false;
     const char* save = expr;
+    unsigned int savedLine = m_lineNo;
     skipComments(expr);
     if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
 	ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
@@ -1121,6 +1132,7 @@ bool JsCode::parseIf(const char*& expr, GenObject* nested)
     }
     else {
 	expr = save;
+	m_lineNo = savedLine;
 	addOpcode(OpcLabel,cond->number());
     }
     return true;
@@ -1445,6 +1457,7 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
     XDebug(this,DebugAll,"JsCode::getSimple(%s) '%.30s'",String::boolText(constOnly),expr);
     skipComments(expr);
     const char* save = expr;
+    unsigned int savedLine = m_lineNo;
     switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_constants)) {
 	case OpcFalse:
 	    addOpcode(false);
@@ -1461,6 +1474,7 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
 	case OpcFuncDef:
 	    if (constOnly) {
 		expr = save;
+		m_lineNo = savedLine;
 		return false;
 	    }
 	    return parseFuncDef(expr,false);

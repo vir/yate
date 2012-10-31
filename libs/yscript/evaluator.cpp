@@ -198,29 +198,21 @@ char ExpEvaluator::skipWhites(const char*& expr)
 {
     if (!expr)
 	return 0;
-    char skip = '\0';
     for (; ; expr++) {
 	char c = *expr;
 	switch (c) {
 	    case ' ':
 	    case '\t':
-		skip = '\0';
 		continue;
 	    case '\r':
-		if (skip != c) {
-		    m_lineNo++;
-		    skip = '\n';
-		}
-		else
-		    skip = '\0';
+		m_lineNo++;
+		if (expr[1] == '\n')
+		    expr++;
 		continue;
 	    case '\n':
-		if (skip != c) {
-		    m_lineNo++;
-		    skip = '\r';
-		}
-		else
-		    skip = '\0';
+		m_lineNo++;
+		if (expr[1] == '\r')
+		    expr++;
 		continue;
 	    default:
 		return c;

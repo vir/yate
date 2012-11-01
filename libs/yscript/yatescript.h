@@ -501,7 +501,16 @@ protected:
      * @param nested User defined object to pass for nested parsing
      * @return True if one expression was compiled and a separator follows
      */
-    virtual bool runCompile(const char*& expr, char stop = 0, GenObject* nested = 0);
+    bool runCompile(const char*& expr, char stop, GenObject* nested = 0);
+
+    /**
+     * Runs the parser and compiler for one (sub)expression
+     * @param expr Pointer to text to parse, gets advanced
+     * @param stop Optional list of possible characters expected after the expression
+     * @param nested User defined object to pass for nested parsing
+     * @return True if one expression was compiled and a separator follows
+     */
+    virtual bool runCompile(const char*& expr, const char* stop = 0, GenObject* nested = 0);
 
     /**
      * Skip over comments and whitespaces

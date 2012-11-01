@@ -345,6 +345,23 @@ static const TokenDict s_preProc[] =
 };
 #undef MAKEOP
 
+#define MAKEOP(o) { "[" #o "]", JsCode::Opc ## o }
+static const TokenDict s_internals[] =
+{
+    MAKEOP(Label),
+    MAKEOP(Begin),
+    MAKEOP(End),
+    MAKEOP(Flush),
+    MAKEOP(Jump),
+    MAKEOP(JumpTrue),
+    MAKEOP(JumpFalse),
+    MAKEOP(JRel),
+    MAKEOP(JRelTrue),
+    MAKEOP(JRelFalse),
+    { 0, 0 }
+};
+#undef MAKEOP
+
 static const ExpNull s_null;
 
 
@@ -887,7 +904,7 @@ bool JsCode::getOneInstruction(const char*& expr, GenObject* nested)
 	    return false;
     }
     else {
-	if (!runCompile(expr,';',nested))
+	if (!runCompile(expr,";}",nested))
 	    return false;
 	if (skipComments(expr) == ';')
 	    expr++;
@@ -983,7 +1000,6 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    }
 	    if (skipComments(expr) != ';')
 		return gotError("Expecting ';'",expr);
-	    expr++;
 	    break;
 	case OpcCont:
 	    if (!ParseNested::parseInner(nested,OpcCont,expr)) {
@@ -992,7 +1008,6 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    }
 	    if (skipComments(expr) != ';')
 		return gotError("Expecting ';'",expr);
-	    expr++;
 	    break;
 	case OpcVar:
 	    return parseVar(expr);
@@ -1120,9 +1135,9 @@ bool JsCode::parseIf(const char*& expr, GenObject* nested)
     expr++;
     if (!getOneInstruction(expr,nested))
 	return false;
+    skipComments(expr);
     const char* save = expr;
     unsigned int savedLine = m_lineNo;
-    skipComments(expr);
     if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
 	ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
 	addOpcode(OpcLabel,cond->number());
@@ -1284,7 +1299,7 @@ bool JsCode::parseTry(const char*& expr, GenObject* nested)
 {
     addOpcode((Opcode)OpcTry);
     ParseNested parseStack(this,nested,OpcTry);
-    if (!runCompile(expr,0,parseStack))
+    if (!runCompile(expr,(const char*)0,parseStack))
 	return false;
     skipComments(expr);
     if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcCatch) {
@@ -1404,17 +1419,21 @@ ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr)
 
 const char* JsCode::getOperator(Opcode oper) const
 {
-    if (oper < OpcPrivate)
-	return ExpEvaluator::getOperator(oper);
     if ((int)oper == (int)OpcIndex)
 	return "[]";
-    const char* tmp = lookup(oper,s_operators);
+    const char* tmp = ExpEvaluator::getOperator(oper);
     if (!tmp) {
-	tmp = lookup(oper,s_unaryOps);
+	tmp = lookup(oper,s_operators);
 	if (!tmp) {
-	    tmp = lookup(oper,s_postfixOps);
-	    if (!tmp)
-		tmp = lookup(oper,s_instr);
+	    tmp = lookup(oper,s_unaryOps);
+	    if (!tmp) {
+		tmp = lookup(oper,s_postfixOps);
+		if (!tmp) {
+		    tmp = lookup(oper,s_instr);
+		    if (!tmp)
+			tmp = lookup(oper,s_internals);
+		}
+	    }
 	}
     }
     return tmp;

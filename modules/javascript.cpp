@@ -106,7 +106,7 @@ private:
 class JsGlobal : public NamedString
 {
 public:
-    JsGlobal(const char* scriptName, const char* fileName);
+    JsGlobal(const char* scriptName, const char* fileName, bool relPath = true);
     virtual ~JsGlobal();
     bool fileChanged(const char* fileName) const;
     inline JsParser& parser()
@@ -117,6 +117,7 @@ public:
     static void markUnused();
     static void freeUnused();
     static void initScript(const String& scriptName, const String& fileName);
+    static bool reloadScript(const String& scriptName);
     inline static ObjList& globals()
 	{ return s_globals; }
     inline static void unloadAll()
@@ -1514,12 +1515,13 @@ bool JsAssist::msgDisconnect(Message& msg, const String& reason)
 
 ObjList JsGlobal::s_globals;
 
-JsGlobal::JsGlobal(const char* scriptName, const char* fileName)
+JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath)
     : NamedString(scriptName,fileName),
       m_fileTime(0), m_inUse(true)
 {
     m_jsCode.basePath(s_basePath);
-    m_jsCode.adjustPath(*this);
+    if (relPath)
+	m_jsCode.adjustPath(*this);
     DDebug(&__plugin,DebugAll,"Loading global Javascript '%s' from '%s'",name().c_str(),c_str());
     File::getFileTime(c_str(),m_fileTime);
     if (m_jsCode.parseFile(*this))
@@ -1565,21 +1567,29 @@ void JsGlobal::markUnused()
 
 void JsGlobal::freeUnused()
 {
+    Lock mylock(__plugin);
     ListIterator iter(s_globals);
     while (JsGlobal* script = static_cast<JsGlobal*>(iter.get()))
-	if (!script->m_inUse)
-	    s_globals.remove(script);
+	if (!script->m_inUse) {
+	    s_globals.remove(script,false);
+	    mylock.drop();
+	    TelEngine::destruct(script);
+	    mylock.acquire(__plugin);
+	}
 }
 
 void JsGlobal::initScript(const String& scriptName, const String& fileName)
 {
     if (fileName.null())
 	return;
+    Lock mylock(__plugin);
     JsGlobal* script = static_cast<JsGlobal*>(s_globals[scriptName]);
     if (script) {
 	if (script->fileChanged(fileName)) {
 	    s_globals.remove(script,false);
+	    mylock.drop();
 	    TelEngine::destruct(script);
+	    mylock.acquire(__plugin);
 	}
 	else {
 	    script->m_inUse = true;
@@ -1587,8 +1597,30 @@ void JsGlobal::initScript(const String& scriptName, const String& fileName)
 	}
     }
     script = new JsGlobal(scriptName,fileName);
-    script->runMain();
     s_globals.append(script);
+    mylock.drop();
+    script->runMain();
+}
+
+bool JsGlobal::reloadScript(const String& scriptName)
+{
+    if (scriptName.null())
+	return false;
+    Lock mylock(__plugin);
+    JsGlobal* script = static_cast<JsGlobal*>(s_globals[scriptName]);
+    if (!script)
+	return false;
+    String fileName = *script;
+    if (fileName.null())
+	return false;
+    s_globals.remove(script,false);
+    mylock.drop();
+    TelEngine::destruct(script);
+    mylock.acquire(__plugin);
+    script = new JsGlobal(scriptName,fileName,false);
+    s_globals.append(script);
+    mylock.drop();
+    return script->runMain();
 }
 
 bool JsGlobal::runMain()
@@ -1611,10 +1643,11 @@ bool JsGlobal::runMain()
 static const char* s_cmds[] = {
     "info",
     "eval",
+    "reload",
     0
 };
 
-static const char* s_cmdsLine = "  javascript {info|eval instructions...}";
+static const char* s_cmdsLine = "  javascript {info|eval instructions...|reload script}";
 
 
 JsModule::JsModule()
@@ -1655,6 +1688,9 @@ bool JsModule::commandExecute(String& retVal, const String& line)
 	return true;
     }
 
+    if (cmd.startSkip("reload") && cmd.trimSpaces())
+	return JsGlobal::reloadScript(cmd);
+
     if (!(cmd.startSkip("eval") && cmd.trimSpaces()))
 	return false;
 
@@ -1691,6 +1727,16 @@ bool JsModule::commandComplete(Message& msg, const String& partLine, const Strin
     else if (partLine == name()) {
 	for (const char** list = s_cmds; *list; list++)
 	    itemComplete(msg.retValue(),*list,partWord);
+	return true;
+    }
+    else if (partLine == YSTRING("javascript reload")) {
+	lock();
+	ListIterator iter(JsGlobal::globals());
+	while (JsGlobal* script = static_cast<JsGlobal*>(iter.get())) {
+	    if (!script->name().null())
+		itemComplete(msg.retValue(),script->name(),partWord);
+	}
+	unlock();
 	return true;
     }
     return Module::commandComplete(msg,partLine,partWord);
@@ -1823,8 +1869,8 @@ void JsModule::initialize()
 	Debug(this,DebugInfo,"Parsed routing script: %s",tmp.c_str());
     else if (tmp)
 	Debug(this,DebugWarn,"Failed to parse script: %s",tmp.c_str());
-    unlock();
     JsGlobal::markUnused();
+    unlock();
     NamedList* sect = cfg.getSection("scripts");
     if (sect) {
 	unsigned int len = sect->length();

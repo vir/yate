@@ -7285,6 +7285,15 @@ void YateSIPLine::login()
     }
 
     buildParty(false);
+    if (m_localAddr && !m_localDetect) {
+	if (!m_localPort)
+	    m_localPort = 5060;
+	SIPParty* p = party();
+	if (p) {
+	    p->setAddr(m_localAddr,m_localPort,true);
+	    TelEngine::destruct(p);
+	}
+    }
     // Wait for the transport to become valid
     Lock lckParty(m_partyMutex);
     YateSIPTransport* trans = transport();
@@ -7330,6 +7339,10 @@ void YateSIPLine::logout(bool sendLogout, const char* reason)
 	sendLogout = m_valid && m_registrar && m_username;
     clearTransaction();
     setValid(false,reason);
+    if (m_localDetect) {
+	m_localAddr.clear();
+	m_localPort = 0;
+    }
     if (sendLogout) {
 	DDebug(&plugin,DebugInfo,"YateSIPLine '%s' logging out [%p]",c_str(),this);
 	buildParty(false);

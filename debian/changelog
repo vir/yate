@@ -1,4 +1,4 @@
-yate (4.2.1~svn5313) UNRELEASED; urgency=low
+yate (4.2.1~svn5317) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -152,8 +152,15 @@ yate (4.2.1~svn5313) UNRELEASED; urgency=low
     member functions.
   * Updated to SVN revision 5313: + Fixed calling object member
     functions.  + Fixed Javascript line counting.
+  * Updated to SVN revision 5317: + Improved code generation debugging.
+    + Fixed parsing of code blocks that don't end in semicolon like: {
+    if (...) if (...) { } }  + Abandon Javascript message handlers on
+    shutdown since they get destroyed by the engine anyway.  + Fixed
+    some potential concurrency issues.  + Added reload Javascript
+    command.  + Fixed handling of automatic REGISTER local address
+    broken by a previous revision.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 01 Nov 2012 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 02 Nov 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

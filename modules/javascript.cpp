@@ -210,6 +210,9 @@ public:
 	    XDebug(&__plugin,DebugAll,"JsMessage::~JsMessage() [%p]",this);
 	    if (m_owned)
 		TelEngine::destruct(m_message);
+	    if (Engine::exiting())
+		while (m_handlers.remove(false))
+		    ;
 	}
     virtual NamedList* nativeParams() const
 	{ return m_message; }

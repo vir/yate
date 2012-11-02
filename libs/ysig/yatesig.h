@@ -658,6 +658,14 @@ public:
     virtual bool initialize(const NamedList* config);
 
     /**
+     * Choose parameters that should be used for object initialization
+     * @param cmpName The name of the parameter holding the component name
+     * @param params The list of parameters used to initialize the component
+     * @param config The received list of parameters
+     */
+    static void resolveConfig(const String& cmpName, NamedList& params, const NamedList* config);
+
+    /**
      * Query or modify component's settings or operational parameters
      * @param params The list of parameters to query or change
      * @return True if the control operation was executed

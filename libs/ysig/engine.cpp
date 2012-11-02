@@ -184,6 +184,28 @@ bool SignallingComponent::initialize(const NamedList* config)
     return true;
 }
 
+void SignallingComponent::resolveConfig(const String& cmpName, NamedList& params, const NamedList* config)
+{
+
+    if (!config)
+	return;
+    String name = config->getValue(cmpName,params);
+    if (!(name && !name.toBoolean(false)))
+	return;
+    static_cast<String&>(params) = name;
+    NamedString* param = config->getParam(params);
+    NamedPointer* ptr = YOBJECT(NamedPointer,param);
+    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+    if (ifConfig)
+	params.copyParams(*ifConfig);
+    else {
+	if (config->hasSubParams(params + "."))
+	    params.copySubParams(*config,params + ".");
+	else
+	    params.addParam("local-config","true");
+    }
+}
+
 bool SignallingComponent::control(NamedList& params)
 {
     return false;

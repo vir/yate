@@ -1645,11 +1645,7 @@ bool SCCPUser::initialize(const NamedList* config)
     DDebug(this,DebugInfo,"SCCPUser::initialize(%p) [%p]",config,this);
     if (engine()) {
 	NamedList params("sccp");
-	if (config) {
-	    String name = config->getValue(YSTRING("sccp"),params);
-	    if (name && !name.toBoolean(false))
-		static_cast<String&>(params) = name;
-	}
+	resolveConfig(YSTRING("sccp"),params,config);
 	// NOTE SS7SCCP is created on demand!!!
 	// engine ->build method will search for the requested sccc and 
 	// if it was found will return it with the ref counter incremented
@@ -1739,11 +1735,7 @@ bool GTT::initialize(const NamedList* config)
     DDebug(this,DebugInfo,"GTT::initialize(%p) [%p]",config,this);
     if (engine()) {
 	NamedList params("sccp");
-	if (config) {
-	    String name = config->getValue(YSTRING("sccp"),params);
-	    if (name && !name.toBoolean(false))
-		static_cast<String&>(params) = name;
-	}
+	resolveConfig(YSTRING("sccp"),params,config);
 	if (params.toBoolean(true))
 	    attach(YOBJECT(SCCP,engine()->build("SCCP",params,true)));
     } else
@@ -2832,9 +2824,7 @@ SS7SCCP::SS7SCCP(const NamedList& params)
 	m_segTimeout = 20000;
     if ((m_type == SS7PointCode::ITU || m_type == SS7PointCode::ANSI) && m_localPointCode) {
 	NamedList mgmParams("sccp-mgm");
-	String name = params.getValue(YSTRING("management"),mgmParams);
-	if (name && !name.toBoolean(false))
-	    static_cast<String&>(mgmParams) = name;
+	resolveConfig(YSTRING("management"),mgmParams,&params);
 	mgmParams.setParam("type",m_type == SS7PointCode::ITU ? "ss7-sccp-itu-mgm" : "ss7-sccp-ansi-mgm");
 	if (mgmParams.toBoolean(true)) {
 	    if (m_type == SS7PointCode::ITU)

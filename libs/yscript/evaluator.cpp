@@ -198,29 +198,21 @@ char ExpEvaluator::skipWhites(const char*& expr)
 {
     if (!expr)
 	return 0;
-    char skip = '\0';
     for (; ; expr++) {
 	char c = *expr;
 	switch (c) {
 	    case ' ':
 	    case '\t':
-		skip = '\0';
 		continue;
 	    case '\r':
-		if (skip != c) {
-		    m_lineNo++;
-		    skip = '\n';
-		}
-		else
-		    skip = '\0';
+		m_lineNo++;
+		if (expr[1] == '\n')
+		    expr++;
 		continue;
 	    case '\n':
-		if (skip != c) {
-		    m_lineNo++;
-		    skip = '\r';
-		}
-		else
-		    skip = '\0';
+		m_lineNo++;
+		if (expr[1] == '\r')
+		    expr++;
 		continue;
 	    default:
 		return c;
@@ -572,6 +564,18 @@ bool ExpEvaluator::getSeparator(const char*& expr, bool remove)
 
 bool ExpEvaluator::runCompile(const char*& expr, char stop, GenObject* nested)
 {
+    char buf[2];
+    const char* stopStr = 0;
+    if (stop) {
+	buf[0] = stop;
+	buf[1] = '\0';
+	stopStr = buf;
+    }
+    return runCompile(expr,stopStr,nested);
+}
+
+bool ExpEvaluator::runCompile(const char*& expr, const char* stop, GenObject* nested)
+{
     typedef struct {
 	Opcode code;
 	int prec;
@@ -579,7 +583,7 @@ bool ExpEvaluator::runCompile(const char*& expr, char stop, GenObject* nested)
     StackedOpcode stack[10];
     unsigned int stackPos = 0;
 #ifdef DEBUG
-    Debugger debug(DebugInfo,"runCompile()"," '%.1s' %p '%.30s'",&stop,nested,expr);
+    Debugger debug(DebugInfo,"runCompile()"," '%s' %p '%.30s'",TelEngine::c_safe(stop),nested,expr);
 #endif
     if (skipComments(expr) == ')')
 	return false;
@@ -589,12 +593,14 @@ bool ExpEvaluator::runCompile(const char*& expr, char stop, GenObject* nested)
 	addOpcode(OpcField,"*");
 	return true;
     }
+    char stopChar = stop ? stop[0] : '\0';
     for (;;) {
-	while (!stackPos && skipComments(expr) && (*expr != stop) && getInstruction(expr,stop,nested))
+	while (!stackPos && skipComments(expr) && (!stop || !::strchr(stop,*expr)) && getInstruction(expr,stopChar,nested))
 	    ;
 	if (inError())
 	    return false;
-	if (stop && (skipComments(expr) == stop))
+	char c = skipComments(expr);
+	if (c && stop && ::strchr(stop,c))
 	    return true;
 	if (!getOperand(expr))
 	    return false;
@@ -603,8 +609,8 @@ bool ExpEvaluator::runCompile(const char*& expr, char stop, GenObject* nested)
 	    addOpcode(oper);
 	if (inError())
 	    return false;
-	char c = skipComments(expr);
-	if (!c || c == stop || getSeparator(expr,false)) {
+	c = skipComments(expr);
+	if (!c || (stop && ::strchr(stop,c)) || getSeparator(expr,false)) {
 	    while (stackPos)
 		addOpcode(stack[--stackPos].code);
 	    return true;
@@ -753,7 +759,7 @@ void ExpEvaluator::addOpcode(ExpOperation* oper, unsigned int line)
 {
     if (!oper)
 	return;
-    DDebug(this,DebugAll,"addOpcode %u, %u",oper->opcode(),line);
+    DDebug(this,DebugAll,"addOpcode %u (%s), %u",oper->opcode(),getOperator(oper->opcode()),line);
     if (!line)
 	line = lineNumber();
     oper->lineNumber(line);
@@ -762,7 +768,7 @@ void ExpEvaluator::addOpcode(ExpOperation* oper, unsigned int line)
 
 ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
 {
-    DDebug(this,DebugAll,"addOpcode %u",oper);
+    DDebug(this,DebugAll,"addOpcode %u (%s)",oper,getOperator(oper));
     if (oper == OpcAs) {
 	// the second operand is used just for the field name
 	ExpOperation* o = 0;
@@ -781,7 +787,7 @@ ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
 
 ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, long int value, bool barrier)
 {
-    DDebug(this,DebugAll,"addOpcode %u %lu",oper,value);
+    DDebug(this,DebugAll,"addOpcode %u (%s) %lu",oper,getOperator(oper),value);
     ExpOperation* op = new ExpOperation(oper,0,value,barrier);
     op->lineNumber(lineNumber());
     m_opcodes.append(op);
@@ -790,7 +796,7 @@ ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, long int value,
 
 ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, const String& name, long int value, bool barrier)
 {
-    DDebug(this,DebugAll,"addOpcode %u '%s' %ld",oper,name.c_str(),value);
+    DDebug(this,DebugAll,"addOpcode %u (%s) '%s' %ld",oper,getOperator(oper),name.c_str(),value);
     ExpOperation* op = new ExpOperation(oper,name,value,barrier);
     op->lineNumber(lineNumber());
     m_opcodes.append(op);
@@ -891,11 +897,12 @@ ExpOperation* ExpEvaluator::popAny(ObjList& stack)
     stack.remove(o,false);
 #ifdef DEBUG
 #ifdef XDEBUG
-    Debug(DebugAll,"popAny: %p%s%s",o,
+    Debug(DebugAll,"popAny: %p%s%s '%s'",o,
 	(YOBJECT(ExpFunction,o) ? " function" : ""),
-	(YOBJECT(ExpWrapper,o) ? " wrapper" : ""));
+	(YOBJECT(ExpWrapper,o) ? " wrapper" : ""),
+	(o ? o->name().safe() : (const char*)0));
 #else
-    Debug(DebugAll,"popAny: %p",o);
+    Debug(DebugAll,"popAny: %p '%s'",o,(o ? o->name().safe() : (const char*)0));
 #endif
 #endif
     return o;

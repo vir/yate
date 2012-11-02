@@ -13,6 +13,55 @@
 
 [general]
 ; This section sets global variables of the implementation
+; It also configures a listener named 'general' who is always enabled and set as default
+;  UDP transport (if type is udp)
+; The listener is always processed before other 'listener ' sections
+
+; type: keyword: Listener type
+; Allowed values:
+; udp: Build an UDP listener
+; tcp: Build a TCP listener
+; tls: Build a TLS listener (encrypted TCP)
+; Defaults to udp if missing or invalid
+;type=
+
+; default: boolean: Specifiy if this is the default transport to use when none specified
+; Defaults to yes (unlike the other listeners)
+;default=yes
+
+; addr: ipaddress: IP address to bind to
+; Leave it empty to listen on all available interfaces
+;addr=
+
+; port: integer: Port to bind to
+; Defaults to 5060 for UDP and TCP, 5061 for TLS listener
+;port=5060
+
+; udp_force_bind: boolean: Try to use a random port if failed to bind on configured one (UDP only)
+; Defaults to yes
+;udp_force_bind=yes
+
+; rtp_localip: ipaddress: IP address to bind local RTP to
+; This parameter is applied on reload
+; TCP/TLS: this parameter is applied on reload for new connections only
+; RTP local IP address will default to bound IP address if not binding on all interfaces
+; Explicitly set it to empty string to avoid using bound IP address
+;rtp_localip=
+
+; nat_address: ipaddress: IP address to advertise in SDP, empty to use the local RTP
+; This parameter is applied on reload
+; Set this parameter when you know your RTP is behind a NAT
+;nat_address=
+
+; backlog: integer: Maximum length of the queue of pending connections
+; This parameter is ignored for UDP listener
+; Set it to 0 for system maximum
+; Defaults to 5 if missing or invalid
+;backlog=5
+
+; sslcontext: string: SSL context if this is an encrypted connection
+; Ignored for non TLS listener, required for TLS listener
+;sslcontext=
 
 ; maxpkt: int: Maximum received UDP packet size, 524 to 65528, default 1500
 ; This parameter is applied on reload and can be overridden in UDP listener sections
@@ -343,51 +392,6 @@
 ;ignore_sdp_addr=no
 
 
-;[listener general]
-; This section has the following purposes:
-; - Maintain compatibility with old configuration
-; - Setup an UDP listener named 'general'
-; This section will be processed before any other listener sections
-; The following parameters can be overridden from 'general' section: maxpkt, buffer
-
-; enable: boolean: Enable or disable the UDP listener
-; This parameter is applied on reload and defaults to yes
-;enable=yes
-
-; default: boolean: Specifiy if this is the default transport to use when none specified
-; Defaults to yes (unlike the other listeners)
-;default=yes
-
-; udp_force_bind: boolean: Try to use a random port if failed to bind on configured one
-; Defaults to yes
-;udp_force_bind=yes
-
-; addr: ipaddress: IP address to bind to
-; Leave it empty to listen on all available interfaces
-;addr=
-
-; port: integer: Port to bind to
-; Defaults to 5060
-;port=5060
-
-; rtp_localip: ipaddress: IP address to bind local RTP to, empty to guess best
-; This parameter is applied on reload
-; RTP local IP address will default to bound IP address if not binding on all interfaces
-; Explicitly set it to empty string to avoid using bound IP address
-;rtp_localip=
-
-; nat_address: ipaddress: IP address to advertise in SDP, empty to use the local RTP
-; This parameter is applied on reload
-; Set this parameter when you know your RTP is behind a NAT
-;nat_address=
-
-; thread: keyword: Listener thread priority
-; Can be one of: lowest, low, normal, high, highest
-; High priorities need superuser privileges on POSIX operating systems
-; Low priorities are not recommended except for debugging
-;thread=normal
-
-
 ;[listener name]
 ; This section configures a listener named 'name' ('general' is reserved and will be ignored)
 ; The following parameters can be overridden from 'general' section:
@@ -410,7 +414,7 @@
 ; Defaults to no
 ;default=no
 
-; udp_force_bind: boolean: UDP only: try to use a random port if failed to bind on configured one
+; udp_force_bind: boolean: UDP only: try to use a random port if failed to bind on configured one (UDP only)
 ; Defaults to yes
 ;udp_force_bind=yes
 

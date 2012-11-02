@@ -269,7 +269,7 @@ JsObject* JsObject::runConstructor(ObjList& stack, const ExpOperation& oper, Gen
 {
     if (!ref())
 	return 0;
-    JsObject* obj = clone();
+    JsObject* obj = clone("[object " + oper.name() + "]");
     obj->params().addParam(new ExpWrapper(this,protoName()));
     return obj;
 }
@@ -286,7 +286,7 @@ bool JsObject::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* 
 	return runNative(stack,oper,context);
     JsFunction* jf = YOBJECT(JsFunction,param);
     if (jf)
-	return jf->runDefined(stack,oper,context);
+	return jf->runDefined(stack,oper,context,this);
     return false;
 }
 

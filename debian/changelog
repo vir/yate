@@ -1,4 +1,4 @@
-yate (4.2.1~svn5317) UNRELEASED; urgency=low
+yate (4.2.1~svn5319) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -159,8 +159,12 @@ yate (4.2.1~svn5317) UNRELEASED; urgency=low
     some potential concurrency issues.  + Added reload Javascript
     command.  + Fixed handling of automatic REGISTER local address
     broken by a previous revision.
+  * Updated to SVN revision 5319: + Added method to check if any
+    parameter in a list starts with a certain prefix.  + Use the new
+    mehod to allow proper configuration of SCCP, management and GTT.  +
+    Added method to resolve signaling subcomponent configuration.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 02 Nov 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 03 Nov 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

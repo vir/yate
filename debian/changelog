@@ -1,3 +1,12 @@
+yate (4.2.1~vir2012110201) UNRELEASED; urgency=low
+
+  * Merged upstream fixes and improvements, including
+  * Recording both channels into single file.
+  * General sip listener configuration change.
+  * H323 and Javascript fixes.
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Fri, 02 Nov 2012 13:29:46 +0400
+
 yate (4.2.1~vir2012102303) UNRELEASED; urgency=low
 
   * Undone last change - it was never needed.

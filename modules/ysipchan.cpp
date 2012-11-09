@@ -7380,10 +7380,10 @@ bool YateSIPLine::process(SIPEvent* ev)
     clearTransaction();
     DDebug(&plugin,DebugAll,"YateSIPLine '%s' got answer %d [%p]",
 	c_str(),msg->code,this);
+    int exp = m_interval;
     switch (msg->code) {
 	case 200:
 	    {
-		int exp = m_interval;
 		const MimeHeaderLine* hl = msg->getHeader("Contact");
 		if (hl) {
 		    const NamedString* e = hl->getParam("expires");
@@ -7397,7 +7397,9 @@ bool YateSIPLine::process(SIPEvent* ev)
 		    if (hl)
 			exp = hl->toInteger(exp);
 		}
-		if ((exp != m_interval) && (exp >= 60)) {
+		if (exp <= 60)
+		    exp = 60;
+		else if ((exp > m_interval + 10) || (exp < m_interval - 10)) {
 		    Debug(&plugin,DebugNote,"SIP line '%s' changed expire interval from %d to %d",
 			c_str(),m_interval,exp);
 		    m_interval = exp;
@@ -7406,7 +7408,7 @@ bool YateSIPLine::process(SIPEvent* ev)
 		resetTransportIdle(msg,m_alive ? m_alive : m_interval);
 	    }
 	    // re-register at 3/4 of the expire interval
-	    m_resend = m_interval*(int64_t)750000 + Time::now();
+	    m_resend = exp * (int64_t)750000 + Time::now();
 	    m_keepalive = m_alive ? m_alive*(int64_t)1000000 + Time::now() : 0;
 	    detectLocal(msg);
 	    if (msg->getParty())

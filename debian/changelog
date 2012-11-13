@@ -1,4 +1,4 @@
-yate (4.2.1~svn5320) UNRELEASED; urgency=low
+yate (4.2.1~svn5321) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -166,8 +166,10 @@ yate (4.2.1~svn5320) UNRELEASED; urgency=low
   * Updated to SVN revision 5320: + Added method to resolve signaling
     subcomponent configuration.  + Use a smarter SIP registration
     adjustment interval to avoid trouble with some providers.
+  * Updated to SVN revision 5321: + Fixed bug: remove relay from relays
+    list when uninstalled to avoid keeping an invalid pointer.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 10 Nov 2012 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 14 Nov 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

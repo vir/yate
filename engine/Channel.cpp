@@ -1056,8 +1056,8 @@ bool Module::uninstallRelay(int id, bool delRelay)
 	    continue;
 	Engine::uninstall(r);
 	m_relays &= ~id;
-	if (delRelay)
-	    TelEngine::destruct(r);
+	l->remove(delRelay);
+	break;
     }
     return false;
 }

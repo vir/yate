@@ -8090,7 +8090,8 @@ public:
 	CVT  = 0xec, // Circuit Validation Test (ANSI only)
 	EXM  = 0xed, // Exit Message (ANSI only)
 	// Dummy, used for various purposes
-	CtrlSave = 256  // control, save circuits
+	CtrlSave = 256, // control, save circuits
+	CtrlCicEvent,   // control, generate circuit events, debug only
     };
 
     /**
@@ -9019,6 +9020,8 @@ private:
     // Handle remote circuit(s) (un)block command
     bool handleCicBlockRemoteCommand(const NamedList& p, unsigned int* cics,
 	unsigned int count, bool block);
+    // Handle circuit(s) event generation command
+    bool handleCicEventCommand(const NamedList& p);
     // Try to start single circuit (un)blocking. Set a pending operation on success 
     // @param force True to ignore resetting/(un)blocking flags of the circuit
     // Return built message to be sent on success

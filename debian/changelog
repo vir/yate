@@ -1,4 +1,4 @@
-yate (4.2.1~svn5321) UNRELEASED; urgency=low
+yate (4.2.1~svn5322) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -168,8 +168,13 @@ yate (4.2.1~svn5321) UNRELEASED; urgency=low
     adjustment interval to avoid trouble with some providers.
   * Updated to SVN revision 5321: + Fixed bug: remove relay from relays
     list when uninstalled to avoid keeping an invalid pointer.
+  * Updated to SVN revision 5322: + Avoid sending group (un)block
+    messages with single circuit in range, try to pick another circuit
+    in the same span and add it to circuits map with bit set to 0 (not
+    handled). Added control 'circuitevent' available when built for
+    debug used to generate alarm/no alarm events for circuits.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 14 Nov 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 15 Nov 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

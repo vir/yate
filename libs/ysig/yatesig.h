@@ -9013,6 +9013,9 @@ private:
     // Retrieve a pending message
     SignallingMessageTimer* findPendingMessage(SS7MsgISUP::Type type, unsigned int cic,
 	bool remove = false);
+    // Retrieve a pending message with given parameter
+    SignallingMessageTimer* findPendingMessage(SS7MsgISUP::Type type, unsigned int cic,
+	const String& param, const String& value, bool remove = false);
     // Transmit a list of messages. Return true if at least 1 message was sent
     bool transmitMessages(ObjList& list);
     // Handle circuit(s) (un)block command

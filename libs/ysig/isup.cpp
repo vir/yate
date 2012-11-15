@@ -3812,6 +3812,28 @@ void SS7ISUP::destroyed()
     SS7Layer4::destroyed();
 }
 
+// Utility: find a pending (un)block message for a given circuit
+static bool findPendingMsgTimerLock(ObjList& list, unsigned int code)
+{
+    for (ObjList* o = list.skipNull(); o; o = o->skipNext()) {
+	SignallingMessageTimer* m = static_cast<SignallingMessageTimer*>(o->get());
+	SS7MsgISUP* msg = static_cast<SS7MsgISUP*>(m->message());
+	if (!msg || code < msg->cic())
+	    continue;
+	if (msg->type() == SS7MsgISUP::BLK || msg->type() == SS7MsgISUP::UBL) {
+	    if (msg->cic() == code)
+		return true;
+	    continue;
+	}
+	if (msg->type() != SS7MsgISUP::CGB && msg->type() != SS7MsgISUP::CGU)
+	    continue;
+	const String& map = msg->params()[YSTRING("RangeAndStatus.map")];
+	if (map[code - msg->cic()] == '1')
+	    return true;
+    }
+    return false;
+}
+
 void SS7ISUP::timerTick(const Time& when)
 {
     Lock mylock(this,SignallingEngine::maxLockWait());
@@ -3884,6 +3906,80 @@ void SS7ISUP::timerTick(const Time& when)
 		TelEngine::destruct(m);
 		if (c && c->ref())
 		    rsc.append(c)->setDelete(false);
+		continue;
+	    }
+	}
+	// Check if message is still in use
+	if (msg->type() == SS7MsgISUP::CGB || msg->type() == SS7MsgISUP::CGU) {
+	    String* map = msg->params().getParam(YSTRING("RangeAndStatus.map"));
+	    bool ok = !TelEngine::null(map);
+	    String removedCics;
+	    if (ok) {
+		unsigned int nCics = 0;
+		int flg = 0;
+		int flgReset = 0; 
+		if ((msg->params()[YSTRING("GroupSupervisionTypeIndicator")] == YSTRING("hw-failure"))) {
+		    flg = SignallingCircuit::LockLocalHWFail;
+		    flgReset = SignallingCircuit::LockingHWFail;
+		}
+		else {
+		    flg = SignallingCircuit::LockLocalMaint;
+		    flgReset = SignallingCircuit::LockingMaint;
+		}
+		int on = (msg->type() == SS7MsgISUP::CGB) ? flg : 0;
+		char* s = (char*)map->c_str();
+		for (unsigned int i = 0; i < map->length(); i++) {
+		    if (s[i] == '0')
+			continue;
+		    unsigned int code = msg->cic() + i;
+		    SignallingCircuit* cic = circuits()->find(code);
+		    if (cic && (on == cic->locked(flg))) {
+			nCics++;
+			continue;
+		    }
+		    // Don't reset locking flag if there is another operation in progress
+		    if (cic && !(findPendingMsgTimerLock(m_pending,code) ||
+			findPendingMsgTimerLock(reInsert,code)) && cic->locked(flgReset)) {
+			cic->resetLock(flgReset);
+			Debug(this,DebugNote,"Pending %s reset flag=0x%x cic=%u current=0x%x",
+			    msg->name(),flgReset,code,cic->locked());;
+		    }
+		    s[i] = '0';
+		    removedCics.append(String(code),",");
+		}
+		if (nCics)
+		    msg->params().setParam("RangeAndStatus",String(nCics));
+		else
+		    ok = false;
+	    }
+	    if (!ok) {
+		Debug(this,DebugNote,"Removed empty pending operation '%s' cic=%u",
+		    msg->name(),msg->cic());
+		TelEngine::destruct(m);
+		continue;
+	    }
+	    if (removedCics)
+		Debug(this,DebugAll,"Removed cics=%s from pending operation '%s' map cic=%u",
+		    removedCics.c_str(),msg->name(),msg->cic());
+	}
+	else if (msg->type() == SS7MsgISUP::BLK || msg->type() == SS7MsgISUP::UBL) {
+	    // We set the following param when sending BLK/UBL for HW fail reason
+	    bool maint = !msg->params().getBoolValue(YSTRING("isup_pending_block_hwfail"));
+	    int flg = maint ? SignallingCircuit::LockLocalMaint : SignallingCircuit::LockLocalHWFail;
+	    int on = (msg->type() == SS7MsgISUP::BLK) ? flg : 0;
+	    SignallingCircuit* cic = circuits()->find(msg->cic());
+	    if (!cic || on != cic->locked(flg)) {
+		flg = maint ? SignallingCircuit::LockingMaint : SignallingCircuit::LockingHWFail;
+		// Don't reset locking flag if there is another operation in progress
+		if (cic && !(findPendingMsgTimerLock(m_pending,msg->cic()) ||
+		    findPendingMsgTimerLock(reInsert,msg->cic())) && cic->locked(flg)) {
+		    cic->resetLock(flg);
+		    Debug(this,DebugNote,"Pending %s reset flag=0x%x cic=%u current=0x%x",
+			msg->name(),flg,cic->code(),cic->locked());
+		}
+		Debug(this,DebugNote,"Removed empty pending operation '%s' cic=%u",
+		    msg->name(),msg->cic());
+		TelEngine::destruct(m);
 		continue;
 	    }
 	}
@@ -5672,6 +5768,23 @@ SignallingMessageTimer* SS7ISUP::findPendingMessage(SS7MsgISUP::Type type, unsig
     return 0;
 }
 
+// Retrieve a pending message with given parameter
+SignallingMessageTimer* SS7ISUP::findPendingMessage(SS7MsgISUP::Type type, unsigned int cic,
+    const String& param, const String& value, bool remove)
+{
+    Lock lock(this);
+    for (ObjList* o = m_pending.skipNull(); o; o = o->skipNext()) {
+	SignallingMessageTimer* m = static_cast<SignallingMessageTimer*>(o->get());
+	SS7MsgISUP* msg = static_cast<SS7MsgISUP*>(m->message());
+	if (msg && msg->type() == type && msg->cic() == cic && msg->params()[param] == value) {
+	    if (remove)
+		o->remove(false);
+	    return m;
+	}
+    }
+    return 0;
+}
+
 // Transmit a list of messages. Return true if at least 1 message was sent
 bool SS7ISUP::transmitMessages(ObjList& list)
 {
@@ -5860,12 +5973,20 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
     }
     if (SS7MsgISUP::Unknown != remove) {
 	bool removed = false;
-	for (;;) {
-	    SignallingMessageTimer* pending = findPendingMessage(remove,msg->cic(),true);
-	    if (!pending)
-		break;
-	    TelEngine::destruct(pending);
-	    removed = true;
+	SignallingMessageTimer* pending = 0;
+	if (remove != SS7MsgISUP::CGB && remove != SS7MsgISUP::CGU) {
+	    while (0 != (pending = findPendingMessage(remove,msg->cic(),true))) {
+		TelEngine::destruct(pending);
+		removed = true;
+	    }
+	}
+	else {
+	    NamedString* ns = msg->params().getParam(YSTRING("GroupSupervisionTypeIndicator"));
+	    while (ns &&
+		0 != (pending = findPendingMessage(remove,msg->cic(),ns->name(),*ns,true))) {
+		TelEngine::destruct(pending);
+		removed = true;
+	    }
 	}
 	if (removed)
 	    Debug(this,DebugNote,"Removed pending operation '%s' cic=%u",

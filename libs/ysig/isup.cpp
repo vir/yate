@@ -5104,16 +5104,20 @@ unsigned int getRangeAndStatus(NamedList& nl, unsigned int minRange, unsigned in
 
 // Retrieve maintenance/hwfail type indicator
 // Return false if invalid
-static bool getGrpTypeInd(SS7ISUP* isup, SS7MsgISUP* msg, bool& hwFail)
+static bool getGrpTypeInd(SS7ISUP* isup, SS7MsgISUP* msg, bool& hwFail, NamedString** ns = 0)
 {
     if (!msg)
 	return false;
-    const String& s = msg->params()[YSTRING("GroupSupervisionTypeIndicator")];
-    hwFail = (s == YSTRING("hw-failure"));
-    if (hwFail || (s == YSTRING("maintenance")))
-	return true;
-    Debug(isup,DebugNote,"%s with unknown GroupSupervisionTypeIndicator=%s [%p]",
-	msg->name(),s.c_str(),isup);
+    NamedString* s = msg->params().getParam(YSTRING("GroupSupervisionTypeIndicator"));
+    if (s) {
+	if (ns)
+	    *ns = s;
+	hwFail = (*s == YSTRING("hw-failure"));
+	if (hwFail || (*s == YSTRING("maintenance")))
+	    return true;
+    }
+    Debug(isup,DebugNote,"%s with unknown/unsupported GroupSupervisionTypeIndicator=%s [%p]",
+	msg->name(),TelEngine::c_safe(s),isup);
     return false;
 }
 
@@ -5231,12 +5235,14 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    // Bit: 0-no indication 1-block/unblock
 	    {
 		bool hwFail = false;
-		if (!getGrpTypeInd(this,msg,hwFail))
+		NamedString* grpSuperType = 0;
+		if (!getGrpTypeInd(this,msg,hwFail,&grpSuperType))
 		    break;
 		String* srcMap = 0;
 		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,32);
 		if (!nCics) {
-		    Debug(this,DebugNote,"%s with invalid range %s or map=%s",msg->name(),
+		    Debug(this,DebugNote,"%s (%s) cic=%u with invalid range %s or map=%s",
+			msg->name(),grpSuperType->c_str(),msg->cic(),
 			msg->params().getValue(YSTRING("RangeAndStatus")),
 			msg->params().getValue(YSTRING("RangeAndStatus.map")));
 		    break;
@@ -5245,14 +5251,17 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		lock();
 		// Check for correct response: same msg type, circuit code, type indicator, circuit map
 		SS7MsgISUP::Type type = block ? SS7MsgISUP::CGB : SS7MsgISUP::CGU;
-		SignallingMessageTimer* t = findPendingMessage(type,msg->cic());
-		SS7MsgISUP* m = t ? static_cast<SS7MsgISUP*>(t->message()) : 0;
+		SignallingMessageTimer* t = findPendingMessage(type,msg->cic(),
+		    grpSuperType->name(),*grpSuperType);
+		if (!t) {
+		    Debug(this,DebugNote,"%s (%s) cic=%u: no request for it in our queue",
+			msg->name(),grpSuperType->c_str(),msg->cic());
+		    unlock();
+		    break;
+		}
+		SS7MsgISUP* m = static_cast<SS7MsgISUP*>(t->message());
 		String map;
 		while (m) {
-		    // Check type indicator
-		    bool hw = (m->params()[YSTRING("GroupSupervisionTypeIndicator")] == YSTRING("hw-failure"));
-		    if (hw != hwFail)
-			break;
 		    // Check map
 		    map = m->params()[YSTRING("RangeAndStatus.map")];
 		    if (!map)
@@ -5269,12 +5278,14 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		    break;
 		}
 		if (map) {
-		    DDebug(this,DebugAll,"%s confirmed for pending cic=%u",m->name(),msg->cic());
+		    DDebug(this,DebugAll,"%s (%s) confirmed for pending cic=%u",
+			m->name(),grpSuperType->c_str(),msg->cic());
 		    m_pending.remove(t);
 		}
 		unlock();
 		if (!map) {
-		    Debug(this,DebugNote,"%s with unnacceptable range %s or map=%s",msg->name(),
+		    Debug(this,DebugNote,"%s (%s) cic=%u with unnacceptable range %s or map=%s",
+			msg->name(),grpSuperType->c_str(),msg->cic(),
 			msg->params().getValue(YSTRING("RangeAndStatus")),
 			msg->params().getValue(YSTRING("RangeAndStatus.map")));
 		    break;

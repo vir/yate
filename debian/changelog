@@ -1,4 +1,4 @@
-yate (4.2.1~svn5322) UNRELEASED; urgency=low
+yate (4.2.1~svn5324) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -173,8 +173,15 @@ yate (4.2.1~svn5322) UNRELEASED; urgency=low
     in the same span and add it to circuits map with bit set to 0 (not
     handled). Added control 'circuitevent' available when built for
     debug used to generate alarm/no alarm events for circuits.
+  * Updated to SVN revision 5324: + Check pending (un)block messages for
+    valid circuits when timed out. Fixed bug: remove conflicting CGB/CGU
+    only if GroupSupervisionTypeIndicator is the same.  + Fixed bug:
+    when processing CGA/CUA check GroupSupervisionTypeIndicator when
+    searching the pending list to avoid ignoring the response when we
+    have duplicate CGB/CGU with different type indicator and receive
+    response to second one.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 15 Nov 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 16 Nov 2012 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

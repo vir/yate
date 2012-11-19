@@ -1,4 +1,4 @@
-yate (4.2.1~svn5324) UNRELEASED; urgency=low
+yate (4.2.1~svn5325) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -180,8 +180,11 @@ yate (4.2.1~svn5324) UNRELEASED; urgency=low
     searching the pending list to avoid ignoring the response when we
     have duplicate CGB/CGU with different type indicator and receive
     response to second one.
+  * Updated to SVN revision 5325: + Create general listener from
+    'listener general' section if the section is present in config to
+    mantain compatibility broken in rev. 8084.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 16 Nov 2012 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 20 Nov 2012 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

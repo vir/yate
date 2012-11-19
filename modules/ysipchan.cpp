@@ -8101,7 +8101,11 @@ void SIPDriver::initialize()
     NamedList* def = general;
     if (!def)
 	def = &dummy;
-    setupListener("general",*def,true);
+    NamedList* generalListener = s_cfg.getSection("listener general");
+    if (generalListener)
+	setupListener("general",*generalListener,true,*def);
+    else
+	setupListener("general",*def,true);
     // Setup listeners
     unsigned int n = s_cfg.sections();
     for (unsigned int i = 0; i < n; i++) {
@@ -8142,7 +8146,7 @@ void SIPDriver::setupListener(const String& name, const NamedList& params,
 	    Debug(this,DebugConf,"Invalid listener type '%s' in section '%s': defaults to %s",
 		type.c_str(),params.c_str(),ProtocolHolder::lookupProtoName(proto,false));
     }
-    bool enabled = isGeneral || params.getBoolValue(YSTRING("enable"),true);
+    bool enabled = (params == YSTRING("general")) || params.getBoolValue(YSTRING("enable"),true);
     switch (proto) {
 	case ProtocolHolder::Udp:
 	    m_endpoint->cancelListener(name,"Type changed");

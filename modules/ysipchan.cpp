@@ -7270,6 +7270,8 @@ void YateSIPLine::login()
     if (m_registrar.null() || m_username.null()) {
 	logout();
 	setValid(true);
+	if (m_alive)
+	    keepalive();
 	return;
     }
     DDebug(&plugin,DebugInfo,"YateSIPLine '%s' logging in [%p]",c_str(),this);
@@ -7579,7 +7581,7 @@ bool YateSIPLine::update(const Message& msg)
 	transChg = true;
 	chg = true;
     }
-    m_alive = msg.getIntValue(YSTRING("keepalive"),(m_localDetect ? 25 : 0));
+    m_alive = msg.getIntValue(YSTRING("keepalive"),((m_localDetect && m_registrar) ? 25 : 0));
     // (Re)Set party
     if (transChg || !m_party) {
 	// Logout if not already done

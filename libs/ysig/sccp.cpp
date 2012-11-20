@@ -1483,7 +1483,7 @@ void SCCP::attachGTT(GTT* gtt)
     m_translator = gtt;
 }
 
-NamedList* SCCP::translateGT(const NamedList& params, const String& prefix)
+NamedList* SCCP::translateGT(const NamedList& params, const String& prefix, const String& nextPrefix)
 {
     Lock lock(m_translatorLocker);
     if (!m_translator) {
@@ -1495,7 +1495,7 @@ NamedList* SCCP::translateGT(const NamedList& params, const String& prefix)
     if (!translator)
 	return 0;
     lock.drop();
-    return translator->routeGT(params,prefix);
+    return translator->routeGT(params,prefix,nextPrefix);
 }
 
 HandledMSU SCCP::pushMessage(DataBlock& data, NamedList& params, int ssn)
@@ -1581,6 +1581,28 @@ bool SCCP::managementStatus(Type type, NamedList& params)
 {
     DDebug(this,DebugStub,"Please implement SCCP::managementStatus()!!");
     return false;
+}
+
+void SCCP::resolveGTParams(SS7MsgSCCP* msg, const NamedList* gtParams)
+{
+    if (!msg || !gtParams)
+	return;
+    msg->params().clearParam(YSTRING("CalledPartyAddress"),'.');
+    for (unsigned int i = 0;i < gtParams->length();i++) {
+	NamedString* val = gtParams->getParam(i);
+	if (val && (val->name().startsWith("gt") || val->name() == YSTRING("pointcode") ||
+		val->name() == YSTRING("ssn") || val->name() == YSTRING("route")))
+	    msg->params().setParam("CalledPartyAddress." + val->name(),*val);
+    }
+    NamedString* param = 0;
+    if ((param = gtParams->getParam(YSTRING("RemotePC"))))
+	msg->params().setParam(param->name(),*param);
+    if ((param = gtParams->getParam(YSTRING("sccp"))))
+	msg->params().setParam(param->name(),*param);
+    if (!gtParams->hasSubParams(YSTRING("CallingPartyAddress.")))
+	return;
+    msg->params().clearParam(YSTRING("CallingPartyAddress"),'.');
+    msg->params().copySubParams(*gtParams,YSTRING("CallingPartyAddress."),false);
 }
 
 /**
@@ -1743,9 +1765,10 @@ bool GTT::initialize(const NamedList* config)
     return m_sccp != 0;
 }
 
-NamedList* GTT::routeGT(const NamedList& gt, const String& prefix)
+NamedList* GTT::routeGT(const NamedList& gt, const String& prefix, const String& nextPrefix)
 {
-    Debug(DebugStub,"Please implement NamedList* GTT::routeGT(const NamedList& gt)");
+    Debug(DebugStub,"Please implement NamedList* GTT::routeGT(%s,%s,%s)",
+	    gt.c_str(),prefix.c_str(),nextPrefix.c_str());
     return 0;
 }
 
@@ -2938,17 +2961,28 @@ int SS7SCCP::transmitMessage(SS7MsgSCCP* sccpMsg, bool local)
 	DDebug(this,DebugNote,"Can not send sccp message, L3 is down");
 	return -1;
     }
-    // Collect data to build routing label
-    int sls = sccpMsg->params().getIntValue(YSTRING("sls"),-1);
-    SS7PointCode orig(0,0,0);
-    SS7PointCode dest(0,0,0);
-    if (!fillPointCode(orig,sccpMsg,"CallingPartyAddress","LocalPC",false) ||
-	    !fillPointCode(dest,sccpMsg,"CalledPartyAddress","RemotePC",true)) {
+
+    int dpc = getPointCode(sccpMsg,"CalledPartyAddress","RemotePC",true);
+    if (dpc == -2) {
 	lock.drop();
+	return routeLocal(sccpMsg);
+    }
+    int opc = getPointCode(sccpMsg,"CallingPartyAddress","LocalPC",false);
+    lock.drop();
+    if (dpc < 0 || opc < 0) {
 	if (m_management)
 	    m_management->routeFailure(sccpMsg);
 	return -1;
     }
+    return sendSCCPMessage(sccpMsg,dpc,opc,local);
+}
+
+int SS7SCCP::sendSCCPMessage(SS7MsgSCCP* sccpMsg,int dpc,int opc, bool local)
+{
+    Lock lock(this);
+    int sls = sccpMsg->params().getIntValue(YSTRING("sls"),-1);
+    SS7PointCode dest(m_type,dpc);
+    SS7PointCode orig(m_type,opc > 0 ? opc : m_localPointCode->pack(m_type));
     // Build the routing label
     SS7Label outLabel(m_type,dest,orig,sls);
     if (sccpMsg->getData()->length() > m_maxUdtLength) {
@@ -2966,10 +3000,10 @@ int SS7SCCP::transmitMessage(SS7MsgSCCP* sccpMsg, bool local)
     }
     // Build the msu
     SS7MSU* msu = buildMSU(sccpMsg,outLabel);
+    lock.drop();
     if (!msu)
 	return segmentMessage(sccpMsg,outLabel,local);
     printMessage(msu,sccpMsg,outLabel);
-    lock.drop();
     sls = transmitMSU(*msu,outLabel,sls);
 #ifdef DEBUG
     if (sls < 0)
@@ -2992,10 +3026,11 @@ bool SS7SCCP::fillLabelAndReason(String& dest,const SS7Label& label,const SS7Msg
 }
 
 // Obtain a pointcode from called/calling party address
-bool SS7SCCP::fillPointCode(SS7PointCode& pointcode, SS7MsgSCCP* msg, const String& prefix, const char* pCode, bool translate)
+// Return: -1 On Error; -2 If the message should be routed to a local sccp; else  the pointcode
+int SS7SCCP::getPointCode(SS7MsgSCCP* msg, const String& prefix, const char* pCode, bool translate)
 {
     if (!msg)
-	return false;
+	return -1;
     bool havePointCode = false;
     NamedString* pcNs = msg->params().getParam(pCode);
     if (pcNs && pcNs->toInteger(0) > 0)
@@ -3008,24 +3043,25 @@ bool SS7SCCP::fillPointCode(SS7PointCode& pointcode, SS7MsgSCCP* msg, const Stri
 	}
     }
     if (!havePointCode && translate) { // CalledParyAddress with no pointcode. Check for Global Title
-	NamedList* route = translateGT(msg->params(),prefix);
+	NamedList* route = translateGT(msg->params(),prefix,
+		YSTRING("CallingPartyAddress"));
 	m_totalGTTranslations++;
 	if (!route) {
 	    m_gttFailed++;
-	    return false;
+	    return -1;
+	}
+	resolveGTParams(msg,route);
+	NamedString* localRouting = route->getParam(YSTRING("sccp"));
+	if (localRouting && *localRouting != toString()) {
+	    TelEngine::destruct(route);
+	    return -2;
 	}
 	bool havePC = route->getParam(pCode) != 0;
 	NamedString* trpc = route->getParam(YSTRING("pointcode"));
 	if (!trpc && !havePC) {
 	    Debug(this,DebugWarn,"The GT has not been translated to a pointcode!!");
 	    TelEngine::destruct(route);
-	    return false;
-	}
-	for (unsigned int i = 0;i < route->length();i++) {
-	    NamedString* val = route->getParam(i);
-    	    if (val && (val->name().startsWith("gt") || val->name() == YSTRING("pointcode") ||
-		    val->name() == YSTRING("ssn") || val->name() == YSTRING("route")))
-		msg->params().setParam(prefix + "." + val->name(),*val);
+	    return -1;
 	}
 	if (!havePC)
 	    msg->params().setParam(pCode,*trpc);
@@ -3035,12 +3071,50 @@ bool SS7SCCP::fillPointCode(SS7PointCode& pointcode, SS7MsgSCCP* msg, const Stri
     } else if (!havePointCode && !translate) { // CallingPartyAddress with no pointcode. Assign sccp pointcode
 	if (!m_localPointCode) {
 	    Debug(this,DebugWarn,"Can not build routing label. No local pointcode present and no pointcode present in CallingPartyAddress");
-	    return false;
+	    return -1;
 	}
-	return pointcode.unpack(m_type,m_localPointCode->pack(m_type));
+	return m_localPointCode->pack(m_type);
     }
-    int pc = msg->params().getIntValue(pCode);
-    return pointcode.unpack(m_type,pc);
+    return msg->params().getIntValue(pCode);
+}
+
+int SS7SCCP::routeLocal(SS7MsgSCCP* msg)
+{
+    if (!msg) {
+	Debug(this,DebugWarn,"Failed to route local! Null message!");
+	return -1;
+    }
+    NamedString* sccp = msg->params().getParam(YSTRING("sccp"));
+    if (!sccp || *sccp == toString()) {
+	Debug(this,DebugStub,
+		"Requested to local route sccp message without sccp component!");
+	return -1;
+    }
+    int dpc = msg->params().getIntValue("RemotePC",-1);
+    if (dpc < 0)
+	dpc = msg->params().getIntValue("CalledPartyAddress.pointcode",-1);
+    if (dpc < 0) {
+	Debug(this,DebugNote,
+		"Unable to route local sccp message! No pointcode present.");
+	return -1;
+    }
+    int opc = msg->params().getIntValue(YSTRING("LocalPC"),-1);
+    if (opc < 0)
+	opc = msg->params().getIntValue(YSTRING("CallingPartyAddress.pointcode"),-1);
+    if (!engine()) {
+	Debug(this,DebugMild,
+		"Unable to route local sccp message! No engine attached!");
+	return -1;
+    }
+    RefPointer<SS7SCCP> sccpCmp = YOBJECT(SS7SCCP,
+		engine()->find(*sccp,YSTRING("SS7SCCP")));
+    if (!sccpCmp) {
+	Debug(this,DebugNote,
+		"Unable to route local sccp message! SCCP component %s not found!",
+		sccp->c_str());
+	return -1;
+    }
+    return sccpCmp->sendSCCPMessage(msg,dpc,opc,false);
 }
 
 int SS7SCCP::checkImportanceLevel(int msgType, int initialImportance)
@@ -3103,6 +3177,9 @@ int SS7SCCP::sendMessage(DataBlock& data, const NamedList& params)
 	return -1;
     }
     sccpMsg->params().copyParams(params); // Copy the parameters to message
+    sccpMsg->params().setParam("generated","local");
+    if (m_localPointCode)
+	sccpMsg->params().setParam("LocalPC",String(getPackedPointCode()));
     ajustMessageParams(sccpMsg->params(),sccpMsg->type());
     if (params.getBoolValue(YSTRING("CallingPartyAddress.pointcode"),false) && m_localPointCode)
 	sccpMsg->params().setParam("CallingPartyAddress.pointcode",String(getPackedPointCode()));
@@ -3747,6 +3824,7 @@ bool SS7SCCP::processMSU(SS7MsgSCCP::Type type, const unsigned char* paramPtr,
     }
     msg->params().setParam("LocalPC",String(label.dpc().pack(m_type)));
     msg->params().setParam("RemotePC",String(label.opc().pack(m_type)));
+    msg->params().setParam("generated","remote");
     // Set the sls in case of STP routing for sequence control
     msg->params().setParam("sls",String(label.sls()));
     if (m_printMsg && debugAt(DebugInfo)) {
@@ -3856,7 +3934,8 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	    Debug(this,DebugInfo,"Message requested to be routed on gt but no gt present!");
 	    break;
 	}
-	NamedList* gtRoute = translateGT(msg->params(),"CalledPartyAddress");
+	NamedList* gtRoute = translateGT(msg->params(),"CalledPartyAddress",
+		"CallingPartyAddress");
 	m_totalGTTranslations++;
 	if (!gtRoute) {
 	    if (m_endpoint && msg->params().getParam(YSTRING("CalledPartyAddress.ssn")))
@@ -3866,6 +3945,13 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	    Debug(this,DebugInfo,"No Gt Found for : %s, or all routes are down!",
 		  msg->params().getValue(YSTRING("CalledPartyAddress.gt")));
 	    break;
+	}
+	resolveGTParams(msg,gtRoute);
+	NamedString* localRouting = gtRoute->getParam(YSTRING("sccp"));
+	if (localRouting && *localRouting != toString()) {
+	    TelEngine::destruct(gtRoute);
+	    lock.drop();
+	    return routeLocal(msg) >= 0;
 	}
 	bool haveRemotePC = gtRoute->getParam(YSTRING("RemotePC")) != 0;
 	if (!gtRoute->getParam(YSTRING("pointcode")) && !haveRemotePC) {
@@ -4305,6 +4391,8 @@ bool SS7SCCP::control(NamedList& params)
 	}
 	return Module::itemComplete(*ret,toString(),part);
     }
+    if (toString() != cmp)
+	return false;
     Lock lock(this);
     switch (cmd) {
 	case Status:

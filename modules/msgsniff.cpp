@@ -24,6 +24,8 @@
 
 #include <yatengine.h>
 
+#include <stdio.h>
+
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -75,10 +77,18 @@ static void dumpParams(const Message &msg, String& par)
 	const NamedString *s = msg.getParam(i);
 	if (s) {
 	    par << "\r\n  param['" << s->name() << "'] = ";
-	    if (s->name() == "password")
+	    if (s->name() == YSTRING("password"))
 		par << "(hidden)";
 	    else
 		par << "'" << *s << "'";
+	    if (const NamedPointer* p = YOBJECT(NamedPointer,s)) {
+		char buf[64];
+		GenObject* obj = p->userData();
+		::sprintf(buf," [%p]",obj);
+		par << buf;
+		if (obj)
+		    par << " '" << obj->toString() << "'";
+	    }
 	}
     }
 }

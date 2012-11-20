@@ -543,15 +543,13 @@ bool MyAcct::initDb()
     Debug(&module,DebugNote,"Initiating pool of %d connections for '%s'",
 	m_poolSize,c_str());
 
-    m_queueSem.lock();
-
     s_libMutex.lock();
     if (0 == s_libCounter++) {
 	DDebug(&module,DebugAll,"Initializing the MySQL library");
 	mysql_library_init(0,0,0);
     }
     s_libMutex.unlock();
-    
+
     int initCons = initConns();
     if (!initCons) {
 	Debug(&module,DebugWarn,"Could not initiate any connections for account '%s', trying again in %d seconds",
@@ -744,7 +742,7 @@ void InitThread::run()
 	    if (acc->shouldRetryInit() && acc->retryWhen() <= Time::msecNow()) {
 		int count = acc->initConns();
 		if (count < acc->poolSize())
-		    Debug(&module,(count ? DebugMild : DebugWarn),"Account '%s' has %d initialized connections out of "
+		    Debug(&module,(count ? DebugMild : DebugWarn),"Account '%s' has %d initialized connections out of"
 			" a pool of %d",acc->c_str(),count,acc->poolSize());
 		else
 		    Debug(&module,DebugInfo,"All connections for account '%s' have been initialized, pool size is %d",

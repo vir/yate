@@ -5042,9 +5042,10 @@ public:
      * Route a SCCP message based on Global Title
      * @param gt The original global title used for message routing
      * @param prefix Optional prefix for gt params
+     * @param nextPrefix Optional prefix for gt params
      * @return A new SCCP called party address or null if no route was found.
      */
-    virtual NamedList* routeGT(const NamedList& gt, const String& prefix);
+    virtual NamedList* routeGT(const NamedList& gt, const String& prefix, const String& nextPrefix);
 
     /**
      * Initialize this GTT
@@ -5177,9 +5178,11 @@ protected:
      * Translate a Global Title
      * @param params The Global Title content
      * @param prefix The prefix of the global title content parameters
+     * @param nextPrefix Other prefix of the global title content parameters
      * @return a new SCCP route or 0 is no route was found
      */
-    NamedList* translateGT(const NamedList& params, const String& prefix);
+    NamedList* translateGT(const NamedList& params, const String& prefix, 
+	    const String& nextPrefix);
 
     /**
      * Send a SCCP message to users list for processing
@@ -5213,6 +5216,13 @@ protected:
      */
     virtual bool isEndpoint()
 	{ return false; }
+
+    /**
+     * Copy the parameters returned by Global Title Translator in the SCCP Message
+     * @param msg The SCCP message
+     * @param gtParams The parameters returned by GTT
+     */
+    void resolveGTParams(SS7MsgSCCP* msg, const NamedList* gtParams);
 private:
     ObjList m_users;
     Mutex m_translatorLocker;
@@ -10482,6 +10492,13 @@ protected:
      */
     virtual bool isEndpoint()
 	{ return m_endpoint; }
+
+    /**
+     * Route a SCCP Message to other SCCP component.
+     * @param msg The sccp message.
+     * @return -1 if the message failed to be routed
+     */
+    int routeLocal(SS7MsgSCCP* msg);
 private:
     // Helper method to calculate sccp address length
     unsigned int getAddressLength(const NamedList& params, const String& prefix);
@@ -10497,7 +10514,9 @@ private:
     void printMessage(const SS7MSU* msu, const SS7MsgSCCP* msg, const SS7Label& label);
     // Helper method used to extract the pointcode from Calling/Called party address.
     // Also will call GT translate if there is no pointcode in called party address
-    bool fillPointCode(SS7PointCode& pointcode, SS7MsgSCCP* msg, const String& prefix, const char* pCode, bool translate);
+    int getPointCode(SS7MsgSCCP* msg, const String& prefix, const char* pCode, bool translate);
+    // Transmit a SCCP message
+    int sendSCCPMessage(SS7MsgSCCP* sccpMsg,int dpc,int opc, bool local);
     // Helper method used to verify if the message is a connectionless data message
     inline bool isSCLCMessage(int msgType)
 	{ return msgType == SS7MsgSCCP::UDT || msgType == SS7MsgSCCP::XUDT || msgType == SS7MsgSCCP::LUDT; }

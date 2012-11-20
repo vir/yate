@@ -1499,6 +1499,13 @@ ExpOperation* ExpWrapper::copy(Mutex* mtx) const
     return op;
 }
 
+bool ExpWrapper::valBoolean() const
+{
+    if (!m_object)
+	return false;
+    return !JsParser::isNull(*this);
+}
+
 void* ExpWrapper::getObject(const String& name) const
 {
     if (name == YSTRING("ExpWrapper"))

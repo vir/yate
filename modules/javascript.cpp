@@ -337,6 +337,7 @@ private:
 };
 
 static String s_basePath;
+static bool s_allowAbort = false;
 
 UNLOAD_PLUGIN(unloadNow)
 {
@@ -401,10 +402,11 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    TelEngine::destruct(op);
 	}
 	if (str) {
+	    int limit = s_allowAbort ? DebugFail : DebugGoOn;
 	    if (level > DebugAll)
 		level = DebugAll;
-	    else if (level <= DebugFail)
-		level = DebugGoOn;
+	    else if (level < limit)
+		level = limit;
 	    Debug(&__plugin,level,"%s",str.c_str());
 	}
     }
@@ -719,7 +721,12 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	ObjList args;
 	if (extractArgs(stack,oper,context,args) < 2)
 	    return false;
-	ExpFunction* func = YOBJECT(ExpFunction,args[0]);
+	const ExpFunction* func = YOBJECT(ExpFunction,args[0]);
+	if (!func) {
+	    JsFunction* jsf = YOBJECT(JsFunction,args[0]);
+	    if (jsf)
+		func = jsf->getFunc();
+	}
 	if (!func)
 	    return false;
 	ExpOperation* name = static_cast<ExpOperation*>(args[1]);
@@ -1860,6 +1867,7 @@ void JsModule::initialize()
     if (!tmp.endsWith(Engine::pathSeparator()))
 	tmp += Engine::pathSeparator();
     s_basePath = tmp;
+    s_allowAbort = cfg.getBoolValue("general","allow_abort");
     lock();
     m_assistCode.clear();
     m_assistCode.basePath(tmp);

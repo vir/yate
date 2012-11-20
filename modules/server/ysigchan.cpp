@@ -820,7 +820,8 @@ class GTTranslator : public GTT
 public:
     GTTranslator(const NamedList& params);
     virtual ~GTTranslator();
-    virtual NamedList* routeGT(const NamedList& gt, const String& prefix);
+    virtual NamedList* routeGT(const NamedList& gt, const String& prefix,
+	    const String& nextPrefix);
     virtual bool initialize(const NamedList* config);
     virtual void updateTables(const NamedList& params);
 };
@@ -3362,7 +3363,7 @@ bool SigSCCPUser::initialize(NamedList& params)
 
 SigSccpGtt::~SigSccpGtt()
 {
-    DDebug(&plugin,DebugAll,"Destroing SigSccpGtt [%p]",this);
+    DDebug(&plugin,DebugAll,"Destroying SigSccpGtt [%p]",this);
     if (m_gtt) {
 	plugin.engine()->remove(m_gtt);
 	TelEngine::destruct(m_gtt);
@@ -4919,7 +4920,7 @@ SCCPUserDummy::SCCPUserDummy(const NamedList& params)
 
 SCCPUserDummy::~SCCPUserDummy()
 {
-    Debug(&plugin,DebugAll,"Destroing SCCPUserDummy [%p]",this);
+    Debug(&plugin,DebugAll,"Destroying SCCPUserDummy [%p]",this);
 }
 
 HandledMSU SCCPUserDummy::receivedData(DataBlock& data, NamedList& params)
@@ -4985,13 +4986,13 @@ GTTranslator::GTTranslator(const NamedList& params)
 
 GTTranslator::~GTTranslator()
 {
-    DDebug(this,DebugAll,"Destroing Global Title Translator [%p]",this);
+    DDebug(this,DebugAll,"Destroying Global Title Translator [%p]",this);
 }
 
-NamedList* GTTranslator::routeGT(const NamedList& gt, const String& prefix)
+NamedList* GTTranslator::routeGT(const NamedList& gt, const String& prefix, const String& nextPrefix)
 {
     // TODO keep a cache!!
-    // Verify iff the requested gt exists in cache
+    // Verify if the requested gt exists in cache
     // if exists return the cached translation of th GT
     // if not exists send it for translation
     Message* msg = new Message("sccp.route");
@@ -5000,6 +5001,9 @@ NamedList* GTTranslator::routeGT(const NamedList& gt, const String& prefix)
     msg->addParam("translator",toString(),false);
     msg->copyParam(gt,YSTRING("HopCounter"));
     msg->copyParam(gt,YSTRING("MessageReturn"));
+    msg->copyParam(gt,YSTRING("LocalPC"));
+    msg->copyParam(gt,YSTRING("generated"));
+    msg->copySubParams(gt,nextPrefix + ".",false);
     msg->copySubParams(gt,prefix + ".");
     if (Engine::dispatch(msg)) // Append the translated GT to cache
 	return msg;

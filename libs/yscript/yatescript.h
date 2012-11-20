@@ -963,13 +963,13 @@ public:
 	{ m_number = num; String::operator=((int)num); return num; }
 
     /**
-     * Retrive the numeric value of the operation
+     * Retrieve the numeric value of the operation
      * @return Number contained in operation, zero if not a number
      */
     virtual long int valInteger() const;
 
     /**
-     * Retrive the boolean value of the operation
+     * Retrieve the boolean value of the operation
      * @return True if the operation is to be interpreted as true value
      */
     virtual bool valBoolean() const;
@@ -1021,6 +1021,13 @@ public:
 	{ if (name) (*this) << "[function " << name << "()]"; }
 
     /**
+     * Retrieve the boolean value of the function (not of its result)
+     * @return Always true
+     */
+    virtual bool valBoolean() const
+	{ return true; }
+
+    /**
      * Clone and rename method
      * @param name Name of the cloned operation
      * @return New operation instance
@@ -1069,6 +1076,12 @@ public:
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
     virtual void* getObject(const String& name) const;
+
+    /**
+     * Retrieve the boolean value of the operation
+     * @return True if the wrapped object is to be interpreted as true value
+     */
+    virtual bool valBoolean() const;
 
     /**
      * Clone and rename method

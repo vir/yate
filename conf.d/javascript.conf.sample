@@ -10,6 +10,10 @@
 ; Example: routing=route.js
 ;routing=
 
+; allow_abort: boolean: Allow messages on level DebugFail to cause an engine abort
+; Never enable it in production!
+;allow_abort=no
+
 
 [scripts]
 ; Add one entry in this section for each script that is to be loaded on Yate startup

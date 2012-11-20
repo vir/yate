@@ -1798,7 +1798,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		ExpOperation* thisObj = 0;
 		bool ok = false;
 		while (ExpOperation* drop = popAny(stack)) {
-		    ok = drop->opcode() == OpcFunc;
+		    ok = drop->barrier() && (drop->opcode() == OpcFunc);
 		    long int lbl = drop->number();
 		    if (ok && (lbl < -1)) {
 			lbl = -lbl;

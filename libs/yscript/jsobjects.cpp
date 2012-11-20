@@ -48,7 +48,6 @@ public:
     inline JsDate(Mutex* mtx)
 	: JsObject("Date",mtx,true)
 	{
-	    params().addParam(new ExpFunction("now"));
 	    params().addParam(new ExpFunction("getDate"));
 	    params().addParam(new ExpFunction("getDay"));
 	    params().addParam(new ExpFunction("getFullYear"));
@@ -67,6 +66,10 @@ public:
 	    params().addParam(new ExpFunction("getUTCMinutes"));
 	    params().addParam(new ExpFunction("getUTCMonth"));
 	    params().addParam(new ExpFunction("getUTCSeconds"));
+	}
+    virtual void initConstructor(JsFunction* construct)
+	{
+	    construct->params().addParam(new ExpFunction("now"));
 	}
 protected:
     inline JsDate(Mutex* mtx, const char* name)

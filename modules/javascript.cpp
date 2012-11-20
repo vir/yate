@@ -721,7 +721,12 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	ObjList args;
 	if (extractArgs(stack,oper,context,args) < 2)
 	    return false;
-	ExpFunction* func = YOBJECT(ExpFunction,args[0]);
+	const ExpFunction* func = YOBJECT(ExpFunction,args[0]);
+	if (!func) {
+	    JsFunction* jsf = YOBJECT(JsFunction,args[0]);
+	    if (jsf)
+		func = jsf->getFunc();
+	}
 	if (!func)
 	    return false;
 	ExpOperation* name = static_cast<ExpOperation*>(args[1]);

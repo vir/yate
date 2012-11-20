@@ -1966,6 +1966,13 @@ public:
     virtual bool runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context, JsObject* thisObj = 0);
 
     /**
+     * Retrieve the ExpFunction matching this Javascript function
+     * @return Pointer to ExpFunction representation
+     */
+    inline const ExpFunction* getFunc() const
+	{ return &m_func; }
+
+    /**
      * Retrieve the name of the N-th formal argument
      * @param index Index of the formal argument
      * @return Pointer to formal argument name, NULL if index too large
@@ -2003,6 +2010,7 @@ private:
     ObjList m_formal;
     long int m_label;
     ScriptCode* m_code;
+    ExpFunction m_func;
 };
 
 /**

@@ -285,8 +285,12 @@ bool JsObject::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* 
     if (ef)
 	return runNative(stack,oper,context);
     JsFunction* jf = YOBJECT(JsFunction,param);
-    if (jf)
-	return jf->runDefined(stack,oper,context,this);
+    if (jf) {
+	JsObject* objThis = 0;
+	if (toString() != YSTRING("()"))
+	    objThis = this;
+	return jf->runDefined(stack,oper,context,objThis);
+    }
     return false;
 }
 
@@ -300,16 +304,11 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
 	if (ef)
 	    ExpEvaluator::pushOne(stack,ef->ExpOperation::clone());
 	else {
-	    JsFunction* jf = YOBJECT(JsFunction,param);
-	    if (jf)
-		ExpEvaluator::pushOne(stack,new ExpFunction(oper.name()));
-	    else {
-		ExpWrapper* w = YOBJECT(ExpWrapper,param);
-		if (w)
-		    ExpEvaluator::pushOne(stack,w->clone(oper.name()));
-		else
-		    ExpEvaluator::pushOne(stack,new ExpOperation(*param,oper.name(),true));
-	    }
+	    ExpWrapper* w = YOBJECT(ExpWrapper,param);
+	    if (w)
+		ExpEvaluator::pushOne(stack,w->clone(oper.name()));
+	    else
+		ExpEvaluator::pushOne(stack,new ExpOperation(*param,oper.name(),true));
 	}
     }
     else

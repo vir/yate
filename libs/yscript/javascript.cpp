@@ -2294,21 +2294,23 @@ bool JsRunner::callable(const String& name)
 
 JsFunction::JsFunction(Mutex* mtx)
     : JsObject("Function",mtx,true),
-      m_label(0), m_code(0)
+      m_label(0), m_code(0), m_func("")
 {
     init();
 }
 
 JsFunction::JsFunction(Mutex* mtx, const char* name, ObjList* args, long int lbl, ScriptCode* code)
     : JsObject(mtx,String("[function ") + name + "()]",false),
-      m_label(lbl), m_code(code)
+      m_label(lbl), m_code(code), m_func(name)
 {
     init();
     if (args) {
 	while (GenObject* arg = args->remove(false))
 	    m_formal.append(arg);
     }
-    params().addParam("length",String(m_formal.count()));
+    unsigned int argc = m_formal.count();
+    static_cast<ExpOperation&>(m_func) = argc;
+    params().addParam("length",String(argc));
 }
 
 JsObject* JsFunction::copy(Mutex* mtx) const

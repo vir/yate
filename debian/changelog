@@ -1,4 +1,4 @@
-yate (4.2.1~svn5325) UNRELEASED; urgency=low
+yate (4.2.1~svn5334) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -183,8 +183,19 @@ yate (4.2.1~svn5325) UNRELEASED; urgency=low
   * Updated to SVN revision 5325: + Create general listener from
     'listener general' section if the section is present in config to
     mantain compatibility broken in rev. 8084.
+  * Updated to SVN revision 5334: + Added possibility to route sccp
+    messages between sccp components.  + No thread - and especially
+    initialization - must wait forever at semaphore.  + Send UDP
+    keepalive even for SIP accounts without registration.  + Fixed
+    boolean evaluation for objects and function objects.  + This
+    prevents misinterpreting function values on stack as return address.
+    + Check the barrier flag when returning from a Javascript function.
+    + Added setting to allow DebugFail from Javascript.  + Added support
+    for calling object methods by variable.  + Show objects stored in
+    sniffed messages' parameters.  + Date.now() is a static function,
+    not a member method.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 20 Nov 2012 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 21 Nov 2012 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

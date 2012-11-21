@@ -192,6 +192,7 @@ int LKSocket::recvMsg(void* buf, int length, SocketAddr& addr, int& stream, int&
     sctp_sndrcvinfo sri;
     memset(&sri,0,sizeof(sri));
     struct sockaddr address;
+    memset(&address,0,sizeof(address));
     socklen_t len = 0;
     int flag = 0;
     int r = sctp_recvmsg(handle(),buf,length,&address,&len,&sri,&flag);
@@ -266,6 +267,28 @@ bool LKSocket::setParams(const NamedList& params)
     if (!aux)
 	Debug(&plugin,DebugNote,"Failed to set SCTP RTO params! Reason: %s",strerror(errno));
     ret |= aux;
+
+    NamedString* adaptation = params.getParam(YSTRING("sctp_adaptation"));
+#ifdef HAVE_SETADAPTATION_STRUCT
+    if (adaptation) {
+	struct sctp_setadaptation adapt;
+	bzero(&adapt, sizeof(adapt));
+
+	int val = adaptation->toInteger(-1);
+	if (val >= 0) {
+	    adapt.ssb_adaptation_ind = val;
+
+	    aux = setOption(IPPROTO_SCTP,SCTP_ADAPTATION_LAYER, &adapt, sizeof(adapt));
+	    if (!aux)
+		Debug(&plugin,DebugNote,"Failed to set SCTP adaptation params! Reason: %s",strerror(errno));
+	    ret |= aux;
+	}
+    }
+#else
+    if (adaptation)
+	Debug(&plugin,DebugNote,"SCTP struct sctp_setadaptation is not available!");
+#endif
+
     struct sctp_paddrparams paddr_params;
     bzero(&paddr_params, sizeof(paddr_params));
 

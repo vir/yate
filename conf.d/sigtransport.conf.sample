@@ -90,3 +90,7 @@
 ; Ex: sack_freq = 2
 ; Note! If you set this to 1 you will disable the sctp acknowledge algorithm
 ;sack_freq=
+
+; Set sctp socket adaptation parameter
+; E.g. : sctp_adaptation=1
+;sctp_adaptation=

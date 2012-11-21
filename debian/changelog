@@ -1,4 +1,4 @@
-yate (4.2.1~svn5334) UNRELEASED; urgency=low
+yate (4.2.1~svn5335) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -194,8 +194,10 @@ yate (4.2.1~svn5334) UNRELEASED; urgency=low
     for calling object methods by variable.  + Show objects stored in
     sniffed messages' parameters.  + Date.now() is a static function,
     not a member method.
+  * Updated to SVN revision 5335: + Added the option to set sctp socket
+    "adaptation" parameter.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 21 Nov 2012 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 22 Nov 2012 02:19:14 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

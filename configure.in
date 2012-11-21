@@ -415,6 +415,16 @@ AC_MSG_RESULT([$sctp_connectx_new])
 if [[ "x$sctp_connectx_new" = "xyes" ]]; then
 SCTP_FLAGS="$SCTP_FLAGS -DHAVE_SCTP_CONNECTX_4"
 fi
+sctp_setadaptation=no
+AC_MSG_CHECKING([whether sctp_setadaptation struct is present])
+AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/sctp.h>],[struct sctp_setadaptation sctp_adapt;],[sctp_setadaptation=yes])
+AC_MSG_RESULT([$sctp_setadaptation])
+if [[ "x$sctp_setadaptation" = "xyes" ]]; then
+SCTP_FLAGS="$SCTP_FLAGS -DHAVE_SETADAPTATION_STRUCT"
+fi
 sctp_sack_info=no
 AC_MSG_CHECKING([whether sctp_sack_info struct is present])
 AC_TRY_COMPILE([#include <sys/types.h>

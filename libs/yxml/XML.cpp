@@ -1718,6 +1718,18 @@ XmlElement::XmlElement(const char* name, bool complete)
 	m_element.c_str(),this);
 }
 
+// Create a new element with a text child
+XmlElement::XmlElement(const char* name, const char* value, bool complete)
+    : m_element(name), m_prefixed(0),
+    m_parent(0), m_inheritedNs(0),
+    m_empty(true), m_complete(complete)
+{
+    setPrefixed();
+    addText(value);
+    XDebug(DebugAll,"XmlElement::XmlElement(%s) [%p]",
+	m_element.c_str(),this);
+}
+
 // Destructor
 XmlElement::~XmlElement()
 {

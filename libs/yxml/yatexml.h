@@ -1095,6 +1095,14 @@ public:
     XmlElement(const char* name, bool complete = true);
 
     /**
+     * Constructor. Create a new element with a text child
+     * @param name The name of the element
+     * @param value Element text child value
+     * @param complete False to build an incomplete element
+     */
+    XmlElement(const char* name, const char* value, bool complete = true);
+
+    /**
      * Copy constructor
      * @param orig Original XmlElement
      */

@@ -911,6 +911,12 @@ public:
 	{ return static_cast<XmlChild*>(m_list.remove(false)); }
 
     /**
+     * Remove the first XmlElement from list and returns it if completed
+     * @return XmlElement pointer or 0 if no XmlElement is found or the first one is not completed
+     */
+    XmlElement* popElement();
+
+    /**
      * Remove a child. Reset the parent of not deleted xml element
      * @param child The child to remove
      * @param delObj True to delete the object

@@ -1395,6 +1395,23 @@ XmlSaxParser::Error XmlFragment::addChild(XmlChild* child)
     return XmlSaxParser::NoError;
 }
 
+// Remove the first XmlElement from list and returns it if completed
+XmlElement* XmlFragment::popElement()
+{
+    for (ObjList* o = m_list.skipNull(); o; o = o->skipNext()) {
+	XmlChild* c = static_cast<XmlChild*>(o->get());
+	XmlElement* x = c->xmlElement();
+	if (x) {
+	     if (x->completed()) {
+		o->remove(false);
+		return x;
+	     }
+	     return 0;
+	}
+    }
+    return 0;
+}
+
 // Remove a child
 XmlChild* XmlFragment::removeChild(XmlChild* child, bool delObj)
 {

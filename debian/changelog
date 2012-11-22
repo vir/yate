@@ -1,4 +1,4 @@
-yate (4.2.1~svn5335) UNRELEASED; urgency=low
+yate (4.2.1~svn5342) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -196,8 +196,19 @@ yate (4.2.1~svn5335) UNRELEASED; urgency=low
     not a member method.
   * Updated to SVN revision 5335: + Added the option to set sctp socket
     "adaptation" parameter.
+  * Updated to SVN revision 5342: + Fixed the way ysig components are
+    initialized.  + Remove sccp message originating pointcode when a
+    local routing is performed.  + Do not copy RemotePC parameter from
+    sccp.route message.  + Set custom names to transport thread and
+    transport mutex for debugging.  + Notify sigtran when a new sctp
+    connection has been established.  + Fixed bugs in sigtransport.  +
+    Added constructor used to build an XmlElement with a text child.  +
+    Added helper method used to retrieve the text of an element's child.
+    + Added helper method used to append a child and release the object
+    if append fails.  + Added method used to pop the first XmlElement
+    from a fragment. The element is extracted only if completed.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 22 Nov 2012 02:19:14 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 23 Nov 2012 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

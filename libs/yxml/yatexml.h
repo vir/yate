@@ -558,9 +558,21 @@ public:
     /**
      * Append a new child to this XmlParent
      * @param child The child to append
-     * @return XmlNoError if the child was successfully added
+     * @return NoError if the child was successfully added
      */
     virtual XmlSaxParser::Error addChild(XmlChild* child) = 0;
+
+    /**
+     * Append a new child of this XmlParent, release the object on failure
+     * @param child The child to append
+     * @return The child on success, 0 on failure
+     */
+    inline XmlChild* addChildSafe(XmlChild* child) {
+	    XmlSaxParser::Error err = addChild(child);
+	    if (err != XmlSaxParser::NoError)
+		TelEngine::destruct(child);
+	    return child;
+	}
 
     /**
      * Remove a child

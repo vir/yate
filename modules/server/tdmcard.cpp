@@ -229,7 +229,7 @@ public:
     // Process incoming data
     virtual bool process();
     // Called by the factory to create TDM interfaces or spans
-    static SignallingComponent* create(const String& type, const NamedList& name);
+    static SignallingComponent* create(const String& type, NamedList& name);
 protected:
     // Check if received any data in the last interval. Notify receiver
     virtual void timerTick(const Time& when);
@@ -1701,7 +1701,7 @@ bool TdmAnalogCircuit::process()
 }
 
 // Interface
-SignallingComponent* TdmInterface::create(const String& type, const NamedList& name)
+SignallingComponent* TdmInterface::create(const String& type, NamedList& name)
 {
     bool circuit = true;
     if (type == "SignallingInterface")
@@ -1719,24 +1719,19 @@ SignallingComponent* TdmInterface::create(const String& type, const NamedList& n
     Configuration cfg(Engine::configFile("tdmcard"));
     const char* sectName = name.getValue((circuit ? "voice" : "sig"),name.getValue("basename",name));
     NamedList* config = cfg.getSection(sectName);
-    if (module) {
-	DDebug(&plugin,DebugAll,"Replace config params in section %s",c_safe(sectName));
-	if (!config) {
-	    cfg.createSection(sectName);
-	    config = cfg.getSection(sectName);
-	}
-	config->copyParams(name);
-	if(!cfg.save())
-	    DDebug(&plugin,DebugAll,"Failed to save configuration in file %s ",module->c_str());
-    }
-    else if (!config){
-	DDebug(&plugin,DebugAll,"No section '%s' in configuration",c_safe(sectName));
+
+    if (!name.getBoolValue(YSTRING("local-config"),false))
+	config = &name;
+    else if (!config) {
+	DDebug(&plugin,DebugConf,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
-    }
+    } else
+	name.copyParams(*config);
+
 #ifdef DEBUG
     if (plugin.debugAt(DebugAll)) {
 	String tmp;
-	name.dump(tmp,"\r\n  ",'\'',true);
+	config->dump(tmp,"\r\n  ",'\'',true);
 	Debug(&plugin,DebugAll,"TdmInterface::create %s%s",
 	    (circuit ? "span" : "interface"),tmp.c_str());
     }

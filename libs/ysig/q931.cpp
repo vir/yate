@@ -2504,9 +2504,15 @@ bool ISDNQ931::initialize(const NamedList* config)
 	    if (linkConfig)
 		params.copyParams(*linkConfig);
 	    else {
-		params.copySubParams(*config,*name + ".");
+		if (config->hasSubParams(*name + "."))
+		    params.copySubParams(*config,*name + ".");
+		else {
+		    params.addParam("local-config","true");
+		    params.copyParams(*config);
+		}
 		linkConfig = &params;
 	    }
+	    params.clearParam(YSTRING("debugname"));
 	    ISDNLayer2* l2 = YSIGCREATE(ISDNLayer2,&params);
 	    if (!l2) {
 		Debug(this,DebugWarn,"Could not create ISDN Layer 2 '%s' [%p]",name->c_str(),this);

@@ -219,6 +219,25 @@ bool SIGTRAN::getSocketParams(const String& params, NamedList& result)
     return true;
 }
 
+bool SIGTRAN::hasTransportThread()
+{
+    m_transMutex.lock();
+    RefPointer<SIGTransport> trans = m_trans;
+    m_transMutex.unlock();
+    if (!trans)
+	return false;
+    return trans->hasThread();
+}
+
+void SIGTRAN::stopTransportThread()
+{
+    m_transMutex.lock();
+    RefPointer<SIGTransport> trans = m_trans;
+    m_transMutex.unlock();
+    if (trans)
+	trans->stopThread();
+}
+
 // Attach or detach an user adaptation layer
 void SIGTransport::attach(SIGTRAN* sigtran)
 {
@@ -238,9 +257,9 @@ u_int32_t SIGTransport::defPort() const
 bool SIGTransport::processMSG(unsigned char msgVersion, unsigned char msgClass,
     unsigned char msgType, const DataBlock& msg, int streamId) const
 {
-    XDebug(this,DebugAll,"Received message class %s type %s (0x%02X)",
+    XDebug(this,DebugAll,"Received message class %s type %s (0x%02X) on stream %d",
 	lookup(msgClass,s_classes,"Unknown"),
-	SIGTRAN::typeName(msgClass,msgType,"Unknown"),msgType);
+	SIGTRAN::typeName(msgClass,msgType,"Unknown"),msgType,streamId);
     return alive() && m_sigtran && m_sigtran->processMSG(msgVersion,msgClass,msgType,msg,streamId);
 }
 
@@ -256,9 +275,9 @@ bool SIGTransport::transmitMSG(unsigned char msgVersion, unsigned char msgClass,
 {
     if (!alive())
 	return false;
-    XDebug(this,DebugAll,"Sending message class %s type %s (0x%02X)",
+    XDebug(this,DebugAll,"Sending message class %s type %s (0x%02X) on stream %d",
 	lookup(msgClass,s_classes,"Unknown"),
-	SIGTRAN::typeName(msgClass,msgType,"Unknown"),msgType);
+	SIGTRAN::typeName(msgClass,msgType,"Unknown"),msgType,streamId);
 
     if (!connected(streamId)) {
 	Debug(this,DebugMild,"Cannot send message, stream %d not connected [%p]",
@@ -283,6 +302,15 @@ bool SIGTransport::transmitMSG(unsigned char msgVersion, unsigned char msgClass,
     return ok;
 }
 
+bool SIGTransport::transportNotify(SIGTransport* newTransport, const SocketAddr& addr)
+{
+    if (alive() && m_sigtran) {
+	return m_sigtran->transportNotify(newTransport,addr);
+    }
+    TelEngine::destruct(newTransport);
+    return false;
+}
+
 
 /**
  * Class SIGAdaptation
@@ -305,26 +333,16 @@ bool SIGAdaptation::initialize(const NamedList* config)
 {
     if (transport())
 	return true;
-    NamedString* name = config->getParam(YSTRING("sig"));
-    if (!name)
-	name = config->getParam(YSTRING("basename"));
-    if (name) {
+    NamedList params("");
+    if (resolveConfig(YSTRING("sig"),params,config) ||
+	    resolveConfig(YSTRING("basename"),params,config)) {
 	DDebug(this,DebugInfo,"Creating transport for SIGTRAN UA [%p]",this);
-	NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	NamedList* trConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	NamedList params(name->c_str());
-	params.addParam("basename",*name);
-	if (trConfig)
-	    params.copyParams(*trConfig);
-	else {
-	    params.copySubParams(*config,params + ".");
-	    trConfig = &params;
-	}
+	params.addParam("basename",params);
 	SIGTransport* tr = YSIGCREATE(SIGTransport,&params);
 	if (!tr)
 	    return false;
 	SIGTRAN::attach(tr);
-	if (tr->initialize(trConfig))
+	if (tr->initialize(&params))
 	    return true;
 	SIGTRAN::attach(0);
     }
@@ -511,6 +529,36 @@ static const TokenDict s_clientStates[] = {
 };
 #undef MAKE_NAME
 
+static const TokenDict s_uaErrors[] = {
+    { "Invalid Version",                        SIGAdaptation::InvalidVersion },
+    { "Invalid Interface Identifier",           SIGAdaptation::InvalidIID },
+    { "Unsupported Message Class",              SIGAdaptation::UnsupportedMessageClass },
+    { "Unsupported Message Type",               SIGAdaptation::UnsupportedMessageType },
+    { "Unsupported Traffic Handling Mode",      SIGAdaptation::UnsupportedTrafficMode },
+    { "Unexpected Message",                     SIGAdaptation::UnexpectedMessage },
+    { "Protocol Error",                         SIGAdaptation::ProtocolError },
+    { "Unsupported Interface Identifier Type",  SIGAdaptation::UnsupportedIIDType },
+    { "Invalid Stream Identifier",              SIGAdaptation::InvalidStreamIdentifier },
+    { "Unassigned TEI",                         SIGAdaptation::UnassignedTEI },
+    { "Unrecognized SAPI",                      SIGAdaptation::UnrecognizedSAPI },
+    { "Invalid TEI, SAPI combination",          SIGAdaptation::InvalidTEISAPI },
+    { "Refused - Management Blocking",          SIGAdaptation::ManagementBlocking },
+    { "ASP Identifier Required",                SIGAdaptation::ASPIDRequired },
+    { "Invalid ASP Identifier",                 SIGAdaptation::InvalidASPID },
+    { "ASP Active for Interface Identifier(s)", SIGAdaptation::ASPActiveIID },
+    { "Invalid Parameter Value ",               SIGAdaptation::InvalidParameterValue },
+    { "Parameter Field Error",                  SIGAdaptation::ParameterFieldError },
+    { "Unexpected Parameter",                   SIGAdaptation::UnexpectedParameter },
+    { "Destination Status Unknown",             SIGAdaptation::DestinationStatusUnknown },
+    { "Invalid Network Appearance",             SIGAdaptation::InvalidNetworkAppearance },
+    { "Missing Parameter",                      SIGAdaptation::MissingParameter },
+    { "Invalid Routing Context",                SIGAdaptation::InvalidRoutingContext },
+    { "No Configured AS for ASP",               SIGAdaptation::NotConfiguredAS },
+    { "Subsystem Status Unknown",               SIGAdaptation::SubsystemStatusUnknown },
+    { "Invalid loadsharing label",              SIGAdaptation::InvalidLoadsharingLabel },
+    { 0, 0 }
+    };
+
 static const TokenDict s_trafficModes[] = {
     { "unused",    SIGAdaptation::TrafficUnused },
     { "override",  SIGAdaptation::TrafficOverride },
@@ -692,7 +740,7 @@ bool SIGAdaptClient::processMgmtMSG(unsigned char msgType, const DataBlock& msg,
 			    setState(AspDown);
 			    return true;
 			default:
-			    Debug(this,DebugWarn,"SG reported error %u",errCode);
+			    Debug(this,DebugWarn,"SG reported error %u: %s",errCode,lookup(errCode,s_uaErrors,"Unknown"));
 			    return true;
 		    }
 		}
@@ -917,6 +965,13 @@ SS7M2PA::~SS7M2PA()
     DDebug(this,DebugAll,"Destroying SS7M2PA [%p]",this);
 }
 
+void SS7M2PA::destroyed()
+{
+    stopTransportThread();
+    SIGTRAN::attach(0);
+    SS7Layer2::destroyed();
+}
+
 bool SS7M2PA::initialize(const NamedList* config)
 {
 #ifdef DEBUG
@@ -929,26 +984,17 @@ bool SS7M2PA::initialize(const NamedList* config)
     m_autostart = !config || config->getBoolValue(YSTRING("autostart"),true);
     m_autoEmergency = !config || config->getBoolValue(YSTRING("autoemergency"),true);
     if (config && !transport()) {
-	NamedString* name = config->getParam(YSTRING("sig"));
-	if (!name)
-	    name = config->getParam(YSTRING("basename"));
-	if (name) {
-	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	    NamedList* trConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(name->c_str());
-	    params.addParam("basename",*name);
+	NamedList params("");
+	if (resolveConfig(YSTRING("sig"),params,config) ||
+		resolveConfig(YSTRING("basename"),params,config)) {
+	    params.addParam("basename",params);
 	    params.addParam("protocol","ss7");
-	    if (trConfig)
-		params.copyParams(*trConfig);
-	    else {
-		params.copySubParams(*config,params + ".");
-		trConfig = &params;
-	    }
+	    params.addParam("listen-notify","false");
 	    SIGTransport* tr = YSIGCREATE(SIGTransport,&params);
 	    if (!tr)
 		return false;
 	    SIGTRAN::attach(tr);
-	    if (!tr->initialize(trConfig))
+	    if (!tr->initialize(&params))
 		SIGTRAN::attach(0);
 	    m_sequenced = config->getBoolValue(YSTRING("sequenced"),transport() ? 
 		transport()->reliable() : false);
@@ -1773,28 +1819,18 @@ bool SS7M2UA::initialize(const NamedList* config)
     m_autoEmergency = !config || config->getBoolValue(YSTRING("autoemergency"),true);
     if (config && !adaptation()) {
 	m_iid = config->getIntValue(YSTRING("iid"),m_iid);
-	NamedString* name = config->getParam(YSTRING("client"));
-	if (!name)
-	    name = config->getParam(YSTRING("basename"));
-	if (name) {
+	NamedList params("");
+	if (resolveConfig(YSTRING("client"),params,config) ||
+		resolveConfig(YSTRING("basename"),params,config)) {
 	    DDebug(this,DebugInfo,"Creating adaptation '%s' for SS7 M2UA [%p]",
-		name->c_str(),this);
-	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	    NamedList* adConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(name->c_str());
-	    params.addParam("basename",*name);
-	    if (adConfig)
-		params.copyParams(*adConfig);
-	    else {
-		params.copySubParams(*config,params + ".");
-		adConfig = &params;
-	    }
+		params.c_str(),this);
+	    params.addParam("basename",params);
 	    SS7M2UAClient* client =
 		YOBJECT(SS7M2UAClient,engine()->build("SS7M2UAClient",params,false));
 	    if (!client)
 		return false;
 	    adaptation(client);
-	    client->initialize(adConfig);
+	    client->initialize(&params);
 	    TelEngine::destruct(client);
 	}
     }
@@ -1960,7 +1996,7 @@ bool SS7M2UA::processMGMT(unsigned char msgType, const DataBlock& msg, int strea
 			    m_linkState = LinkDown;
 			    return true;
 			default:
-			    Debug(this,DebugWarn,"M2UA SG reported error %u",errCode);
+			    Debug(this,DebugWarn,"M2UA SG reported error %u: %s",errCode,lookup(errCode,s_uaErrors,"Unknown"));
 			    return true;
 		    }
 		}
@@ -2131,6 +2167,9 @@ bool SS7M2UA::operational() const
     return (m_linkState >= LinkUp) && !m_rpo;
 }
 
+/**
+ * ISDNIUAClient
+ */
 
 bool ISDNIUAClient::processMSG(unsigned char msgVersion, unsigned char msgClass,
 	unsigned char msgType, const DataBlock& msg, int streamId)
@@ -2270,7 +2309,7 @@ bool ISDNIUA::processMGMT(unsigned char msgType, const DataBlock& msg, int strea
 			    multipleFrameReleased(localTei(),false,true);
 			    return true;
 			default:
-			    Debug(this,DebugWarn,"IUA SG reported error %u",errCode);
+			    Debug(this,DebugWarn,"IUA SG reported error %u: %s",errCode,lookup(errCode,s_uaErrors,"Unknown"));
 			    return true;
 		    }
 		}
@@ -2380,28 +2419,18 @@ bool ISDNIUA::initialize(const NamedList* config)
     m_autostart = !config || config->getBoolValue(YSTRING("autostart"),true);
     if (config && !adaptation()) {
 	m_iid = config->getIntValue(YSTRING("iid"),m_iid);
-	NamedString* name = config->getParam(YSTRING("client"));
-	if (!name)
-	    name = config->getParam(YSTRING("basename"));
-	if (name) {
+	NamedList params("");
+	if (resolveConfig(YSTRING("client"),params,config) ||
+		resolveConfig(YSTRING("basename"),params,config)) {
 	    DDebug(this,DebugInfo,"Creating adaptation '%s' for ISDN UA [%p]",
-		name->c_str(),this);
-	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	    NamedList* adConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(name->c_str());
-	    params.addParam("basename",*name);
-	    if (adConfig)
-		params.copyParams(*adConfig);
-	    else {
-		params.copySubParams(*config,params + ".");
-		adConfig = &params;
-	    }
+		params.c_str(),this);
+	    params.addParam("basename",params);
 	    ISDNIUAClient* client =
 		YOBJECT(ISDNIUAClient,engine()->build("ISDNIUAClient",params,false));
 	    if (!client)
 		return false;
 	    adaptation(client);
-	    client->initialize(adConfig);
+	    client->initialize(&params);
 	    TelEngine::destruct(client);
 	}
     }

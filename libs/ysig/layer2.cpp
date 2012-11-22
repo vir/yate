@@ -379,30 +379,19 @@ bool SS7MTP2::initialize(const NamedList* config)
     m_autostart = !config || config->getBoolValue(YSTRING("autostart"),true);
     m_flushMsus = !config || config->getBoolValue(YSTRING("flushmsus"),true);
     if (config && !iface()) {
-	NamedString* name = config->getParam(YSTRING("sig"));
-	if (!name)
-	    name = config->getParam(YSTRING("basename"));
-	if (name) {
-	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(name->c_str());
-	    params.addParam("basename",*name);
+	NamedList params("");
+	if (resolveConfig(YSTRING("sig"),params,config) ||
+		resolveConfig(YSTRING("basename"),params,config)) {
+	    params.addParam("basename",params);
 	    params.addParam("protocol","ss7");
-	    if (ifConfig) {
-		params.copyParams(*ifConfig);
-		int rx = params.getIntValue(YSTRING("rxunderrun"));
-		if ((rx > 0) && (rx < 25))
-		    params.setParam("rxunderrun","25");
-	    }
-	    else {
-		params.copySubParams(*config,params + ".");
-		ifConfig = &params;
-	    }
+	    int rx = params.getIntValue(YSTRING("rxunderrun"));
+	    if ((rx > 0) && (rx < 25))
+		params.setParam("rxunderrun","25");
 	    SignallingInterface* ifc = YSIGCREATE(SignallingInterface,&params);
 	    if (!ifc)
 		return false;
 	    SignallingReceiver::attach(ifc);
-	    if (!(ifc->initialize(ifConfig) && control((Operation)SignallingInterface::Enable,ifConfig)))
+	    if (!(ifc->initialize(&params) && control((Operation)SignallingInterface::Enable,&params)))
 		TelEngine::destruct(SignallingReceiver::attach(0));
 	}
     }

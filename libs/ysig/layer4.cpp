@@ -63,20 +63,10 @@ bool SS7Layer4::initialize(const NamedList* config)
 {
     if (engine() && !network()) {
 	NamedList params("ss7router");
-	if (config) {
-	    String name = config->getValue(YSTRING("router"),params);
-	    if (name && !name.toBoolean(false))
-		static_cast<String&>(params) = name;
-	}
-	if (params.toBoolean(true))
+	if (resolveConfig(YSTRING("router"),params,config) && params.toBoolean(true))
 	    attach(YOBJECT(SS7Router,engine()->build("SS7Router",params,true,false)));
-	else if (config) {
-	    String name = config->getValue(YSTRING("network"));
-	    if (name && name.toBoolean(true)) {
-		static_cast<String&>(params) = name;
-		attach(YOBJECT(SS7Layer3,engine()->build("SS7Layer3",params,true)));
-	    }
-	}
+	else if (resolveConfig(YSTRING("network"),params,config) && params.toBoolean(true))
+	    attach(YOBJECT(SS7Layer3,engine()->build("SS7Layer3",params,true)));
     }
     return m_layer3 != 0;
 }

@@ -428,7 +428,7 @@ public:
 	{return lookup((int)state, s_linkCongestion);}
     static inline const char* sprotocolError(protocolError state)
 	{return lookup((int)state, s_protocolError);}
-    static SignallingComponent* create(const String& type,const NamedList& params);
+    static SignallingComponent* create(const String& type, NamedList& params);
 protected:
     unsigned int m_status;                                 // Layer status
     unsigned int m_rStatus;                                // Remote layer status
@@ -2082,7 +2082,7 @@ void SLT::configure(bool start)
 	sendConnect(m_reqStatus == NormalAlignment ? Normal : Emergency);
 }
 
-SignallingComponent* SLT::create(const String& type, const NamedList& name)
+SignallingComponent* SLT::create(const String& type, NamedList& name)
 {
     if (type != "SS7Layer2")
 	return 0;
@@ -2092,39 +2092,41 @@ SignallingComponent* SLT::create(const String& type, const NamedList& name)
     Configuration cfg(Engine::configFile("ciscosm"));
     const char* sectName = name.getValue("link",name);
     NamedList* layer = cfg.getSection(sectName);
-    if (module) {
-	if (layer)
-	    layer->clearParams();
+    if (!name.getBoolValue(YSTRING("local-config"),false)) {
+	const String* ty = name.getParam(YSTRING("type"));
+	if (ty) {
+	    if (*ty == YSTRING("cisco-slt"))
+		layer = &name;
+	    else
+		return 0;
+	} else	if (module)
+	    layer = &name;
 	else {
-	    cfg.createSection(sectName);
-	    layer = cfg.getSection(sectName);
+	    Debug("CiscoSM",DebugConf,
+		  "Ambiguous request! Requested to create a layer2 with external config, but no module param is present!");
+	    return 0;
 	}
-	layer->copyParams(name);
-	cfg.save();
+    } else if (!layer) {
+	DDebug("CiscoSM",DebugConf,"No section %s in configuration file!", sectName);
+	return 0;
+    } else
+	name.copyParams(*layer);
+
+    NamedList* session = 0;
+    NamedList params("");
+    if (resolveConfig(YSTRING("session"),params,&name)) {
+	if (!params.getBoolValue(YSTRING("local-config"),false))
+	    session = &params;
     }
-    if (!layer) {
+    if (!session) {
+	String ses = name.getValue(YSTRING("session"),"session");
+	session = cfg.getSection(ses);
+    }
+    if (!session) {
+	Debug("CiscoSLT",DebugConf,"Session config could not be resolved!");
 	return 0;
     }
-    String confSec = layer->getValue("session","session");
-    NamedList recvSec(confSec);
-    recvSec.copySubParams(*layer,confSec + ".");
-    NamedList* section = cfg.getSection(confSec);
-    if (recvSec.count()) {
-	if (section)
-	    section->clearParams();
-	else {
-	    cfg.createSection(confSec);
-	    section = cfg.getSection(confSec);
-	}
-	section->copyParams(recvSec);
-	cfg.save();
-    }
-    if (!section) {
-	Debug(&plugin,DebugConf,"Session '%s' does not exist in configuration",confSec.c_str());
-	return 0;
-    }
-    layer->copyParams(*section);
-    layer->copyParams(name);
+    layer->copyParams(*session);
     return new SLT(name,*layer);
 }
 

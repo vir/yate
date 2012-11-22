@@ -51,9 +51,10 @@ static inline const char* linkSide(bool net)
     return net ? s_linkSideNet : s_linkSideCpe;
 }
 
-static inline void fixParams(NamedList& params, const NamedList& config)
+static inline void fixParams(NamedList& params, const NamedList* config)
 {
-    params.copyParams(config);
+    if (config && params.getBoolValue(YSTRING("local-config"),false))
+	params.copyParams(*config);
     int rx = params.getIntValue(YSTRING("rxunderrun"));
     if ((rx > 0) && (rx < 2500))
 	params.setParam("rxunderrun","2500");
@@ -201,25 +202,17 @@ bool ISDNQ921::initialize(const NamedList* config)
 	    config->getBoolValue(YSTRING("extended-debug"),false));
     }
     if (config && !m_management && !iface()) {
-	NamedString* name = config->getParam(YSTRING("sig"));
-	if (!name)
-	    name = config->getParam(YSTRING("basename"));
-	if (name) {
-	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(*name + "/D");
-	    params.addParam("basename",*name);
-	    if (ifConfig)
-		fixParams(params,*ifConfig);
-	    else {
-		params.copySubParams(*config,*name + ".");
-		ifConfig = &params;
-	    }
+	NamedList params("");
+	if (resolveConfig(YSTRING("sig"),params,config) ||
+		resolveConfig(YSTRING("basename"),params,config)) {
+	    params.addParam("basename",params);
+	    params.assign(params + "/D");
+	    fixParams(params,config);
 	    SignallingInterface* ifc = YSIGCREATE(SignallingInterface,&params);
 	    if (!ifc)
 		return false;
 	    SignallingReceiver::attach(ifc);
-	    if (ifc->initialize(ifConfig)) {
+	    if (ifc->initialize(&params)) {
 		SignallingReceiver::control(SignallingInterface::Enable);
 		multipleFrame(0,true,false);
 	    }
@@ -1090,23 +1083,17 @@ bool ISDNQ921Management::initialize(const NamedList* config)
 	debugLevel(config->getIntValue(YSTRING("debuglevel_q921mgmt"),
 	    config->getIntValue(YSTRING("debuglevel"),-1)));
     if (config && !iface()) {
-	NamedString* name = config->getParam(YSTRING("sig"));
-	if (!name)
-	    name = config->getParam(YSTRING("basename"));
-	if (name) {
-	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(*name + "/D");
-	    params.addParam("basename",*name);
-	    if (ifConfig)
-		fixParams(params,*ifConfig);
-	    else
-		ifConfig = &params;
+	NamedList params("");
+	if (resolveConfig(YSTRING("sig"),params,config) ||
+		resolveConfig(YSTRING("basename"),params,config)) {
+	    params.addParam("basename",params);
+	    params.assign(params + "/D");
+	    fixParams(params,config);
 	    SignallingInterface* ifc = YSIGCREATE(SignallingInterface,&params);
 	    if (!ifc)
 		return false;
 	    SignallingReceiver::attach(ifc);
-	    if (ifc->initialize(ifConfig))
+	    if (ifc->initialize(&params))
 		SignallingReceiver::control(SignallingInterface::Enable);
 	    else
 		TelEngine::destruct(SignallingReceiver::attach(0));
@@ -1552,24 +1539,18 @@ bool ISDNQ921Passive::initialize(const NamedList* config)
 	    config->getBoolValue(YSTRING("extended-debug"),false));
     }
     if (config && !iface()) {
-	NamedString* name = config->getParam(YSTRING("sig"));
-	if (!name)
-	    name = config->getParam(YSTRING("basename"));
-	if (name) {
-	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(*name + "/D");
-	    params.addParam("basename",*name);
+	NamedList params("");
+	if (resolveConfig(YSTRING("sig"),params,config) ||
+		resolveConfig(YSTRING("basename"),params,config)) {
+	    params.addParam("basename",params);
+	    params.assign(params + "/D");
 	    params.addParam("readonly",String::boolText(true));
-	    if (ifConfig)
-		fixParams(params,*ifConfig);
-	    else
-		ifConfig = &params;
+	    fixParams(params,config);
 	    SignallingInterface* ifc = YSIGCREATE(SignallingInterface,&params);
 	    if (!ifc)
 		return false;
 	    SignallingReceiver::attach(ifc);
-	    if (ifc->initialize(ifConfig))
+	    if (ifc->initialize(&params))
 		SignallingReceiver::control(SignallingInterface::Enable);
 	    else
 		TelEngine::destruct(SignallingReceiver::attach(0));

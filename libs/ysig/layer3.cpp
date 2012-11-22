@@ -76,8 +76,8 @@ bool SS7Layer3::initialize(const NamedList* config)
 	setNI(SS7MSU::getNetIndicator(config->getValue(YSTRING("netindicator")),SS7MSU::National));
     if (engine() && !user()) {
 	NamedList params("ss7router");
-	if (config)
-	    static_cast<String&>(params) = config->getValue(YSTRING("router"),params);
+	if (!resolveConfig(YSTRING("router"),params,config))
+	    params.addParam("local-config","true");
 	if (params.toBoolean(true))
 	    SS7Layer3::attach(YOBJECT(SS7Router,engine()->build("SS7Router",params,true,false)));
     }
@@ -948,7 +948,10 @@ bool SS7MTP3::initialize(const NamedList* config)
 	    if (linkConfig)
 		params.copyParams(*linkConfig);
 	    else {
-		params.copySubParams(*config,params + ".");
+		if (config->hasSubParams(params + "."))
+		    params.copySubParams(*config,params + ".");
+		else
+		    params.addParam("local-config","true");
 		linkConfig = &params;
 	    }
 	    SS7Layer2* link = YSIGCREATE(SS7Layer2,&params);

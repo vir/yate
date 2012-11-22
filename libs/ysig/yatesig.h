@@ -154,7 +154,7 @@ class ISDNQ931Monitor;                   // ISDN Q.931 implementation on top of 
 class clas ## Factory : public SignallingFactory \
 { \
 protected: \
-virtual SignallingComponent* create(const String& type, const NamedList& name) \
+virtual SignallingComponent* create(const String& type, NamedList& name) \
     { return (type == #clas) ? new clas : 0; } \
 }; \
 static clas ## Factory s_ ## clas ## Factory
@@ -164,7 +164,7 @@ static clas ## Factory s_ ## clas ## Factory
 class clas ## Factory : public SignallingFactory \
 { \
 protected: \
-virtual SignallingComponent* create(const String& type, const NamedList& name) \
+virtual SignallingComponent* create(const String& type, NamedList& name) \
     { return clas::create(type,name); } \
 }; \
 static clas ## Factory s_ ## clas ## Factory
@@ -609,7 +609,7 @@ public:
      * @param name Name of the requested component and additional parameters
      * @return Pointer to the created component, NULL on failure
      */
-    static SignallingComponent* build(const String& type, const NamedList* name = 0);
+    static SignallingComponent* build(const String& type, NamedList* name = 0);
 
     /**
      * This method is for internal use only and must not be called directly
@@ -617,7 +617,7 @@ public:
      * @param name Name of the requested component and additional parameters
      * @return Raw pointer to the requested interface of the component, NULL on failure
      */
-    static void* buildInternal(const String& type, const NamedList* name);
+    static void* buildInternal(const String& type, NamedList* name);
 
 protected:
     /**
@@ -626,7 +626,7 @@ protected:
      * @param name Name of the requested component and additional parameters
      * @return Pointer to the created component
      */
-    virtual SignallingComponent* create(const String& type, const NamedList& name) = 0;
+    virtual SignallingComponent* create(const String& type, NamedList& name) = 0;
 };
 
 /**
@@ -662,8 +662,9 @@ public:
      * @param cmpName The name of the parameter holding the component name
      * @param params The list of parameters used to initialize the component
      * @param config The received list of parameters
+     * @return True if the config was resolved
      */
-    static void resolveConfig(const String& cmpName, NamedList& params, const NamedList* config);
+    static bool resolveConfig(const String& cmpName, NamedList& params, const NamedList* config);
 
     /**
      * Query or modify component's settings or operational parameters
@@ -849,7 +850,7 @@ public:
      * @param ref True to add a reference when returning existing component
      * @return Pointer to component found or created, NULL on failure
      */
-    SignallingComponent* build(const String& type, const NamedList& params, bool init = false, bool ref = true);
+    SignallingComponent* build(const String& type, NamedList& params, bool init = false, bool ref = true);
 
     /**
      * Apply a control operation to all components in the engine

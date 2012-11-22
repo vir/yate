@@ -1667,7 +1667,8 @@ bool SCCPUser::initialize(const NamedList* config)
     DDebug(this,DebugInfo,"SCCPUser::initialize(%p) [%p]",config,this);
     if (engine()) {
 	NamedList params("sccp");
-	resolveConfig(YSTRING("sccp"),params,config);
+	if (!resolveConfig(YSTRING("sccp"),params,config))
+	    params.addParam("local-config","true");
 	// NOTE SS7SCCP is created on demand!!!
 	// engine ->build method will search for the requested sccc and 
 	// if it was found will return it with the ref counter incremented
@@ -1757,7 +1758,8 @@ bool GTT::initialize(const NamedList* config)
     DDebug(this,DebugInfo,"GTT::initialize(%p) [%p]",config,this);
     if (engine()) {
 	NamedList params("sccp");
-	resolveConfig(YSTRING("sccp"),params,config);
+	if (!resolveConfig(YSTRING("sccp"),params,config))
+	    params.addParam("local-config","true");
 	if (params.toBoolean(true))
 	    attach(YOBJECT(SCCP,engine()->build("SCCP",params,true)));
     } else
@@ -2847,7 +2849,8 @@ SS7SCCP::SS7SCCP(const NamedList& params)
 	m_segTimeout = 20000;
     if ((m_type == SS7PointCode::ITU || m_type == SS7PointCode::ANSI) && m_localPointCode) {
 	NamedList mgmParams("sccp-mgm");
-	resolveConfig(YSTRING("management"),mgmParams,&params);
+	if (!resolveConfig(YSTRING("management"),mgmParams,&params))
+	    mgmParams.addParam("local-config","true");
 	mgmParams.setParam("type",m_type == SS7PointCode::ITU ? "ss7-sccp-itu-mgm" : "ss7-sccp-ansi-mgm");
 	if (mgmParams.toBoolean(true)) {
 	    if (m_type == SS7PointCode::ITU)
@@ -2857,7 +2860,7 @@ SS7SCCP::SS7SCCP(const NamedList& params)
 	}
 	if (!m_management)
 	    Debug(this,DebugWarn,"Failed to create sccp management!");
-	else
+	else if (m_management->initialize(&mgmParams))
 	    m_management->attach(this);
     } else
 	Debug(this,DebugConf,"Created SS7SCCP '%p' without management! No local pointcode pressent!",this);

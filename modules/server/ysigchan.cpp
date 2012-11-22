@@ -660,7 +660,7 @@ public:
     static const TokenDict s_compNames[];
     static const TokenDict s_compClass[];
 protected:
-    virtual SignallingComponent* create(const String& type, const NamedList& name);
+    virtual SignallingComponent* create(const String& type, NamedList& name);
 };
 
 // Consumer used to push data to SigSourceMux
@@ -942,7 +942,7 @@ public:
 
 
 // Construct a locally configured component
-SignallingComponent* SigFactory::create(const String& type, const NamedList& name)
+SignallingComponent* SigFactory::create(const String& type, NamedList& name)
 {
     const NamedList* config = s_cfg.getSection(name);
     DDebug(&plugin,DebugAll,"SigFactory::create('%s','%s') config=%p",
@@ -961,7 +961,9 @@ SignallingComponent* SigFactory::create(const String& type, const NamedList& nam
 	    else
 		return 0;
 	}
-    }
+    } else if (name.getBoolValue(YSTRING("local-config"),false))
+	name.copyParams(*config);
+
     String* ty = config->getParam("type");
     switch (compType) {
 	case SigISDNLayer2:
@@ -3527,7 +3529,10 @@ SignallingCircuitGroup* SigTrunk::buildCircuits(NamedList& params, const String&
 	if (s->null())
 	    continue;
 	NamedList spanParams(*s);
-	spanParams.copySubParams(params,*s + ".");
+	if (params.hasSubParams(*s + "."))
+	    spanParams.copySubParams(params,*s + ".");
+	else
+	    spanParams.addParam("local-config","true");
 	SignallingCircuitSpan* span = group->buildSpan(*s,start,&spanParams);
 	if (!span) {
 	    error << "Failed to build voice span '" << *s << "'";

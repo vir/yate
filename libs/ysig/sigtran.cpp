@@ -305,26 +305,16 @@ bool SIGAdaptation::initialize(const NamedList* config)
 {
     if (transport())
 	return true;
-    NamedString* name = config->getParam(YSTRING("sig"));
-    if (!name)
-	name = config->getParam(YSTRING("basename"));
-    if (name) {
+    NamedList params("");
+    if (resolveConfig(YSTRING("sig"),params,config) ||
+	    resolveConfig(YSTRING("basename"),params,config)) {
 	DDebug(this,DebugInfo,"Creating transport for SIGTRAN UA [%p]",this);
-	NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	NamedList* trConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	NamedList params(name->c_str());
-	params.addParam("basename",*name);
-	if (trConfig)
-	    params.copyParams(*trConfig);
-	else {
-	    params.copySubParams(*config,params + ".");
-	    trConfig = &params;
-	}
+	params.addParam("basename",params);
 	SIGTransport* tr = YSIGCREATE(SIGTransport,&params);
 	if (!tr)
 	    return false;
 	SIGTRAN::attach(tr);
-	if (tr->initialize(trConfig))
+	if (tr->initialize(&params))
 	    return true;
 	SIGTRAN::attach(0);
     }
@@ -929,26 +919,16 @@ bool SS7M2PA::initialize(const NamedList* config)
     m_autostart = !config || config->getBoolValue(YSTRING("autostart"),true);
     m_autoEmergency = !config || config->getBoolValue(YSTRING("autoemergency"),true);
     if (config && !transport()) {
-	NamedString* name = config->getParam(YSTRING("sig"));
-	if (!name)
-	    name = config->getParam(YSTRING("basename"));
-	if (name) {
-	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	    NamedList* trConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(name->c_str());
-	    params.addParam("basename",*name);
+	NamedList params("");
+	if (resolveConfig(YSTRING("sig"),params,config) ||
+		resolveConfig(YSTRING("basename"),params,config)) {
+	    params.addParam("basename",params);
 	    params.addParam("protocol","ss7");
-	    if (trConfig)
-		params.copyParams(*trConfig);
-	    else {
-		params.copySubParams(*config,params + ".");
-		trConfig = &params;
-	    }
 	    SIGTransport* tr = YSIGCREATE(SIGTransport,&params);
 	    if (!tr)
 		return false;
 	    SIGTRAN::attach(tr);
-	    if (!tr->initialize(trConfig))
+	    if (!tr->initialize(&params))
 		SIGTRAN::attach(0);
 	    m_sequenced = config->getBoolValue(YSTRING("sequenced"),transport() ? 
 		transport()->reliable() : false);
@@ -1773,28 +1753,18 @@ bool SS7M2UA::initialize(const NamedList* config)
     m_autoEmergency = !config || config->getBoolValue(YSTRING("autoemergency"),true);
     if (config && !adaptation()) {
 	m_iid = config->getIntValue(YSTRING("iid"),m_iid);
-	NamedString* name = config->getParam(YSTRING("client"));
-	if (!name)
-	    name = config->getParam(YSTRING("basename"));
-	if (name) {
+	NamedList params("");
+	if (resolveConfig(YSTRING("client"),params,config) ||
+		resolveConfig(YSTRING("basename"),params,config)) {
 	    DDebug(this,DebugInfo,"Creating adaptation '%s' for SS7 M2UA [%p]",
-		name->c_str(),this);
-	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	    NamedList* adConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(name->c_str());
-	    params.addParam("basename",*name);
-	    if (adConfig)
-		params.copyParams(*adConfig);
-	    else {
-		params.copySubParams(*config,params + ".");
-		adConfig = &params;
-	    }
+		params.c_str(),this);
+	    params.addParam("basename",params);
 	    SS7M2UAClient* client =
 		YOBJECT(SS7M2UAClient,engine()->build("SS7M2UAClient",params,false));
 	    if (!client)
 		return false;
 	    adaptation(client);
-	    client->initialize(adConfig);
+	    client->initialize(&params);
 	    TelEngine::destruct(client);
 	}
     }
@@ -2380,28 +2350,18 @@ bool ISDNIUA::initialize(const NamedList* config)
     m_autostart = !config || config->getBoolValue(YSTRING("autostart"),true);
     if (config && !adaptation()) {
 	m_iid = config->getIntValue(YSTRING("iid"),m_iid);
-	NamedString* name = config->getParam(YSTRING("client"));
-	if (!name)
-	    name = config->getParam(YSTRING("basename"));
-	if (name) {
+	NamedList params("");
+	if (resolveConfig(YSTRING("client"),params,config) ||
+		resolveConfig(YSTRING("basename"),params,config)) {
 	    DDebug(this,DebugInfo,"Creating adaptation '%s' for ISDN UA [%p]",
-		name->c_str(),this);
-	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
-	    NamedList* adConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(name->c_str());
-	    params.addParam("basename",*name);
-	    if (adConfig)
-		params.copyParams(*adConfig);
-	    else {
-		params.copySubParams(*config,params + ".");
-		adConfig = &params;
-	    }
+		params.c_str(),this);
+	    params.addParam("basename",params);
 	    ISDNIUAClient* client =
 		YOBJECT(ISDNIUAClient,engine()->build("ISDNIUAClient",params,false));
 	    if (!client)
 		return false;
 	    adaptation(client);
-	    client->initialize(adConfig);
+	    client->initialize(&params);
 	    TelEngine::destruct(client);
 	}
     }

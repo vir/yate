@@ -193,7 +193,7 @@ public:
     u_int32_t getMsgLen(unsigned char* buf);
     bool addAddress(const NamedList &param, Socket* socket);
     bool bindSocket();
-    static SignallingComponent* create(const String& type,const NamedList& params);
+    static SignallingComponent* create(const String& type, NamedList& params);
     virtual bool transmitMSG(const DataBlock& header, const DataBlock& msg, int streamId = 0);
     virtual bool getSocketParams(const String& params, NamedList& result);
 private:
@@ -535,7 +535,7 @@ void TransportWorker::stop()
  * Transport class
  */
 
-SignallingComponent* Transport::create(const String& type, const NamedList& name)
+SignallingComponent* Transport::create(const String& type, NamedList& name)
 {
     if (type != "SIGTransport")
 	return 0;
@@ -544,10 +544,14 @@ SignallingComponent* Transport::create(const String& type, const NamedList& name
 
     const char* sectName = name.getValue("basename");
     NamedList* config = cfg.getSection(sectName);
-    if (!config) {
-	DDebug(&plugin,DebugWarn,"No section '%s' in configuration",c_safe(sectName));
+    if (!name.getBoolValue(YSTRING("local-config"),false))
+	config = &name;
+    else if (!config) {
+	Debug("SIGTransport",DebugWarn,"No section %s in configuration!",sectName);
 	return 0;
-    }
+    } else
+	name.copyParams(*config);
+
     return new Transport(*config);
 }
 
@@ -624,20 +628,13 @@ bool Transport::getSocketParams(const String& params, NamedList& result)
 
 bool Transport::initialize(const NamedList* params)
 {
-    Configuration cfg(Engine::configFile("sigtransport"));
-    cfg.load();
-    const char* sectName = params->getValue("basename");
-    NamedList* config = cfg.getSection(sectName);
-    if (!config) {
-	DDebug(&plugin,DebugWarn,"No section '%s' in configuration",c_safe(sectName));
-	return false;
-    }
-    m_type = lookup(config->getValue("type","sctp"),s_transType);
-    m_streamer = config->getBoolValue("stream",streamDefault());
-    m_endpoint = config->getBoolValue("endpoint",false);
+
+    m_type = lookup(m_config.getValue("type","sctp"),s_transType);
+    m_streamer = m_config.getBoolValue("stream",streamDefault());
+    m_endpoint = m_config.getBoolValue("endpoint",false);
     if (!m_endpoint && m_streamer) {
 	m_listener = new ListenerThread(this);
-	if (!m_listener->init(*config)) {
+	if (!m_listener->init(m_config)) {
 	    DDebug(this,DebugNote,"Unable to start listener");
 	    return false;
 	}

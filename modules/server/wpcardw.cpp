@@ -141,7 +141,7 @@ class WpInterface : public SignallingInterface
     friend class WpSigThread;
 public:
     // Create an instance of WpInterface or WpSpan
-    static void* create(const String& type, const NamedList& name);
+    static void* create(const String& type, NamedList& name);
     WpInterface(const NamedList& params);
     virtual ~WpInterface();
     // Initialize interface. Return false on failure
@@ -482,7 +482,7 @@ Output("HERE - 1");
  * WpInterface
  */
 // Create WpInterface or WpSpan
-void* WpInterface::create(const String& type, const NamedList& name)
+void* WpInterface::create(const String& type, NamedList& name)
 {
     bool iface = false;
     if (type == "sig")
@@ -497,10 +497,14 @@ void* WpInterface::create(const String& type, const NamedList& name)
     const char* sectName = name.getValue(type);
     DDebug(&driver,DebugAll,"Factory trying to create %s='%s'",type.c_str(),sectName);
     NamedList* config = cfg.getSection(sectName);
-    if (!config) {
-	DDebug(&driver,DebugAll,"No section '%s' in configuration",c_safe(sectName));
+
+    if (!name.getBoolValue(YSTRING("local-config"),false))
+	config = &name;
+    else if (!config) {
+	Debug(&plugin,DebugConf,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
-    }
+    } else
+	name.copyParams(*config);
 
     if (iface) {
 	WpInterface* iface = new WpInterface(name);

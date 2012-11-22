@@ -531,7 +531,7 @@ public:
     // Process incoming data
     virtual bool process();
     // Called by the factory to create Zaptel interfaces or spans
-    static SignallingComponent* create(const String& type, const NamedList& name);
+    static SignallingComponent* create(const String& type, NamedList& name);
 protected:
     // Check if received any data in the last interval. Notify receiver
     virtual void timerTick(const Time& when);
@@ -1694,7 +1694,7 @@ ZapInterface::~ZapInterface()
 }
 
 // Called by the factory to create Zaptel interfaces or spans
-SignallingComponent* ZapInterface::create(const String& type, const NamedList& name)
+SignallingComponent* ZapInterface::create(const String& type, NamedList& name)
 {
     bool circuit = true;
     if (type == "SignallingInterface")
@@ -1710,20 +1710,15 @@ SignallingComponent* ZapInterface::create(const String& type, const NamedList& n
     Configuration cfg(Engine::configFile("zapcard"));
     const char* sectName = name.getValue((circuit ? "voice" : "sig"),name.getValue("basename",name));
     NamedList* config = cfg.getSection(sectName);
-    if (module) {
-	DDebug(&plugin,DebugAll,"Replace config params in section %s",c_safe(sectName));
-	if (!config) {
-	    cfg.createSection(sectName);
-	    config = cfg.getSection(sectName);
-	}
-	config->copyParams(name);
-	if (!cfg.save())
-	    Debug(&plugin,DebugNote,"Failed to save configuration in file %s",cfg.c_str());
-    }
-    else if (!config){
-	DDebug(&plugin,DebugAll,"No section '%s' in configuration",c_safe(sectName));
+
+    if (!name.getBoolValue(YSTRING("local-config"),false))
+	config = &name;
+    else if (!config) {
+	DDebug(&plugin,DebugConf,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
-    }
+    } else
+	name.copyParams(*config);
+
 #ifdef DEBUG
     if (plugin.debugAt(DebugAll)) {
 	String tmp;

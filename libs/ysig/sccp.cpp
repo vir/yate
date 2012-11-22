@@ -1595,8 +1595,6 @@ void SCCP::resolveGTParams(SS7MsgSCCP* msg, const NamedList* gtParams)
 	    msg->params().setParam("CalledPartyAddress." + val->name(),*val);
     }
     NamedString* param = 0;
-    if ((param = gtParams->getParam(YSTRING("RemotePC"))))
-	msg->params().setParam(param->name(),*param);
     if ((param = gtParams->getParam(YSTRING("sccp"))))
 	msg->params().setParam(param->name(),*param);
     if (!gtParams->hasSubParams(YSTRING("CallingPartyAddress.")))
@@ -3117,6 +3115,8 @@ int SS7SCCP::routeLocal(SS7MsgSCCP* msg)
 		sccp->c_str());
 	return -1;
     }
+    msg->params().clearParam(YSTRING("LocalPC"));
+    msg->params().clearParam(YSTRING("CallingPartyAddress.pointcode"));
     return sccpCmp->sendSCCPMessage(msg,dpc,opc,false);
 }
 

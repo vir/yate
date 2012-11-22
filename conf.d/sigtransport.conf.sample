@@ -49,6 +49,10 @@
 ; linger: int; How much to block waiting for socket to close.
 ;linger = 0
 
+; listen-notify: boolean: True to notify the upper layer that a new incoming connection has been established
+; Default to true
+;listen-notify=true
+
 
 ; SCTP parameters
 ; NOTE these parameters will be set only for SCTP sockets

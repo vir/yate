@@ -1325,6 +1325,21 @@ public:
 	}
 
     /**
+     * Retrieve a child's text
+     * @param name Name (tag) of the child
+     * @param ns Optional child namespace
+     * @param noPrefix True to compare the tag without namespace prefix, false to
+     *  include namespace prefix when comparing the given tag.
+     *  This parameter is ignored ns is not 0
+     * @return Pointer to child's text, 0 if the child was not found
+     */
+    inline const String* childText(const String& name, const String* ns = 0,
+	bool noPrefix = true) const {
+	    XmlElement* c = findFirstChild(&name,ns,noPrefix);
+	    return c ? &(c->getText()) : 0;
+	}
+
+    /**
      * @return The first XmlText found in this XmlElement children
      */
     const String& getText();

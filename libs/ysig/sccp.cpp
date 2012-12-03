@@ -3054,6 +3054,7 @@ int SS7SCCP::getPointCode(SS7MsgSCCP* msg, const String& prefix, const char* pCo
 	resolveGTParams(msg,route);
 	NamedString* localRouting = route->getParam(YSTRING("sccp"));
 	if (localRouting && *localRouting != toString()) {
+	    msg->params().copyParam(*route,YSTRING("RemotePC"));
 	    TelEngine::destruct(route);
 	    return -2;
 	}
@@ -3099,9 +3100,6 @@ int SS7SCCP::routeLocal(SS7MsgSCCP* msg)
 		"Unable to route local sccp message! No pointcode present.");
 	return -1;
     }
-    int opc = msg->params().getIntValue(YSTRING("LocalPC"),-1);
-    if (opc < 0)
-	opc = msg->params().getIntValue(YSTRING("CallingPartyAddress.pointcode"),-1);
     if (!engine()) {
 	Debug(this,DebugMild,
 		"Unable to route local sccp message! No engine attached!");
@@ -3117,7 +3115,7 @@ int SS7SCCP::routeLocal(SS7MsgSCCP* msg)
     }
     msg->params().clearParam(YSTRING("LocalPC"));
     msg->params().clearParam(YSTRING("CallingPartyAddress.pointcode"));
-    return sccpCmp->sendSCCPMessage(msg,dpc,opc,false);
+    return sccpCmp->sendSCCPMessage(msg,dpc,-1,false);
 }
 
 int SS7SCCP::checkImportanceLevel(int msgType, int initialImportance)
@@ -3952,6 +3950,7 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	resolveGTParams(msg,gtRoute);
 	NamedString* localRouting = gtRoute->getParam(YSTRING("sccp"));
 	if (localRouting && *localRouting != toString()) {
+	    msg->params().copyParam(*gtRoute,YSTRING("RemotePC"));
 	    TelEngine::destruct(gtRoute);
 	    lock.drop();
 	    return routeLocal(msg) >= 0;

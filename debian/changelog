@@ -1,4 +1,4 @@
-yate (4.2.1~svn5342) UNRELEASED; urgency=low
+yate (4.2.1~svn5343) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -207,8 +207,9 @@ yate (4.2.1~svn5342) UNRELEASED; urgency=low
     + Added helper method used to append a child and release the object
     if append fails.  + Added method used to pop the first XmlElement
     from a fragment. The element is extracted only if completed.
+  * Updated to SVN revision 5343: + Bug fixed in sccp local routing.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 23 Nov 2012 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 04 Dec 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

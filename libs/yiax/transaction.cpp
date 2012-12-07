@@ -76,7 +76,8 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
     m_expire(60),
     m_format(IAXFormat::Audio), m_formatVideo(IAXFormat::Video),
     m_capability(0), m_callToken(false),
-    m_trunkFrame(0)
+    m_trunkFrame(0),
+    m_trunkInOffsetTimeMs(0), m_trunkInLastTs(0), m_warnTrunkInTimestamp(true)
 {
     Debug(m_engine,DebugAll,"Transaction(%u,%u) incoming type=%u remote=%s:%d [%p]",
 	localCallNo(),remoteCallNo(),m_type,m_addr.host().c_str(),m_addr.port(),this);
@@ -139,7 +140,8 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_expire(60),
     m_format(IAXFormat::Audio), m_formatVideo(IAXFormat::Video),
     m_capability(0), m_callToken(false),
-    m_trunkFrame(0)
+    m_trunkFrame(0),
+    m_trunkInOffsetTimeMs(0), m_trunkInLastTs(0), m_warnTrunkInTimestamp(true)
 {
     Debug(m_engine,DebugAll,"Transaction(%u,%u) outgoing type=%u remote=%s:%d [%p]",
 	localCallNo(),remoteCallNo(),m_type,m_addr.host().c_str(),m_addr.port(),this);
@@ -836,6 +838,47 @@ void IAXTransaction::processCallToken(const DataBlock& callToken)
 	ies->appendBinary(IAXInfoElement::CALLTOKEN,(unsigned char*)callToken.data(),callToken.length());
     frame->updateBuffer(m_engine->maxFullFrameDataLen());
     sendFrame(frame);
+}
+
+// Update transaction incoming trunk data (used for trunk without timestamps)
+bool IAXTransaction::updateTrunkRecvTs(u_int32_t& frameTs, u_int32_t ts, u_int64_t currentTimeMs)
+{
+    Lock lck(this);
+    if (m_trunkInLastTs) {
+	bool ok = (ts > m_trunkInLastTs);
+	if (!ok) {
+	    // Allow frames older then 5 seconds to restart trunk
+	    if ((m_trunkInLastTs - ts) >= 5000) {
+		ok = true;
+		m_trunkInOffsetTimeMs = 0;
+	    }
+	    else
+		ok = (m_trunkInOffsetTimeMs == 0);
+	}
+	if (!ok) {
+	    if (m_warnTrunkInTimestamp) {
+		Debug(m_engine,DebugNote,
+		    "Transaction(%u,%u) ignoring trunked mini-frame without timestamps from %s:%d with ts=%u last=%u [%p]",
+		    localCallNo(),remoteCallNo(),remoteAddr().host().c_str(),remoteAddr().port(),
+		    ts,m_trunkInLastTs,this);
+		m_warnTrunkInTimestamp = false;
+	    }
+	    return false;
+	}
+	m_warnTrunkInTimestamp = true;
+    }
+    m_trunkInLastTs = ts;
+    if (!m_trunkInOffsetTimeMs) {
+	if (!currentTimeMs)
+	    currentTimeMs = Time::msecNow();
+	u_int64_t trunkStart = currentTimeMs - ts;
+	m_trunkInOffsetTimeMs = (int64_t)m_timeStamp - trunkStart;
+    }
+    if (m_trunkInOffsetTimeMs >= 0)
+	frameTs = ts - (u_int32_t)m_trunkInOffsetTimeMs;
+    else
+	frameTs = ts + (u_int32_t)(-m_trunkInOffsetTimeMs);
+    return true;
 }
 
 void IAXTransaction::print(bool printStats, bool printFrames, const char* location)

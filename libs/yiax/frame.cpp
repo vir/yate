@@ -46,6 +46,32 @@ inline void setStringFromInteger(String& dest, u_int32_t value, u_int8_t length)
     dest = tmp;
 }
 
+
+class IAXTrunkFrameTrans : public GenObject
+{
+public:
+    inline IAXTrunkFrameTrans(IAXTransaction* tr, u_int32_t frameTs)
+	: m_tr(tr), m_frameTs(frameTs), m_trunkIndex(0)
+	{}
+    ~IAXTrunkFrameTrans()
+	{ TelEngine::destruct(m_tr); }
+    static IAXTrunkFrameTrans* find(ObjList& list, u_int16_t rCallNo);
+    IAXTransaction* m_tr;
+    u_int32_t m_frameTs;
+    unsigned int m_trunkIndex;
+};
+
+IAXTrunkFrameTrans* IAXTrunkFrameTrans::find(ObjList& list, u_int16_t rCallNo)
+{
+    for (ObjList* o = list.skipNull(); o; o = o->skipNext()) {
+	IAXTrunkFrameTrans* t = static_cast<IAXTrunkFrameTrans*>(o->get());
+	if (t->m_tr->remoteCallNo() == rCallNo)
+	    return t;
+    }
+    return 0;
+}
+
+
 /*
  * IAXInfoElement
  */
@@ -824,11 +850,10 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 	if (buf[2] != 1)
 	    return 0;
 	bool tstamps = (buf[3] & 1) != 0;
-//	u_int32_t ts = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
-	buf += 8;
-	len -= 8;
 	if (tstamps) {
 	    // Trunk timestamps (mini frames)
+	    buf += 8;
+	    len -= 8;
 	    while (len >= 6) {
 		u_int16_t dlen = (buf[0] << 8) | buf[1];
 		if ((unsigned int)(dlen + 6) > len)
@@ -850,6 +875,11 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 	}
 	else {
 	    // No trunk timestamps
+	    u_int32_t ts = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
+	    buf += 8;
+	    len -= 8;
+	    u_int64_t timeMs = Time::msecNow();
+	    ObjList list;
 	    while (len >= 4) {
 		u_int16_t dlen = (buf[2] << 8) | buf[3];
 		if ((unsigned int)(dlen + 4) > len)
@@ -860,9 +890,27 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 		    retrans = true;
 		    scn &= 0x7fff;
 		}
-		IAXFrame* frame = new IAXFrame(IAXFrame::Voice,scn,0,retrans,buf+4,dlen);
-		engine->addFrame(*addr,frame);
-		frame->deref();
+		IAXTrunkFrameTrans* t = IAXTrunkFrameTrans::find(list,scn);
+		if (!t) {
+		    IAXTransaction* tr = engine->findTransaction(*addr,scn);
+		    if (tr) {
+			u_int32_t frameTs = 0;
+			if (tr->updateTrunkRecvTs(frameTs,ts,timeMs)) {
+			    t = new IAXTrunkFrameTrans(tr,frameTs);
+			    list.append(t);
+			}
+			else
+			    TelEngine::destruct(tr);
+		    }
+		}
+		else
+		    // Adjust timestamp: there are more packets for the same transaction
+		    t->m_frameTs++;
+		if (t) {
+		    IAXFrame* frame = new IAXFrame(IAXFrame::Voice,scn,t->m_frameTs,retrans,buf+4,dlen);
+		    if (!t->m_tr->processFrame(frame))
+			frame->deref();
+		}
 		dlen += 4;
 		buf += dlen;
 		len -= dlen;

@@ -268,6 +268,19 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, const unsigned char*
     return tr;
 }
 
+// Find a complete transaction
+IAXTransaction* IAXEngine::findTransaction(const SocketAddr& addr, u_int16_t rCallNo)
+{
+    Lock lck(this);
+    ObjList* o = m_transList[rCallNo % m_transListCount]->skipNull();
+    for (; o; o = o->skipNext()) {
+	IAXTransaction* tr = static_cast<IAXTransaction*>(o->get());
+	if (tr->remoteCallNo() == rCallNo && addr == tr->remoteAddr())
+	    return tr->ref() ? tr : 0;
+    }
+    return 0;
+}
+
 void IAXEngine::sendInval(IAXFullFrame* frame, const SocketAddr& addr)
 {
     if (!frame)

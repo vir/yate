@@ -590,8 +590,9 @@ static bool encodeRaw(const Parameter* param, DataBlock& payload, XmlElement* el
     }
     AsnTag tag;
     const String* clas = elem->getAttribute(s_typeStr);
+    bool checkParam = (param && !TelEngine::null(param->name));
     if (TelEngine::null(clas)) {
-	if (param)
+	if (checkParam)
 	    tag.classType(param->tag.classType());
 	else {
 	    Debug(DebugMild,"In <%s> missing %s=\"...\" attribute!",elem->getTag().c_str(),s_typeStr.c_str());
@@ -602,7 +603,7 @@ static bool encodeRaw(const Parameter* param, DataBlock& payload, XmlElement* el
 	tag.classType((AsnTag::Class)lookup(*clas,s_tagTypes,AsnTag::Universal));
     clas = elem->getAttribute(s_tagAttr);
     if (TelEngine::null(clas)) {
-	if (param)
+	if (checkParam)
 	    tag.code(param->tag.code());
 	else {
 	    Debug(DebugMild,"In <%s> missing %s=\"...\" attribute!",elem->getTag().c_str(),s_tagAttr.c_str());

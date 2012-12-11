@@ -2780,10 +2780,9 @@ void SS7TCAPTransactionANSI::encodeComponents(NamedList& params, DataBlock& data
     int componentCount = params.getIntValue(s_tcapCompCount,0);
     DataBlock compData;
     if (componentCount) {
-	int index = 0;
+	int index = componentCount + 1;
 
-	while (index < componentCount) {
-	    index++;
+	while (--index) {
 	    DataBlock codedComp;
 	    // encode parameters
 	    String compParam;
@@ -4362,10 +4361,9 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
     int componentCount = params.getIntValue(s_tcapCompCount,0);
     DataBlock compData;
     if (componentCount) {
-	int index = 0;
+	int index = componentCount + 1;
 
-	while (index < componentCount) {
-	    index++;
+	while (--index) {
 	    DataBlock codedComp;
 	    // encode parameters
 	    String compParam;

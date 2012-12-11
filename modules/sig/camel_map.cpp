@@ -57,10 +57,16 @@ struct TCAPMap {
     const String name;
 };
 
+struct OpTable {
+    const Operation* mainTable;
+    const OpTable* fallbackTable;
+};
+
 struct AppCtxt {
     const char* name;
     const char* oid;
     const ObjList& ops;
+    const OpTable* opTable;
 };
 
 struct Capability {
@@ -2301,162 +2307,6 @@ static const Capability s_mapCapab[] = {
     {"SMSC",                     s_smscCapabOps},
     {"None",                     s_noOps},
     {0, s_noOps},
-};
-
-
-
-static const StringList s_netLocUpCtxtOps("updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,activateTraceMode");
-static const StringList s_locationCancelCtxtOps("cancelLocation");
-static const StringList s_roamingNumberEnqCtxtOps("provideRoamingNumber");
-static const StringList s_locationInfoRetrieveCtxtOps("sendRoutingInfo");
-static const StringList s_reportingCtxtOps("setReportingState,statusReport,remoteUserFree");
-static const StringList s_resetCtxtOps("reset");
-static const StringList s_infoRetrieveCtxt2Ops("sendAuthenticationInfo");
-static const StringList s_infoRetrieveCtxt1Ops("sendParameters");
-static const StringList s_subscriberDataCtxtOps("insertSubscriberData,deleteSubscriberData");
-static const StringList s_tracingCtxtOps("activateTraceMode,deactivateTraceMode");
-static const StringList s_networkFunctionalSsCtxtOps("registerSS,eraseSS,activateSS,deactivateSS,"
-							"interrogateSS,registerPassword,getPassword");
-static const StringList s_networkUnstructuredSsCtxt2Ops("processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify");
-static const StringList s_networkUnstructuredSsCtxt1Ops("processUnstructuredSS-Data");
-static const StringList s_shortMsgGatewayCtxtOps("sendRoutingInfoForSM,informServiceCentre");
-static const StringList s_shortMsgMOCtxtOps("mo-forwardSM");
-static const StringList s_forwardMsgCtxtOps("forwardSM");
-static const StringList s_shortMsgAlertCtxtOps("alertServiceCentre");
-static const StringList s_mwdMngtCtxtOps("readyForSM");
-static const StringList s_shortMsgMTCtxtOps("mt-forwardSM");
-static const StringList s_imsiRetrievalCtxtOps("sendIMSI");
-static const StringList s_msPurgingCtxtOps("purgeMS");
-static const StringList s_anyTimeInfoEnquiryCtxOps("anyTimeInterrogation");
-static const StringList s_gprsLocationUpdateCtxtOps("updateGprsLocation,insertSubscriberData,activateTraceMode");
-static const StringList s_gprsLocationInfoRetrieveCtxtOps("sendRoutingInfoForGprs");
-static const StringList s_failureReportCtxtOps("failureReport");
-static const StringList s_locationSvcGatewayCtxtOps("sendRoutingInfoForLCS");
-static const StringList s_authFailureReportCtxtOps("authenticationFailureReport");
-
-
-static const AppCtxt s_mapAppCtxt[]= {
-    // Network Loc Up context
-    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", s_netLocUpCtxtOps},
-    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", s_netLocUpCtxtOps},
-    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", s_netLocUpCtxtOps},
-
-    // Location Cancellation context
-    {"locationCancelationContext-v3", "0.4.0.0.1.0.2.3", s_locationCancelCtxtOps},
-    {"locationCancelationContext-v2", "0.4.0.0.1.0.2.2", s_locationCancelCtxtOps},
-    {"locationCancelationContext-v1", "0.4.0.0.1.0.2.1", s_locationCancelCtxtOps},
-
-    // Roaming Number Enquiry Context
-    {"roamingNumberEnquiryContext-v3", "0.4.0.0.1.0.3.3", s_roamingNumberEnqCtxtOps},
-    {"roamingNumberEnquiryContext-v2", "0.4.0.0.1.0.3.2", s_roamingNumberEnqCtxtOps},
-    {"roamingNumberEnquiryContext-v1", "0.4.0.0.1.0.3.1", s_roamingNumberEnqCtxtOps},
-
-    // Location Info Retrieval Context 
-    {"locationInfoRetrievalContext-v3", "0.4.0.0.1.0.5.3", s_locationInfoRetrieveCtxtOps},
-    {"locationInfoRetrievalContext-v2", "0.4.0.0.1.0.5.2", s_locationInfoRetrieveCtxtOps},
-    {"locationInfoRetrievalContext-v1", "0.4.0.0.1.0.5.1", s_locationInfoRetrieveCtxtOps},
-
-    // Reporting Context
-    {"reportingContext-v3", "0.4.0.0.1.0.7.3", s_reportingCtxtOps},
-
-    // Reset context
-    {"resetContext-v2", "0.4.0.0.1.0.10.2", s_resetCtxtOps},
-    {"resetContext-v1", "0.4.0.0.1.0.10.1", s_resetCtxtOps},
-
-    // Info retrieval context
-    {"infoRetrievalContext-v3", "0.4.0.0.1.0.14.3", s_infoRetrieveCtxt2Ops},
-    {"infoRetrievalContext-v2", "0.4.0.0.1.0.14.2", s_infoRetrieveCtxt2Ops}, 
-    {"infoRetrievalContext-v1", "0.4.0.0.1.0.14.1", s_infoRetrieveCtxt1Ops},
-
-    // Subscriber Data Management Context
-    {"subscriberDataMngtContext-v3", "0.4.0.0.1.0.16.3", s_subscriberDataCtxtOps},
-    {"subscriberDataMngtContext-v2", "0.4.0.0.1.0.16.2", s_subscriberDataCtxtOps},
-    {"subscriberDataMngtContext-v1", "0.4.0.0.1.0.16.1", s_subscriberDataCtxtOps},
-
-    // Tracing context
-    {"tracingContext-v3", "0.4.0.0.1.0.17.3", s_tracingCtxtOps},
-    {"tracingContext-v2", "0.4.0.0.1.0.17.2", s_tracingCtxtOps},
-    {"tracingContext-v1", "0.4.0.0.1.0.17.1", s_tracingCtxtOps},
-
-    // Network functional SS context
-    {"networkFunctionalSsContext-v2", "0.4.0.0.1.0.18.2", s_networkFunctionalSsCtxtOps},
-    {"networkFunctionalSsContext-v1", "0.4.0.0.1.0.18.1", s_networkFunctionalSsCtxtOps},
-
-    // Network unstructured SS context
-    {"networkUnstructuredSsContext-v2", "0.4.0.0.1.0.19.2", s_networkUnstructuredSsCtxt2Ops},
-    {"networkUnstructuredSsContext-v1", "0.4.0.0.1.0.19.1", s_networkUnstructuredSsCtxt1Ops},
-
-    // Short message routing
-    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", s_shortMsgGatewayCtxtOps},
-    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", s_shortMsgGatewayCtxtOps},
-    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", s_shortMsgGatewayCtxtOps},
-
-    // Mobile Originated short messages
-    {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", s_shortMsgMOCtxtOps},
-    {"shortMsgMO-RelayContext-v2", "0.4.0.0.1.0.21.2", s_forwardMsgCtxtOps},
-    {"shortMsgMO-RelayContext-v1", "0.4.0.0.1.0.21.1", s_forwardMsgCtxtOps},
-
-    // Short message alerts
-    {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", s_shortMsgAlertCtxtOps},
-    {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", s_shortMsgAlertCtxtOps},
-
-    // readyForSM context
-    {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", s_mwdMngtCtxtOps},
-    {"mwdMngtContext-v2", "0.4.0.0.1.0.24.2", s_mwdMngtCtxtOps},
-    {"mwdMngtContext-v1", "0.4.0.0.1.0.24.1", s_mwdMngtCtxtOps},
-
-    // Mobile Terminated short messages
-    {"shortMsgMT-RelayContext-v3", "0.4.0.0.1.0.25.3", s_shortMsgMTCtxtOps},
-    {"shortMsgMT-RelayContext-v2", "0.4.0.0.1.0.25.2", s_forwardMsgCtxtOps},
-
-    // sendIMSI Context
-    {"imsiRetrievalContext-v2", "0.4.0.0.1.0.26.2", s_imsiRetrievalCtxtOps},
-
-    // MS Purging Context
-    {"msPurgingContext-v3", "0.4.0.0.1.0.27.3", s_msPurgingCtxtOps},
-    {"msPurgingContext-v2", "0.4.0.0.1.0.27.2", s_msPurgingCtxtOps},
-
-    // Any Time Info Enquiry Context 
-    {"anyTimeInfoEnquiryContext-v3", "0.4.0.0.1.0.29.3", s_anyTimeInfoEnquiryCtxOps},
-
-    // GPRS Location Update Context
-    {"gprsLocationUpdateContext-v3", "0.4.0.0.1.0.32.3", s_gprsLocationUpdateCtxtOps},
-
-    // GPRS Location Info Retrieval Context
-    {"gprsLocationInfoRetrievalContext-v3" , "0.4.0.0.1.0.33.3", s_gprsLocationInfoRetrieveCtxtOps},
-
-    // Failure Report Context 
-    {"failureReportContext-v3" , "0.4.0.0.1.0.34.3", s_failureReportCtxtOps},
-
-    // Location Services Gateway Context 
-    {"locationSvcGatewayContext-v3", "0.4.0.0.1.0.37.3", s_locationSvcGatewayCtxtOps},
-
-    // Authentication Failure Report Context
-    {"authenticationFailureReportContext-v3" , "0.4.0.0.1.0.39.3", s_authFailureReportCtxtOps},
-
-    {0, 0, s_noOps},
-};
-
-static const StringList s_cap2gsmSSFgsmSCFCtxtOps("initialDP,establishTemporaryConnection,connectToResource,"
-							    "disconnectForwardConnection,connect,releaseCall,eventReportBCSM,"
-							    "requestReportBCSMEvent,applyChargingReport,applyCharging,continue,"
-							    "resetTimer,furnishChargingInformation,callInformationReport,"
-							    "callInformationRequest,sendChargingInformation,specializedResourceReport,"
-							    "playAnnouncement,promptAndCollectUserInformation,cancel,activityTest");
-static const StringList s_cap2AssistgsmSSFgsmSCFCtxtOps("assistRequestInstructions,disconnectForwardConnection,connectToResource,"
-								"resetTimer,specializedResourceReport,playAnnouncement,"
-								"promptAndCollectUserInformation,cancel,activityTest");
-static const StringList s_cap2gsmSRFgsmSCFCtxtOps("assistRequestInstructions,specializedResourceReport,playAnnouncement,"
-							"promptAndCollectUserInformation,cancel,activityTest");
-
-static const AppCtxt s_camelAppCtxt[] = {
-    {"CAP-v2-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.50.1", s_cap2gsmSSFgsmSCFCtxtOps},
-
-    {"CAP-v2-assist-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.51.1", s_cap2AssistgsmSSFgsmSCFCtxtOps},
-
-    {"CAP-v2-gsmSRF-to-gsmSCF-AC", "0.4.0.0.1.0.52.1", s_cap2gsmSRFgsmSCFCtxtOps},
-
-    {0, 0, s_noOps}
 };
 
 static const StringList s_smscCapabOIDs("shortMsgMO-RelayContext-v3,shortMsgMO-RelayContext-v2,shortMsgMO-RelayContext-v1,"
@@ -6561,11 +6411,168 @@ static const Operation s_camelErrors[] = {
     },
 };
 
+static const StringList s_netLocUpCtxtOps("updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,activateTraceMode");
+static const StringList s_locationCancelCtxtOps("cancelLocation");
+static const StringList s_roamingNumberEnqCtxtOps("provideRoamingNumber");
+static const StringList s_locationInfoRetrieveCtxtOps("sendRoutingInfo");
+static const StringList s_reportingCtxtOps("setReportingState,statusReport,remoteUserFree");
+static const StringList s_resetCtxtOps("reset");
+static const StringList s_infoRetrieveCtxt2Ops("sendAuthenticationInfo");
+static const StringList s_infoRetrieveCtxt1Ops("sendParameters");
+static const StringList s_subscriberDataCtxtOps("insertSubscriberData,deleteSubscriberData");
+static const StringList s_tracingCtxtOps("activateTraceMode,deactivateTraceMode");
+static const StringList s_networkFunctionalSsCtxtOps("registerSS,eraseSS,activateSS,deactivateSS,"
+							"interrogateSS,registerPassword,getPassword");
+static const StringList s_networkUnstructuredSsCtxt2Ops("processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify");
+static const StringList s_networkUnstructuredSsCtxt1Ops("processUnstructuredSS-Data");
+static const StringList s_shortMsgGatewayCtxtOps("sendRoutingInfoForSM,informServiceCentre");
+static const StringList s_shortMsgMOCtxtOps("mo-forwardSM");
+static const StringList s_forwardMsgCtxtOps("forwardSM");
+static const StringList s_shortMsgAlertCtxtOps("alertServiceCentre");
+static const StringList s_mwdMngtCtxtOps("readyForSM");
+static const StringList s_shortMsgMTCtxtOps("mt-forwardSM");
+static const StringList s_imsiRetrievalCtxtOps("sendIMSI");
+static const StringList s_msPurgingCtxtOps("purgeMS");
+static const StringList s_anyTimeInfoEnquiryCtxOps("anyTimeInterrogation");
+static const StringList s_gprsLocationUpdateCtxtOps("updateGprsLocation,insertSubscriberData,activateTraceMode");
+static const StringList s_gprsLocationInfoRetrieveCtxtOps("sendRoutingInfoForGprs");
+static const StringList s_failureReportCtxtOps("failureReport");
+static const StringList s_locationSvcGatewayCtxtOps("sendRoutingInfoForLCS");
+static const StringList s_authFailureReportCtxtOps("authenticationFailureReport");
+
+static const OpTable s_defMapOpTable = { s_mapOps, 0};
+
+static const AppCtxt s_mapAppCtxt[]= {
+    // Network Loc Up context
+    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", s_netLocUpCtxtOps, &s_defMapOpTable},
+    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", s_netLocUpCtxtOps, &s_defMapOpTable},
+    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", s_netLocUpCtxtOps, &s_defMapOpTable},
+
+    // Location Cancellation context
+    {"locationCancelationContext-v3", "0.4.0.0.1.0.2.3", s_locationCancelCtxtOps, &s_defMapOpTable},
+    {"locationCancelationContext-v2", "0.4.0.0.1.0.2.2", s_locationCancelCtxtOps, &s_defMapOpTable},
+    {"locationCancelationContext-v1", "0.4.0.0.1.0.2.1", s_locationCancelCtxtOps, &s_defMapOpTable},
+
+    // Roaming Number Enquiry Context
+    {"roamingNumberEnquiryContext-v3", "0.4.0.0.1.0.3.3", s_roamingNumberEnqCtxtOps, &s_defMapOpTable},
+    {"roamingNumberEnquiryContext-v2", "0.4.0.0.1.0.3.2", s_roamingNumberEnqCtxtOps, &s_defMapOpTable},
+    {"roamingNumberEnquiryContext-v1", "0.4.0.0.1.0.3.1", s_roamingNumberEnqCtxtOps, &s_defMapOpTable},
+
+    // Location Info Retrieval Context 
+    {"locationInfoRetrievalContext-v3", "0.4.0.0.1.0.5.3", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
+    {"locationInfoRetrievalContext-v2", "0.4.0.0.1.0.5.2", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
+    {"locationInfoRetrievalContext-v1", "0.4.0.0.1.0.5.1", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
+
+    // Reporting Context
+    {"reportingContext-v3", "0.4.0.0.1.0.7.3", s_reportingCtxtOps, &s_defMapOpTable},
+
+    // Reset context
+    {"resetContext-v2", "0.4.0.0.1.0.10.2", s_resetCtxtOps, &s_defMapOpTable},
+    {"resetContext-v1", "0.4.0.0.1.0.10.1", s_resetCtxtOps, &s_defMapOpTable},
+
+    // Info retrieval context
+    {"infoRetrievalContext-v3", "0.4.0.0.1.0.14.3", s_infoRetrieveCtxt2Ops, &s_defMapOpTable},
+    {"infoRetrievalContext-v2", "0.4.0.0.1.0.14.2", s_infoRetrieveCtxt2Ops, &s_defMapOpTable}, 
+    {"infoRetrievalContext-v1", "0.4.0.0.1.0.14.1", s_infoRetrieveCtxt1Ops, &s_defMapOpTable},
+
+    // Subscriber Data Management Context
+    {"subscriberDataMngtContext-v3", "0.4.0.0.1.0.16.3", s_subscriberDataCtxtOps, &s_defMapOpTable},
+    {"subscriberDataMngtContext-v2", "0.4.0.0.1.0.16.2", s_subscriberDataCtxtOps, &s_defMapOpTable},
+    {"subscriberDataMngtContext-v1", "0.4.0.0.1.0.16.1", s_subscriberDataCtxtOps, &s_defMapOpTable},
+
+    // Tracing context
+    {"tracingContext-v3", "0.4.0.0.1.0.17.3", s_tracingCtxtOps, &s_defMapOpTable},
+    {"tracingContext-v2", "0.4.0.0.1.0.17.2", s_tracingCtxtOps, &s_defMapOpTable},
+    {"tracingContext-v1", "0.4.0.0.1.0.17.1", s_tracingCtxtOps, &s_defMapOpTable},
+
+    // Network functional SS context
+    {"networkFunctionalSsContext-v2", "0.4.0.0.1.0.18.2", s_networkFunctionalSsCtxtOps, &s_defMapOpTable},
+    {"networkFunctionalSsContext-v1", "0.4.0.0.1.0.18.1", s_networkFunctionalSsCtxtOps, &s_defMapOpTable},
+
+    // Network unstructured SS context
+    {"networkUnstructuredSsContext-v2", "0.4.0.0.1.0.19.2", s_networkUnstructuredSsCtxt2Ops, &s_defMapOpTable},
+    {"networkUnstructuredSsContext-v1", "0.4.0.0.1.0.19.1", s_networkUnstructuredSsCtxt1Ops, &s_defMapOpTable},
+
+    // Short message routing
+    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", s_shortMsgGatewayCtxtOps, &s_defMapOpTable},
+    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", s_shortMsgGatewayCtxtOps, &s_defMapOpTable},
+    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", s_shortMsgGatewayCtxtOps, &s_defMapOpTable},
+
+    // Mobile Originated short messages
+    {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", s_shortMsgMOCtxtOps, &s_defMapOpTable},
+    {"shortMsgMO-RelayContext-v2", "0.4.0.0.1.0.21.2", s_forwardMsgCtxtOps, &s_defMapOpTable},
+    {"shortMsgMO-RelayContext-v1", "0.4.0.0.1.0.21.1", s_forwardMsgCtxtOps, &s_defMapOpTable},
+
+    // Short message alerts
+    {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", s_shortMsgAlertCtxtOps, &s_defMapOpTable},
+    {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", s_shortMsgAlertCtxtOps, &s_defMapOpTable},
+
+    // readyForSM context
+    {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", s_mwdMngtCtxtOps, &s_defMapOpTable},
+    {"mwdMngtContext-v2", "0.4.0.0.1.0.24.2", s_mwdMngtCtxtOps, &s_defMapOpTable},
+    {"mwdMngtContext-v1", "0.4.0.0.1.0.24.1", s_mwdMngtCtxtOps, &s_defMapOpTable},
+
+    // Mobile Terminated short messages
+    {"shortMsgMT-RelayContext-v3", "0.4.0.0.1.0.25.3", s_shortMsgMTCtxtOps, &s_defMapOpTable},
+    {"shortMsgMT-RelayContext-v2", "0.4.0.0.1.0.25.2", s_forwardMsgCtxtOps, &s_defMapOpTable},
+
+    // sendIMSI Context
+    {"imsiRetrievalContext-v2", "0.4.0.0.1.0.26.2", s_imsiRetrievalCtxtOps, &s_defMapOpTable},
+
+    // MS Purging Context
+    {"msPurgingContext-v3", "0.4.0.0.1.0.27.3", s_msPurgingCtxtOps, &s_defMapOpTable},
+    {"msPurgingContext-v2", "0.4.0.0.1.0.27.2", s_msPurgingCtxtOps, &s_defMapOpTable},
+
+    // Any Time Info Enquiry Context 
+    {"anyTimeInfoEnquiryContext-v3", "0.4.0.0.1.0.29.3", s_anyTimeInfoEnquiryCtxOps, &s_defMapOpTable},
+
+    // GPRS Location Update Context
+    {"gprsLocationUpdateContext-v3", "0.4.0.0.1.0.32.3", s_gprsLocationUpdateCtxtOps, &s_defMapOpTable},
+
+    // GPRS Location Info Retrieval Context
+    {"gprsLocationInfoRetrievalContext-v3" , "0.4.0.0.1.0.33.3", s_gprsLocationInfoRetrieveCtxtOps, &s_defMapOpTable},
+
+    // Failure Report Context 
+    {"failureReportContext-v3" , "0.4.0.0.1.0.34.3", s_failureReportCtxtOps, &s_defMapOpTable},
+
+    // Location Services Gateway Context 
+    {"locationSvcGatewayContext-v3", "0.4.0.0.1.0.37.3", s_locationSvcGatewayCtxtOps, &s_defMapOpTable},
+
+    // Authentication Failure Report Context
+    {"authenticationFailureReportContext-v3" , "0.4.0.0.1.0.39.3", s_authFailureReportCtxtOps, &s_defMapOpTable},
+
+    {0, 0, s_noOps, 0},
+};
+
+static const StringList s_cap2gsmSSFgsmSCFCtxtOps("initialDP,establishTemporaryConnection,connectToResource,"
+							    "disconnectForwardConnection,connect,releaseCall,eventReportBCSM,"
+							    "requestReportBCSMEvent,applyChargingReport,applyCharging,continue,"
+							    "resetTimer,furnishChargingInformation,callInformationReport,"
+							    "callInformationRequest,sendChargingInformation,specializedResourceReport,"
+							    "playAnnouncement,promptAndCollectUserInformation,cancel,activityTest");
+static const StringList s_cap2AssistgsmSSFgsmSCFCtxtOps("assistRequestInstructions,disconnectForwardConnection,connectToResource,"
+								"resetTimer,specializedResourceReport,playAnnouncement,"
+								"promptAndCollectUserInformation,cancel,activityTest");
+static const StringList s_cap2gsmSRFgsmSCFCtxtOps("assistRequestInstructions,specializedResourceReport,playAnnouncement,"
+							"promptAndCollectUserInformation,cancel,activityTest");
+    
+static OpTable s_defCamelOpTable = { s_camelOps, 0 };
+
+static const AppCtxt s_camelAppCtxt[] = {
+    {"CAP-v2-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.50.1", s_cap2gsmSSFgsmSCFCtxtOps, &s_defCamelOpTable},
+
+    {"CAP-v2-assist-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.51.1", s_cap2AssistgsmSSFgsmSCFCtxtOps, &s_defCamelOpTable},
+
+    {"CAP-v2-gsmSRF-to-gsmSCF-AC", "0.4.0.0.1.0.52.1", s_cap2gsmSRFgsmSCFCtxtOps, &s_defCamelOpTable},
+
+    {0, 0, s_noOps, 0}
+};
+
 static const StringList s_mapDialogCtxtOps("map-open,map-accept,map-close,map-refuse,map-userAbort,map-providerAbort");
 
 static const AppCtxt s_mapDialogCtxt[] = {
-    {"map-DialogueAS", "0.4.0.0.1.1.1.1", s_mapDialogCtxtOps},
-    {0, 0, s_noOps}
+    {"map-DialogueAS", "0.4.0.0.1.1.1.1", s_mapDialogCtxtOps, 0},
+    {0, 0, s_noOps, 0}
 };
 
 static const Parameter s_mapOpenSeq[] = {
@@ -6700,27 +6707,39 @@ static bool isAppCtxtOperation(const AppCtxt* ctxt, const Operation* op)
 
 static const Operation* findOperation(TcapXUser::UserType type, int opCode, bool opLocal = true, const AppCtxt* ctxt = 0)
 {
-    DDebug(&__plugin,DebugAll,"findOperation(type=%s,opCode=%d, local=%s)",lookup(type,s_userTypes),opCode,String::boolText(opLocal));
-    const Operation* ops = (type == TcapXUser::MAP ? s_mapOps : s_camelOps);
-    while (!TelEngine::null(ops->name)) {
-	if (ops->code == opCode && ops->local == opLocal) {
-	    if (isAppCtxtOperation(ctxt,ops))
-		return ops;
+    DDebug(&__plugin,DebugAll,"findOperation(type=%s,opCode=%d,local=%s,ctxt=%p)",lookup(type,s_userTypes),opCode,String::boolText(opLocal),ctxt);
+    const Operation* ops = 0;
+    const OpTable* opTable = (ctxt ? ctxt->opTable : 0);
+    do {
+	ops = ( opTable ? opTable->mainTable : (type == TcapXUser::MAP ? s_mapOps : s_camelOps));
+	while (!TelEngine::null(ops->name)) {
+	    if (ops->code == opCode && ops->local == opLocal) {
+		if (isAppCtxtOperation(ctxt,ops))
+		    return ops;
+	    }
+	    ops++;
 	}
-	ops++;
-    }
+	if (opTable)
+	    opTable = opTable->fallbackTable;
+    } while (opTable);
     return 0;
 }
 
 static const Operation* findOperation(TcapXUser::UserType type, const String& op, const AppCtxt* ctxt = 0)
 {
-    DDebug(&__plugin,DebugAll,"findOperation(opCode=%s)",op.c_str());
-    const Operation* ops = (type == TcapXUser::MAP ? s_mapOps : s_camelOps);
-    while (!TelEngine::null(ops->name)) {
-	if (op == ops->name && isAppCtxtOperation(ctxt,ops))
-	    return ops;
-	ops++;
-    }
+    DDebug(&__plugin,DebugAll,"findOperation(opCode=%s,ctxt=%p)",op.c_str(),ctxt);
+    const Operation* ops = 0;
+    const OpTable* opTable = (ctxt ? ctxt->opTable : 0);
+    do {
+	ops = ( opTable ? opTable->mainTable : (type == TcapXUser::MAP ? s_mapOps : s_camelOps));
+	while (!TelEngine::null(ops->name)) {
+	    if (op == ops->name && isAppCtxtOperation(ctxt,ops))
+		return ops;
+	    ops++;
+	}
+	if (opTable)
+	    opTable = opTable->fallbackTable;
+    } while (opTable);
     return 0;
 }
 

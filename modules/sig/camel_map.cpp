@@ -8552,8 +8552,8 @@ bool TcapXUser::initialize(NamedList& sect)
     }
 
     m_type = (UserType)lookup(sect.getValue(s_typeStr,"MAP"),s_userTypes,m_type);
-    m_printMsg = sect.getBoolValue("print-messages",false);
-    m_addEnc = sect.getBoolValue("add-encoding",false);
+    m_printMsg = sect.getBoolValue(YSTRING("print-messages"),false);
+    m_addEnc = sect.getBoolValue(YSTRING("add-encoding"),false);
     if (!tcap() && !findTCAP(sect.getValue("tcap",0)))
 	return false;
     notifyManagementState(true);

@@ -760,6 +760,12 @@ HandledMSU SS7TCAP::processSCCPData(SS7TCAPMessage* msg)
 	    else
 		tr->setTransmitState(SS7TCAPTransaction::Transmitted);
 	}
+	else if (type != SS7TCAP::TC_Notice) {
+	    tr->update(SS7TCAP::TC_U_Abort,msgParams,false);
+	    buildSCCPData(msgParams,tr);
+	    tr->setTransmitState(SS7TCAPTransaction::Transmitted);
+	    tr->updateState(false);
+	}
 	else
 	    tr->setState(SS7TCAPTransaction::Idle);
 	TelEngine::destruct(tr);

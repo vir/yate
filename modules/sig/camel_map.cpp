@@ -1849,7 +1849,7 @@ static const TokenDict s_dict_qual[] = {
 // Utility function - extract just ISUP digits from a parameter
 static void getDigits(String& num, bool odd, const unsigned char* buf, unsigned int len)
 {
-    static const char digits[] = "0123456789ABCD?.";
+    static const char digits[] = "0123456789ABCDE.";
     for (unsigned int i = 0; i < len; i++) {
 	num += digits[buf[i] & 0x0f];
 	if (odd && ((i+1) == len))

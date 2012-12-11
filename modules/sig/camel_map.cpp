@@ -469,6 +469,7 @@ static const String s_tcapAbortInfo = "tcap.transaction.abort.information";
 static const String s_tcapCompType = "componentType";
 static const String s_tcapOpCodeType = "operationCodeType";
 static const String s_tcapOpCode = "operationCode";
+static const String s_tcapOpClass = "operationClass";
 static const String s_tcapErrCodeType = "errorCodeType";
 static const String s_tcapErrCode = "errorCode";
 static const String s_tcapProblemCode = "problemCode";
@@ -495,6 +496,7 @@ struct Operation {
     const String name;
     bool local;
     int code;
+    int opClass;
     const AsnTag& argTag;
     const Parameter* args;
     const AsnTag& retTag;
@@ -5133,168 +5135,168 @@ static const Parameter s_statusReportRes[] = {
 };
 
 static const Operation s_mapOps[] = {
-    {"updateLocation",                true,   2,
+    {"updateLocation",                true,   2,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_updateLocationArgs,
 	s_sequenceTag, s_updateLocationRes
     },
-    {"cancelLocation",                true,   3,
+    {"cancelLocation",                true,   3,  SS7TCAP::SuccessOrFailureReport,
 	s_ctxtCstr_3_Tag, s_cancelLocationArgs,
 	s_sequenceTag,    s_extensionContainerRes
     },
-    {"provideRoamingNumber",          true,   4,
+    {"provideRoamingNumber",          true,   4,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_provideRoamingNumberArgs,
 	s_sequenceTag, s_provideRoamingNumberRes
     },
-    {"insertSubscriberData",          true,   7,
+    {"insertSubscriberData",          true,   7,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_insertSubscriberDataArgs,
 	s_sequenceTag, s_insertSubscriberDataRes
     },
-    {"deleteSubscriberData",          true,   8,
+    {"deleteSubscriberData",          true,   8,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_deleteSubscriberDataArgs,
 	s_sequenceTag, s_deleteSubscriberDataRes
     },
-    {"sendParameters",                true,   9,
+    {"sendParameters",                true,   9,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_sendParametersDataArgs,
 	s_noTag, s_sendParametersDataRes
     },
-    {"registerSS",                    true,  10,
+    {"registerSS",                    true,  10,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_registerSSArgs,
 	s_noTag,       s_extSSInfoChoice
     },
-    {"eraseSS",                       true,  11,
+    {"eraseSS",                       true,  11,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_ssCodeArgs,
 	s_noTag,       s_extSSInfoChoice
     },
-    {"activateSS",                    true,  12,
+    {"activateSS",                    true,  12,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_ssCodeArgs,
 	s_noTag,       s_extSSInfoChoice
     },
-    {"deactivateSS",                  true,  13,
+    {"deactivateSS",                  true,  13,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_ssCodeArgs,
 	s_noTag,       s_extSSInfoChoice
     },
-    {"interrogateSS",                 true,  14,
+    {"interrogateSS",                 true,  14,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_ssCodeArgs,
 	s_noTag,       s_InterrogateSSRes
     },
-    {"authenticationFailureReport",   true,  15,
+    {"authenticationFailureReport",   true,  15,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_authFailureArgs,
 	s_sequenceTag, s_extensionContainerRes,
     },
-    {"registerPassword",              true,  17,
+    {"registerPassword",              true,  17,  SS7TCAP::SuccessOrFailureReport,
 	s_noTag, s_registerPasswordArgs,
 	s_noTag, s_registerPasswordRes
     },
-    {"getPassword",                   true,  18,
+    {"getPassword",                   true,  18,  SS7TCAP::SuccessOnlyReport,
 	s_noTag, s_getPasswordArgs,
 	s_noTag, s_getPasswordRes
     },
-    {"updateGprsLocation",            true,  23,
+    {"updateGprsLocation",            true,  23,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_updateGprsLocationArgs,
 	s_sequenceTag, s_updateGprsLocationRes
     },
-    {"sendRoutingInfoForGprs",        true,  24,
+    {"sendRoutingInfoForGprs",        true,  24,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_sendRoutingInfoForGprsArgs,
 	s_sequenceTag, s_sendRoutingInfoForGprsRes
     },
-    {"failureReport",                 true,  25,
+    {"failureReport",                 true,  25,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_failureReportArgs,
 	s_sequenceTag, s_failureReportRes
     },
-    {"reset",                         true,  37,
+    {"reset",                         true,  37,  SS7TCAP::NoReport,
 	s_sequenceTag, s_resetArgs,
 	s_noTag, 0
     },
-    {"forwardCheckSS-Indication",     true,  38,
+    {"forwardCheckSS-Indication",     true,  38,  SS7TCAP::NoReport,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"mt-forwardSM",                  true,  44,
+    {"mt-forwardSM",                  true,  44,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_mtForwardSMArgs,
 	s_sequenceTag, s_forwardSMRes
     },
-    {"sendRoutingInfoForSM",          true,  45,
+    {"sendRoutingInfoForSM",          true,  45,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_sendRoutingInfoForSMArgs,
 	s_sequenceTag, s_sendRoutingInfoForSMRes
     },
-    {"mo-forwardSM",                  true,  46,
+    {"mo-forwardSM",                  true,  46,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_moForwardSMArgs,
 	s_sequenceTag, s_forwardSMRes
     },
-    {"forwardSM",                     true,  46,
+    {"forwardSM",                     true,  46,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_forwardSMArgs,
 	s_noTag, 0
     },
-    {"reportSM-DeliveryStatus",       true,  47,
+    {"reportSM-DeliveryStatus",       true,  47,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_reportSMDeliveryArgs,
 	s_sequenceTag, s_reportSMDeliveryRes,
 	
     },
-    {"activateTraceMode",             true,  50,
+    {"activateTraceMode",             true,  50,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_activateTraceModeArgs,
 	s_sequenceTag, s_traceModeRes
     },
-    {"deactivateTraceMode",           true,  51,
+    {"deactivateTraceMode",           true,  51,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_deactivateTraceModeArgs,
 	s_sequenceTag, s_traceModeRes
     },
-    {"sendAuthenticationInfo",        true,  56,
+    {"sendAuthenticationInfo",        true,  56,  SS7TCAP::SuccessOrFailureReport,
 	s_noTag, s_sendAuthenticationInfoArgs,
 	s_noTag, s_sendAuthenticationInfoRes
     },
-    {"restoreData",                   true,  57,
+    {"restoreData",                   true,  57,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_restoreDataArgs,
 	s_sequenceTag, s_restoreDataRes
     },
-    {"sendIMSI",                      true,  58,
+    {"sendIMSI",                      true,  58,  SS7TCAP::SuccessOrFailureReport,
 	s_noTag, s_sendIMSIArgs,
 	s_noTag, s_sendIMSIRes
     },
-    {"processUnstructuredSS-Request", true,  59,
+    {"processUnstructuredSS-Request", true,  59,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_unstructuredSSArgs,
 	s_sequenceTag, s_unstructuredSSRes
     },
-    {"unstructuredSS-Request",        true,  60,
+    {"unstructuredSS-Request",        true,  60,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_unstructuredSSArgs,
 	s_sequenceTag, s_unstructuredSSRes
     },
-    {"unstructuredSS-Notify",         true,  61,
+    {"unstructuredSS-Notify",         true,  61,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_unstructuredSSArgs,
 	s_noTag, 0
     },
-    {"informServiceCentre",           true,  63,
+    {"informServiceCentre",           true,  63,  SS7TCAP::NoReport,
 	s_sequenceTag, s_informServiceCentreArgs,
 	s_noTag, 0
     },
-    {"alertServiceCentre",            true,  64,
+    {"alertServiceCentre",            true,  64,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_alertServiceCentreArgs,
 	s_noTag, 0
     },
-    {"readyForSM",                    true,  66,
+    {"readyForSM",                    true,  66,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_readyForSMArgs,
 	s_sequenceTag, s_extensionContainerRes
     },
-    {"purgeMS",                       true,  67,
+    {"purgeMS",                       true,  67,  SS7TCAP::SuccessOrFailureReport,
 	s_ctxtCstr_3_Tag, s_purgeMSArgs,
 	s_sequenceTag,    s_purgeMSRes
     },
-    {"anyTimeInterrogation",          true,  71,
+    {"anyTimeInterrogation",          true,  71,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_anyTimeInterrogationArgs,
 	s_sequenceTag, s_anyTimeInterrogationRes
     },
-    {"setReportingState",             true,  73,
+    {"setReportingState",             true,  73,  SS7TCAP::SuccessOrFailureReport,
  	s_sequenceTag, s_setReportingStateArgs,
 	s_sequenceTag, s_setReportingStateRes
     },
-    {"statusReport",                  true,  74,
+    {"statusReport",                  true,  74,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_statusReportArgs,
 	s_sequenceTag, s_statusReportRes
     },
-    {"sendRoutingInfoForLCS",         true,  85,
+    {"sendRoutingInfoForLCS",         true,  85,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_sendRoutingInfoForLCSArgs,
 	s_sequenceTag, s_sendRoutingInfoForLCSRes
     },
-    {"",                              false,  0,
+    {"",                              false,  0,  -1,
 	s_noTag,  0,
 	s_noTag,  0
     },
@@ -5871,95 +5873,95 @@ static const Parameter s_cancelArgs[] = {
 };
 
 static const Operation s_camelOps[] = {
-    {"initialDP",                true,   0,
+    {"initialDP",                true,   0,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_initialDPArgs,
 	s_noTag, 0
     },
-    {"assistRequestInstructions",   true,   16,
+    {"assistRequestInstructions",   true,   16,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_assistRequestInstructionsArgs,
 	s_noTag, 0
     },
-    {"establishTemporaryConnection",   true,   17,
+    {"establishTemporaryConnection",   true,   17,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_establishTemporaryConnectionArgs,
 	s_noTag, 0
     },
-    {"disconnectForwardConnection",   true,   18,
+    {"disconnectForwardConnection",   true,   18,   SS7TCAP::FailureOnlyReport,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"connectToResource",   true,   19,
+    {"connectToResource",   true,   19,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_connectToResourceArgs,
 	s_noTag, 0
     },
-    {"connect",   true,   20,
+    {"connect",   true,   20,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_connectArgs,
 	s_noTag, 0
     },
-    {"releaseCall",   true,   22,
+    {"releaseCall",   true,   22,   SS7TCAP::NoReport,
 	s_noTag, s_releaseCallArgs,
 	s_noTag, 0
     },
-    {"requestReportBCSMEvent",   true,   23,
+    {"requestReportBCSMEvent",   true,   23,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_requestReportBCSMEventArgs,
 	s_noTag, 0
     },
-    {"eventReportBCSM",   true,   24,
+    {"eventReportBCSM",   true,   24,   SS7TCAP::NoReport,
 	s_sequenceTag, s_eventReportBCSMArgs,
 	s_noTag, 0
     },
-    {"continue",   true,   31,
+    {"continue",   true,   31,   SS7TCAP::NoReport,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"resetTimer",   true,   33,
+    {"resetTimer",   true,   33,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_resetTimerArgs,
 	s_noTag, 0
     },
-    {"furnishChargingInformation",   true,   34,
+    {"furnishChargingInformation",   true,   34,   SS7TCAP::FailureOnlyReport,
 	s_noTag, s_FCIBillingChargingCharacteristics,
 	s_noTag, 0
     },
-    {"applyCharging",   true,   35,
+    {"applyCharging",   true,   35,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_applyChargingArgs,
 	s_noTag, 0
     },
-    {"applyChargingReport",   true,   36,
+    {"applyChargingReport",   true,   36,   SS7TCAP::FailureOnlyReport,
 	s_noTag, s_callResult,
 	s_noTag, 0
     },
-    {"callInformationReport",   true,   44,
+    {"callInformationReport",   true,   44,   SS7TCAP::NoReport,
 	s_sequenceTag, s_callInformationArgs,
 	s_noTag, 0
     },
-    {"callInformationRequest",   true,   45,
+    {"callInformationRequest",   true,   45,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_callInformationRequestArgs,
 	s_noTag, 0
     },
-    {"sendChargingInformation",   true,   46,
+    {"sendChargingInformation",   true,   46,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_sendChargingInformationArgs,
 	s_noTag, 0
     },
-    {"playAnnouncement",   true,   47,
+    {"playAnnouncement",   true,   47,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_playAnnouncementArgs,
 	s_noTag, 0
     },
-    {"promptAndCollectUserInformation",   true,   48,
+    {"promptAndCollectUserInformation",   true,   48,   SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_promptAndCollectUserInformationArgs,
 	s_noTag, 0
     },
-    {"specializedResourceReport",   true,   49,
+    {"specializedResourceReport",   true,   49,   SS7TCAP::NoReport,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"cancel",   true,   53,
+    {"cancel",   true,   53,   SS7TCAP::FailureOnlyReport,
 	s_noTag, s_cancelChoice,
 	s_noTag, 0
     },
-    {"activityTest",   true,   55,
+    {"activityTest",   true,   55,   SS7TCAP::SuccessOnlyReport,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"",                              false,  0,
+    {"",                              false,  0, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
@@ -6139,155 +6141,155 @@ static const Parameter s_busySubscriberErr[] = {
 };
 
 static const Operation s_mapErrors[] = {
-    {"unknownSubscriber", true, 1, 
+    {"unknownSubscriber", true, 1, -1,
 	s_sequenceTag, s_unknownSubscriberErr,
 	s_noTag, 0
     },
-    {"unknownMSC", true, 3,
+    {"unknownMSC", true, 3, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"unidentifiedSubscriber", true, 5,
+    {"unidentifiedSubscriber", true, 5, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"absentsubscriberSM", true, 6,
+    {"absentsubscriberSM", true, 6, -1,
 	s_sequenceTag, s_absentsubscriberSMErr,
 	s_noTag, 0
     },
-    {"unknownEquipment", true, 7,
+    {"unknownEquipment", true, 7, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"roamingNotAllowed", true, 8,
+    {"roamingNotAllowed", true, 8, -1,
 	s_sequenceTag, s_roamingNotAllowedErr,
 	s_noTag, 0
     },
-    {"illegalSubscriber", true, 9,
+    {"illegalSubscriber", true, 9, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"bearerServiceNotProvisioned", true, 10,
+    {"bearerServiceNotProvisioned", true, 10, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"teleserviceNotProvisioned", true, 11,
+    {"teleserviceNotProvisioned", true, 11, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"illegalEquipment", true, 12,
+    {"illegalEquipment", true, 12, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"callBarred", true, 13,
+    {"callBarred", true, 13, -1,
 	s_noTag, s_callBarredErr,
 	s_noTag, 0
     },
-    {"forwardingViolation", true, 14,
+    {"forwardingViolation", true, 14, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"illegalSS-Operation", true, 16,
+    {"illegalSS-Operation", true, 16, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"ss-ErrorStatus", true, 17,
+    {"ss-ErrorStatus", true, 17, -1,
 	s_noTag, s_ssErrorStatusErr,
 	s_noTag, 0
     },
-    {"ss-NotAvailable", true, 18,
+    {"ss-NotAvailable", true, 18, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"ss-SubscriptionViolation", true, 19,
+    {"ss-SubscriptionViolation", true, 19, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"ss-Incompatibility", true, 20,
+    {"ss-Incompatibility", true, 20, -1,
 	s_sequenceTag, s_ssIncompatibilityErr,
 	s_noTag, 0
     },
-    {"facilityNotSupported", true, 21,
+    {"facilityNotSupported", true, 21, -1,
 	s_sequenceTag, s_facilityNotSupportedErr,
 	s_noTag, 0
     },
-    {"absentSubscriber", true, 27,
+    {"absentSubscriber", true, 27, -1,
 	s_sequenceTag, s_absentSubscriberErr,
 	s_noTag, 0
     },
-    {"sm-DeliveryFailure", true, 32,
+    {"sm-DeliveryFailure", true, 32, -1,
 	s_sequenceTag, s_smDeliveryFailureErr,
 	s_noTag, 0
     },
-    {"messageWaitingListFull", true, 33,
+    {"messageWaitingListFull", true, 33, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"systemFailure", true, 34,
+    {"systemFailure", true, 34, -1,
 	s_noTag, s_systemFailure,
 	s_noTag, 0
     },
-    {"dataMissing", true, 35,
+    {"dataMissing", true, 35, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"unexpectedDataValue", true, 36,
+    {"unexpectedDataValue", true, 36, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"pw-RegistrationFailure", true, 37,
+    {"pw-RegistrationFailure", true, 37, -1,
 	s_noTag, s_pwRegistrationFailureErr,
 	s_noTag, 0
     },
-    {"negativePW-Check", true, 38,
+    {"negativePW-Check", true, 38, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"noRoamingNumberAvailable", true, 39,
+    {"noRoamingNumberAvailable", true, 39, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"tracingBufferFull", true, 40,
+    {"tracingBufferFull", true, 40, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"numberOfPW-AttemptsViolation", true, 43,
+    {"numberOfPW-AttemptsViolation", true, 43, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"busySubscriber", true, 45,
+    {"busySubscriber", true, 45, -1,
 	s_sequenceTag, s_busySubscriberErr,
 	s_noTag, 0
     },
-    {"noSubscriberReply", true, 46,
+    {"noSubscriberReply", true, 46, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"or-NotAllowed", true, 48,
+    {"or-NotAllowed", true, 48, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"ati-NotAllowed", true, 49,
+    {"ati-NotAllowed", true, 49, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"resourceLimitation", true, 51,
+    {"resourceLimitation", true, 51, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"unauthorizedRequestingNetwork", true, 52,
+    {"unauthorizedRequestingNetwork", true, 52, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"unknownAlphabet", true, 71,
+    {"unknownAlphabet", true, 71, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"ussd-Busy", true, 72,
+    {"ussd-Busy", true, 72, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"",          false,  0,
+    {"",          false,  0, -1,
 	s_noTag,  0,
 	s_noTag,  0
     },
@@ -6346,67 +6348,67 @@ static const Parameter s_taskRefusedErr[] = {
 
 
 static const Operation s_camelErrors[] = {
-    {"cancelled", true, 0,
+    {"cancelled", true, 0, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"cancelFailed", true, 1,
+    {"cancelFailed", true, 1, -1,
 	s_sequenceTag, s_cancelFailedErr,
 	s_noTag, 0
     },
-    {"eTCFailed", true, 3,
+    {"eTCFailed", true, 3, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"improperCallerResponse", true, 4,
+    {"improperCallerResponse", true, 4, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"missingCustomerRecord", true, 6,
+    {"missingCustomerRecord", true, 6, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"missingParameter", true, 7,
+    {"missingParameter", true, 7, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"parameterOutOfRange", true, 8,
+    {"parameterOutOfRange", true, 8, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"requestedInfoError", true, 10,
+    {"requestedInfoError", true, 10, -1,
 	s_noTag, s_requestedInfoErr,
 	s_noTag, 0
     },
-    {"systemFailure", true, 11,
+    {"systemFailure", true, 11, -1,
 	s_noTag, s_systemFailureCamelErr,
 	s_noTag, 0
     },
-    {"taskRefused", true, 12,
+    {"taskRefused", true, 12, -1,
 	s_noTag, s_taskRefusedErr,
 	s_noTag, 0
     },
-    {"unavailableResource", true, 13,
+    {"unavailableResource", true, 13, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"unexpectedComponentSequence", true, 14,
+    {"unexpectedComponentSequence", true, 14, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"unexpectedDataValue", true, 15,
+    {"unexpectedDataValue", true, 15, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"unexpectedParameter", true, 16,
+    {"unexpectedParameter", true, 16, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"unknownLegID", true, 17,
+    {"unknownLegID", true, 17, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"",            false,  0,
+    {"",            false,  0,  -1,
 	s_noTag,  0,
 	s_noTag,  0
     },
@@ -7185,6 +7187,7 @@ const XMLMap TcapToXml::s_xmlMap[] = {
     {Regexp("^tcap\\.component\\..\\+\\.errorCode$"),          "component",                             "",                          TcapToXml::Attribute},
     {Regexp("^tcap\\.component\\..\\+\\.errorCodeType$"),      "",                                      "",                          TcapToXml::None},
     {Regexp("^tcap\\.component\\..\\+\\.problemCode$"),        "component",                             "",                          TcapToXml::Attribute},
+    {Regexp("^tcap\\.component\\..\\+\\.operationClass$"),     "component",                             "",                          TcapToXml::Attribute},
     {Regexp("^tcap\\.component\\..\\+\\..\\+"),                "component",                             "",                          TcapToXml::NewElement},
     {Regexp(""),                                               "",                                      "",                          TcapToXml::End},
 };
@@ -7405,8 +7408,11 @@ void TcapToXml::addComponentsToXml(XmlElement* el, NamedList& params, const AppC
 	Operation* op = 0;
 	if (!TelEngine::null(opCode) && !TelEngine::null(opType))
 	    op = (Operation*)findOperation(m_app->type(),opCode->toInteger(),(*opType == "local"),ctxt);
-	if (op)
+	if (op) {
 	    compParams.setParam(root + "." + s_tcapOpCode,op->name);
+	    if (op->opClass > -1)
+		compParams.setParam(root + "." + s_tcapOpClass,lookup(op->opClass,SS7TCAP::s_compOperClasses,"reportAll"));
+	}
 
 	int compType = SS7TCAP::lookupComponent(params.getValue(root + "." + s_tcapCompType));
 

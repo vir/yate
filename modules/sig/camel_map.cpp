@@ -39,7 +39,7 @@ class XMLConnection;
 class TcapXApplication;
 class TcapToXml;
 class XmlToTcap;
-class TcapXNamespace;
+class StringList;
 struct MapCamelType;
 struct Parameter;
 struct Operation;
@@ -60,12 +60,23 @@ struct TCAPMap {
 struct AppCtxt {
     const char* name;
     const char* oid;
-    const String ops;
+    const ObjList& ops;
 };
 
 struct Capability {
     const char* name;
-    String ops[30];
+    const ObjList& ops;
+};
+
+class StringList
+{
+public:
+    StringList(const char* list, char sep = ',');
+    virtual ~StringList();
+    inline operator const ObjList&() const
+	{ return *m_list; }
+private:
+    ObjList* m_list;
 };
 
 class MyDomParser : public XmlDomParser
@@ -2262,159 +2273,203 @@ static bool encodeUSI(const Parameter* param,  MapCamelType* type, DataBlock& da
     return true;
 }
 
+static const StringList s_locationManagementCapabOps("updateLocation,cancelLocation,purgeMS,updateGprsLocation,anyTimeInterrogation");
+static const StringList s_authenticationCapabOps("sendAuthenticationInfo,authenticationFailureReport");
+static const StringList s_subscriberDataCapabOps("insertSubscriberData,deleteSubscriberData,restoreData");
+static const StringList s_routingCapabOps("sendRoutingInfoForGprs,sendRoutingInfoForLCS,statusReport");
+static const StringList s_vlrRoutingCapabOps("provideRoamingNumber");
+static const StringList s_traceSubscriberCapabOps("activateTraceMode,deactivateTraceMode");
+static const StringList s_servicesCapabOps("registerSS,eraseSS,activateSS,deactivateSS,interrogateSS,registerPassword,getPassword," 
+				    "processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify");
+static const StringList s_miscellaneousCapabOps("sendIMSI,readyForSM,setReportingState");
+static const StringList s_errorRecoveryCapabOps("reset,forwardCheckSS-Indication,failureReport");
+static const StringList s_smscCapabOps("informServiceCentre,alertServiceCentre,sendRoutingInfoForSM,mo-forwardSM,mt-forwardSM,forwardSM");
+
+static const StringList s_noOps("");
+
 static const Capability s_mapCapab[] = {
-    {"LocationManagement",       {"updateLocation", "cancelLocation", "purgeMS", "updateGprsLocation", "anyTimeInterrogation", ""}},
-    {"Authentication",           {"sendAuthenticationInfo", "authenticationFailureReport", ""}},
-    {"SubscriberData",           {"insertSubscriberData", "deleteSubscriberData", "restoreData", ""}},
-    {"Routing",                  {"sendRoutingInfoForGprs", "sendRoutingInfoForLCS", "statusReport", ""}},
-    {"VLR-Routing",              {"provideRoamingNumber",  ""}},
-    {"TraceSubscriber",          {"activateTraceMode", "deactivateTraceMode", ""}},
-    {"Services",                 {"registerSS", "eraseSS", "activateSS", "deactivateSS", "interrogateSS", "registerPassword", "getPassword", 
-				    "processUnstructuredSS-Request", "unstructuredSS-Request", "unstructuredSS-Notify", ""}},
-    {"Miscellaneous",            {"sendIMSI", "readyForSM", "setReportingState", "sendParameters", ""}},
-    {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
-    {"Charging",                 {""}},
-    {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", "mo-forwardSM", "mt-forwardSM",
-				    "forwardSM", "reportSM-DeliveryStatus", ""}},
-    {"None",                     {""}},
-    {0, {""}},
+    {"LocationManagement",       s_locationManagementCapabOps},
+    {"Authentication",           s_authenticationCapabOps},
+    {"SubscriberData",           s_subscriberDataCapabOps},
+    {"Routing",                  s_routingCapabOps},
+    {"VLR-Routing",              s_vlrRoutingCapabOps},
+    {"TraceSubscriber",          s_traceSubscriberCapabOps},
+    {"Services",                 s_servicesCapabOps},
+    {"Miscellaneous",            s_miscellaneousCapabOps},
+    {"ErrorRecovery",            s_errorRecoveryCapabOps},
+    {"Charging",                 s_noOps},
+    {"SMSC",                     s_smscCapabOps},
+    {"None",                     s_noOps},
+    {0, s_noOps},
 };
+
+
+
+static const StringList s_netLocUpCtxtOps("updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,activateTraceMode");
+static const StringList s_locationCancelCtxtOps("cancelLocation");
+static const StringList s_roamingNumberEnqCtxtOps("provideRoamingNumber");
+static const StringList s_locationInfoRetrieveCtxtOps("sendRoutingInfo");
+static const StringList s_reportingCtxtOps("setReportingState,statusReport,remoteUserFree");
+static const StringList s_resetCtxtOps("reset");
+static const StringList s_infoRetrieveCtxt2Ops("sendAuthenticationInfo");
+static const StringList s_infoRetrieveCtxt1Ops("sendParameters");
+static const StringList s_subscriberDataCtxtOps("insertSubscriberData,deleteSubscriberData");
+static const StringList s_tracingCtxtOps("activateTraceMode,deactivateTraceMode");
+static const StringList s_networkFunctionalSsCtxtOps("registerSS,eraseSS,activateSS,deactivateSS,"
+							"interrogateSS,registerPassword,getPassword");
+static const StringList s_networkUnstructuredSsCtxt2Ops("processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify");
+static const StringList s_networkUnstructuredSsCtxt1Ops("processUnstructuredSS-Data");
+static const StringList s_shortMsgGatewayCtxtOps("sendRoutingInfoForSM,informServiceCentre");
+static const StringList s_shortMsgMOCtxtOps("mo-forwardSM");
+static const StringList s_forwardMsgCtxtOps("forwardSM");
+static const StringList s_shortMsgAlertCtxtOps("alertServiceCentre");
+static const StringList s_mwdMngtCtxtOps("readyForSM");
+static const StringList s_shortMsgMTCtxtOps("mt-forwardSM");
+static const StringList s_imsiRetrievalCtxtOps("sendIMSI");
+static const StringList s_msPurgingCtxtOps("purgeMS");
+static const StringList s_anyTimeInfoEnquiryCtxOps("anyTimeInterrogation");
+static const StringList s_gprsLocationUpdateCtxtOps("updateGprsLocation,insertSubscriberData,activateTraceMode");
+static const StringList s_gprsLocationInfoRetrieveCtxtOps("sendRoutingInfoForGprs");
+static const StringList s_failureReportCtxtOps("failureReport");
+static const StringList s_locationSvcGatewayCtxtOps("sendRoutingInfoForLCS");
+static const StringList s_authFailureReportCtxtOps("authenticationFailureReport");
+
 
 static const AppCtxt s_mapAppCtxt[]= {
     // Network Loc Up context
-    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,"
-							"activateTraceMode"},
-    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,"
-							"activateTraceMode"},
-    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", "updateLocation,forwardCheckSS-Indication,sendParameters,insertSubscriberData,"
-							"activateTraceMode"},
+    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", s_netLocUpCtxtOps},
+    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", s_netLocUpCtxtOps},
+    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", s_netLocUpCtxtOps},
 
     // Location Cancellation context
-    {"locationCancelationContext-v3", "0.4.0.0.1.0.2.3", "cancelLocation"},
-    {"locationCancelationContext-v2", "0.4.0.0.1.0.2.2", "cancelLocation"},
-    {"locationCancelationContext-v1", "0.4.0.0.1.0.2.1", "cancelLocation"},
+    {"locationCancelationContext-v3", "0.4.0.0.1.0.2.3", s_locationCancelCtxtOps},
+    {"locationCancelationContext-v2", "0.4.0.0.1.0.2.2", s_locationCancelCtxtOps},
+    {"locationCancelationContext-v1", "0.4.0.0.1.0.2.1", s_locationCancelCtxtOps},
 
     // Roaming Number Enquiry Context
-    {"roamingNumberEnquiryContext-v3", "0.4.0.0.1.0.3.3", "provideRoamingNumber"},
-    {"roamingNumberEnquiryContext-v2", "0.4.0.0.1.0.3.2", "provideRoamingNumber"},
-    {"roamingNumberEnquiryContext-v1", "0.4.0.0.1.0.3.1", "provideRoamingNumber"},
+    {"roamingNumberEnquiryContext-v3", "0.4.0.0.1.0.3.3", s_roamingNumberEnqCtxtOps},
+    {"roamingNumberEnquiryContext-v2", "0.4.0.0.1.0.3.2", s_roamingNumberEnqCtxtOps},
+    {"roamingNumberEnquiryContext-v1", "0.4.0.0.1.0.3.1", s_roamingNumberEnqCtxtOps},
 
     // Location Info Retrieval Context 
-    {"locationInfoRetrievalContext-v3", "0.4.0.0.1.0.5.3", "sendRoutingInfo"},
-    {"locationInfoRetrievalContext-v2", "0.4.0.0.1.0.5.2", "sendRoutingInfo"},
-    {"locationInfoRetrievalContext-v1", "0.4.0.0.1.0.5.1", "sendRoutingInfo"},
+    {"locationInfoRetrievalContext-v3", "0.4.0.0.1.0.5.3", s_locationInfoRetrieveCtxtOps},
+    {"locationInfoRetrievalContext-v2", "0.4.0.0.1.0.5.2", s_locationInfoRetrieveCtxtOps},
+    {"locationInfoRetrievalContext-v1", "0.4.0.0.1.0.5.1", s_locationInfoRetrieveCtxtOps},
 
     // Reporting Context
-    {"reportingContext-v3", "0.4.0.0.1.0.7.3", "setReportingState,statusReport,remoteUserFree"},
+    {"reportingContext-v3", "0.4.0.0.1.0.7.3", s_reportingCtxtOps},
 
     // Reset context
-    {"resetContext-v2", "0.4.0.0.1.0.10.2", "reset"},
-    {"resetContext-v1", "0.4.0.0.1.0.10.1", "reset"},
+    {"resetContext-v2", "0.4.0.0.1.0.10.2", s_resetCtxtOps},
+    {"resetContext-v1", "0.4.0.0.1.0.10.1", s_resetCtxtOps},
 
     // Info retrieval context
-    {"infoRetrievalContext-v3", "0.4.0.0.1.0.14.3", "sendAuthenticationInfo"},
-    {"infoRetrievalContext-v2", "0.4.0.0.1.0.14.2", "sendAuthenticationInfo"}, 
-    {"infoRetrievalContext-v1", "0.4.0.0.1.0.14.1", "sendParameters"},
+    {"infoRetrievalContext-v3", "0.4.0.0.1.0.14.3", s_infoRetrieveCtxt2Ops},
+    {"infoRetrievalContext-v2", "0.4.0.0.1.0.14.2", s_infoRetrieveCtxt2Ops}, 
+    {"infoRetrievalContext-v1", "0.4.0.0.1.0.14.1", s_infoRetrieveCtxt1Ops},
 
     // Subscriber Data Management Context
-    {"subscriberDataMngtContext-v3", "0.4.0.0.1.0.16.3", "insertSubscriberData,deleteSubscriberData"},
-    {"subscriberDataMngtContext-v2", "0.4.0.0.1.0.16.2", "insertSubscriberData,deleteSubscriberData"},
-    {"subscriberDataMngtContext-v1", "0.4.0.0.1.0.16.1", "insertSubscriberData,deleteSubscriberData"},
+    {"subscriberDataMngtContext-v3", "0.4.0.0.1.0.16.3", s_subscriberDataCtxtOps},
+    {"subscriberDataMngtContext-v2", "0.4.0.0.1.0.16.2", s_subscriberDataCtxtOps},
+    {"subscriberDataMngtContext-v1", "0.4.0.0.1.0.16.1", s_subscriberDataCtxtOps},
 
     // Tracing context
-    {"tracingContext-v3", "0.4.0.0.1.0.17.3", "activateTraceMode,deactivateTraceMode"},
-    {"tracingContext-v2", "0.4.0.0.1.0.17.2", "activateTraceMode,deactivateTraceMode"},
-    {"tracingContext-v1", "0.4.0.0.1.0.17.1", "activateTraceMode,deactivateTraceMode"},
+    {"tracingContext-v3", "0.4.0.0.1.0.17.3", s_tracingCtxtOps},
+    {"tracingContext-v2", "0.4.0.0.1.0.17.2", s_tracingCtxtOps},
+    {"tracingContext-v1", "0.4.0.0.1.0.17.1", s_tracingCtxtOps},
 
     // Network functional SS context
-    {"networkFunctionalSsContext-v2", "0.4.0.0.1.0.18.2", "registerSS,eraseSS,activateSS,deactivateSS,"
-								"interrogateSS,registerPassword,getPassword"},
-    {"networkFunctionalSsContext-v1", "0.4.0.0.1.0.18.1", "registerSS,eraseSS,activateSS,deactivateSS,"
-								"interrogateSS,registerPassword,getPassword"},
+    {"networkFunctionalSsContext-v2", "0.4.0.0.1.0.18.2", s_networkFunctionalSsCtxtOps},
+    {"networkFunctionalSsContext-v1", "0.4.0.0.1.0.18.1", s_networkFunctionalSsCtxtOps},
+
     // Network unstructured SS context
-    {"networkUnstructuredSsContext-v2", "0.4.0.0.1.0.19.2", "processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify"},
-    {"networkUnstructuredSsContext-v1", "0.4.0.0.1.0.19.1", "processUnstructuredSS-Data"},
+    {"networkUnstructuredSsContext-v2", "0.4.0.0.1.0.19.2", s_networkUnstructuredSsCtxt2Ops},
+    {"networkUnstructuredSsContext-v1", "0.4.0.0.1.0.19.1", s_networkUnstructuredSsCtxt1Ops},
 
     // Short message routing
-    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
-    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
-    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
+    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", s_shortMsgGatewayCtxtOps},
+    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", s_shortMsgGatewayCtxtOps},
+    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", s_shortMsgGatewayCtxtOps},
 
     // Mobile Originated short messages
-    {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", "mo-forwardSM"},
-    {"shortMsgMO-RelayContext-v2", "0.4.0.0.1.0.21.2", "forwardSM"},
-    {"shortMsgMO-RelayContext-v1", "0.4.0.0.1.0.21.1", "forwardSM"},
+    {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", s_shortMsgMOCtxtOps},
+    {"shortMsgMO-RelayContext-v2", "0.4.0.0.1.0.21.2", s_forwardMsgCtxtOps},
+    {"shortMsgMO-RelayContext-v1", "0.4.0.0.1.0.21.1", s_forwardMsgCtxtOps},
 
     // Short message alerts
-    {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", "alertServiceCentre"},
-    {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", "alertServiceCentre"},
+    {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", s_shortMsgAlertCtxtOps},
+    {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", s_shortMsgAlertCtxtOps},
 
     // readyForSM context
-    {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", "readyForSM"},
-    {"mwdMngtContext-v2", "0.4.0.0.1.0.24.2", "readyForSM"},
-    {"mwdMngtContext-v1", "0.4.0.0.1.0.24.1", "readyForSM"},
+    {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", s_mwdMngtCtxtOps},
+    {"mwdMngtContext-v2", "0.4.0.0.1.0.24.2", s_mwdMngtCtxtOps},
+    {"mwdMngtContext-v1", "0.4.0.0.1.0.24.1", s_mwdMngtCtxtOps},
 
     // Mobile Terminated short messages
-    {"shortMsgMT-RelayContext-v3", "0.4.0.0.1.0.25.3", "mt-forwardSM"},
-    {"shortMsgMT-RelayContext-v2", "0.4.0.0.1.0.25.2", "forwardSM"},
+    {"shortMsgMT-RelayContext-v3", "0.4.0.0.1.0.25.3", s_shortMsgMTCtxtOps},
+    {"shortMsgMT-RelayContext-v2", "0.4.0.0.1.0.25.2", s_forwardMsgCtxtOps},
 
     // sendIMSI Context
-    {"imsiRetrievalContext-v2", "0.4.0.0.1.0.26.2", "sendIMSI"},
+    {"imsiRetrievalContext-v2", "0.4.0.0.1.0.26.2", s_imsiRetrievalCtxtOps},
 
     // MS Purging Context
-    {"msPurgingContext-v3", "0.4.0.0.1.0.27.3", "purgeMS"},
-    {"msPurgingContext-v2", "0.4.0.0.1.0.27.2", "purgeMS"},
+    {"msPurgingContext-v3", "0.4.0.0.1.0.27.3", s_msPurgingCtxtOps},
+    {"msPurgingContext-v2", "0.4.0.0.1.0.27.2", s_msPurgingCtxtOps},
 
     // Any Time Info Enquiry Context 
-    {"anyTimeInfoEnquiryContext-v3", "0.4.0.0.1.0.29.3", "anyTimeInterrogation"},
+    {"anyTimeInfoEnquiryContext-v3", "0.4.0.0.1.0.29.3", s_anyTimeInfoEnquiryCtxOps},
 
     // GPRS Location Update Context
-    {"gprsLocationUpdateContext-v3", "0.4.0.0.1.0.32.3", "updateGprsLocation,insertSubscriberData,activateTraceMode"},
+    {"gprsLocationUpdateContext-v3", "0.4.0.0.1.0.32.3", s_gprsLocationUpdateCtxtOps},
 
     // GPRS Location Info Retrieval Context
-    {"gprsLocationInfoRetrievalContext-v3" , "0.4.0.0.1.0.33.3", "sendRoutingInfoForGprs"},
+    {"gprsLocationInfoRetrievalContext-v3" , "0.4.0.0.1.0.33.3", s_gprsLocationInfoRetrieveCtxtOps},
 
     // Failure Report Context 
-    {"failureReportContext-v3" , "0.4.0.0.1.0.34.3", "failureReport"},
+    {"failureReportContext-v3" , "0.4.0.0.1.0.34.3", s_failureReportCtxtOps},
 
     // Location Services Gateway Context 
-    {"locationSvcGatewayContext-v3", "0.4.0.0.1.0.37.3", "sendRoutingInfoForLCS"},
+    {"locationSvcGatewayContext-v3", "0.4.0.0.1.0.37.3", s_locationSvcGatewayCtxtOps},
 
     // Authentication Failure Report Context
-    {"authenticationFailureReportContext-v3" , "0.4.0.0.1.0.39.3", "authenticationFailureReport"},
+    {"authenticationFailureReportContext-v3" , "0.4.0.0.1.0.39.3", s_authFailureReportCtxtOps},
 
-    {0, 0, ""},
+    {0, 0, s_noOps},
 };
 
-static const AppCtxt s_camelAppCtxt[] = {
-    {"CAP-v2-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.50.1", "initialDP,establishTemporaryConnection,connectToResource,"
+static const StringList s_cap2gsmSSFgsmSCFCtxtOps("initialDP,establishTemporaryConnection,connectToResource,"
 							    "disconnectForwardConnection,connect,releaseCall,eventReportBCSM,"
 							    "requestReportBCSMEvent,applyChargingReport,applyCharging,continue,"
 							    "resetTimer,furnishChargingInformation,callInformationReport,"
 							    "callInformationRequest,sendChargingInformation,specializedResourceReport,"
-							    "playAnnouncement,promptAndCollectUserInformation,cancel,activityTest"},
-
-    {"CAP-v2-assist-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.51.1", "assistRequestInstructions,disconnectForwardConnection,connectToResource,"
+							    "playAnnouncement,promptAndCollectUserInformation,cancel,activityTest");
+static const StringList s_cap2AssistgsmSSFgsmSCFCtxtOps("assistRequestInstructions,disconnectForwardConnection,connectToResource,"
 								"resetTimer,specializedResourceReport,playAnnouncement,"
-								"promptAndCollectUserInformation,cancel,activityTest"},
+								"promptAndCollectUserInformation,cancel,activityTest");
+static const StringList s_cap2gsmSRFgsmSCFCtxtOps("assistRequestInstructions,specializedResourceReport,playAnnouncement,"
+							"promptAndCollectUserInformation,cancel,activityTest");
 
-    {"CAP-v2-gsmSRF-to-gsmSCF-AC", "0.4.0.0.1.0.52.1", "assistRequestInstructions,specializedResourceReport,playAnnouncement,"
-							"promptAndCollectUserInformation,cancel,activityTest"},
+static const AppCtxt s_camelAppCtxt[] = {
+    {"CAP-v2-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.50.1", s_cap2gsmSSFgsmSCFCtxtOps},
 
-    {0, 0, ""}
+    {"CAP-v2-assist-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.51.1", s_cap2AssistgsmSSFgsmSCFCtxtOps},
+
+    {"CAP-v2-gsmSRF-to-gsmSCF-AC", "0.4.0.0.1.0.52.1", s_cap2gsmSRFgsmSCFCtxtOps},
+
+    {0, 0, s_noOps}
 };
 
-
+static const StringList s_smscCapabOIDs("shortMsgMO-RelayContext-v3,shortMsgMO-RelayContext-v2,shortMsgMO-RelayContext-v1,"
+					"shortMsgMT-RelayContext-v3,shortMsgMT-RelayContext-v2");
 static const Capability s_mapCapabOID[] = {
-    {"SMSC",                     {"shortMsgMO-RelayContext-v3", "shortMsgMO-RelayContext-v2", "shortMsgMO-RelayContext-v1",
-					"shortMsgMT-RelayContext-v3", "shortMsgMT-RelayContext-v2", ""}},
-    {"None",                     {""}},
-    {0, {""}},
+    {"SMSC",                     s_smscCapabOIDs},
+    {"None",                     s_noOps},
+    {0, s_noOps},
 };
 
 static const Capability s_camelCapabOID[] = {
-    {"None",                     {""}},
-    {0, {""}},
+    {"None",                     s_noOps},
+    {0, s_noOps},
 };
 
 
@@ -5394,13 +5449,16 @@ static const Operation s_mapOps[] = {
     },
 };
 
+static const StringList s_camelCapabOps("initialDP,assistRequestInstructions,establishTemporaryConnection,disconnectForwardConnection,"
+		"connectToResource,connect,releaseCall,requestReportBCSMEvent,eventReportBCSM,continue,resetTimer,"
+		"furnishChargingInformation,applyCharging,applyChargingReport,callInformationReport,callInformationRequest,"
+		"sendChargingInformation,playAnnouncement,promptAndCollectUserInformation,specializedResourceReport,"
+		"cancel,activityTest,initiateCallAttempt,disconnectLeg,moveLeg,splitLeg,entityReleased,"
+		"continueWithArgument,disconnectForwardConnectionWithArgument,playTone,callGap");
+
 static const Capability s_camelCapab[] = {
-    {"Camel",  {"initialDP", "assistRequestInstructions", "establishTemporaryConnection", "disconnectForwardConnection",
-		"connectToResource", "connect", "releaseCall", "requestReportBCSMEvent","eventReportBCSM", "continue", "resetTimer",
-		"furnishChargingInformation", "applyCharging", "applyChargingReport", "callInformationReport", "callInformationRequest",
-		"sendChargingInformation", "playAnnouncement", "promptAndCollectUserInformation", "specializedResourceReport",
-		"cancel", "activityTest", ""}},
-    {0, {""}},
+    {"Camel",  s_camelCapabOps},
+    {0, s_noOps},
 };
 
 static TokenDict s_eventTypeBCSM[] = {
@@ -6503,9 +6561,11 @@ static const Operation s_camelErrors[] = {
     },
 };
 
+static const StringList s_mapDialogCtxtOps("map-open,map-accept,map-close,map-refuse,map-userAbort,map-providerAbort");
+
 static const AppCtxt s_mapDialogCtxt[] = {
-    {"map-DialogueAS", "0.4.0.0.1.1.1.1", "map-open,map-accept,map-close,map-refuse,map-userAbort,map-providerAbort"},
-    {0, 0, ""}
+    {"map-DialogueAS", "0.4.0.0.1.1.1.1", s_mapDialogCtxtOps},
+    {0, 0, s_noOps}
 };
 
 static const Parameter s_mapOpenSeq[] = {
@@ -6635,10 +6695,7 @@ static bool isAppCtxtOperation(const AppCtxt* ctxt, const Operation* op)
     DDebug(&__plugin,DebugAll,"isAppCtxtOperation(ctxt=%s[%p],op=%s[%p]]",(ctxt ? ctxt->name : ""),ctxt,(op ? op->name.c_str() : ""),op);
     if (!ctxt)
 	return true;
-    ObjList* ops = ctxt->ops.split(',',false);
-    bool ok = (0 != ops->find(op->name));
-    TelEngine::destruct(ops);
-    return ok;
+    return (0 != ctxt->ops.find(op->name));
 }
 
 static const Operation* findOperation(TcapXUser::UserType type, int opCode, bool opLocal = true, const AppCtxt* ctxt = 0)
@@ -6672,12 +6729,8 @@ static const Capability* findCapability(TcapXUser::UserType type, const String& 
     DDebug(&__plugin,DebugAll,"findCapability(opName=%s)",opName.c_str());
     const Capability* cap = (type == TcapXUser::MAP ? s_mapCapab : s_camelCapab);
     while (cap->name) {
-	int index = 0;
-	while (!TelEngine::null(cap->ops[index])) {
-	    if (opName == cap->ops[index])
-		return cap;
-	    index++;
-	}
+	if (cap->ops.find(opName))
+	    return cap;
 	cap++;
     }
     return 0;
@@ -6690,12 +6743,8 @@ static const Capability* findCapabilityOID(TcapXUser::UserType type, const char*
     DDebug(&__plugin,DebugAll,"findCapabilityOID(oid=%s)",oid);
     const Capability* cap = (type == TcapXUser::MAP ? s_mapCapabOID : s_camelCapabOID);
     while (cap->name) {
-	int index = 0;
-	while (!TelEngine::null(cap->ops[index])) {
-	    if (cap->ops[index] == oid)
-		return cap;
-	    index++;
-	}
+	if (cap->ops.find(oid))
+	    return cap;
 	cap++;
     }
     return 0;
@@ -6790,6 +6839,23 @@ Transaction* IDMap::findByTcapID(const char* tcapID)
     }
     return 0;
 }
+
+/**
+ * StringList
+ */
+StringList::StringList(const char* list, char sep)
+{
+    DDebug(&__plugin,DebugAll,"StringList(list=%s) [%p]",list,this);
+    String str(list);
+    m_list = str.split(sep,false);
+}
+
+StringList::~StringList()
+{
+    XDebug(&__plugin,DebugAll,"~StringList() [%p]",this);
+    TelEngine::destruct(m_list);
+}
+
 
 /**
  * MyDomParser
@@ -7221,9 +7287,7 @@ bool TcapToXml::decodeDialogPDU(XmlElement* el, const AppCtxt* ctxt, DataBlock& 
 	AsnTag tag;
 	AsnTag::decode(tag,data);
 	if (decodeParam(param,tag,data,el,m_app->addEncoding(),err)) {
-	    ObjList* pdus = ctxt->ops.split(',',false);
-	    bool ok = (0 != pdus->find(param->name));
-	    TelEngine::destruct(pdus);
+	    bool ok = (0 != ctxt->ops.find(param->name));
 	    if (!ok)
 		el->clearChildren();
 	    return ok;
@@ -7731,9 +7795,7 @@ bool XmlToTcap::handleMAPDialog(NamedList& tcapParams, XmlElement* elem, String 
 	// find reference for decoded param
 	const AppCtxt* ctxt = s_mapDialogCtxt;
 	while (ctxt && ctxt->name) {
-	    ObjList* pdus = ctxt->ops.split(',',false);
-	    bool ok = (param && param->name && pdus->find(param->name));
-	    TelEngine::destruct(pdus);
+	    bool ok = (param && ctxt->ops.find(param->name));
 	    if (ok) {
 		tcapParams.setParam(s_tcapDirectReference,ctxt->oid);
 		break;

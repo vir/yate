@@ -8023,10 +8023,10 @@ bool TcapXApplication::canHandle(NamedList& params)
 	    continue;
 	const Operation* op = findOperation(m_type,opCode->toInteger(),(*opType == "local"),appCtxt);
 	if (!op)
-	    continue;
+	    return false;
 	const Capability* cap = findCapability(m_type,op->name);
 	if (!cap)
-	    continue;
+	    return false;
 	if (!hasCapability(cap->name)) {
 	    Debug(&__plugin,DebugAll,"TcapXApplication '%s' cannot handle operation='%s' [%p]",m_name.c_str(),op->name.c_str(),this);
 	    return false;

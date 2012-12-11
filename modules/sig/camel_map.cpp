@@ -39,7 +39,7 @@ class XMLConnection;
 class TcapXApplication;
 class TcapToXml;
 class XmlToTcap;
-class TcapXNamespace;
+class StringList;
 struct MapCamelType;
 struct Parameter;
 struct Operation;
@@ -57,15 +57,32 @@ struct TCAPMap {
     const String name;
 };
 
+struct OpTable {
+    const Operation* mainTable;
+    const OpTable* fallbackTable;
+};
+
 struct AppCtxt {
     const char* name;
     const char* oid;
-    const String ops;
+    const ObjList& ops;
+    const OpTable* opTable;
 };
 
 struct Capability {
     const char* name;
-    String ops[30];
+    const ObjList& ops;
+};
+
+class StringList
+{
+public:
+    StringList(const char* list, char sep = ',');
+    virtual ~StringList();
+    inline operator const ObjList&() const
+	{ return *m_list; }
+private:
+    ObjList* m_list;
 };
 
 class MyDomParser : public XmlDomParser
@@ -452,6 +469,7 @@ static const String s_tcapAbortInfo = "tcap.transaction.abort.information";
 static const String s_tcapCompType = "componentType";
 static const String s_tcapOpCodeType = "operationCodeType";
 static const String s_tcapOpCode = "operationCode";
+static const String s_tcapOpClass = "operationClass";
 static const String s_tcapErrCodeType = "errorCodeType";
 static const String s_tcapErrCode = "errorCode";
 static const String s_tcapProblemCode = "problemCode";
@@ -478,6 +496,7 @@ struct Operation {
     const String name;
     bool local;
     int code;
+    int opClass;
     const AsnTag& argTag;
     const Parameter* args;
     const AsnTag& retTag;
@@ -573,8 +592,9 @@ static bool encodeRaw(const Parameter* param, DataBlock& payload, XmlElement* el
     }
     AsnTag tag;
     const String* clas = elem->getAttribute(s_typeStr);
+    bool checkParam = (param && !TelEngine::null(param->name));
     if (TelEngine::null(clas)) {
-	if (param)
+	if (checkParam)
 	    tag.classType(param->tag.classType());
 	else {
 	    Debug(DebugMild,"In <%s> missing %s=\"...\" attribute!",elem->getTag().c_str(),s_typeStr.c_str());
@@ -585,7 +605,7 @@ static bool encodeRaw(const Parameter* param, DataBlock& payload, XmlElement* el
 	tag.classType((AsnTag::Class)lookup(*clas,s_tagTypes,AsnTag::Universal));
     clas = elem->getAttribute(s_tagAttr);
     if (TelEngine::null(clas)) {
-	if (param)
+	if (checkParam)
 	    tag.code(param->tag.code());
 	else {
 	    Debug(DebugMild,"In <%s> missing %s=\"...\" attribute!",elem->getTag().c_str(),s_tagAttr.c_str());
@@ -655,7 +675,8 @@ static bool encodeParam(const Parameter* param, DataBlock& data, XmlElement* ele
 	else {
 	    if (param->tag.type() == AsnTag::Constructor && 
 		!(param->type == TcapXApplication::HexString || param->type == TcapXApplication::SequenceOf 
-		|| param->type == TcapXApplication::Sequence || param->type == TcapXApplication::Choice))
+		|| param->type == TcapXApplication::Sequence || param->type == TcapXApplication::Choice
+		|| param->type == TcapXApplication::SetOf))
 		Debug(&__plugin,DebugGoOn,"Encoding definition conflict for param='%s', tag is defined as contructor" 
 		    " while its type is primitive",param->name.c_str());
 	    ok = type->encode(param,type,data,child,err);
@@ -1830,7 +1851,7 @@ static const TokenDict s_dict_qual[] = {
 // Utility function - extract just ISUP digits from a parameter
 static void getDigits(String& num, bool odd, const unsigned char* buf, unsigned int len)
 {
-    static const char digits[] = "0123456789ABCD?.";
+    static const char digits[] = "0123456789ABCDE.";
     for (unsigned int i = 0; i < len; i++) {
 	num += digits[buf[i] & 0x0f];
 	if (odd && ((i+1) == len))
@@ -2261,159 +2282,47 @@ static bool encodeUSI(const Parameter* param,  MapCamelType* type, DataBlock& da
     return true;
 }
 
+static const StringList s_locationManagementCapabOps("updateLocation,cancelLocation,purgeMS,updateGprsLocation,anyTimeInterrogation");
+static const StringList s_authenticationCapabOps("sendAuthenticationInfo,authenticationFailureReport");
+static const StringList s_subscriberDataCapabOps("insertSubscriberData,deleteSubscriberData,restoreData");
+static const StringList s_routingCapabOps("sendRoutingInfoForGprs,sendRoutingInfoForLCS,statusReport");
+static const StringList s_vlrRoutingCapabOps("provideRoamingNumber");
+static const StringList s_traceSubscriberCapabOps("activateTraceMode,deactivateTraceMode");
+static const StringList s_servicesCapabOps("registerSS,eraseSS,activateSS,deactivateSS,interrogateSS,registerPassword,getPassword," 
+				    "processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify");
+static const StringList s_miscellaneousCapabOps("sendIMSI,readyForSM,setReportingState");
+static const StringList s_errorRecoveryCapabOps("reset,forwardCheckSS-Indication,failureReport");
+static const StringList s_smscCapabOps("informServiceCentre,alertServiceCentre,sendRoutingInfoForSM,mo-forwardSM,mt-forwardSM,forwardSM");
+
+static const StringList s_noOps("");
+
 static const Capability s_mapCapab[] = {
-    {"LocationManagement",       {"updateLocation", "cancelLocation", "purgeMS", "updateGprsLocation", "anyTimeInterrogation", ""}},
-    {"Authentication",           {"sendAuthenticationInfo", "authenticationFailureReport", ""}},
-    {"SubscriberData",           {"insertSubscriberData", "deleteSubscriberData", "restoreData", ""}},
-    {"Routing",                  {"sendRoutingInfoForGprs", "sendRoutingInfoForLCS", "statusReport", ""}},
-    {"VLR-Routing",              {"provideRoamingNumber",  ""}},
-    {"TraceSubscriber",          {"activateTraceMode", "deactivateTraceMode", ""}},
-    {"Services",                 {"registerSS", "eraseSS", "activateSS", "deactivateSS", "interrogateSS", "registerPassword", "getPassword", 
-				    "processUnstructuredSS-Request", "unstructuredSS-Request", "unstructuredSS-Notify", ""}},
-    {"Miscellaneous",            {"sendIMSI", "readyForSM", "setReportingState", "sendParameters", ""}},
-    {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
-    {"Charging",                 {""}},
-    {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", "mo-forwardSM", "mt-forwardSM",
-				    "forwardSM", "reportSM-DeliveryStatus", ""}},
-    {"None",                     {""}},
-    {0, {""}},
+    {"LocationManagement",       s_locationManagementCapabOps},
+    {"Authentication",           s_authenticationCapabOps},
+    {"SubscriberData",           s_subscriberDataCapabOps},
+    {"Routing",                  s_routingCapabOps},
+    {"VLR-Routing",              s_vlrRoutingCapabOps},
+    {"TraceSubscriber",          s_traceSubscriberCapabOps},
+    {"Services",                 s_servicesCapabOps},
+    {"Miscellaneous",            s_miscellaneousCapabOps},
+    {"ErrorRecovery",            s_errorRecoveryCapabOps},
+    {"Charging",                 s_noOps},
+    {"SMSC",                     s_smscCapabOps},
+    {"None",                     s_noOps},
+    {0, s_noOps},
 };
 
-static const AppCtxt s_mapAppCtxt[]= {
-    // Network Loc Up context
-    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,"
-							"activateTraceMode"},
-    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,"
-							"activateTraceMode"},
-    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", "updateLocation,forwardCheckSS-Indication,sendParameters,insertSubscriberData,"
-							"activateTraceMode"},
-
-    // Location Cancellation context
-    {"locationCancelationContext-v3", "0.4.0.0.1.0.2.3", "cancelLocation"},
-    {"locationCancelationContext-v2", "0.4.0.0.1.0.2.2", "cancelLocation"},
-    {"locationCancelationContext-v1", "0.4.0.0.1.0.2.1", "cancelLocation"},
-
-    // Roaming Number Enquiry Context
-    {"roamingNumberEnquiryContext-v3", "0.4.0.0.1.0.3.3", "provideRoamingNumber"},
-    {"roamingNumberEnquiryContext-v2", "0.4.0.0.1.0.3.2", "provideRoamingNumber"},
-    {"roamingNumberEnquiryContext-v1", "0.4.0.0.1.0.3.1", "provideRoamingNumber"},
-
-    // Location Info Retrieval Context 
-    {"locationInfoRetrievalContext-v3", "0.4.0.0.1.0.5.3", "sendRoutingInfo"},
-    {"locationInfoRetrievalContext-v2", "0.4.0.0.1.0.5.2", "sendRoutingInfo"},
-    {"locationInfoRetrievalContext-v1", "0.4.0.0.1.0.5.1", "sendRoutingInfo"},
-
-    // Reporting Context
-    {"reportingContext-v3", "0.4.0.0.1.0.7.3", "setReportingState,statusReport,remoteUserFree"},
-
-    // Reset context
-    {"resetContext-v2", "0.4.0.0.1.0.10.2", "reset"},
-    {"resetContext-v1", "0.4.0.0.1.0.10.1", "reset"},
-
-    // Info retrieval context
-    {"infoRetrievalContext-v3", "0.4.0.0.1.0.14.3", "sendAuthenticationInfo"},
-    {"infoRetrievalContext-v2", "0.4.0.0.1.0.14.2", "sendAuthenticationInfo"}, 
-    {"infoRetrievalContext-v1", "0.4.0.0.1.0.14.1", "sendParameters"},
-
-    // Subscriber Data Management Context
-    {"subscriberDataMngtContext-v3", "0.4.0.0.1.0.16.3", "insertSubscriberData,deleteSubscriberData"},
-    {"subscriberDataMngtContext-v2", "0.4.0.0.1.0.16.2", "insertSubscriberData,deleteSubscriberData"},
-    {"subscriberDataMngtContext-v1", "0.4.0.0.1.0.16.1", "insertSubscriberData,deleteSubscriberData"},
-
-    // Tracing context
-    {"tracingContext-v3", "0.4.0.0.1.0.17.3", "activateTraceMode,deactivateTraceMode"},
-    {"tracingContext-v2", "0.4.0.0.1.0.17.2", "activateTraceMode,deactivateTraceMode"},
-    {"tracingContext-v1", "0.4.0.0.1.0.17.1", "activateTraceMode,deactivateTraceMode"},
-
-    // Network functional SS context
-    {"networkFunctionalSsContext-v2", "0.4.0.0.1.0.18.2", "registerSS,eraseSS,activateSS,deactivateSS,"
-								"interrogateSS,registerPassword,getPassword"},
-    {"networkFunctionalSsContext-v1", "0.4.0.0.1.0.18.1", "registerSS,eraseSS,activateSS,deactivateSS,"
-								"interrogateSS,registerPassword,getPassword"},
-    // Network unstructured SS context
-    {"networkUnstructuredSsContext-v2", "0.4.0.0.1.0.19.2", "processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify"},
-    {"networkUnstructuredSsContext-v1", "0.4.0.0.1.0.19.1", "processUnstructuredSS-Data"},
-
-    // Short message routing
-    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
-    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
-    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
-
-    // Mobile Originated short messages
-    {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", "mo-forwardSM"},
-    {"shortMsgMO-RelayContext-v2", "0.4.0.0.1.0.21.2", "forwardSM"},
-    {"shortMsgMO-RelayContext-v1", "0.4.0.0.1.0.21.1", "forwardSM"},
-
-    // Short message alerts
-    {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", "alertServiceCentre"},
-    {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", "alertServiceCentre"},
-
-    // readyForSM context
-    {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", "readyForSM"},
-    {"mwdMngtContext-v2", "0.4.0.0.1.0.24.2", "readyForSM"},
-    {"mwdMngtContext-v1", "0.4.0.0.1.0.24.1", "readyForSM"},
-
-    // Mobile Terminated short messages
-    {"shortMsgMT-RelayContext-v3", "0.4.0.0.1.0.25.3", "mt-forwardSM"},
-    {"shortMsgMT-RelayContext-v2", "0.4.0.0.1.0.25.2", "forwardSM"},
-
-    // sendIMSI Context
-    {"imsiRetrievalContext-v2", "0.4.0.0.1.0.26.2", "sendIMSI"},
-
-    // MS Purging Context
-    {"msPurgingContext-v3", "0.4.0.0.1.0.27.3", "purgeMS"},
-    {"msPurgingContext-v2", "0.4.0.0.1.0.27.2", "purgeMS"},
-
-    // Any Time Info Enquiry Context 
-    {"anyTimeInfoEnquiryContext-v3", "0.4.0.0.1.0.29.3", "anyTimeInterrogation"},
-
-    // GPRS Location Update Context
-    {"gprsLocationUpdateContext-v3", "0.4.0.0.1.0.32.3", "updateGprsLocation,insertSubscriberData,activateTraceMode"},
-
-    // GPRS Location Info Retrieval Context
-    {"gprsLocationInfoRetrievalContext-v3" , "0.4.0.0.1.0.33.3", "sendRoutingInfoForGprs"},
-
-    // Failure Report Context 
-    {"failureReportContext-v3" , "0.4.0.0.1.0.34.3", "failureReport"},
-
-    // Location Services Gateway Context 
-    {"locationSvcGatewayContext-v3", "0.4.0.0.1.0.37.3", "sendRoutingInfoForLCS"},
-
-    // Authentication Failure Report Context
-    {"authenticationFailureReportContext-v3" , "0.4.0.0.1.0.39.3", "authenticationFailureReport"},
-
-    {0, 0, ""},
-};
-
-static const AppCtxt s_camelAppCtxt[] = {
-    {"CAP-v2-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.50.1", "initialDP,establishTemporaryConnection,connectToResource,"
-							    "disconnectForwardConnection,connect,releaseCall,eventReportBCSM,"
-							    "requestReportBCSMEvent,applyChargingReport,applyCharging,continue,"
-							    "resetTimer,furnishChargingInformation,callInformationReport,"
-							    "callInformationRequest,sendChargingInformation,specializedResourceReport,"
-							    "playAnnouncement,promptAndCollectUserInformation,cancel,activityTest"},
-
-    {"CAP-v2-assist-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.51.1", "assistRequestInstructions,disconnectForwardConnection,connectToResource,"
-								"resetTimer,specializedResourceReport,playAnnouncement,"
-								"promptAndCollectUserInformation,cancel,activityTest"},
-
-    {"CAP-v2-gsmSRF-to-gsmSCF-AC", "0.4.0.0.1.0.52.1", "assistRequestInstructions,specializedResourceReport,playAnnouncement,"
-							"promptAndCollectUserInformation,cancel,activityTest"},
-
-    {0, 0, ""}
-};
-
-
+static const StringList s_smscCapabOIDs("shortMsgMO-RelayContext-v3,shortMsgMO-RelayContext-v2,shortMsgMO-RelayContext-v1,"
+					"shortMsgMT-RelayContext-v3,shortMsgMT-RelayContext-v2");
 static const Capability s_mapCapabOID[] = {
-    {"SMSC",                     {"shortMsgMO-RelayContext-v3", "shortMsgMO-RelayContext-v2", "shortMsgMO-RelayContext-v1",
-					"shortMsgMT-RelayContext-v3", "shortMsgMT-RelayContext-v2", ""}},
-    {"None",                     {""}},
-    {0, {""}},
+    {"SMSC",                     s_smscCapabOIDs},
+    {"None",                     s_noOps},
+    {0, s_noOps},
 };
 
 static const Capability s_camelCapabOID[] = {
-    {"None",                     {""}},
-    {0, {""}},
+    {"None",                     s_noOps},
+    {0, s_noOps},
 };
 
 
@@ -5226,180 +5135,183 @@ static const Parameter s_statusReportRes[] = {
 };
 
 static const Operation s_mapOps[] = {
-    {"updateLocation",                true,   2,
+    {"updateLocation",                true,   2,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_updateLocationArgs,
 	s_sequenceTag, s_updateLocationRes
     },
-    {"cancelLocation",                true,   3,
+    {"cancelLocation",                true,   3,  SS7TCAP::SuccessOrFailureReport,
 	s_ctxtCstr_3_Tag, s_cancelLocationArgs,
 	s_sequenceTag,    s_extensionContainerRes
     },
-    {"provideRoamingNumber",          true,   4,
+    {"provideRoamingNumber",          true,   4,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_provideRoamingNumberArgs,
 	s_sequenceTag, s_provideRoamingNumberRes
     },
-    {"insertSubscriberData",          true,   7,
+    {"insertSubscriberData",          true,   7,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_insertSubscriberDataArgs,
 	s_sequenceTag, s_insertSubscriberDataRes
     },
-    {"deleteSubscriberData",          true,   8,
+    {"deleteSubscriberData",          true,   8,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_deleteSubscriberDataArgs,
 	s_sequenceTag, s_deleteSubscriberDataRes
     },
-    {"sendParameters",                true,   9,
+    {"sendParameters",                true,   9,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_sendParametersDataArgs,
 	s_noTag, s_sendParametersDataRes
     },
-    {"registerSS",                    true,  10,
+    {"registerSS",                    true,  10,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_registerSSArgs,
 	s_noTag,       s_extSSInfoChoice
     },
-    {"eraseSS",                       true,  11,
+    {"eraseSS",                       true,  11,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_ssCodeArgs,
 	s_noTag,       s_extSSInfoChoice
     },
-    {"activateSS",                    true,  12,
+    {"activateSS",                    true,  12,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_ssCodeArgs,
 	s_noTag,       s_extSSInfoChoice
     },
-    {"deactivateSS",                  true,  13,
+    {"deactivateSS",                  true,  13,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_ssCodeArgs,
 	s_noTag,       s_extSSInfoChoice
     },
-    {"interrogateSS",                 true,  14,
+    {"interrogateSS",                 true,  14,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_ssCodeArgs,
 	s_noTag,       s_InterrogateSSRes
     },
-    {"authenticationFailureReport",   true,  15,
+    {"authenticationFailureReport",   true,  15,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_authFailureArgs,
 	s_sequenceTag, s_extensionContainerRes,
     },
-    {"registerPassword",              true,  17,
+    {"registerPassword",              true,  17,  SS7TCAP::SuccessOrFailureReport,
 	s_noTag, s_registerPasswordArgs,
 	s_noTag, s_registerPasswordRes
     },
-    {"getPassword",                   true,  18,
+    {"getPassword",                   true,  18,  SS7TCAP::SuccessOnlyReport,
 	s_noTag, s_getPasswordArgs,
 	s_noTag, s_getPasswordRes
     },
-    {"updateGprsLocation",            true,  23,
+    {"updateGprsLocation",            true,  23,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_updateGprsLocationArgs,
 	s_sequenceTag, s_updateGprsLocationRes
     },
-    {"sendRoutingInfoForGprs",        true,  24,
+    {"sendRoutingInfoForGprs",        true,  24,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_sendRoutingInfoForGprsArgs,
 	s_sequenceTag, s_sendRoutingInfoForGprsRes
     },
-    {"failureReport",                 true,  25,
+    {"failureReport",                 true,  25,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_failureReportArgs,
 	s_sequenceTag, s_failureReportRes
     },
-    {"reset",                         true,  37,
+    {"reset",                         true,  37,  SS7TCAP::NoReport,
 	s_sequenceTag, s_resetArgs,
 	s_noTag, 0
     },
-    {"forwardCheckSS-Indication",     true,  38,
+    {"forwardCheckSS-Indication",     true,  38,  SS7TCAP::NoReport,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"mt-forwardSM",                  true,  44,
+    {"mt-forwardSM",                  true,  44,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_mtForwardSMArgs,
 	s_sequenceTag, s_forwardSMRes
     },
-    {"sendRoutingInfoForSM",          true,  45,
+    {"sendRoutingInfoForSM",          true,  45,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_sendRoutingInfoForSMArgs,
 	s_sequenceTag, s_sendRoutingInfoForSMRes
     },
-    {"mo-forwardSM",                  true,  46,
+    {"mo-forwardSM",                  true,  46,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_moForwardSMArgs,
 	s_sequenceTag, s_forwardSMRes
     },
-    {"forwardSM",                     true,  46,
+    {"forwardSM",                     true,  46,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_forwardSMArgs,
 	s_noTag, 0
     },
-    {"reportSM-DeliveryStatus",       true,  47,
+    {"reportSM-DeliveryStatus",       true,  47,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_reportSMDeliveryArgs,
 	s_sequenceTag, s_reportSMDeliveryRes,
 	
     },
-    {"activateTraceMode",             true,  50,
+    {"activateTraceMode",             true,  50,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_activateTraceModeArgs,
 	s_sequenceTag, s_traceModeRes
     },
-    {"deactivateTraceMode",           true,  51,
+    {"deactivateTraceMode",           true,  51,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_deactivateTraceModeArgs,
 	s_sequenceTag, s_traceModeRes
     },
-    {"sendAuthenticationInfo",        true,  56,
+    {"sendAuthenticationInfo",        true,  56,  SS7TCAP::SuccessOrFailureReport,
 	s_noTag, s_sendAuthenticationInfoArgs,
 	s_noTag, s_sendAuthenticationInfoRes
     },
-    {"restoreData",                   true,  57,
+    {"restoreData",                   true,  57,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_restoreDataArgs,
 	s_sequenceTag, s_restoreDataRes
     },
-    {"sendIMSI",                      true,  58,
+    {"sendIMSI",                      true,  58,  SS7TCAP::SuccessOrFailureReport,
 	s_noTag, s_sendIMSIArgs,
 	s_noTag, s_sendIMSIRes
     },
-    {"processUnstructuredSS-Request", true,  59,
+    {"processUnstructuredSS-Request", true,  59,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_unstructuredSSArgs,
 	s_sequenceTag, s_unstructuredSSRes
     },
-    {"unstructuredSS-Request",        true,  60,
+    {"unstructuredSS-Request",        true,  60,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_unstructuredSSArgs,
 	s_sequenceTag, s_unstructuredSSRes
     },
-    {"unstructuredSS-Notify",         true,  61,
+    {"unstructuredSS-Notify",         true,  61,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_unstructuredSSArgs,
 	s_noTag, 0
     },
-    {"informServiceCentre",           true,  63,
+    {"informServiceCentre",           true,  63,  SS7TCAP::NoReport,
 	s_sequenceTag, s_informServiceCentreArgs,
 	s_noTag, 0
     },
-    {"alertServiceCentre",            true,  64,
+    {"alertServiceCentre",            true,  64,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_alertServiceCentreArgs,
 	s_noTag, 0
     },
-    {"readyForSM",                    true,  66,
+    {"readyForSM",                    true,  66,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_readyForSMArgs,
 	s_sequenceTag, s_extensionContainerRes
     },
-    {"purgeMS",                       true,  67,
+    {"purgeMS",                       true,  67,  SS7TCAP::SuccessOrFailureReport,
 	s_ctxtCstr_3_Tag, s_purgeMSArgs,
 	s_sequenceTag,    s_purgeMSRes
     },
-    {"anyTimeInterrogation",          true,  71,
+    {"anyTimeInterrogation",          true,  71,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_anyTimeInterrogationArgs,
 	s_sequenceTag, s_anyTimeInterrogationRes
     },
-    {"setReportingState",             true,  73,
+    {"setReportingState",             true,  73,  SS7TCAP::SuccessOrFailureReport,
  	s_sequenceTag, s_setReportingStateArgs,
 	s_sequenceTag, s_setReportingStateRes
     },
-    {"statusReport",                  true,  74,
+    {"statusReport",                  true,  74,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_statusReportArgs,
 	s_sequenceTag, s_statusReportRes
     },
-    {"sendRoutingInfoForLCS",         true,  85,
+    {"sendRoutingInfoForLCS",         true,  85,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_sendRoutingInfoForLCSArgs,
 	s_sequenceTag, s_sendRoutingInfoForLCSRes
     },
-    {"",                              false,  0,
+    {"",                              false,  0,  -1,
 	s_noTag,  0,
 	s_noTag,  0
     },
 };
 
+static const StringList s_camelCapabOps("initialDP,assistRequestInstructions,establishTemporaryConnection,disconnectForwardConnection,"
+		"connectToResource,connect,releaseCall,requestReportBCSMEvent,eventReportBCSM,continue,resetTimer,"
+		"furnishChargingInformation,applyCharging,applyChargingReport,callInformationReport,callInformationRequest,"
+		"sendChargingInformation,playAnnouncement,promptAndCollectUserInformation,specializedResourceReport,"
+		"cancel,activityTest,initiateCallAttempt,disconnectLeg,moveLeg,splitLeg,entityReleased,"
+		"continueWithArgument,disconnectForwardConnectionWithArgument,playTone,callGap");
+
 static const Capability s_camelCapab[] = {
-    {"Camel",  {"initialDP", "assistRequestInstructions", "establishTemporaryConnection", "disconnectForwardConnection",
-		"connectToResource", "connect", "releaseCall", "requestReportBCSMEvent","eventReportBCSM", "continue", "resetTimer",
-		"furnishChargingInformation", "applyCharging", "applyChargingReport", "callInformationReport", "callInformationRequest",
-		"sendChargingInformation", "playAnnouncement", "promptAndCollectUserInformation", "specializedResourceReport",
-		"cancel", "activityTest", ""}},
-    {0, {""}},
+    {"Camel",  s_camelCapabOps},
+    {0, s_noOps},
 };
 
 static TokenDict s_eventTypeBCSM[] = {
@@ -5961,95 +5873,95 @@ static const Parameter s_cancelArgs[] = {
 };
 
 static const Operation s_camelOps[] = {
-    {"initialDP",                true,   0,
+    {"initialDP",                true,   0,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_initialDPArgs,
 	s_noTag, 0
     },
-    {"assistRequestInstructions",   true,   16,
+    {"assistRequestInstructions",   true,   16,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_assistRequestInstructionsArgs,
 	s_noTag, 0
     },
-    {"establishTemporaryConnection",   true,   17,
+    {"establishTemporaryConnection",   true,   17,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_establishTemporaryConnectionArgs,
 	s_noTag, 0
     },
-    {"disconnectForwardConnection",   true,   18,
+    {"disconnectForwardConnection",   true,   18,   SS7TCAP::FailureOnlyReport,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"connectToResource",   true,   19,
+    {"connectToResource",   true,   19,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_connectToResourceArgs,
 	s_noTag, 0
     },
-    {"connect",   true,   20,
+    {"connect",   true,   20,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_connectArgs,
 	s_noTag, 0
     },
-    {"releaseCall",   true,   22,
+    {"releaseCall",   true,   22,   SS7TCAP::NoReport,
 	s_noTag, s_releaseCallArgs,
 	s_noTag, 0
     },
-    {"requestReportBCSMEvent",   true,   23,
+    {"requestReportBCSMEvent",   true,   23,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_requestReportBCSMEventArgs,
 	s_noTag, 0
     },
-    {"eventReportBCSM",   true,   24,
+    {"eventReportBCSM",   true,   24,   SS7TCAP::NoReport,
 	s_sequenceTag, s_eventReportBCSMArgs,
 	s_noTag, 0
     },
-    {"continue",   true,   31,
+    {"continue",   true,   31,   SS7TCAP::NoReport,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"resetTimer",   true,   33,
+    {"resetTimer",   true,   33,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_resetTimerArgs,
 	s_noTag, 0
     },
-    {"furnishChargingInformation",   true,   34,
+    {"furnishChargingInformation",   true,   34,   SS7TCAP::FailureOnlyReport,
 	s_noTag, s_FCIBillingChargingCharacteristics,
 	s_noTag, 0
     },
-    {"applyCharging",   true,   35,
+    {"applyCharging",   true,   35,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_applyChargingArgs,
 	s_noTag, 0
     },
-    {"applyChargingReport",   true,   36,
+    {"applyChargingReport",   true,   36,   SS7TCAP::FailureOnlyReport,
 	s_noTag, s_callResult,
 	s_noTag, 0
     },
-    {"callInformationReport",   true,   44,
+    {"callInformationReport",   true,   44,   SS7TCAP::NoReport,
 	s_sequenceTag, s_callInformationArgs,
 	s_noTag, 0
     },
-    {"callInformationRequest",   true,   45,
+    {"callInformationRequest",   true,   45,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_callInformationRequestArgs,
 	s_noTag, 0
     },
-    {"sendChargingInformation",   true,   46,
+    {"sendChargingInformation",   true,   46,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_sendChargingInformationArgs,
 	s_noTag, 0
     },
-    {"playAnnouncement",   true,   47,
+    {"playAnnouncement",   true,   47,   SS7TCAP::FailureOnlyReport,
 	s_sequenceTag, s_playAnnouncementArgs,
 	s_noTag, 0
     },
-    {"promptAndCollectUserInformation",   true,   48,
+    {"promptAndCollectUserInformation",   true,   48,   SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_promptAndCollectUserInformationArgs,
 	s_noTag, 0
     },
-    {"specializedResourceReport",   true,   49,
+    {"specializedResourceReport",   true,   49,   SS7TCAP::NoReport,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"cancel",   true,   53,
+    {"cancel",   true,   53,   SS7TCAP::FailureOnlyReport,
 	s_noTag, s_cancelChoice,
 	s_noTag, 0
     },
-    {"activityTest",   true,   55,
+    {"activityTest",   true,   55,   SS7TCAP::SuccessOnlyReport,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"",                              false,  0,
+    {"",                              false,  0, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
@@ -6229,155 +6141,155 @@ static const Parameter s_busySubscriberErr[] = {
 };
 
 static const Operation s_mapErrors[] = {
-    {"unknownSubscriber", true, 1, 
+    {"unknownSubscriber", true, 1, -1,
 	s_sequenceTag, s_unknownSubscriberErr,
 	s_noTag, 0
     },
-    {"unknownMSC", true, 3,
+    {"unknownMSC", true, 3, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"unidentifiedSubscriber", true, 5,
+    {"unidentifiedSubscriber", true, 5, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"absentsubscriberSM", true, 6,
+    {"absentsubscriberSM", true, 6, -1,
 	s_sequenceTag, s_absentsubscriberSMErr,
 	s_noTag, 0
     },
-    {"unknownEquipment", true, 7,
+    {"unknownEquipment", true, 7, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"roamingNotAllowed", true, 8,
+    {"roamingNotAllowed", true, 8, -1,
 	s_sequenceTag, s_roamingNotAllowedErr,
 	s_noTag, 0
     },
-    {"illegalSubscriber", true, 9,
+    {"illegalSubscriber", true, 9, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"bearerServiceNotProvisioned", true, 10,
+    {"bearerServiceNotProvisioned", true, 10, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"teleserviceNotProvisioned", true, 11,
+    {"teleserviceNotProvisioned", true, 11, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"illegalEquipment", true, 12,
+    {"illegalEquipment", true, 12, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"callBarred", true, 13,
+    {"callBarred", true, 13, -1,
 	s_noTag, s_callBarredErr,
 	s_noTag, 0
     },
-    {"forwardingViolation", true, 14,
+    {"forwardingViolation", true, 14, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"illegalSS-Operation", true, 16,
+    {"illegalSS-Operation", true, 16, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"ss-ErrorStatus", true, 17,
+    {"ss-ErrorStatus", true, 17, -1,
 	s_noTag, s_ssErrorStatusErr,
 	s_noTag, 0
     },
-    {"ss-NotAvailable", true, 18,
+    {"ss-NotAvailable", true, 18, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"ss-SubscriptionViolation", true, 19,
+    {"ss-SubscriptionViolation", true, 19, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"ss-Incompatibility", true, 20,
+    {"ss-Incompatibility", true, 20, -1,
 	s_sequenceTag, s_ssIncompatibilityErr,
 	s_noTag, 0
     },
-    {"facilityNotSupported", true, 21,
+    {"facilityNotSupported", true, 21, -1,
 	s_sequenceTag, s_facilityNotSupportedErr,
 	s_noTag, 0
     },
-    {"absentSubscriber", true, 27,
+    {"absentSubscriber", true, 27, -1,
 	s_sequenceTag, s_absentSubscriberErr,
 	s_noTag, 0
     },
-    {"sm-DeliveryFailure", true, 32,
+    {"sm-DeliveryFailure", true, 32, -1,
 	s_sequenceTag, s_smDeliveryFailureErr,
 	s_noTag, 0
     },
-    {"messageWaitingListFull", true, 33,
+    {"messageWaitingListFull", true, 33, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"systemFailure", true, 34,
+    {"systemFailure", true, 34, -1,
 	s_noTag, s_systemFailure,
 	s_noTag, 0
     },
-    {"dataMissing", true, 35,
+    {"dataMissing", true, 35, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"unexpectedDataValue", true, 36,
+    {"unexpectedDataValue", true, 36, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"pw-RegistrationFailure", true, 37,
+    {"pw-RegistrationFailure", true, 37, -1,
 	s_noTag, s_pwRegistrationFailureErr,
 	s_noTag, 0
     },
-    {"negativePW-Check", true, 38,
+    {"negativePW-Check", true, 38, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"noRoamingNumberAvailable", true, 39,
+    {"noRoamingNumberAvailable", true, 39, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"tracingBufferFull", true, 40,
+    {"tracingBufferFull", true, 40, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"numberOfPW-AttemptsViolation", true, 43,
+    {"numberOfPW-AttemptsViolation", true, 43, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"busySubscriber", true, 45,
+    {"busySubscriber", true, 45, -1,
 	s_sequenceTag, s_busySubscriberErr,
 	s_noTag, 0
     },
-    {"noSubscriberReply", true, 46,
+    {"noSubscriberReply", true, 46, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"or-NotAllowed", true, 48,
+    {"or-NotAllowed", true, 48, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"ati-NotAllowed", true, 49,
+    {"ati-NotAllowed", true, 49, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"resourceLimitation", true, 51,
+    {"resourceLimitation", true, 51, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"unauthorizedRequestingNetwork", true, 52,
+    {"unauthorizedRequestingNetwork", true, 52, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
-    {"unknownAlphabet", true, 71,
+    {"unknownAlphabet", true, 71, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"ussd-Busy", true, 72,
+    {"ussd-Busy", true, 72, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"",          false,  0,
+    {"",          false,  0, -1,
 	s_noTag,  0,
 	s_noTag,  0
     },
@@ -6436,75 +6348,234 @@ static const Parameter s_taskRefusedErr[] = {
 
 
 static const Operation s_camelErrors[] = {
-    {"cancelled", true, 0,
+    {"cancelled", true, 0, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"cancelFailed", true, 1,
+    {"cancelFailed", true, 1, -1,
 	s_sequenceTag, s_cancelFailedErr,
 	s_noTag, 0
     },
-    {"eTCFailed", true, 3,
+    {"eTCFailed", true, 3, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"improperCallerResponse", true, 4,
+    {"improperCallerResponse", true, 4, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"missingCustomerRecord", true, 6,
+    {"missingCustomerRecord", true, 6, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"missingParameter", true, 7,
+    {"missingParameter", true, 7, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"parameterOutOfRange", true, 8,
+    {"parameterOutOfRange", true, 8, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"requestedInfoError", true, 10,
+    {"requestedInfoError", true, 10, -1,
 	s_noTag, s_requestedInfoErr,
 	s_noTag, 0
     },
-    {"systemFailure", true, 11,
+    {"systemFailure", true, 11, -1,
 	s_noTag, s_systemFailureCamelErr,
 	s_noTag, 0
     },
-    {"taskRefused", true, 12,
+    {"taskRefused", true, 12, -1,
 	s_noTag, s_taskRefusedErr,
 	s_noTag, 0
     },
-    {"unavailableResource", true, 13,
+    {"unavailableResource", true, 13, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"unexpectedComponentSequence", true, 14,
+    {"unexpectedComponentSequence", true, 14, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"unexpectedDataValue", true, 15,
+    {"unexpectedDataValue", true, 15, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"unexpectedParameter", true, 16,
+    {"unexpectedParameter", true, 16, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"unknownLegID", true, 17,
+    {"unknownLegID", true, 17, -1,
 	s_noTag, 0,
 	s_noTag, 0
     },
-    {"",            false,  0,
+    {"",            false,  0,  -1,
 	s_noTag,  0,
 	s_noTag,  0
     },
 };
 
+static const StringList s_netLocUpCtxtOps("updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,activateTraceMode");
+static const StringList s_locationCancelCtxtOps("cancelLocation");
+static const StringList s_roamingNumberEnqCtxtOps("provideRoamingNumber");
+static const StringList s_locationInfoRetrieveCtxtOps("sendRoutingInfo");
+static const StringList s_reportingCtxtOps("setReportingState,statusReport,remoteUserFree");
+static const StringList s_resetCtxtOps("reset");
+static const StringList s_infoRetrieveCtxt2Ops("sendAuthenticationInfo");
+static const StringList s_infoRetrieveCtxt1Ops("sendParameters");
+static const StringList s_subscriberDataCtxtOps("insertSubscriberData,deleteSubscriberData");
+static const StringList s_tracingCtxtOps("activateTraceMode,deactivateTraceMode");
+static const StringList s_networkFunctionalSsCtxtOps("registerSS,eraseSS,activateSS,deactivateSS,"
+							"interrogateSS,registerPassword,getPassword");
+static const StringList s_networkUnstructuredSsCtxt2Ops("processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify");
+static const StringList s_networkUnstructuredSsCtxt1Ops("processUnstructuredSS-Data");
+static const StringList s_shortMsgGatewayCtxtOps("sendRoutingInfoForSM,informServiceCentre");
+static const StringList s_shortMsgMOCtxtOps("mo-forwardSM");
+static const StringList s_forwardMsgCtxtOps("forwardSM");
+static const StringList s_shortMsgAlertCtxtOps("alertServiceCentre");
+static const StringList s_mwdMngtCtxtOps("readyForSM");
+static const StringList s_shortMsgMTCtxtOps("mt-forwardSM");
+static const StringList s_imsiRetrievalCtxtOps("sendIMSI");
+static const StringList s_msPurgingCtxtOps("purgeMS");
+static const StringList s_anyTimeInfoEnquiryCtxOps("anyTimeInterrogation");
+static const StringList s_gprsLocationUpdateCtxtOps("updateGprsLocation,insertSubscriberData,activateTraceMode");
+static const StringList s_gprsLocationInfoRetrieveCtxtOps("sendRoutingInfoForGprs");
+static const StringList s_failureReportCtxtOps("failureReport");
+static const StringList s_locationSvcGatewayCtxtOps("sendRoutingInfoForLCS");
+static const StringList s_authFailureReportCtxtOps("authenticationFailureReport");
+
+static const OpTable s_defMapOpTable = { s_mapOps, 0};
+
+static const AppCtxt s_mapAppCtxt[]= {
+    // Network Loc Up context
+    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", s_netLocUpCtxtOps, &s_defMapOpTable},
+    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", s_netLocUpCtxtOps, &s_defMapOpTable},
+    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", s_netLocUpCtxtOps, &s_defMapOpTable},
+
+    // Location Cancellation context
+    {"locationCancelationContext-v3", "0.4.0.0.1.0.2.3", s_locationCancelCtxtOps, &s_defMapOpTable},
+    {"locationCancelationContext-v2", "0.4.0.0.1.0.2.2", s_locationCancelCtxtOps, &s_defMapOpTable},
+    {"locationCancelationContext-v1", "0.4.0.0.1.0.2.1", s_locationCancelCtxtOps, &s_defMapOpTable},
+
+    // Roaming Number Enquiry Context
+    {"roamingNumberEnquiryContext-v3", "0.4.0.0.1.0.3.3", s_roamingNumberEnqCtxtOps, &s_defMapOpTable},
+    {"roamingNumberEnquiryContext-v2", "0.4.0.0.1.0.3.2", s_roamingNumberEnqCtxtOps, &s_defMapOpTable},
+    {"roamingNumberEnquiryContext-v1", "0.4.0.0.1.0.3.1", s_roamingNumberEnqCtxtOps, &s_defMapOpTable},
+
+    // Location Info Retrieval Context 
+    {"locationInfoRetrievalContext-v3", "0.4.0.0.1.0.5.3", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
+    {"locationInfoRetrievalContext-v2", "0.4.0.0.1.0.5.2", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
+    {"locationInfoRetrievalContext-v1", "0.4.0.0.1.0.5.1", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
+
+    // Reporting Context
+    {"reportingContext-v3", "0.4.0.0.1.0.7.3", s_reportingCtxtOps, &s_defMapOpTable},
+
+    // Reset context
+    {"resetContext-v2", "0.4.0.0.1.0.10.2", s_resetCtxtOps, &s_defMapOpTable},
+    {"resetContext-v1", "0.4.0.0.1.0.10.1", s_resetCtxtOps, &s_defMapOpTable},
+
+    // Info retrieval context
+    {"infoRetrievalContext-v3", "0.4.0.0.1.0.14.3", s_infoRetrieveCtxt2Ops, &s_defMapOpTable},
+    {"infoRetrievalContext-v2", "0.4.0.0.1.0.14.2", s_infoRetrieveCtxt2Ops, &s_defMapOpTable}, 
+    {"infoRetrievalContext-v1", "0.4.0.0.1.0.14.1", s_infoRetrieveCtxt1Ops, &s_defMapOpTable},
+
+    // Subscriber Data Management Context
+    {"subscriberDataMngtContext-v3", "0.4.0.0.1.0.16.3", s_subscriberDataCtxtOps, &s_defMapOpTable},
+    {"subscriberDataMngtContext-v2", "0.4.0.0.1.0.16.2", s_subscriberDataCtxtOps, &s_defMapOpTable},
+    {"subscriberDataMngtContext-v1", "0.4.0.0.1.0.16.1", s_subscriberDataCtxtOps, &s_defMapOpTable},
+
+    // Tracing context
+    {"tracingContext-v3", "0.4.0.0.1.0.17.3", s_tracingCtxtOps, &s_defMapOpTable},
+    {"tracingContext-v2", "0.4.0.0.1.0.17.2", s_tracingCtxtOps, &s_defMapOpTable},
+    {"tracingContext-v1", "0.4.0.0.1.0.17.1", s_tracingCtxtOps, &s_defMapOpTable},
+
+    // Network functional SS context
+    {"networkFunctionalSsContext-v2", "0.4.0.0.1.0.18.2", s_networkFunctionalSsCtxtOps, &s_defMapOpTable},
+    {"networkFunctionalSsContext-v1", "0.4.0.0.1.0.18.1", s_networkFunctionalSsCtxtOps, &s_defMapOpTable},
+
+    // Network unstructured SS context
+    {"networkUnstructuredSsContext-v2", "0.4.0.0.1.0.19.2", s_networkUnstructuredSsCtxt2Ops, &s_defMapOpTable},
+    {"networkUnstructuredSsContext-v1", "0.4.0.0.1.0.19.1", s_networkUnstructuredSsCtxt1Ops, &s_defMapOpTable},
+
+    // Short message routing
+    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", s_shortMsgGatewayCtxtOps, &s_defMapOpTable},
+    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", s_shortMsgGatewayCtxtOps, &s_defMapOpTable},
+    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", s_shortMsgGatewayCtxtOps, &s_defMapOpTable},
+
+    // Mobile Originated short messages
+    {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", s_shortMsgMOCtxtOps, &s_defMapOpTable},
+    {"shortMsgMO-RelayContext-v2", "0.4.0.0.1.0.21.2", s_forwardMsgCtxtOps, &s_defMapOpTable},
+    {"shortMsgMO-RelayContext-v1", "0.4.0.0.1.0.21.1", s_forwardMsgCtxtOps, &s_defMapOpTable},
+
+    // Short message alerts
+    {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", s_shortMsgAlertCtxtOps, &s_defMapOpTable},
+    {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", s_shortMsgAlertCtxtOps, &s_defMapOpTable},
+
+    // readyForSM context
+    {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", s_mwdMngtCtxtOps, &s_defMapOpTable},
+    {"mwdMngtContext-v2", "0.4.0.0.1.0.24.2", s_mwdMngtCtxtOps, &s_defMapOpTable},
+    {"mwdMngtContext-v1", "0.4.0.0.1.0.24.1", s_mwdMngtCtxtOps, &s_defMapOpTable},
+
+    // Mobile Terminated short messages
+    {"shortMsgMT-RelayContext-v3", "0.4.0.0.1.0.25.3", s_shortMsgMTCtxtOps, &s_defMapOpTable},
+    {"shortMsgMT-RelayContext-v2", "0.4.0.0.1.0.25.2", s_forwardMsgCtxtOps, &s_defMapOpTable},
+
+    // sendIMSI Context
+    {"imsiRetrievalContext-v2", "0.4.0.0.1.0.26.2", s_imsiRetrievalCtxtOps, &s_defMapOpTable},
+
+    // MS Purging Context
+    {"msPurgingContext-v3", "0.4.0.0.1.0.27.3", s_msPurgingCtxtOps, &s_defMapOpTable},
+    {"msPurgingContext-v2", "0.4.0.0.1.0.27.2", s_msPurgingCtxtOps, &s_defMapOpTable},
+
+    // Any Time Info Enquiry Context 
+    {"anyTimeInfoEnquiryContext-v3", "0.4.0.0.1.0.29.3", s_anyTimeInfoEnquiryCtxOps, &s_defMapOpTable},
+
+    // GPRS Location Update Context
+    {"gprsLocationUpdateContext-v3", "0.4.0.0.1.0.32.3", s_gprsLocationUpdateCtxtOps, &s_defMapOpTable},
+
+    // GPRS Location Info Retrieval Context
+    {"gprsLocationInfoRetrievalContext-v3" , "0.4.0.0.1.0.33.3", s_gprsLocationInfoRetrieveCtxtOps, &s_defMapOpTable},
+
+    // Failure Report Context 
+    {"failureReportContext-v3" , "0.4.0.0.1.0.34.3", s_failureReportCtxtOps, &s_defMapOpTable},
+
+    // Location Services Gateway Context 
+    {"locationSvcGatewayContext-v3", "0.4.0.0.1.0.37.3", s_locationSvcGatewayCtxtOps, &s_defMapOpTable},
+
+    // Authentication Failure Report Context
+    {"authenticationFailureReportContext-v3" , "0.4.0.0.1.0.39.3", s_authFailureReportCtxtOps, &s_defMapOpTable},
+
+    {0, 0, s_noOps, 0},
+};
+
+static const StringList s_cap2gsmSSFgsmSCFCtxtOps("initialDP,establishTemporaryConnection,connectToResource,"
+							    "disconnectForwardConnection,connect,releaseCall,eventReportBCSM,"
+							    "requestReportBCSMEvent,applyChargingReport,applyCharging,continue,"
+							    "resetTimer,furnishChargingInformation,callInformationReport,"
+							    "callInformationRequest,sendChargingInformation,specializedResourceReport,"
+							    "playAnnouncement,promptAndCollectUserInformation,cancel,activityTest");
+static const StringList s_cap2AssistgsmSSFgsmSCFCtxtOps("assistRequestInstructions,disconnectForwardConnection,connectToResource,"
+								"resetTimer,specializedResourceReport,playAnnouncement,"
+								"promptAndCollectUserInformation,cancel,activityTest");
+static const StringList s_cap2gsmSRFgsmSCFCtxtOps("assistRequestInstructions,specializedResourceReport,playAnnouncement,"
+							"promptAndCollectUserInformation,cancel,activityTest");
+    
+static OpTable s_defCamelOpTable = { s_camelOps, 0 };
+
+static const AppCtxt s_camelAppCtxt[] = {
+    {"CAP-v2-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.50.1", s_cap2gsmSSFgsmSCFCtxtOps, &s_defCamelOpTable},
+
+    {"CAP-v2-assist-gsmSSF-to-gsmSCF-AC", "0.4.0.0.1.0.51.1", s_cap2AssistgsmSSFgsmSCFCtxtOps, &s_defCamelOpTable},
+
+    {"CAP-v2-gsmSRF-to-gsmSCF-AC", "0.4.0.0.1.0.52.1", s_cap2gsmSRFgsmSCFCtxtOps, &s_defCamelOpTable},
+
+    {0, 0, s_noOps, 0}
+};
+
+static const StringList s_mapDialogCtxtOps("map-open,map-accept,map-close,map-refuse,map-userAbort,map-providerAbort");
+
 static const AppCtxt s_mapDialogCtxt[] = {
-    {"map-DialogueAS", "0.4.0.0.1.1.1.1", "map-open,map-accept,map-close,map-refuse,map-userAbort,map-providerAbort"},
-    {0, 0, ""}
+    {"map-DialogueAS", "0.4.0.0.1.1.1.1", s_mapDialogCtxtOps, 0},
+    {0, 0, s_noOps, 0}
 };
 
 static const Parameter s_mapOpenSeq[] = {
@@ -6634,35 +6705,44 @@ static bool isAppCtxtOperation(const AppCtxt* ctxt, const Operation* op)
     DDebug(&__plugin,DebugAll,"isAppCtxtOperation(ctxt=%s[%p],op=%s[%p]]",(ctxt ? ctxt->name : ""),ctxt,(op ? op->name.c_str() : ""),op);
     if (!ctxt)
 	return true;
-    ObjList* ops = ctxt->ops.split(',',false);
-    bool ok = (0 != ops->find(op->name));
-    TelEngine::destruct(ops);
-    return ok;
+    return (0 != ctxt->ops.find(op->name));
 }
 
 static const Operation* findOperation(TcapXUser::UserType type, int opCode, bool opLocal = true, const AppCtxt* ctxt = 0)
 {
-    DDebug(&__plugin,DebugAll,"findOperation(type=%s,opCode=%d, local=%s)",lookup(type,s_userTypes),opCode,String::boolText(opLocal));
-    const Operation* ops = (type == TcapXUser::MAP ? s_mapOps : s_camelOps);
-    while (!TelEngine::null(ops->name)) {
-	if (ops->code == opCode && ops->local == opLocal) {
-	    if (isAppCtxtOperation(ctxt,ops))
-		return ops;
+    DDebug(&__plugin,DebugAll,"findOperation(type=%s,opCode=%d,local=%s,ctxt=%p)",lookup(type,s_userTypes),opCode,String::boolText(opLocal),ctxt);
+    const Operation* ops = 0;
+    const OpTable* opTable = (ctxt ? ctxt->opTable : 0);
+    do {
+	ops = ( opTable ? opTable->mainTable : (type == TcapXUser::MAP ? s_mapOps : s_camelOps));
+	while (!TelEngine::null(ops->name)) {
+	    if (ops->code == opCode && ops->local == opLocal) {
+		if (isAppCtxtOperation(ctxt,ops))
+		    return ops;
+	    }
+	    ops++;
 	}
-	ops++;
-    }
+	if (opTable)
+	    opTable = opTable->fallbackTable;
+    } while (opTable);
     return 0;
 }
 
 static const Operation* findOperation(TcapXUser::UserType type, const String& op, const AppCtxt* ctxt = 0)
 {
-    DDebug(&__plugin,DebugAll,"findOperation(opCode=%s)",op.c_str());
-    const Operation* ops = (type == TcapXUser::MAP ? s_mapOps : s_camelOps);
-    while (!TelEngine::null(ops->name)) {
-	if (op == ops->name && isAppCtxtOperation(ctxt,ops))
-	    return ops;
-	ops++;
-    }
+    DDebug(&__plugin,DebugAll,"findOperation(opCode=%s,ctxt=%p)",op.c_str(),ctxt);
+    const Operation* ops = 0;
+    const OpTable* opTable = (ctxt ? ctxt->opTable : 0);
+    do {
+	ops = ( opTable ? opTable->mainTable : (type == TcapXUser::MAP ? s_mapOps : s_camelOps));
+	while (!TelEngine::null(ops->name)) {
+	    if (op == ops->name && isAppCtxtOperation(ctxt,ops))
+		return ops;
+	    ops++;
+	}
+	if (opTable)
+	    opTable = opTable->fallbackTable;
+    } while (opTable);
     return 0;
 }
 
@@ -6671,12 +6751,8 @@ static const Capability* findCapability(TcapXUser::UserType type, const String& 
     DDebug(&__plugin,DebugAll,"findCapability(opName=%s)",opName.c_str());
     const Capability* cap = (type == TcapXUser::MAP ? s_mapCapab : s_camelCapab);
     while (cap->name) {
-	int index = 0;
-	while (!TelEngine::null(cap->ops[index])) {
-	    if (opName == cap->ops[index])
-		return cap;
-	    index++;
-	}
+	if (cap->ops.find(opName))
+	    return cap;
 	cap++;
     }
     return 0;
@@ -6689,12 +6765,8 @@ static const Capability* findCapabilityOID(TcapXUser::UserType type, const char*
     DDebug(&__plugin,DebugAll,"findCapabilityOID(oid=%s)",oid);
     const Capability* cap = (type == TcapXUser::MAP ? s_mapCapabOID : s_camelCapabOID);
     while (cap->name) {
-	int index = 0;
-	while (!TelEngine::null(cap->ops[index])) {
-	    if (cap->ops[index] == oid)
-		return cap;
-	    index++;
-	}
+	if (cap->ops.find(oid))
+	    return cap;
 	cap++;
     }
     return 0;
@@ -6789,6 +6861,23 @@ Transaction* IDMap::findByTcapID(const char* tcapID)
     }
     return 0;
 }
+
+/**
+ * StringList
+ */
+StringList::StringList(const char* list, char sep)
+{
+    DDebug(&__plugin,DebugAll,"StringList(list=%s) [%p]",list,this);
+    String str(list);
+    m_list = str.split(sep,false);
+}
+
+StringList::~StringList()
+{
+    XDebug(&__plugin,DebugAll,"~StringList() [%p]",this);
+    TelEngine::destruct(m_list);
+}
+
 
 /**
  * MyDomParser
@@ -7098,6 +7187,7 @@ const XMLMap TcapToXml::s_xmlMap[] = {
     {Regexp("^tcap\\.component\\..\\+\\.errorCode$"),          "component",                             "",                          TcapToXml::Attribute},
     {Regexp("^tcap\\.component\\..\\+\\.errorCodeType$"),      "",                                      "",                          TcapToXml::None},
     {Regexp("^tcap\\.component\\..\\+\\.problemCode$"),        "component",                             "",                          TcapToXml::Attribute},
+    {Regexp("^tcap\\.component\\..\\+\\.operationClass$"),     "component",                             "",                          TcapToXml::Attribute},
     {Regexp("^tcap\\.component\\..\\+\\..\\+"),                "component",                             "",                          TcapToXml::NewElement},
     {Regexp(""),                                               "",                                      "",                          TcapToXml::End},
 };
@@ -7220,9 +7310,7 @@ bool TcapToXml::decodeDialogPDU(XmlElement* el, const AppCtxt* ctxt, DataBlock& 
 	AsnTag tag;
 	AsnTag::decode(tag,data);
 	if (decodeParam(param,tag,data,el,m_app->addEncoding(),err)) {
-	    ObjList* pdus = ctxt->ops.split(',',false);
-	    bool ok = (0 != pdus->find(param->name));
-	    TelEngine::destruct(pdus);
+	    bool ok = (0 != ctxt->ops.find(param->name));
 	    if (!ok)
 		el->clearChildren();
 	    return ok;
@@ -7320,8 +7408,11 @@ void TcapToXml::addComponentsToXml(XmlElement* el, NamedList& params, const AppC
 	Operation* op = 0;
 	if (!TelEngine::null(opCode) && !TelEngine::null(opType))
 	    op = (Operation*)findOperation(m_app->type(),opCode->toInteger(),(*opType == "local"),ctxt);
-	if (op)
+	if (op) {
 	    compParams.setParam(root + "." + s_tcapOpCode,op->name);
+	    if (op->opClass > -1)
+		compParams.setParam(root + "." + s_tcapOpClass,lookup(op->opClass,SS7TCAP::s_compOperClasses,"reportAll"));
+	}
 
 	int compType = SS7TCAP::lookupComponent(params.getValue(root + "." + s_tcapCompType));
 
@@ -7649,15 +7740,19 @@ bool XmlToTcap::handleComponent(NamedList& tcapParams, XmlElement* elem, const A
 	}
 	else if (ns->name() == s_tcapOpCode) {
 	    op = (Operation*)findOperation(m_app->type(),*ns,appCtxt);
-	    if (!op)
+	    if (!op) {
+		Debug(&__plugin,DebugMild,"Cannot find operation='%s' in ctxt='%s' [%p]",ns->c_str(),(appCtxt ? appCtxt->name : ""),this);
 		continue;
+	    }
 	    tcapParams.setParam(prefix + "." + s_tcapOpCode,String(op->code));
 	    tcapParams.setParam(prefix + "." + s_tcapOpCodeType,(op->local ? "local" : "global"));
 	}
 	else if (ns->name() == s_tcapErrCode) {
 	    op = (Operation*)findError(m_app->type(),*ns);
-	    if (!op)
+	    if (!op) {
+		Debug(&__plugin,DebugMild,"Cannot find error='%s' [%p]",ns->c_str(),this);
 		continue;
+	    }
 	    tcapParams.setParam(prefix + "." + s_tcapErrCode,String(op->code));
 	    tcapParams.setParam(prefix + "." + s_tcapErrCodeType,(op->local ? "local" : "global"));
 	}
@@ -7730,9 +7825,7 @@ bool XmlToTcap::handleMAPDialog(NamedList& tcapParams, XmlElement* elem, String 
 	// find reference for decoded param
 	const AppCtxt* ctxt = s_mapDialogCtxt;
 	while (ctxt && ctxt->name) {
-	    ObjList* pdus = ctxt->ops.split(',',false);
-	    bool ok = (param && param->name && pdus->find(param->name));
-	    TelEngine::destruct(pdus);
+	    bool ok = (param && ctxt->ops.find(param->name));
 	    if (ok) {
 		tcapParams.setParam(s_tcapDirectReference,ctxt->oid);
 		break;
@@ -7940,10 +8033,10 @@ bool TcapXApplication::canHandle(NamedList& params)
 	    continue;
 	const Operation* op = findOperation(m_type,opCode->toInteger(),(*opType == "local"),appCtxt);
 	if (!op)
-	    continue;
+	    return false;
 	const Capability* cap = findCapability(m_type,op->name);
 	if (!cap)
-	    continue;
+	    return false;
 	if (!hasCapability(cap->name)) {
 	    Debug(&__plugin,DebugAll,"TcapXApplication '%s' cannot handle operation='%s' [%p]",m_name.c_str(),op->name.c_str(),this);
 	    return false;
@@ -8379,7 +8472,7 @@ void TcapXApplication::reportError(const char* err)
 {
     if (!err)
 	return;
-    DDebug(&__plugin,DebugInfo,"TcapXApplication::reportError(error=%s) [%p]",err,this);
+    Debug(&__plugin,DebugInfo,"TcapXApplication::reportError(error=%s) - app=%s [%p]",err,m_name.c_str(),this);
 }
 
 void TcapXApplication::status(NamedList& status)
@@ -8469,8 +8562,8 @@ bool TcapXUser::initialize(NamedList& sect)
     }
 
     m_type = (UserType)lookup(sect.getValue(s_typeStr,"MAP"),s_userTypes,m_type);
-    m_printMsg = sect.getBoolValue("print-messages",false);
-    m_addEnc = sect.getBoolValue("add-encoding",false);
+    m_printMsg = sect.getBoolValue(YSTRING("print-messages"),false);
+    m_addEnc = sect.getBoolValue(YSTRING("add-encoding"),false);
     if (!tcap() && !findTCAP(sect.getValue("tcap",0)))
 	return false;
     notifyManagementState(true);

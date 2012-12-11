@@ -1,4 +1,4 @@
-yate (4.2.1~svn5344) UNRELEASED; urgency=low
+yate (4.2.1~svn5357) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -210,8 +210,31 @@ yate (4.2.1~svn5344) UNRELEASED; urgency=low
   * Updated to SVN revision 5343: + Bug fixed in sccp local routing.
   * Updated to SVN revision 5344: + Properly handle trunk frames without
     miniframe timestamps.
+  * Updated to SVN revision 5357: + Added check for definition mismatch
+    when ASN type is SET OF, but the definition indicates a primitive
+    type.  + Added StringList class. Use it to improve searching for
+    operations and capabilities.  + Use the table associated with the
+    application context when searching for an operation definition.  +
+    Associate application contexts with tables of operations.  + Bug
+    fix: when trying to encode raw, if a parameter definition is
+    present, first check that it isn't the definition of the empty
+    parameter which finishes the table definitions.  + Use YSTRING for
+    retrieving values from conf file where it wasn't already used.  +
+    Print error message from application with debug, not ddebug.  +
+    Encode components in the order they are received, not reversed.  +
+    Don't ever accept an operation for which we don't have a definition
+    or for which we don't have an associated capability.  + Added debug
+    messages for when an operation does not match given context.  + For
+    ISUP digits, decode digit 0xe as E instead of ?.  + When there is no
+    user to accept an incoming transaction, respond with an U_Abort
+    message.  + When sending to the TCAP user a
+    Result/ReturnError/L_Cancel send operation code and type also.  +
+    Keep operation code and type for components.  + Send to an
+    application the operation class information when receiving an
+    operation code.  + Added operation class information to MAP and
+    CAMEL operation definitions.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 08 Dec 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 12 Dec 2012 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

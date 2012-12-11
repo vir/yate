@@ -7734,15 +7734,19 @@ bool XmlToTcap::handleComponent(NamedList& tcapParams, XmlElement* elem, const A
 	}
 	else if (ns->name() == s_tcapOpCode) {
 	    op = (Operation*)findOperation(m_app->type(),*ns,appCtxt);
-	    if (!op)
+	    if (!op) {
+		Debug(&__plugin,DebugMild,"Cannot find operation='%s' in ctxt='%s' [%p]",ns->c_str(),(appCtxt ? appCtxt->name : ""),this);
 		continue;
+	    }
 	    tcapParams.setParam(prefix + "." + s_tcapOpCode,String(op->code));
 	    tcapParams.setParam(prefix + "." + s_tcapOpCodeType,(op->local ? "local" : "global"));
 	}
 	else if (ns->name() == s_tcapErrCode) {
 	    op = (Operation*)findError(m_app->type(),*ns);
-	    if (!op)
+	    if (!op) {
+		Debug(&__plugin,DebugMild,"Cannot find error='%s' [%p]",ns->c_str(),this);
 		continue;
+	    }
 	    tcapParams.setParam(prefix + "." + s_tcapErrCode,String(op->code));
 	    tcapParams.setParam(prefix + "." + s_tcapErrCodeType,(op->local ? "local" : "global"));
 	}

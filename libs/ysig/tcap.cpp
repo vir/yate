@@ -1482,9 +1482,8 @@ void SS7TCAPTransaction::checkComponents()
 		case SS7TCAP::TC_InvokeNotLast:
 			if (comp->operationClass() != SS7TCAP::NoReport) {
 			    index++;
+			    comp->setType(SS7TCAP::TC_L_Cancel);
 			    comp->fill(index,params);
-			    compPrefix(paramRoot,index,false);
-			    params.setParam(paramRoot + ".componentType",lookup(SS7TCAP::TC_L_Cancel,SS7TCAP::s_compPrimitives,"L_Cancel"));
 			}
 			comp->setState(SS7TCAPComponent::Idle);
 		    break;
@@ -1616,6 +1615,8 @@ SS7TCAPComponent::SS7TCAPComponent(SS7TCAP::TCAPType type, SS7TCAPTransaction* t
 
     setState(OperationPending);
 
+    m_opType = params.getValue(paramRoot + s_tcapOpCodeType,"");
+    m_opCode = params.getValue(paramRoot + s_tcapOpCode,"");
     NamedString* opClass = params.getParam(paramRoot + "operationClass");
     if (!TelEngine::null(opClass))
 	m_opClass = (SS7TCAP::TCAPComponentOperationClass) opClass->toInteger(SS7TCAP::s_compOperClasses,SS7TCAP::SuccessOrFailureReport);
@@ -1652,6 +1653,7 @@ void SS7TCAPComponent::update(NamedList& params, unsigned int index)
 		params.setParam(paramRoot + "." + s_tcapProblemCode,String(SS7TCAPError::Result_UnexpectedReturnResult));
 		m_error.setError(SS7TCAPError::Result_UnexpectedReturnResult);
 		setState(OperationPending);
+		return;
 	    }
 	    break;
 	case SS7TCAP::TC_ResultNotLast:
@@ -1662,6 +1664,7 @@ void SS7TCAPComponent::update(NamedList& params, unsigned int index)
 		params.setParam(paramRoot + "." + s_tcapProblemCode,String(SS7TCAPError::Result_UnexpectedReturnResult));
 		m_error.setError(SS7TCAPError::Result_UnexpectedReturnResult);
 		setState(OperationPending);
+		return;
 	    }
 	    else if (m_opClass == SS7TCAP::SuccessOnlyReport)
 		setState(WaitForReject);
@@ -1675,11 +1678,16 @@ void SS7TCAPComponent::update(NamedList& params, unsigned int index)
 		params.setParam(paramRoot + "." + s_tcapProblemCode,String(SS7TCAPError::Error_UnexpectedReturnError));
 		m_error.setError(SS7TCAPError::Error_UnexpectedReturnError);
 		setState(OperationPending);
+		return;
 	    }
 	    break;
 	case SS7TCAP::TC_TimerReset:
 	default:
 	    break;
+    }
+    if (TelEngine::null(params.getParam(paramRoot + "." + s_tcapOpCode))) {
+	params.setParam(paramRoot + "." + s_tcapOpCode,m_opCode);
+	params.setParam(paramRoot + "." + s_tcapOpCodeType,m_opType);
     }
 }
 
@@ -1737,6 +1745,10 @@ void SS7TCAPComponent::fill(unsigned int index, NamedList& fillIn)
 	    fillIn.setParam(paramRoot + s_tcapErrCode,String(m_error.error()));
 	else if (m_type == SS7TCAP::TC_L_Reject || m_type == SS7TCAP::TC_U_Reject || m_type == SS7TCAP::TC_R_Reject)
 	    fillIn.setParam(paramRoot + s_tcapProblemCode,String(m_error.error()));
+    }
+    if (m_type == SS7TCAP::TC_L_Cancel) {
+	fillIn.setParam(paramRoot + s_tcapOpCode,m_opCode);
+	fillIn.setParam(paramRoot + s_tcapOpCodeType,m_opType);
     }
     if (m_type == SS7TCAP::TC_U_Reject || m_type == SS7TCAP::TC_R_Reject || m_type == SS7TCAP::TC_L_Reject)
 	setState(Idle);

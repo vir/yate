@@ -11667,6 +11667,8 @@ private:
     TCAPComponentState m_state;
     String m_id;
     String m_corrID;
+    String m_opCode;
+    String m_opType;
     SS7TCAP::TCAPComponentOperationClass m_opClass;
     SignallingTimer m_opTimer;
     SS7TCAPError m_error;

@@ -8462,7 +8462,7 @@ void TcapXApplication::reportError(const char* err)
 {
     if (!err)
 	return;
-    DDebug(&__plugin,DebugInfo,"TcapXApplication::reportError(error=%s) [%p]",err,this);
+    Debug(&__plugin,DebugInfo,"TcapXApplication::reportError(error=%s) - app=%s [%p]",err,m_name.c_str(),this);
 }
 
 void TcapXApplication::status(NamedList& status)

@@ -1,4 +1,4 @@
-yate (4.2.1~svn5357) UNRELEASED; urgency=low
+yate (4.2.1~svn5358) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -233,8 +233,12 @@ yate (4.2.1~svn5357) UNRELEASED; urgency=low
     application the operation class information when receiving an
     operation code.  + Added operation class information to MAP and
     CAMEL operation definitions.
+  * Updated to SVN revision 5358: + Added operation class information to
+    MAP and CAMEL operation definitions.  + A fax channel can now copy
+    parameters from handled call.execute in sent
+    call.route/call.execute.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 12 Dec 2012 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 13 Dec 2012 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

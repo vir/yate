@@ -2188,13 +2188,9 @@ void YJGConnection::processActionAccept(JGEvent* event)
 	if (mediaChanged && c == m_audioContent)
 	    resetEp("audio");
 	// Update transport(s)
-	// Force changed for Version0 (we have valid common media)
-	bool changed = (m_sessVersion == JGSession::Version0);
-	if (changed) {
-	    changed = updateCandidate(1,*c,*recv);
-	    changed = updateCandidate(2,*c,*recv) || changed;
-	}
-	if (changed && !m_audioContent)
+	bool changed = updateCandidate(1,*c,*recv);
+	changed = updateCandidate(2,*c,*recv) || changed;
+	if (!m_audioContent || (changed && c == m_audioContent))
 	    resetCurrentAudioContent(true,false,true,c);
     }
     if (!m_audioContent)

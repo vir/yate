@@ -7016,9 +7016,12 @@ bool XMLConnection::writeData(XmlFragment* elem)
     const char* buffer = xml.c_str();
     while (m_socket && (len > 0)) {
 	bool writeOk = false,error = false;
-	if (!m_socket->select(0,&writeOk,&error,idleUsec()))
+	if (!m_socket->select(0,&writeOk,&error,idleUsec()) || error) {
+	    if (!m_socket->canRetry())
+		return false;
 	    continue;
-	if (!writeOk || error)
+	}
+	if (!writeOk )
 	    continue;
 	int w = m_socket->writeData(buffer,len);
 	if (w < 0) {
@@ -8058,8 +8061,11 @@ void TcapXApplication::setIO(XMLConnection* io)
 {
     DDebug(&__plugin,DebugAll,"TcapXApplication::setIO(io=%p) - app=%s[%p]",io,m_name.c_str(),this);
     Lock l(this);
+    if (!m_io)
+	return;
     m_io = io;
-    if (!m_io && m_user)
+    l.drop();
+    if (!io && m_user)
 	m_user->removeApp(this);
 }
 

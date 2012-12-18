@@ -318,7 +318,8 @@ unsigned int MGCPEngine::getNextId()
 
 // Send a command message. Create a transaction for it.
 // Fail if the message is not a valid one or isn't a valid command
-MGCPTransaction* MGCPEngine::sendCommand(MGCPMessage* cmd, const SocketAddr& addr)
+MGCPTransaction* MGCPEngine::sendCommand(MGCPMessage* cmd, const SocketAddr& addr,
+    bool engineProcess)
 {
     if (!cmd)
 	return 0;
@@ -330,7 +331,7 @@ MGCPTransaction* MGCPEngine::sendCommand(MGCPMessage* cmd, const SocketAddr& add
     }
 
     Lock lock(this);
-    return new MGCPTransaction(this,cmd,true,addr);
+    return new MGCPTransaction(this,cmd,true,addr,engineProcess);
 }
 
 // Read data from the socket. Parse and process the received message
@@ -455,6 +456,20 @@ bool MGCPEngine::process(u_int64_t time)
     return true;
 }
 
+// Try to get an event from a given transaction.
+// If the event contains an unknown command and this engine is not allowed
+//  to process such commands, calls the returnEvent() method, otherwise,
+//  calls the processEvent() method
+bool MGCPEngine::processTransaction(MGCPTransaction* tr, u_int64_t time)
+{
+    MGCPEvent* event = tr ? tr->getEvent(time) : 0;
+    if (!event)
+	return false;
+    if (!processEvent(event))
+	returnEvent(event);
+    return true;
+}
+
 // Repeatedly calls receive() until the calling thread terminates
 void MGCPEngine::runReceive(SocketAddr& addr)
 {
@@ -499,6 +514,8 @@ MGCPEvent* MGCPEngine::getEvent(u_int64_t time)
 	    m_iterator.assign(m_transactions);
 	    break;
 	}
+	if (!tr->m_engineProcess)
+	    continue;
 	RefPointer<MGCPTransaction> sref = tr;
 	if (!sref)
 	    continue;

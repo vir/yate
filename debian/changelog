@@ -1,4 +1,4 @@
-yate (4.2.1~svn5360) UNRELEASED; urgency=low
+yate (4.2.1~svn5364) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -243,8 +243,17 @@ yate (4.2.1~svn5360) UNRELEASED; urgency=low
     to the socket to null.  + If when writing data on the application
     socket the select call fails, do not try again, but return
     immediately.
+  * Updated to SVN revision 5364: + If when writing data on the
+    application socket the select call fails, do not try again, but
+    return immediately.  + Send heartbeat messages to check if a sctp
+    stream is freezed.  + Added control command used to send RSIP.  +
+    Added MGCPTransaction flag used to instruct the engine to process it
+    in the private process worker. Handle it when getting events from
+    transactions.  + Process transaction in sender's thread when
+    synchronously sending a command to avoid blocking the engine private
+    process thread.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 15 Dec 2012 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 19 Dec 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

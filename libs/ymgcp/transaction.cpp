@@ -27,7 +27,7 @@ using namespace TelEngine;
 
 // Construct a transaction from its first message
 MGCPTransaction::MGCPTransaction(MGCPEngine* engine, MGCPMessage* msg, bool outgoing,
-	const SocketAddr& address)
+	const SocketAddr& address, bool engineProcess)
     : Mutex(true,"MGCPTransaction"),
     m_state(Invalid),
     m_outgoing(outgoing),
@@ -43,7 +43,8 @@ MGCPTransaction::MGCPTransaction(MGCPEngine* engine, MGCPMessage* msg, bool outg
     m_retransCount(0),
     m_timeout(false),
     m_ackRequest(true),
-    m_private(0)
+    m_private(0),
+    m_engineProcess(engineProcess)
 {
     if (m_engine) {
 	ackRequest(m_engine->ackRequest());
@@ -62,9 +63,9 @@ MGCPTransaction::MGCPTransaction(MGCPEngine* engine, MGCPMessage* msg, bool outg
     m_endpoint = m_cmd->endpointId();
     m_debug << "Transaction(" << (int)outgoing << "," << m_id << ")";
 
-    DDebug(m_engine,DebugAll,"%s. cmd=%s ep=%s addr=%s:%d [%p]",
+    DDebug(m_engine,DebugAll,"%s. cmd=%s ep=%s addr=%s:%d engineProcess=%u [%p]",
 	m_debug.c_str(),m_cmd->name().c_str(),m_cmd->endpointId().c_str(),
-	m_address.host().c_str(),m_address.port(),this);
+	m_address.host().c_str(),m_address.port(),m_engineProcess,this);
 
     // Outgoing: send the message
     if (outgoing) {

@@ -253,9 +253,10 @@ public:
      * @param msg The command creating this transaction
      * @param outgoing The direction of this transaction
      * @param address Remote enpoint's address
+     * @param engineProcess Use engine processor thread for this transaction
      */
     MGCPTransaction(MGCPEngine* engine, MGCPMessage* msg, bool outgoing,
-	const SocketAddr& address);
+	const SocketAddr& address, bool engineProcess = true);
 
     /**
      * Destructor
@@ -359,6 +360,13 @@ public:
      */
     inline void userData(void* data)
 	{ m_private = data; }
+
+    /**
+     * Set the engine process flag. Allow the engine to process this transaction
+     * (call getEvent() from engine process thread)
+     */
+    inline void setEngineProcess()
+	{ m_engineProcess = true; }
 
     /**
      * Get an event from this transaction. Check timeouts
@@ -477,6 +485,7 @@ private:
     bool m_ackRequest;                   // Remote is requested to send ACK
     void* m_private;                     // Data used by this transaction's user
     String m_debug;                      // String used to identify the transaction in debug messages
+    bool m_engineProcess;                // Process transaction (getEvent) from engine processor
 };
 
 /**
@@ -952,9 +961,12 @@ public:
      * The method will fail if the message is not a valid one or isn't a valid command
      * @param cmd The message containig the command
      * @param address The destination IP address
+     * @param engineProcess Use engine private processor thread for the new transaction.
+     *  If false the caller is responsable with transaction processing
      * @return MGCPTransaction pointer or 0 if failed to create a transaction
      */
-    MGCPTransaction* sendCommand(MGCPMessage* cmd, const SocketAddr& address);
+    MGCPTransaction* sendCommand(MGCPMessage* cmd, const SocketAddr& address,
+	bool engineProcess = true);
 
     /**
      * Read data from the socket. Parse and process the received message
@@ -974,6 +986,17 @@ public:
      * @return True if an event was processed
      */
     bool process(u_int64_t time = Time());
+
+    /**
+     * Try to get an event from a given transaction.
+     * If the event contains an unknown command and this engine is not allowed
+     *  to process such commands, calls the @ref returnEvent() method, otherwise,
+     *  calls the @ref processEvent() method
+     * @param tr Transaction to process
+     * @param time Current time in microseconds
+     * @return True if an event was processed
+     */
+    bool processTransaction(MGCPTransaction* tr, u_int64_t time = Time());
 
     /**
      * Repeatedly calls @ref receive() until the calling thread terminates

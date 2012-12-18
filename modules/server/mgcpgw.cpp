@@ -35,11 +35,18 @@ namespace { // anonymous
 class YMGCPEngine : public MGCPEngine
 {
 public:
+    enum EpCommands {
+	EpCmdUnk = 0,
+	EpCmdRsip,
+    };
     inline YMGCPEngine(const NamedList* params)
 	: MGCPEngine(true,0,params)
 	{ }
     virtual ~YMGCPEngine();
     virtual bool processEvent(MGCPTransaction* trans, MGCPMessage* msg);
+    bool handleControl(const String& comp, Message& msg, bool& retVal);
+    void completeControl(const String& partLine, const String& partWord, String& retVal);
+    static const TokenDict s_epCmds[];
 private:
     bool createConn(MGCPTransaction* trans, MGCPMessage* msg);
 };
@@ -110,6 +117,11 @@ public:
     inline SDPParser& parser()
 	{ return m_parser; }
     void activate(bool standby);
+protected:
+    virtual bool received(Message& msg, int id);
+    virtual bool commandComplete(Message& msg, const String& partLine,
+	const String& partWord);
+    bool handleControl(Message& msg);
 private:
     SDPParser m_parser;
 };
@@ -140,6 +152,13 @@ static bool s_standby = false;
 // start time as UNIX time
 String s_started;
 
+const TokenDict YMGCPEngine::s_epCmds[] = {
+    {"rsip", EpCmdRsip},
+    {0,0}
+};
+
+static const String s_skipControlParams[] = {"component", "operation", "targetid", "handlers", ""};
+
 // copy parameter (if present) with new name
 bool copyRename(NamedList& dest, const char* dname, const NamedList& src, const String& sname)
 {
@@ -150,6 +169,17 @@ bool copyRename(NamedList& dest, const char* dname, const NamedList& src, const 
 	return false;
     dest.setParam(dname,*value);
     return true;
+}
+
+// Find a string in a 0 terminated array
+static bool findString(const String& what, const String* list)
+{
+    while (!TelEngine::null(list)) {
+	if (*list == what)
+	    return true;
+	list++;
+    }
+    return false;
 }
 
 
@@ -224,6 +254,65 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg)
 	    msg->name().c_str(),msg->endpointId().c_str());
     }
     return false;
+}
+
+bool YMGCPEngine::handleControl(const String& comp, Message& msg, bool& retVal)
+{
+    retVal = false;
+    Lock lock(this);
+    MGCPEndpoint* ep = 0;
+    for (ObjList* o = m_endpoints.skipNull(); o; o = o->skipNext()) {
+	ep = static_cast<MGCPEndpoint*>(o->get());
+	if (ep->toString() == comp)
+	    break;
+	ep = 0;
+    }
+    if (!ep)
+	return false;
+    MGCPEpInfo* peer = ep->peer();
+    if (!peer)
+	return true;
+    String epId = ep->id();
+    SocketAddr addr = peer->address();
+    lock.drop();
+    bool copyParams = true;
+    String oper = msg[YSTRING("operation")];
+    MGCPMessage* mm = 0;
+    int cmd = lookup(oper.toLower(),s_epCmds);
+    if (cmd == EpCmdRsip) {
+	mm = new MGCPMessage(this,"RSIP",epId);
+    }
+    else {
+	Debug(this,DebugNote,"Unknown ep control '%s'",msg.getValue("operation"));
+	return true;
+    }
+    if (copyParams) {
+	NamedIterator iter(msg);
+	for (const NamedString* ns = 0; 0 != (ns = iter.get());)
+	    if (!findString(ns->name(),s_skipControlParams))
+		mm->params.addParam(ns->name(),*ns);
+    }
+    retVal = (0 != sendCommand(mm,addr));
+    return true;
+}
+
+void YMGCPEngine::completeControl(const String& partLine, const String& partWord, String& retVal)
+{
+    if (!partLine) {
+	// Complete endpoints
+	Lock lock(this);
+	for (ObjList* o = m_endpoints.skipNull(); o; o = o->skipNext()) {
+	    MGCPEndpoint* ep = static_cast<MGCPEndpoint*>(o->get());
+	    Module::itemComplete(retVal,ep->toString(),partWord);
+	}
+	return;
+    }
+    // Complete EP commands
+    if (findEp(partLine)) {
+	for (const TokenDict* d = s_epCmds; d->value; d++)
+	    Module::itemComplete(retVal,d->token,partWord);
+	return;
+    }
 }
 
 // create a new connection
@@ -716,6 +805,39 @@ void MGCPPlugin::initialize()
     m_parser.initialize(cfg.getSection("codecs"),cfg.getSection("hacks"),
 	cfg.getSection("general"));
     s_rtp_preserve = cfg.getBoolValue("hacks","ignore_sdp_addr",false);
+}
+
+bool MGCPPlugin::received(Message& msg, int id)
+{
+    switch (id) {
+	case Control:
+	    if (handleControl(msg))
+		return true;
+	    break;
+    }
+    return Driver::received(msg,id);
+}
+
+bool MGCPPlugin::commandComplete(Message& msg, const String& partLine,
+    const String& partWord)
+{
+    if (partLine == YSTRING("control"))
+	s_engine->completeControl(String::empty(),partWord,msg.retValue());
+    else {
+	String tmp = partLine;
+	if (tmp.startSkip("control"))
+	    s_engine->completeControl(tmp,partWord,msg.retValue());
+    }
+    return Driver::commandComplete(msg,partLine,partWord);
+}
+
+bool MGCPPlugin::handleControl(Message& msg)
+{
+    const String& comp = msg[YSTRING("component")];
+    bool retVal = false;
+    if (s_engine->handleControl(comp,msg,retVal))
+	return retVal;
+    return false;
 }
 
 }; // anonymous namespace

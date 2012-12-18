@@ -4678,6 +4678,12 @@ public:
 	TrafficBroadcast = 3,
     };
 
+    enum HeartbeatState {
+	HeartbeatDisabled     = 0,
+	HeartbeatEnabled      = 1,
+	HeartbeatWaitResponse = 2,
+    };
+
     enum Errors {
 	InvalidVersion            = 0x01,
 	InvalidIID                = 0x02,
@@ -4789,6 +4795,12 @@ public:
      */
     static void addTag(DataBlock& data, uint16_t tag, const DataBlock& value);
 
+    /**
+     * Method called when the transport status has been changed
+     * @param status Status of the transport causing the notification
+     */
+    void notifyLayer(SignallingInterface::Notification status);
+
 protected:
     /**
      * Constructs an uninitialized User Adaptation component
@@ -4837,6 +4849,47 @@ protected:
      * @return True if the message was handled
      */
     virtual bool processAsptmMSG(unsigned char msgType, const DataBlock& msg, int streamId) = 0;
+
+    /**
+     * Method called periodically by the engine to keep everything alive
+     * @param when Time to use as computing base for events and timeouts
+     */
+    virtual void timerTick(const Time& when);
+
+    /**
+     * Process the heartbeat messages
+     * @param msgType The message type
+     * @param msg Message data
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    bool processHeartbeat(unsigned char msgType, const DataBlock& msg,
+	int streamId);
+
+    /**
+     * Reset heartbeat for all streams
+     */
+    inline void resetHeartbeat()
+    {
+	Lock myLock(this);
+	for (int i = 0;i < 32;i++)
+	    m_streamsHB[i] = HeartbeatDisabled;
+    }
+
+    /**
+     * Enable heartbeat for the specifyed steam id
+     * @param streamId The stream id
+     */
+    inline void enableHeartbeat(unsigned char streamId) {
+	if (streamId > 31)
+	    return;
+	m_streamsHB[streamId] = HeartbeatEnabled;
+    }
+private:
+    unsigned int m_maxRetransmit;
+    SignallingTimer m_sendHeartbeat;
+    SignallingTimer m_waitHeartbeatAck;
+    unsigned char m_streamsHB[32];
 };
 
 /**
@@ -5026,7 +5079,7 @@ protected:
      * Default constructor
      */
     inline SIGAdaptUser()
-	: m_autostart(false), m_adaptation(0)
+	: m_autostart(false), m_streamId(1), m_adaptation(0)
 	{ }
 
     /**
@@ -5077,9 +5130,21 @@ protected:
 	{ return m_adaptation && m_adaptation->aspActive(); }
 
     /**
+     * Obtain the stream id to use for data messages
+     * @return The stream id
+     */
+    inline unsigned char getStreamId()
+	{ return m_streamId; }
+
+    /**
      * Automatically start on init flag
      */
     bool m_autostart;
+
+    /**
+     * The SCTP streamId
+     */
+    unsigned char m_streamId;
 
 private:
     SIGAdaptClient* m_adaptation;

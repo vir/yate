@@ -1,4 +1,4 @@
-yate (4.2.1~svn5364) UNRELEASED; urgency=low
+yate (4.2.1~svn5365) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -252,8 +252,10 @@ yate (4.2.1~svn5364) UNRELEASED; urgency=low
     transactions.  + Process transaction in sender's thread when
     synchronously sending a command to avoid blocking the engine private
     process thread.
+  * Updated to SVN revision 5365: + Properly encode bitstrings with no
+    values set.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 19 Dec 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 21 Dec 2012 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

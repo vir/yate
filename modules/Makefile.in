@@ -389,9 +389,9 @@ server/sipfeatures.yate: ../libs/yxml/libyatexml.a
 server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml
 server/sipfeatures.yate: LOCALLIBS = -L../libs/yxml -lyatexml
 
-javascript.yate: ../libyatescript.so ../libs/ypbx/libyatepbx.a
-javascript.yate: LOCALFLAGS = -I@top_srcdir@/libs/yscript -I@top_srcdir@/libs/ypbx
-javascript.yate: LOCALLIBS = -lyatescript -L../libs/ypbx -lyatepbx
+javascript.yate: ../libyatescript.so ../libs/ypbx/libyatepbx.a ../libs/yxml/libyatexml.a
+javascript.yate: LOCALFLAGS = -I@top_srcdir@/libs/yscript -I@top_srcdir@/libs/ypbx -I@top_srcdir@/libs/yxml
+javascript.yate: LOCALLIBS = -lyatescript -L../libs/ypbx -lyatepbx -L../libs/yxml -lyatexml
 
 zlibcompress.yate: EXTERNFLAGS = $(ZLIB_INC)
 zlibcompress.yate: EXTERNLIBS = $(ZLIB_LIB)

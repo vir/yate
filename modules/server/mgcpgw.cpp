@@ -821,12 +821,16 @@ bool MGCPPlugin::received(Message& msg, int id)
 bool MGCPPlugin::commandComplete(Message& msg, const String& partLine,
     const String& partWord)
 {
-    if (partLine == YSTRING("control"))
-	s_engine->completeControl(String::empty(),partWord,msg.retValue());
+    if (partLine == YSTRING("control")) {
+	if (s_engine)
+	    s_engine->completeControl(String::empty(),partWord,msg.retValue());
+    }
     else {
 	String tmp = partLine;
-	if (tmp.startSkip("control"))
-	    s_engine->completeControl(tmp,partWord,msg.retValue());
+	if (tmp.startSkip("control")) {
+	    if (s_engine)
+		s_engine->completeControl(tmp,partWord,msg.retValue());
+	}
     }
     return Driver::commandComplete(msg,partLine,partWord);
 }
@@ -835,7 +839,7 @@ bool MGCPPlugin::handleControl(Message& msg)
 {
     const String& comp = msg[YSTRING("component")];
     bool retVal = false;
-    if (s_engine->handleControl(comp,msg,retVal))
+    if (s_engine && s_engine->handleControl(comp,msg,retVal))
 	return retVal;
     return false;
 }

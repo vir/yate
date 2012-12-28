@@ -2286,7 +2286,7 @@ static const StringList s_locationManagementCapabOps("updateLocation,cancelLocat
 static const StringList s_authenticationCapabOps("sendAuthenticationInfo,authenticationFailureReport");
 static const StringList s_subscriberDataCapabOps("insertSubscriberData,deleteSubscriberData,restoreData");
 static const StringList s_routingCapabOps("sendRoutingInfoForGprs,sendRoutingInfoForLCS,statusReport");
-static const StringList s_vlrRoutingCapabOps("provideRoamingNumber");
+static const StringList s_vlrRoutingCapabOps("provideRoamingNumber,provideSubscriberInfo");
 static const StringList s_traceSubscriberCapabOps("activateTraceMode,deactivateTraceMode");
 static const StringList s_servicesCapabOps("registerSS,eraseSS,activateSS,deactivateSS,interrogateSS,registerPassword,getPassword," 
 				    "processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify");
@@ -5093,6 +5093,20 @@ static const Parameter s_purgeMSRes[] = {
     {"",                  s_noTag,             false,  TcapXApplication::None,         0},
 };
 
+static const Parameter s_provideSubscriberInfoArgs[] = {
+    {"imsi",              s_ctxtPrim_0_Tag,    false,  TcapXApplication::TBCD,         0},
+    {"lmsi",              s_ctxtPrim_1_Tag,    true,   TcapXApplication::HexString,    0},
+    {"requestedInfo",     s_ctxtCstr_2_Tag,    false,  TcapXApplication::Sequence,     s_requestedInfo},
+    {"extensionContainer",s_ctxtCstr_3_Tag,    true,   TcapXApplication::HexString,    0},
+    {"",                  s_noTag,             false,  TcapXApplication::None,         0},
+};
+
+static const Parameter s_provideSubscriberInfoRes[] = {
+    {"subscriberInfo",        s_sequenceTag,   false,   TcapXApplication::Sequence,      s_subscriberInfo},
+    {"extensionContainer",    s_sequenceTag,   true,    TcapXApplication::HexString,     0},
+    {"",                      s_noTag,         false,   TcapXApplication::None,          0},
+};
+
 static const Parameter s_anyTimeInterrogationArgs[] = {
     {"subscriberIdentity",    s_ctxtCstr_0_Tag,    false,   TcapXApplication::Choice,        s_subscriberIdentity},
     {"requestedInfo",         s_ctxtCstr_1_Tag,    false,   TcapXApplication::Sequence,      s_requestedInfo},
@@ -5279,6 +5293,10 @@ static const Operation s_mapOps[] = {
     {"purgeMS",                       true,  67,  SS7TCAP::SuccessOrFailureReport,
 	s_ctxtCstr_3_Tag, s_purgeMSArgs,
 	s_sequenceTag,    s_purgeMSRes
+    },
+    {"provideSubscriberInfo",         true,  70,  SS7TCAP::SuccessOrFailureReport,
+	s_sequenceTag, s_provideSubscriberInfoArgs,
+	s_sequenceTag, s_provideSubscriberInfoRes
     },
     {"anyTimeInterrogation",          true,  71,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_anyTimeInterrogationArgs,
@@ -6436,6 +6454,7 @@ static const StringList s_mwdMngtCtxtOps("readyForSM");
 static const StringList s_shortMsgMTCtxtOps("mt-forwardSM");
 static const StringList s_imsiRetrievalCtxtOps("sendIMSI");
 static const StringList s_msPurgingCtxtOps("purgeMS");
+static const StringList s_subscriberInfoEnquiryCtxOps("provideSubscriberInfo");
 static const StringList s_anyTimeInfoEnquiryCtxOps("anyTimeInterrogation");
 static const StringList s_gprsLocationUpdateCtxtOps("updateGprsLocation,insertSubscriberData,activateTraceMode");
 static const StringList s_gprsLocationInfoRetrieveCtxtOps("sendRoutingInfoForGprs");
@@ -6525,6 +6544,9 @@ static const AppCtxt s_mapAppCtxt[]= {
     // MS Purging Context
     {"msPurgingContext-v3", "0.4.0.0.1.0.27.3", s_msPurgingCtxtOps, &s_defMapOpTable},
     {"msPurgingContext-v2", "0.4.0.0.1.0.27.2", s_msPurgingCtxtOps, &s_defMapOpTable},
+
+    // Subscriber Information Enquiry Context 
+    {"subscriberInfoEnquiryContext-v3", "0.4.0.0.1.0.28.3", s_subscriberInfoEnquiryCtxOps, &s_defMapOpTable},
 
     // Any Time Info Enquiry Context 
     {"anyTimeInfoEnquiryContext-v3", "0.4.0.0.1.0.29.3", s_anyTimeInfoEnquiryCtxOps, &s_defMapOpTable},

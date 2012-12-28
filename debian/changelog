@@ -1,4 +1,4 @@
-yate (4.3.1~svn5371) UNRELEASED; urgency=low
+yate (4.3.1~svn5372) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -258,8 +258,10 @@ yate (4.3.1~svn5371) UNRELEASED; urgency=low
     Fixed bug: check engine pointer before using it.  + Bumped version
     to 4.3.0 release.  + Fixed Javascript build with XML under Windows.
     + Bumped version to 4.3.1 development.
+  * Updated to SVN revision 5372: + Added support for the
+    provideSubscriberInfo MAP operation.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 22 Dec 2012 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 29 Dec 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

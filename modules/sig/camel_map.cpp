@@ -4286,7 +4286,7 @@ static const Parameter s_userCSGInformationSeq[] = {
 
 static const Parameter s_locationInformation[] = {
 // TS 100 974 v7.15.0 page 309
-    {"ageOfLocationInformation", s_intTag,         false,  TcapXApplication::Integer,       0},
+    {"ageOfLocationInformation", s_intTag,         true,   TcapXApplication::Integer,       0},
     {"geographicalInformation",  s_ctxtPrim_0_Tag, true,   TcapXApplication::HexString,     0},
     {"vlr-Number",               s_ctxtPrim_1_Tag, true,   TcapXApplication::AddressString, 0},
     {"locationNumber",           s_ctxtPrim_2_Tag, true,   TcapXApplication::HexString,     0},

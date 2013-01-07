@@ -32,6 +32,8 @@
 
 #define CONN_RETRY_MIN   250000
 #define CONN_RETRY_MAX 60000000
+#define DECREASE_INTERVAL 1000000
+#define DECREASE_AMOUNT    250000
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -140,7 +142,7 @@ public:
     inline TReader()
 	: Mutex(true,"TReader"),
 	  m_sending(true,"TReader::sending"), m_canSend(true), m_reconnect(false),
-	  m_tryAgain(0), m_interval(CONN_RETRY_MIN), m_downTime(0)
+	  m_tryAgain(0), m_interval(CONN_RETRY_MIN), m_downTime(0), m_decrease(0)
 	{ }
     virtual ~TReader();
     virtual void listen(int maxConn) = 0;
@@ -157,6 +159,7 @@ protected:
     u_int64_t m_tryAgain;
     u_int32_t m_interval;
     u_int64_t m_downTime;
+    u_int64_t m_decrease;
 };
 
 class Transport : public SIGTransport
@@ -1247,7 +1250,7 @@ bool StreamReader::sendBuffer(int streamId)
 bool StreamReader::connectSocket()
 {
     Time t;
-    if (t < m_tryAgain && !m_reconnect) {
+    if (t.usec() < m_tryAgain && !m_reconnect) {
 	Thread::yield(true);
 	return false;
     }
@@ -1256,16 +1259,14 @@ bool StreamReader::connectSocket()
 	m_interval = CONN_RETRY_MIN;
     }
     m_tryAgain = t + m_interval;
-    if (m_transport->connectSocket()) {
-	m_interval = CONN_RETRY_MIN;
-	m_tryAgain = 0;
-	return true;
-    }
-    m_tryAgain = Time::now() + m_interval;
     // exponential backoff
     m_interval *= 2;
     if (m_interval > CONN_RETRY_MAX)
 	m_interval = CONN_RETRY_MAX;
+    if (m_transport->connectSocket()) {
+	m_decrease = t.usec() + DECREASE_INTERVAL;
+	return true;
+    }
     return false;
 }
 
@@ -1279,6 +1280,16 @@ bool StreamReader::readData()
 	myLock.drop();
 	stopThread();
 	return false;
+    }
+    if (m_interval > CONN_RETRY_MIN) {
+	Time t;
+	if (t.usec() > m_decrease) {
+	    if (((int64_t)m_interval - DECREASE_AMOUNT) > CONN_RETRY_MIN)
+		m_interval -= DECREASE_AMOUNT;
+	    else
+		m_interval = CONN_RETRY_MIN;
+	    m_decrease = t.usec() + DECREASE_INTERVAL;
+	}
     }
     sendBuffer();
     if (!m_socket)

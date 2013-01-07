@@ -325,11 +325,13 @@ SIGAdaptation::SIGAdaptation(const char* name, const NamedList* params,
     DDebug(this,DebugAll,"Creating SIGTRAN UA [%p]",this);
     for (int i = 0; i < 32;i++)
 	m_streamsHB[i] = HeartbeatDisabled;
-    m_waitHeartbeatAck.interval(*params,"wait_hb_ack",500,2000,false);
-    m_sendHeartbeat.interval(*params,"send_hb",15000,30000,true);
-    // The maximum interval in miliseconds allowed for SCTP to retransmit
-    // a lost package
-    m_maxRetransmit = params->getIntValue("max_interval_retrans",1000);
+    if (params) {
+	m_waitHeartbeatAck.interval(*params,"wait_hb_ack",500,2000,false);
+	m_sendHeartbeat.interval(*params,"send_hb",15000,30000,true);
+	// The maximum interval in miliseconds allowed for SCTP to retransmit
+	// a lost package
+	m_maxRetransmit = params->getIntValue("max_interval_retrans",1000);
+    }
 }
 
 SIGAdaptation::~SIGAdaptation()

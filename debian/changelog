@@ -1,4 +1,4 @@
-yate (4.3.1~svn5372) UNRELEASED; urgency=low
+yate (4.3.1~svn5375) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -260,8 +260,13 @@ yate (4.3.1~svn5372) UNRELEASED; urgency=low
     + Bumped version to 4.3.1 development.
   * Updated to SVN revision 5372: + Added support for the
     provideSubscriberInfo MAP operation.
+  * Updated to SVN revision 5375: + MAP parameter
+    ageOfLocationInformation is optional.  + Check if params list is
+    valid before initializing heartbeat params.  + Extended socket
+    connect exponential backoff for the case when the gateway accepts
+    the connection and it close it immediately.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 29 Dec 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 08 Jan 2013 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

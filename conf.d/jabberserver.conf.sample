@@ -33,6 +33,12 @@
 ; Defaults to no
 ;c2s_allowunsecureplainauth=
 
+; c2s_plainauthonly: boolean: Offer only plain password authentication when available
+; This parameter is used only when plain password authentication is available
+;  (c2s_allowunsecureplainauth is enabled or the stream is secured)
+; Defaults to no
+;c2s_plainauthonly=no
+
 ; c2s_oldstyleauth: boolean: Enable old style (XEP 0078) user authentication
 ; Defaults to yes
 ;c2s_oldstyleauth=

@@ -383,6 +383,7 @@ private:
 
     bool m_c2sTlsRequired;               // TLS is required on c2s streams
     bool m_allowUnsecurePlainAuth;       // Allow user plain password auth on unsecured streams
+    bool m_plainAuthOnly;                // Offer only plain password auth when available
     ObjList m_domains;                   // Domains serviced by this engine
     ObjList m_dynamicDomains;            // Dynamic domains (components or items)
     ObjList m_restrictedResources;       // Resource names the users can't use
@@ -1034,7 +1035,8 @@ void YJBEntityCapsList::save()
  */
 YJBEngine::YJBEngine()
     : m_c2sTlsRequired(false),
-    m_allowUnsecurePlainAuth(false)
+    m_allowUnsecurePlainAuth(false),
+    m_plainAuthOnly(false)
 {
     m_c2sReceive = new YStreamSetReceive(this,10,"c2s/recv");
     m_c2sProcess = new YStreamSetProcess(this,10,"c2s/process");
@@ -1059,6 +1061,7 @@ void YJBEngine::initialize(const NamedList* params, bool first)
 	params = &dummy;
 
     m_allowUnsecurePlainAuth = params->getBoolValue("c2s_allowunsecureplainauth");
+    m_plainAuthOnly = params->getBoolValue("c2s_plainauthonly");
 
     // Serviced domains
     // Check if an existing domain is no longer accepted
@@ -2050,8 +2053,12 @@ void YJBEngine::processStartIn(JBEvent* ev)
 	    // Add SASL auth if stream is not authenticated
 	    if (!authenticated) {
 		int mech = XMPPUtils::AuthMD5;
-		if (ev->stream()->flag(JBStream::StreamTls) || m_allowUnsecurePlainAuth)
-		    mech |= XMPPUtils::AuthPlain;
+		if (ev->stream()->flag(JBStream::StreamTls) || m_allowUnsecurePlainAuth) {
+		    if (m_plainAuthOnly)
+			mech = XMPPUtils::AuthPlain;
+		    else
+			mech |= XMPPUtils::AuthPlain;
+		}
 		auth = new XMPPFeatureSasl(mech,true);
 	    }
 	    // TLS and/or SASL are missing or not required: add bind

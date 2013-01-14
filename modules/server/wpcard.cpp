@@ -238,7 +238,7 @@ class WpInterface : public SignallingInterface
     friend class WpSigThread;
 public:
     // Create an instance of WpInterface or WpSpan
-    static SignallingComponent* create(const String& type, const NamedList& name);
+    static SignallingComponent* create(const String& type, NamedList& name);
     WpInterface(const NamedList& params);
     virtual ~WpInterface();
     // Initialize interface. Return false on failure
@@ -772,7 +772,7 @@ bool WpSocket::updateLinkStatus()
  * WpInterface
  */
 // Create WpInterface or WpSpan
-SignallingComponent* WpInterface::create(const String& type, const NamedList& name)
+SignallingComponent* WpInterface::create(const String& type, NamedList& name)
 {
     const String* module = name.getParam("module");
     if (module && *module != "wpcard") {
@@ -790,25 +790,19 @@ SignallingComponent* WpInterface::create(const String& type, const NamedList& na
     Configuration cfg(Engine::configFile("wpcard"));
     const char* sectName = name.getValue((interface ? "sig" : "voice"),name.getValue("basename",name));
     NamedList* config = cfg.getSection(sectName);
-    if (module) {
-	DDebug(&driver,DebugAll,"Replace config params in section %s",c_safe(sectName));
-	if (!config) {
-	    cfg.createSection(sectName);
-	    config = cfg.getSection(sectName);
-	}
-	config->copyParams(name);
-	if(!cfg.save())
-	    DDebug(&driver,DebugAll,"Failed to save configuration in file %s ",cfg.c_str());
-    }
-    else if (!config){
-	DDebug(&driver,DebugAll,"No section '%s' in configuration",c_safe(sectName));
+
+    if (!name.getBoolValue(YSTRING("local-config"),false))
+	config = &name;
+    else if (!config) {
+	DDebug(&driver,DebugConf,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
-    }
+    } else
+	name.copyParams(*config);
 
 #ifdef DEBUG
     if (driver.debugAt(DebugAll)) {
 	String tmp;
-	name.dump(tmp,"\r\n  ",'\'',true);
+	config->dump(tmp,"\r\n  ",'\'',true);
 	Debug(&driver,DebugAll,"WpInterface::create %s%s",
 	    (interface ? "interface" : "span"),tmp.c_str());
     }

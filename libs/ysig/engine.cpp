@@ -88,7 +88,7 @@ SignallingFactory::~SignallingFactory()
     s_mutex.unlock();
 }
 
-SignallingComponent* SignallingFactory::build(const String& type, const NamedList* name)
+SignallingComponent* SignallingFactory::build(const String& type, NamedList* name)
 {
     if (type.null())
 	return 0;
@@ -129,7 +129,7 @@ SignallingComponent* SignallingFactory::build(const String& type, const NamedLis
     return 0;
 }
 
-void* SignallingFactory::buildInternal(const String& type, const NamedList* name)
+void* SignallingFactory::buildInternal(const String& type, NamedList* name)
 {
     SignallingComponent* c = build(type,name);
     if (!c)
@@ -181,6 +181,28 @@ const String& SignallingComponent::toString() const
 
 bool SignallingComponent::initialize(const NamedList* config)
 {
+    return true;
+}
+
+bool SignallingComponent::resolveConfig(const String& cmpName, NamedList& params, const NamedList* config)
+{
+    if (!config)
+	return false;
+    String name = config->getValue(cmpName,params);
+    if (!(name && !name.toBoolean(false)))
+	return false;
+    static_cast<String&>(params) = name;
+    NamedString* param = config->getParam(params);
+    NamedPointer* ptr = YOBJECT(NamedPointer,param);
+    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+    if (ifConfig)
+	params.copyParams(*ifConfig);
+    else {
+	if (config->hasSubParams(params + "."))
+	    params.copySubParams(*config,params + ".");
+	else
+	    params.addParam("local-config","true");
+    }
     return true;
 }
 
@@ -341,7 +363,7 @@ bool SignallingEngine::find(const SignallingComponent* component)
     return m_components.find(component) != 0;
 }
 
-SignallingComponent* SignallingEngine::build(const String& type, const NamedList& params, bool init, bool ref)
+SignallingComponent* SignallingEngine::build(const String& type, NamedList& params, bool init, bool ref)
 {
     XDebug(this,DebugAll,"Engine building '%s' of type %s [%p]",
 	params.c_str(),type.c_str(),this);

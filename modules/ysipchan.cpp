@@ -7270,6 +7270,8 @@ void YateSIPLine::login()
     if (m_registrar.null() || m_username.null()) {
 	logout();
 	setValid(true);
+	if (m_alive)
+	    keepalive();
 	return;
     }
     DDebug(&plugin,DebugInfo,"YateSIPLine '%s' logging in [%p]",c_str(),this);
@@ -7380,10 +7382,10 @@ bool YateSIPLine::process(SIPEvent* ev)
     clearTransaction();
     DDebug(&plugin,DebugAll,"YateSIPLine '%s' got answer %d [%p]",
 	c_str(),msg->code,this);
+    int exp = m_interval;
     switch (msg->code) {
 	case 200:
 	    {
-		int exp = m_interval;
 		const MimeHeaderLine* hl = msg->getHeader("Contact");
 		if (hl) {
 		    const NamedString* e = hl->getParam("expires");
@@ -7397,7 +7399,9 @@ bool YateSIPLine::process(SIPEvent* ev)
 		    if (hl)
 			exp = hl->toInteger(exp);
 		}
-		if ((exp != m_interval) && (exp >= 60)) {
+		if (exp <= 60)
+		    exp = 60;
+		else if ((exp > m_interval + 10) || (exp < m_interval - 10)) {
 		    Debug(&plugin,DebugNote,"SIP line '%s' changed expire interval from %d to %d",
 			c_str(),m_interval,exp);
 		    m_interval = exp;
@@ -7406,7 +7410,7 @@ bool YateSIPLine::process(SIPEvent* ev)
 		resetTransportIdle(msg,m_alive ? m_alive : m_interval);
 	    }
 	    // re-register at 3/4 of the expire interval
-	    m_resend = m_interval*(int64_t)750000 + Time::now();
+	    m_resend = exp * (int64_t)750000 + Time::now();
 	    m_keepalive = m_alive ? m_alive*(int64_t)1000000 + Time::now() : 0;
 	    detectLocal(msg);
 	    if (msg->getParty())
@@ -7577,7 +7581,7 @@ bool YateSIPLine::update(const Message& msg)
 	transChg = true;
 	chg = true;
     }
-    m_alive = msg.getIntValue(YSTRING("keepalive"),(m_localDetect ? 25 : 0));
+    m_alive = msg.getIntValue(YSTRING("keepalive"),((m_localDetect && m_registrar) ? 25 : 0));
     // (Re)Set party
     if (transChg || !m_party) {
 	// Logout if not already done
@@ -8099,7 +8103,11 @@ void SIPDriver::initialize()
     NamedList* def = general;
     if (!def)
 	def = &dummy;
-    setupListener("general",*def,true);
+    NamedList* generalListener = s_cfg.getSection("listener general");
+    if (generalListener)
+	setupListener("general",*generalListener,true,*def);
+    else
+	setupListener("general",*def,true);
     // Setup listeners
     unsigned int n = s_cfg.sections();
     for (unsigned int i = 0; i < n; i++) {
@@ -8140,7 +8148,7 @@ void SIPDriver::setupListener(const String& name, const NamedList& params,
 	    Debug(this,DebugConf,"Invalid listener type '%s' in section '%s': defaults to %s",
 		type.c_str(),params.c_str(),ProtocolHolder::lookupProtoName(proto,false));
     }
-    bool enabled = isGeneral || params.getBoolValue(YSTRING("enable"),true);
+    bool enabled = (params == YSTRING("general")) || params.getBoolValue(YSTRING("enable"),true);
     switch (proto) {
 	case ProtocolHolder::Udp:
 	    m_endpoint->cancelListener(name,"Type changed");

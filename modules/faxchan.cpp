@@ -825,6 +825,7 @@ bool FaxDriver::msgExecute(Message& msg, String& dest)
 	Message m("call.route");
 	fc->complete(m);
 	fc->setParams(m,fc->guessType(msg),FaxChan::guessT38(msg));
+	m.copyParams(msg,msg[YSTRING("copyparams")]);
 	m.userData(fc);
 	String callto = msg.getValue("caller");
 	if (callto)

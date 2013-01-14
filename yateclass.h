@@ -3800,6 +3800,13 @@ public:
     NamedList& copySubParams(const NamedList& original, const String& prefix, bool skipPrefix = true);
 
     /**
+     * Check if we have a parameter that starts with prefix
+     * @param prefix Prefix to match in parameter name, must not be NULL
+     * @return True if a parameter starts with prefix
+     */
+    bool hasSubParams(const char* prefix) const;
+
+    /**
      * Get the index of a named string in the parameter list.
      * @param param Pointer to the parameter to locate
      * @return Index of the named string or -1 if not found

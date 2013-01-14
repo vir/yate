@@ -48,7 +48,6 @@ public:
     inline JsDate(Mutex* mtx)
 	: JsObject("Date",mtx,true)
 	{
-	    params().addParam(new ExpFunction("now"));
 	    params().addParam(new ExpFunction("getDate"));
 	    params().addParam(new ExpFunction("getDay"));
 	    params().addParam(new ExpFunction("getFullYear"));
@@ -67,6 +66,10 @@ public:
 	    params().addParam(new ExpFunction("getUTCMinutes"));
 	    params().addParam(new ExpFunction("getUTCMonth"));
 	    params().addParam(new ExpFunction("getUTCSeconds"));
+	}
+    virtual void initConstructor(JsFunction* construct)
+	{
+	    construct->params().addParam(new ExpFunction("now"));
 	}
 protected:
     inline JsDate(Mutex* mtx, const char* name)
@@ -285,8 +288,12 @@ bool JsObject::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* 
     if (ef)
 	return runNative(stack,oper,context);
     JsFunction* jf = YOBJECT(JsFunction,param);
-    if (jf)
-	return jf->runDefined(stack,oper,context,this);
+    if (jf) {
+	JsObject* objThis = 0;
+	if (toString() != YSTRING("()"))
+	    objThis = this;
+	return jf->runDefined(stack,oper,context,objThis);
+    }
     return false;
 }
 
@@ -300,16 +307,11 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
 	if (ef)
 	    ExpEvaluator::pushOne(stack,ef->ExpOperation::clone());
 	else {
-	    JsFunction* jf = YOBJECT(JsFunction,param);
-	    if (jf)
-		ExpEvaluator::pushOne(stack,new ExpFunction(oper.name()));
-	    else {
-		ExpWrapper* w = YOBJECT(ExpWrapper,param);
-		if (w)
-		    ExpEvaluator::pushOne(stack,w->clone(oper.name()));
-		else
-		    ExpEvaluator::pushOne(stack,new ExpOperation(*param,oper.name(),true));
-	    }
+	    ExpWrapper* w = YOBJECT(ExpWrapper,param);
+	    if (w)
+		ExpEvaluator::pushOne(stack,w->clone(oper.name()));
+	    else
+		ExpEvaluator::pushOne(stack,new ExpOperation(*param,oper.name(),true));
 	}
     }
     else

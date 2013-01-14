@@ -1395,6 +1395,23 @@ XmlSaxParser::Error XmlFragment::addChild(XmlChild* child)
     return XmlSaxParser::NoError;
 }
 
+// Remove the first XmlElement from list and returns it if completed
+XmlElement* XmlFragment::popElement()
+{
+    for (ObjList* o = m_list.skipNull(); o; o = o->skipNext()) {
+	XmlChild* c = static_cast<XmlChild*>(o->get());
+	XmlElement* x = c->xmlElement();
+	if (x) {
+	     if (x->completed()) {
+		o->remove(false);
+		return x;
+	     }
+	     return 0;
+	}
+    }
+    return 0;
+}
+
 // Remove a child
 XmlChild* XmlFragment::removeChild(XmlChild* child, bool delObj)
 {
@@ -1714,6 +1731,18 @@ XmlElement::XmlElement(const char* name, bool complete)
     m_empty(true), m_complete(complete)
 {
     setPrefixed();
+    XDebug(DebugAll,"XmlElement::XmlElement(%s) [%p]",
+	m_element.c_str(),this);
+}
+
+// Create a new element with a text child
+XmlElement::XmlElement(const char* name, const char* value, bool complete)
+    : m_element(name), m_prefixed(0),
+    m_parent(0), m_inheritedNs(0),
+    m_empty(true), m_complete(complete)
+{
+    setPrefixed();
+    addText(value);
     XDebug(DebugAll,"XmlElement::XmlElement(%s) [%p]",
 	m_element.c_str(),this);
 }

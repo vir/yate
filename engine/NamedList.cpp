@@ -216,6 +216,19 @@ NamedList& NamedList::copySubParams(const NamedList& original, const String& pre
     return *this;
 }
 
+bool NamedList::hasSubParams(const char* prefix) const
+{
+    XDebug(DebugInfo,"NamedList::hasSubParams(\"%s\") [%p]",prefix,this);
+    if (!TelEngine::null(prefix)) {
+	for (const ObjList* l = m_params.skipNull(); l; l = l->skipNext()) {
+	    const NamedString* s = static_cast<const NamedString*>(l->get());
+	    if (s->name().startsWith(prefix))
+		return true;
+	}
+    }
+    return false;
+}
+
 void NamedList::dump(String& str, const char* separator, char quote, bool force) const
 {
     if (force && str.null())

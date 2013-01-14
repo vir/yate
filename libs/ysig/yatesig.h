@@ -154,7 +154,7 @@ class ISDNQ931Monitor;                   // ISDN Q.931 implementation on top of 
 class clas ## Factory : public SignallingFactory \
 { \
 protected: \
-virtual SignallingComponent* create(const String& type, const NamedList& name) \
+virtual SignallingComponent* create(const String& type, NamedList& name) \
     { return (type == #clas) ? new clas : 0; } \
 }; \
 static clas ## Factory s_ ## clas ## Factory
@@ -164,7 +164,7 @@ static clas ## Factory s_ ## clas ## Factory
 class clas ## Factory : public SignallingFactory \
 { \
 protected: \
-virtual SignallingComponent* create(const String& type, const NamedList& name) \
+virtual SignallingComponent* create(const String& type, NamedList& name) \
     { return clas::create(type,name); } \
 }; \
 static clas ## Factory s_ ## clas ## Factory
@@ -609,7 +609,7 @@ public:
      * @param name Name of the requested component and additional parameters
      * @return Pointer to the created component, NULL on failure
      */
-    static SignallingComponent* build(const String& type, const NamedList* name = 0);
+    static SignallingComponent* build(const String& type, NamedList* name = 0);
 
     /**
      * This method is for internal use only and must not be called directly
@@ -617,7 +617,7 @@ public:
      * @param name Name of the requested component and additional parameters
      * @return Raw pointer to the requested interface of the component, NULL on failure
      */
-    static void* buildInternal(const String& type, const NamedList* name);
+    static void* buildInternal(const String& type, NamedList* name);
 
 protected:
     /**
@@ -626,7 +626,7 @@ protected:
      * @param name Name of the requested component and additional parameters
      * @return Pointer to the created component
      */
-    virtual SignallingComponent* create(const String& type, const NamedList& name) = 0;
+    virtual SignallingComponent* create(const String& type, NamedList& name) = 0;
 };
 
 /**
@@ -656,6 +656,15 @@ public:
      * @return True if the component was initialized properly
      */
     virtual bool initialize(const NamedList* config);
+
+    /**
+     * Choose parameters that should be used for object initialization
+     * @param cmpName The name of the parameter holding the component name
+     * @param params The list of parameters used to initialize the component
+     * @param config The received list of parameters
+     * @return True if the config was resolved
+     */
+    static bool resolveConfig(const String& cmpName, NamedList& params, const NamedList* config);
 
     /**
      * Query or modify component's settings or operational parameters
@@ -841,7 +850,7 @@ public:
      * @param ref True to add a reference when returning existing component
      * @return Pointer to component found or created, NULL on failure
      */
-    SignallingComponent* build(const String& type, const NamedList& params, bool init = false, bool ref = true);
+    SignallingComponent* build(const String& type, NamedList& params, bool init = false, bool ref = true);
 
     /**
      * Apply a control operation to all components in the engine
@@ -4346,6 +4355,27 @@ public:
     virtual bool getSocketParams(const String& params, NamedList& result)
 	{ return false; }
 
+    /**
+     * Notification that a new incomming connection has been made
+     * NOTE newTransport needs to be destroyed if will not be used
+     * @param newTransport The new created transport
+     * @param addr The newly created transport socket address
+     * @return True if the newTransport will be used.
+     */
+    virtual bool transportNotify(SIGTransport* newTransport, const SocketAddr& addr);
+
+    /**
+     * Check if the transport thread is still running
+     * @return True if the thread is still running.
+     */
+    virtual bool hasThread()
+	{ return false; }
+
+    /**
+     * Stop the transport thread
+     */
+    virtual void stopThread()
+	{ }
 protected:
     /**
      * Constructor
@@ -4589,6 +4619,27 @@ public:
      * @return True if operation was successful, false if an error occurred
      */
     bool getSocketParams(const String& params, NamedList& result);
+
+    /**
+     * Notification that a new incomming connection has been made
+     * @param newTransport The new created transport
+     * @param addr The newly created transport socket address
+     * @return True if the newTransport will be used.
+     */
+    virtual bool transportNotify(SIGTransport* newTransport, const SocketAddr& addr)
+	{ TelEngine::destruct(newTransport); return false; }
+
+    /**
+     * Check if the transport thread is running
+     * @return true if the transport thread is running
+     */
+    bool hasTransportThread();
+
+    /**
+     * Stop the transport thread
+     */
+    void stopTransportThread();
+
 protected:
     /**
      * Process a complete message
@@ -4625,6 +4676,41 @@ public:
 	TrafficOverride  = 1,
 	TrafficLoadShare = 2,
 	TrafficBroadcast = 3,
+    };
+
+    enum HeartbeatState {
+	HeartbeatDisabled     = 0,
+	HeartbeatEnabled      = 1,
+	HeartbeatWaitResponse = 2,
+    };
+
+    enum Errors {
+	InvalidVersion            = 0x01,
+	InvalidIID                = 0x02,
+	UnsupportedMessageClass   = 0x03,
+	UnsupportedMessageType    = 0x04,
+	UnsupportedTrafficMode    = 0x05,
+	UnexpectedMessage         = 0x06,
+	ProtocolError             = 0x07,
+	UnsupportedIIDType        = 0x08,
+	InvalidStreamIdentifier   = 0x09,
+	UnassignedTEI             = 0x0a,
+	UnrecognizedSAPI          = 0x0b,
+	InvalidTEISAPI            = 0x0c,
+	ManagementBlocking        = 0x0d,
+	ASPIDRequired             = 0x0e,
+	InvalidASPID              = 0x0f,
+	ASPActiveIID              = 0x10,
+	InvalidParameterValue     = 0x11,
+	ParameterFieldError       = 0x12,
+	UnexpectedParameter       = 0x13,
+	DestinationStatusUnknown  = 0x14,
+	InvalidNetworkAppearance  = 0x15,
+	MissingParameter          = 0x16,
+	InvalidRoutingContext     = 0x19,
+	NotConfiguredAS           = 0x1a,
+	SubsystemStatusUnknown    = 0x1b,
+	InvalidLoadsharingLabel   = 0x1c
     };
 
     /**
@@ -4709,6 +4795,12 @@ public:
      */
     static void addTag(DataBlock& data, uint16_t tag, const DataBlock& value);
 
+    /**
+     * Method called when the transport status has been changed
+     * @param status Status of the transport causing the notification
+     */
+    void notifyLayer(SignallingInterface::Notification status);
+
 protected:
     /**
      * Constructs an uninitialized User Adaptation component
@@ -4757,6 +4849,47 @@ protected:
      * @return True if the message was handled
      */
     virtual bool processAsptmMSG(unsigned char msgType, const DataBlock& msg, int streamId) = 0;
+
+    /**
+     * Method called periodically by the engine to keep everything alive
+     * @param when Time to use as computing base for events and timeouts
+     */
+    virtual void timerTick(const Time& when);
+
+    /**
+     * Process the heartbeat messages
+     * @param msgType The message type
+     * @param msg Message data
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    bool processHeartbeat(unsigned char msgType, const DataBlock& msg,
+	int streamId);
+
+    /**
+     * Reset heartbeat for all streams
+     */
+    inline void resetHeartbeat()
+    {
+	Lock myLock(this);
+	for (int i = 0;i < 32;i++)
+	    m_streamsHB[i] = HeartbeatDisabled;
+    }
+
+    /**
+     * Enable heartbeat for the specifyed steam id
+     * @param streamId The stream id
+     */
+    inline void enableHeartbeat(unsigned char streamId) {
+	if (streamId > 31)
+	    return;
+	m_streamsHB[streamId] = HeartbeatEnabled;
+    }
+private:
+    unsigned int m_maxRetransmit;
+    SignallingTimer m_sendHeartbeat;
+    SignallingTimer m_waitHeartbeatAck;
+    unsigned char m_streamsHB[32];
 };
 
 /**
@@ -4946,7 +5079,7 @@ protected:
      * Default constructor
      */
     inline SIGAdaptUser()
-	: m_autostart(false), m_adaptation(0)
+	: m_autostart(false), m_streamId(1), m_adaptation(0)
 	{ }
 
     /**
@@ -4997,9 +5130,21 @@ protected:
 	{ return m_adaptation && m_adaptation->aspActive(); }
 
     /**
+     * Obtain the stream id to use for data messages
+     * @return The stream id
+     */
+    inline unsigned char getStreamId()
+	{ return m_streamId; }
+
+    /**
      * Automatically start on init flag
      */
     bool m_autostart;
+
+    /**
+     * The SCTP streamId
+     */
+    unsigned char m_streamId;
 
 private:
     SIGAdaptClient* m_adaptation;
@@ -5034,9 +5179,10 @@ public:
      * Route a SCCP message based on Global Title
      * @param gt The original global title used for message routing
      * @param prefix Optional prefix for gt params
+     * @param nextPrefix Optional prefix for gt params
      * @return A new SCCP called party address or null if no route was found.
      */
-    virtual NamedList* routeGT(const NamedList& gt, const String& prefix);
+    virtual NamedList* routeGT(const NamedList& gt, const String& prefix, const String& nextPrefix);
 
     /**
      * Initialize this GTT
@@ -5169,9 +5315,11 @@ protected:
      * Translate a Global Title
      * @param params The Global Title content
      * @param prefix The prefix of the global title content parameters
+     * @param nextPrefix Other prefix of the global title content parameters
      * @return a new SCCP route or 0 is no route was found
      */
-    NamedList* translateGT(const NamedList& params, const String& prefix);
+    NamedList* translateGT(const NamedList& params, const String& prefix, 
+	    const String& nextPrefix);
 
     /**
      * Send a SCCP message to users list for processing
@@ -5205,6 +5353,13 @@ protected:
      */
     virtual bool isEndpoint()
 	{ return false; }
+
+    /**
+     * Copy the parameters returned by Global Title Translator in the SCCP Message
+     * @param msg The SCCP message
+     * @param gtParams The parameters returned by GTT
+     */
+    void resolveGTParams(SS7MsgSCCP* msg, const NamedList* gtParams);
 private:
     ObjList m_users;
     Mutex m_translatorLocker;
@@ -5516,7 +5671,6 @@ protected:
     /**
      * Process a notification generated by the attached data link
      * @param link Data link that generated the notification
-     * @return True if notification was processed
      */
     virtual void notify(SS7Layer2* link) = 0;
 };
@@ -7069,6 +7223,17 @@ public:
     virtual bool control(M2PAOperations oper, NamedList* params = 0);
 
     /**
+     * Execute a control operation. Operations can change the link status or
+     *  can query the aligned status.
+     * @param oper Operation to execute
+     * @param params Optional parameters for the operation
+     * @return True if the command completed successfully, for query operations
+     *  also indicates the data link is aligned and operational
+     */
+    virtual bool control(SS7Layer2::Operation oper, NamedList* params = 0)
+	{ return control((M2PAOperations)oper,params); }
+	
+    /**
      * Retrieve the current link status indications
      * @return Link status indication bits
      */
@@ -7216,6 +7381,7 @@ protected:
      */
      void retransData();
 
+     virtual void destroyed();
 private:
     void dumpMsg(u_int8_t version, u_int8_t mClass, u_int8_t type,
 	const DataBlock& data, int stream, bool send);
@@ -8082,7 +8248,8 @@ public:
 	CVT  = 0xec, // Circuit Validation Test (ANSI only)
 	EXM  = 0xed, // Exit Message (ANSI only)
 	// Dummy, used for various purposes
-	CtrlSave = 256  // control, save circuits
+	CtrlSave = 256, // control, save circuits
+	CtrlCicEvent,   // control, generate circuit events, debug only
     };
 
     /**
@@ -9004,6 +9171,9 @@ private:
     // Retrieve a pending message
     SignallingMessageTimer* findPendingMessage(SS7MsgISUP::Type type, unsigned int cic,
 	bool remove = false);
+    // Retrieve a pending message with given parameter
+    SignallingMessageTimer* findPendingMessage(SS7MsgISUP::Type type, unsigned int cic,
+	const String& param, const String& value, bool remove = false);
     // Transmit a list of messages. Return true if at least 1 message was sent
     bool transmitMessages(ObjList& list);
     // Handle circuit(s) (un)block command
@@ -9011,6 +9181,8 @@ private:
     // Handle remote circuit(s) (un)block command
     bool handleCicBlockRemoteCommand(const NamedList& p, unsigned int* cics,
 	unsigned int count, bool block);
+    // Handle circuit(s) event generation command
+    bool handleCicEventCommand(const NamedList& p);
     // Try to start single circuit (un)blocking. Set a pending operation on success 
     // @param force True to ignore resetting/(un)blocking flags of the circuit
     // Return built message to be sent on success
@@ -10468,6 +10640,13 @@ protected:
      */
     virtual bool isEndpoint()
 	{ return m_endpoint; }
+
+    /**
+     * Route a SCCP Message to other SCCP component.
+     * @param msg The sccp message.
+     * @return -1 if the message failed to be routed
+     */
+    int routeLocal(SS7MsgSCCP* msg);
 private:
     // Helper method to calculate sccp address length
     unsigned int getAddressLength(const NamedList& params, const String& prefix);
@@ -10483,7 +10662,9 @@ private:
     void printMessage(const SS7MSU* msu, const SS7MsgSCCP* msg, const SS7Label& label);
     // Helper method used to extract the pointcode from Calling/Called party address.
     // Also will call GT translate if there is no pointcode in called party address
-    bool fillPointCode(SS7PointCode& pointcode, SS7MsgSCCP* msg, const String& prefix, const char* pCode, bool translate);
+    int getPointCode(SS7MsgSCCP* msg, const String& prefix, const char* pCode, bool translate);
+    // Transmit a SCCP message
+    int sendSCCPMessage(SS7MsgSCCP* sccpMsg,int dpc,int opc, bool local);
     // Helper method used to verify if the message is a connectionless data message
     inline bool isSCLCMessage(int msgType)
 	{ return msgType == SS7MsgSCCP::UDT || msgType == SS7MsgSCCP::XUDT || msgType == SS7MsgSCCP::LUDT; }
@@ -11551,6 +11732,8 @@ private:
     TCAPComponentState m_state;
     String m_id;
     String m_corrID;
+    String m_opCode;
+    String m_opType;
     SS7TCAP::TCAPComponentOperationClass m_opClass;
     SignallingTimer m_opTimer;
     SS7TCAPError m_error;

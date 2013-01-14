@@ -1794,6 +1794,15 @@ public:
     void processCallToken(const DataBlock& callToken);
 
     /**
+     * Update transaction incoming trunk data (used for trunk without timestamps)
+     * @param frameTs Address of variable to be set with frame timestamp
+     * @param ts Trunk frame timestamp
+     * @param currentTimeMs Current time
+     * @return True if accepted
+     */
+    bool updateTrunkRecvTs(u_int32_t& frameTs, u_int32_t ts, u_int64_t currentTimeMs);
+
+    /**
      * Print transaction data on stdin
      * @param printStats True to print media statistics
      * @param printFrames True to print in/out pending frames
@@ -2238,6 +2247,9 @@ private:
     bool m_callToken;                           // Call token supported/expected
     // Meta trunking
     IAXMetaTrunkFrame* m_trunkFrame;		// Reference to a trunk frame if trunking is enabled for this transaction
+    int64_t m_trunkInOffsetTimeMs;		// Offset between transaction start and trunk start
+    u_int32_t m_trunkInLastTs;                  // Last received trunk timestamp
+    bool m_warnTrunkInTimestamp;                // Warn incoming trunk invalid timestamp
 };
 
 /**
@@ -2434,6 +2446,15 @@ public:
      * @return Pointer to the transaction or 0
      */
     IAXTransaction* addFrame(const SocketAddr& addr, const unsigned char* buf, unsigned int len);
+
+    /**
+     * Find a complete transaction.
+     * This method is thread safe
+     * @param addr Remote address
+     * @param rCallNo Remote transaction call number
+     * @return Referrenced pointer to the transaction or 0
+     */
+    IAXTransaction* findTransaction(const SocketAddr& addr, u_int16_t rCallNo);
 
     /**
      * Process media from remote peer. Descendents must override this method

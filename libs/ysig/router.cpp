@@ -398,7 +398,10 @@ SS7Router::SS7Router(const NamedList& params)
 	if (mConfig)
 	    mParams.copyParams(*mConfig);
 	else {
-	    mParams.copySubParams(params,mParams + ".");
+	    if (params.hasSubParams(mParams + "."))
+		mParams.copySubParams(params,mParams + ".");
+	    else
+		mParams.addParam("local-config","true");
 	    mConfig = &mParams;
 	}
 	attach(m_mngmt = YSIGCREATE(SS7Management,&mParams));

@@ -28,6 +28,12 @@
 
 using namespace TelEngine;
 
+#ifdef DEBUG
+#define ISUP_HANDLE_CIC_EVENT_CONTROL
+#else
+//#define ISUP_HANDLE_CIC_EVENT_CONTROL
+#endif
+
 // Maximum number of mandatory parameters including two terminators
 #define MAX_MANDATORY_PARAMS 16
 
@@ -44,6 +50,33 @@ using namespace TelEngine;
 #define ISUP_T34_MINVAL 2000
 #define ISUP_T34_DEFVAL 3000
 #define ISUP_T34_MAXVAL 4000
+
+// Utility: check if 2 cic codes are in valid range, return range if valid, 0 otherwise
+static inline int checkValidRange(int code, int extra)
+{
+    int range = extra - code;
+    return (range > -256 && range < 256) ? range : 0;
+}
+
+// Adjust range and status data when needed (a new range is used)
+static void adjustRangeAndStatus(char* status, unsigned int& code, unsigned int& range,
+    int newRange)
+{
+    if (!(status && newRange))
+	return;
+    if (newRange > 0) {
+	range = (unsigned int)newRange;
+	status[0] = '1';
+	::memset(status + 1,'0',range);
+    }
+    else {
+	range = (unsigned int)(-newRange);
+	code -= range;
+	::memset(status,'0',range);
+	status[range] = '1';
+    }
+    range++;
+}
 
 // Description of each ISUP parameter
 struct IsupParam {
@@ -227,6 +260,9 @@ static const TokenDict s_dict_control[] = {
     { "parttest", SS7MsgISUP::UPT },
     { "available", SS7MsgISUP::UPA },
     { "save", SS7MsgISUP::CtrlSave },
+#ifdef ISUP_HANDLE_CIC_EVENT_CONTROL
+    { "circuitevent", SS7MsgISUP::CtrlCicEvent },
+#endif
     { 0, 0 }
 };
 
@@ -3776,6 +3812,28 @@ void SS7ISUP::destroyed()
     SS7Layer4::destroyed();
 }
 
+// Utility: find a pending (un)block message for a given circuit
+static bool findPendingMsgTimerLock(ObjList& list, unsigned int code)
+{
+    for (ObjList* o = list.skipNull(); o; o = o->skipNext()) {
+	SignallingMessageTimer* m = static_cast<SignallingMessageTimer*>(o->get());
+	SS7MsgISUP* msg = static_cast<SS7MsgISUP*>(m->message());
+	if (!msg || code < msg->cic())
+	    continue;
+	if (msg->type() == SS7MsgISUP::BLK || msg->type() == SS7MsgISUP::UBL) {
+	    if (msg->cic() == code)
+		return true;
+	    continue;
+	}
+	if (msg->type() != SS7MsgISUP::CGB && msg->type() != SS7MsgISUP::CGU)
+	    continue;
+	const String& map = msg->params()[YSTRING("RangeAndStatus.map")];
+	if (map[code - msg->cic()] == '1')
+	    return true;
+    }
+    return false;
+}
+
 void SS7ISUP::timerTick(const Time& when)
 {
     Lock mylock(this,SignallingEngine::maxLockWait());
@@ -3848,6 +3906,80 @@ void SS7ISUP::timerTick(const Time& when)
 		TelEngine::destruct(m);
 		if (c && c->ref())
 		    rsc.append(c)->setDelete(false);
+		continue;
+	    }
+	}
+	// Check if message is still in use
+	if (msg->type() == SS7MsgISUP::CGB || msg->type() == SS7MsgISUP::CGU) {
+	    String* map = msg->params().getParam(YSTRING("RangeAndStatus.map"));
+	    bool ok = !TelEngine::null(map);
+	    String removedCics;
+	    if (ok) {
+		unsigned int nCics = 0;
+		int flg = 0;
+		int flgReset = 0; 
+		if ((msg->params()[YSTRING("GroupSupervisionTypeIndicator")] == YSTRING("hw-failure"))) {
+		    flg = SignallingCircuit::LockLocalHWFail;
+		    flgReset = SignallingCircuit::LockingHWFail;
+		}
+		else {
+		    flg = SignallingCircuit::LockLocalMaint;
+		    flgReset = SignallingCircuit::LockingMaint;
+		}
+		int on = (msg->type() == SS7MsgISUP::CGB) ? flg : 0;
+		char* s = (char*)map->c_str();
+		for (unsigned int i = 0; i < map->length(); i++) {
+		    if (s[i] == '0')
+			continue;
+		    unsigned int code = msg->cic() + i;
+		    SignallingCircuit* cic = circuits()->find(code);
+		    if (cic && (on == cic->locked(flg))) {
+			nCics++;
+			continue;
+		    }
+		    // Don't reset locking flag if there is another operation in progress
+		    if (cic && !(findPendingMsgTimerLock(m_pending,code) ||
+			findPendingMsgTimerLock(reInsert,code)) && cic->locked(flgReset)) {
+			cic->resetLock(flgReset);
+			Debug(this,DebugNote,"Pending %s reset flag=0x%x cic=%u current=0x%x",
+			    msg->name(),flgReset,code,cic->locked());;
+		    }
+		    s[i] = '0';
+		    removedCics.append(String(code),",");
+		}
+		if (nCics)
+		    msg->params().setParam("RangeAndStatus",String(nCics));
+		else
+		    ok = false;
+	    }
+	    if (!ok) {
+		Debug(this,DebugNote,"Removed empty pending operation '%s' cic=%u",
+		    msg->name(),msg->cic());
+		TelEngine::destruct(m);
+		continue;
+	    }
+	    if (removedCics)
+		Debug(this,DebugAll,"Removed cics=%s from pending operation '%s' map cic=%u",
+		    removedCics.c_str(),msg->name(),msg->cic());
+	}
+	else if (msg->type() == SS7MsgISUP::BLK || msg->type() == SS7MsgISUP::UBL) {
+	    // We set the following param when sending BLK/UBL for HW fail reason
+	    bool maint = !msg->params().getBoolValue(YSTRING("isup_pending_block_hwfail"));
+	    int flg = maint ? SignallingCircuit::LockLocalMaint : SignallingCircuit::LockLocalHWFail;
+	    int on = (msg->type() == SS7MsgISUP::BLK) ? flg : 0;
+	    SignallingCircuit* cic = circuits()->find(msg->cic());
+	    if (!cic || on != cic->locked(flg)) {
+		flg = maint ? SignallingCircuit::LockingMaint : SignallingCircuit::LockingHWFail;
+		// Don't reset locking flag if there is another operation in progress
+		if (cic && !(findPendingMsgTimerLock(m_pending,msg->cic()) ||
+		    findPendingMsgTimerLock(reInsert,msg->cic())) && cic->locked(flg)) {
+		    cic->resetLock(flg);
+		    Debug(this,DebugNote,"Pending %s reset flag=0x%x cic=%u current=0x%x",
+			msg->name(),flg,cic->code(),cic->locked());
+		}
+		Debug(this,DebugNote,"Removed empty pending operation '%s' cic=%u",
+		    msg->name(),msg->cic());
+		TelEngine::destruct(m);
 		continue;
 	    }
 	}
@@ -4048,6 +4180,10 @@ bool SS7ISUP::control(NamedList& params)
 	case SS7MsgISUP::CtrlSave:
 	    setVerify(true,true);
 	    return true;
+#ifdef ISUP_HANDLE_CIC_EVENT_CONTROL
+	case SS7MsgISUP::CtrlCicEvent:
+	    return handleCicEventCommand(params);
+#endif
     }
     mylock.drop();
     return SignallingComponent::control(params);
@@ -4968,16 +5104,20 @@ unsigned int getRangeAndStatus(NamedList& nl, unsigned int minRange, unsigned in
 
 // Retrieve maintenance/hwfail type indicator
 // Return false if invalid
-static bool getGrpTypeInd(SS7ISUP* isup, SS7MsgISUP* msg, bool& hwFail)
+static bool getGrpTypeInd(SS7ISUP* isup, SS7MsgISUP* msg, bool& hwFail, NamedString** ns = 0)
 {
     if (!msg)
 	return false;
-    const String& s = msg->params()[YSTRING("GroupSupervisionTypeIndicator")];
-    hwFail = (s == YSTRING("hw-failure"));
-    if (hwFail || (s == YSTRING("maintenance")))
-	return true;
-    Debug(isup,DebugNote,"%s with unknown GroupSupervisionTypeIndicator=%s [%p]",
-	msg->name(),s.c_str(),isup);
+    NamedString* s = msg->params().getParam(YSTRING("GroupSupervisionTypeIndicator"));
+    if (s) {
+	if (ns)
+	    *ns = s;
+	hwFail = (*s == YSTRING("hw-failure"));
+	if (hwFail || (*s == YSTRING("maintenance")))
+	    return true;
+    }
+    Debug(isup,DebugNote,"%s with unknown/unsupported GroupSupervisionTypeIndicator=%s [%p]",
+	msg->name(),TelEngine::c_safe(s),isup);
     return false;
 }
 
@@ -5095,12 +5235,14 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    // Bit: 0-no indication 1-block/unblock
 	    {
 		bool hwFail = false;
-		if (!getGrpTypeInd(this,msg,hwFail))
+		NamedString* grpSuperType = 0;
+		if (!getGrpTypeInd(this,msg,hwFail,&grpSuperType))
 		    break;
 		String* srcMap = 0;
 		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,32);
 		if (!nCics) {
-		    Debug(this,DebugNote,"%s with invalid range %s or map=%s",msg->name(),
+		    Debug(this,DebugNote,"%s (%s) cic=%u with invalid range %s or map=%s",
+			msg->name(),grpSuperType->c_str(),msg->cic(),
 			msg->params().getValue(YSTRING("RangeAndStatus")),
 			msg->params().getValue(YSTRING("RangeAndStatus.map")));
 		    break;
@@ -5109,14 +5251,17 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		lock();
 		// Check for correct response: same msg type, circuit code, type indicator, circuit map
 		SS7MsgISUP::Type type = block ? SS7MsgISUP::CGB : SS7MsgISUP::CGU;
-		SignallingMessageTimer* t = findPendingMessage(type,msg->cic());
-		SS7MsgISUP* m = t ? static_cast<SS7MsgISUP*>(t->message()) : 0;
+		SignallingMessageTimer* t = findPendingMessage(type,msg->cic(),
+		    grpSuperType->name(),*grpSuperType);
+		if (!t) {
+		    Debug(this,DebugNote,"%s (%s) cic=%u: no request for it in our queue",
+			msg->name(),grpSuperType->c_str(),msg->cic());
+		    unlock();
+		    break;
+		}
+		SS7MsgISUP* m = static_cast<SS7MsgISUP*>(t->message());
 		String map;
 		while (m) {
-		    // Check type indicator
-		    bool hw = (m->params()[YSTRING("GroupSupervisionTypeIndicator")] == YSTRING("hw-failure"));
-		    if (hw != hwFail)
-			break;
 		    // Check map
 		    map = m->params()[YSTRING("RangeAndStatus.map")];
 		    if (!map)
@@ -5133,12 +5278,14 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		    break;
 		}
 		if (map) {
-		    DDebug(this,DebugAll,"%s confirmed for pending cic=%u",m->name(),msg->cic());
+		    DDebug(this,DebugAll,"%s (%s) confirmed for pending cic=%u",
+			m->name(),grpSuperType->c_str(),msg->cic());
 		    m_pending.remove(t);
 		}
 		unlock();
 		if (!map) {
-		    Debug(this,DebugNote,"%s with unnacceptable range %s or map=%s",msg->name(),
+		    Debug(this,DebugNote,"%s (%s) cic=%u with unnacceptable range %s or map=%s",
+			msg->name(),grpSuperType->c_str(),msg->cic(),
 			msg->params().getValue(YSTRING("RangeAndStatus")),
 			msg->params().getValue(YSTRING("RangeAndStatus.map")));
 		    break;
@@ -5500,6 +5647,8 @@ bool SS7ISUP::sendLocalLock(const Time& when)
 	d[0] = '1';
 	unsigned int cics = 1;
 	unsigned int lockRange = 1;
+	ObjList* cicPos = o;
+	int newRange = 0;
 	int flag = hwReq ? SignallingCircuit::LockLocalHWFail : SignallingCircuit::LockLocalMaint;
 	for (; o && cics < 32 && lockRange < 256; o = o->skipNext()) {
 	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
@@ -5508,6 +5657,8 @@ bool SS7ISUP::sendLocalLock(const Time& when)
 		break;
 	    // Make sure the circuit codes are sequential
 	    if ((code + lockRange) != cic->code()) {
+		if (!newRange)
+		    newRange = checkValidRange(code,cic->code());
 		checkNeedLock(cic,needLock);
 		continue;
 	    }
@@ -5524,8 +5675,40 @@ bool SS7ISUP::sendLocalLock(const Time& when)
 	    }
 	    lockRange++;
 	}
-	if (cics == 1)
-	    lockRange = 1;
+	if (cics == 1) {
+	    if (lockRange > 1) {
+		// Shorten the range: be nice to remote party, no need to check the whole map
+		if (hwReq)
+		    lockRange = 2;
+		else
+		    lockRange = 1;
+	    }
+	    else if (m_lockGroup && hwReq) {
+		if (!newRange) {
+		    // Bad luck: check for a code before the circuit
+		    for (o = circuits()->circuits().skipNull(); o && o != cicPos; o = o->skipNext()) {
+			SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+			if (span != cic->span())
+			    continue;
+			newRange = checkValidRange(code,cic->code());
+			if (newRange)
+			    break;
+		    }
+		}
+		if (newRange)
+		    adjustRangeAndStatus(d,code,lockRange,newRange);
+		else
+		    Debug(this,DebugNote,
+			"Failed to pick a second circuit to group HW %sblock cic=%u [%p]",
+			lockReq ? "" : "un",code,this);
+	    }
+	}
+	else {
+	    // Shorten range
+	    unsigned int last = lockRange;
+	    while (d[--last] == '0')
+		lockRange--;
+	}
 	// Build and send the message
 	// Don't send individual circuit blocking for HW failure (they are supposed
 	//  to be sent for maintenance reason)
@@ -5588,6 +5771,23 @@ SignallingMessageTimer* SS7ISUP::findPendingMessage(SS7MsgISUP::Type type, unsig
 	SignallingMessageTimer* m = static_cast<SignallingMessageTimer*>(o->get());
 	SS7MsgISUP* msg = static_cast<SS7MsgISUP*>(m->message());
 	if (msg && msg->type() == type && msg->cic() == cic) {
+	    if (remove)
+		o->remove(false);
+	    return m;
+	}
+    }
+    return 0;
+}
+
+// Retrieve a pending message with given parameter
+SignallingMessageTimer* SS7ISUP::findPendingMessage(SS7MsgISUP::Type type, unsigned int cic,
+    const String& param, const String& value, bool remove)
+{
+    Lock lock(this);
+    for (ObjList* o = m_pending.skipNull(); o; o = o->skipNext()) {
+	SignallingMessageTimer* m = static_cast<SignallingMessageTimer*>(o->get());
+	SS7MsgISUP* msg = static_cast<SS7MsgISUP*>(m->message());
+	if (msg && msg->type() == type && msg->cic() == cic && msg->params()[param] == value) {
 	    if (remove)
 		o->remove(false);
 	    return m;
@@ -5738,6 +5938,26 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
 		p.getValue(YSTRING("operation")),param->c_str());
 	    return false;
 	}
+	if (nCics == 1) {
+	    // Try to pick another circuit for map
+	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(list.skipNull()->get());
+	    int newRange = 0;
+	    for (ObjList* o = circuits()->circuits().skipNull(); o ; o = o->skipNext()) {
+		SignallingCircuit* c = static_cast<SignallingCircuit*>(o->get());
+		if (c->span() != cic->span() || c == cic)
+		    continue;
+		newRange = checkValidRange(cic->code(),c->code());
+		if (newRange)
+		    break;
+	    }
+	    if (!newRange) {
+		Debug(this,DebugNote,
+		    "Circuit group '%s': failed to pick another circuit to send group command",
+		    p.getValue(YSTRING("operation")));
+		return false;
+	    }
+	    adjustRangeAndStatus(d,code,lockRange,newRange);
+	}
 	// Ok: block circuits and send the request
 	int flg = maint ? SignallingCircuit::LockingMaint : SignallingCircuit::LockingHWFail;
 	for (ObjList* o = list.skipNull(); o ; o = o->skipNext()) {
@@ -5764,12 +5984,20 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
     }
     if (SS7MsgISUP::Unknown != remove) {
 	bool removed = false;
-	for (;;) {
-	    SignallingMessageTimer* pending = findPendingMessage(remove,msg->cic(),true);
-	    if (!pending)
-		break;
-	    TelEngine::destruct(pending);
-	    removed = true;
+	SignallingMessageTimer* pending = 0;
+	if (remove != SS7MsgISUP::CGB && remove != SS7MsgISUP::CGU) {
+	    while (0 != (pending = findPendingMessage(remove,msg->cic(),true))) {
+		TelEngine::destruct(pending);
+		removed = true;
+	    }
+	}
+	else {
+	    NamedString* ns = msg->params().getParam(YSTRING("GroupSupervisionTypeIndicator"));
+	    while (ns &&
+		0 != (pending = findPendingMessage(remove,msg->cic(),ns->name(),*ns,true))) {
+		TelEngine::destruct(pending);
+		removed = true;
+	    }
 	}
 	if (removed)
 	    Debug(this,DebugNote,"Removed pending operation '%s' cic=%u",
@@ -5812,6 +6040,72 @@ bool SS7ISUP::handleCicBlockRemoteCommand(const NamedList& p, unsigned int* cics
     if (found)
 	m_verifyEvent = true;
     return found;
+}
+
+// Handle circuit(s) event generation command
+bool SS7ISUP::handleCicEventCommand(const NamedList& p)
+{
+    if (!circuits())
+	return false;
+    int evType = p.getIntValue(YSTRING("type"));
+    if (evType <= 0) {
+	Debug(this,DebugNote,"Control '%s': invalid type '%s'",
+	    p.getValue(YSTRING("operation")),p.getValue(YSTRING("type")));
+	return false;
+    }
+    ObjList cics;
+    String* param = p.getParam(YSTRING("circuit"));
+    if (param) {
+	SignallingCircuit* cic = circuits()->find(param->toInteger());
+	if (!cic) {
+	    Debug(this,DebugNote,"Control '%s' circuit %s not found",
+		p.getValue(YSTRING("operation")),param->c_str());
+	    return false;
+	}
+	cics.append(cic)->setDelete(false);
+    }
+    else {
+	param = p.getParam(YSTRING("circuits"));
+	if (TelEngine::null(param)) {
+	    Debug(this,DebugNote,"Control '%s' missing circuit(s)",
+		p.getValue(YSTRING("operation")));
+	    return false;
+	}
+	// Parse the range
+	unsigned int count = 0;
+	unsigned int* cList = SignallingUtils::parseUIntArray(*param,1,0xffffffff,count,true);
+	if (!cList) {
+	    Debug(this,DebugNote,"Control '%s' invalid circuits=%s",
+		p.getValue(YSTRING("operation")),param->c_str());
+	    return false;
+	}
+	for (unsigned int i = 0; i < count; i++) {
+	    SignallingCircuit* cic = circuits()->find(cList[i]);
+	    if (cic) {
+		cics.append(cic)->setDelete(false);
+		continue;
+	    }
+	    Debug(this,DebugNote,"Control '%s' circuit %u not found",
+		p.getValue(YSTRING("operation")),cList[i]);
+	    cics.clear();
+	    break;
+	}
+	delete[] cList;
+    }
+    ObjList* o = cics.skipNull();
+    if (!o)
+	return false;
+    for (; o; o = o->skipNext()) {
+	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+	SignallingCircuitEvent* cicEvent = new SignallingCircuitEvent(cic,
+	    (SignallingCircuitEvent::Type)evType);
+	cicEvent->copyParams(p);
+	SignallingEvent* ev = processCircuitEvent(cicEvent,0);
+	TelEngine::destruct(cicEvent);
+	if (ev)
+	    delete ev;
+    }
+    return true;
 }
 
 // Try to start single circuit (un)blocking. Set a pending operation on success 

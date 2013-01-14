@@ -973,7 +973,7 @@ DataBlock ASNLib::encodeBitString(String val, bool tagCheck)
     DataBlock contents;
 
     int l = val.length();
-    uint8_t trail = 8 - l % 8;
+    uint8_t trail = (-l) & 0x07;
     for (int i = 0; i < trail; i++)
 	val += "0";
     contents.append(&trail, 1);

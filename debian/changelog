@@ -1,3 +1,26 @@
+yate (4.3.1~vir2013011501) UNRELEASED; urgency=low
+
+  * Merged upstream changes (version 4.3.1)
+    4.3 brings many minor features, improvements and problem fixes.
+  * ISDN+SS7 - fixes in subcomponent configuration handling
+  * SIGTRAN - better SCTP error condition handling, added heartbeat support
+  * ISUP - fixed handling of several circuit blocking scenarios, added charging
+    message handling
+  * SCCP - support for GTT routing between different networks
+  * CAMEL+MAP - support for operations having different structure per version
+  * Javascript - added XML support, fixed some parsing errors and error reporting
+  * SIP - improved DTMF configuration and negotiation, fixed REGISTER interval
+    handling and keepalives
+  * RTP - fixed a memory leak, fixed timestamps when data is repacked
+  * IAX - fixes in handling logic for various frame types and audio timestamps
+  * Jingle - added support for more minor protocol variations
+  * H.323 - support for setting some protocol timeouts
+  * RADIUS - support for interim updates and Quintum attributes
+  * Unspecific - fixed a number of infrequent crashes, deadlocks and performance
+    issues
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Tue, 15 Jan 2013 10:23:51 +0400
+
 yate (4.2.1~vir2012110201) UNRELEASED; urgency=low
 
   * Merged upstream fixes and improvements, including

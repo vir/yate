@@ -2218,7 +2218,7 @@ bool JBStreamSetList::add(JBStream* client)
     if (!client || m_engine->exiting())
 	return false;
     Lock lock(this);
-    for (ObjList* o = m_sets.skipNull(); o; o = o->skipNull()) {
+    for (ObjList* o = m_sets.skipNull(); o; o = o->skipNext()) {
 	if ((static_cast<JBStreamSet*>(o->get()))->add(client)) {
 	    m_streamCount++;
 	    return true;

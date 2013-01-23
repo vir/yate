@@ -370,7 +370,7 @@ GenObject* JsContext::resolveTop(ObjList& stack, const String& name, GenObject* 
     XDebug(DebugAll,"JsContext::resolveTop '%s'",name.c_str());
     for (ObjList* l = stack.skipNull(); l; l = l->skipNext()) {
 	JsObject* jso = YOBJECT(JsObject,l->get());
-	if (jso && jso->hasField(stack,name,context))
+	if (jso && jso->toString() == YSTRING("()") && jso->hasField(stack,name,context))
 	    return jso;
     }
     return this;

@@ -1,4 +1,4 @@
-yate (4.3.1~svn5380) UNRELEASED; urgency=low
+yate (4.3.1~svn5381) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -282,8 +282,10 @@ yate (4.3.1~svn5380) UNRELEASED; urgency=low
     configuread. If not show warning.
   * Updated to SVN revision 5380: + FixedArray.join() and Array.pop()
     implementations. Replaced incorrect use of toString().
+  * Updated to SVN revision 5381: + Perform top level name resolution
+    only on JS call contexts on stack.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 22 Jan 2013 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 24 Jan 2013 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

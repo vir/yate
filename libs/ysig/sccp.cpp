@@ -2816,15 +2816,17 @@ SS7SCCP::SS7SCCP(const NamedList& params)
 	Debug(this,DebugConf,"Invalid point code type '%s'",c_safe(stype));
 	return;
     }
-    String lpc = params.getValue(YSTRING("localpointcode"));
+    String* lpc = params.getParam(YSTRING("localpointcode"));
     m_localPointCode = new SS7PointCode(0,0,0);
     bool pointcodeAssigned = false;
-    if (lpc.find('-') > 0)
-	pointcodeAssigned = m_localPointCode->assign(lpc,m_type);
-    else
-	pointcodeAssigned = m_localPointCode->unpack(m_type,lpc.toInteger());
+    if (lpc) {
+	 if (lpc->find('-') > 0)
+	    pointcodeAssigned = m_localPointCode->assign(*lpc,m_type);
+	else
+	    pointcodeAssigned = m_localPointCode->unpack(m_type,lpc->toInteger());
+    }
     if (!pointcodeAssigned) {
-	Debug(this,DebugWarn,"Invalid localpointcode='%s'",lpc.c_str());
+	Debug(this,DebugWarn,"Invalid localpointcode='%s'",lpc ? lpc->c_str() : "null");
 	Debug(this,DebugConf,"No local PointCode configured!! GT translations with no local PointCode may lead to undesired behavior");
 	TelEngine::destruct(m_localPointCode);
 	m_localPointCode = 0;
@@ -4419,7 +4421,7 @@ bool SS7SCCP::control(NamedList& params)
 	    m_printMsg = false;
 	    return true;
     }
-    return false;
+    return true;
 }
 
 void SS7SCCP::printStatus(bool extended)

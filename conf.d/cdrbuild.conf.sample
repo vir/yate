@@ -14,10 +14,15 @@
 
 ; status_interval: int: The time interval in seconds to emit call cdr status messages
 ; Note: If status is set to false this interval will be ignored
+; If this interval is set to 0 a single cdr status is emitted at answer time
 ; Default 60s
 ; Min 60s
 ; Max 600s
 ;status_interval=60
+
+; status_answer: bool: Emit cdr status message immediately when the call is answered
+; If set to false the first cdr status is sent after status_interval
+;status_answer=true
 
 
 [parameters]
@@ -48,7 +53,7 @@
 ; MM | %m   -> Month as a decimal number (01-12)
 ; DD | %d   -> Day of the month (01-31)
 ; HH | %H   -> Hour in 24h format (00-23)
-; mm | %M   -> Hour in 24h format (00-23)
+; mm | %M   -> Minute (00-59)
 ; SS | %S   -> Second (00-60)
 ;              Note the value is rounded
 ; UTC       -> If present the time will represent the UTC time. If is missing

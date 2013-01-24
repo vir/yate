@@ -526,7 +526,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	else {
 	    NamedPointer* np = (NamedPointer*)last->getObject(YSTRING("NamedPointer"));
 	    if (!np)
-		ExpEvaluator::pushOne(stack,new ExpOperation(last->toString()));
+		ExpEvaluator::pushOne(stack,new ExpOperation(*last));
 	    else
 		ExpEvaluator::pushOne(stack,new ExpWrapper(np->userData(),0));
 	}
@@ -592,7 +592,8 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	String separator = ",";
 	if (oper.number()) {
 	    ExpOperation* op = popValue(stack,context);
-	    separator = op->toString();
+	    separator = *op;
+	    TelEngine::destruct(op);
 	}
 	String result;
 	for (long int i = 0; i < length(); i++)

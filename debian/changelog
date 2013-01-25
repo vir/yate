@@ -1,4 +1,4 @@
-yate (4.3.1~svn5381) UNRELEASED; urgency=low
+yate (4.3.1~svn5385) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -284,8 +284,16 @@ yate (4.3.1~svn5381) UNRELEASED; urgency=low
     implementations. Replaced incorrect use of toString().
   * Updated to SVN revision 5381: + Perform top level name resolution
     only on JS call contexts on stack.
+  * Updated to SVN revision 5385: + Modified cdrfile and register to be
+    able to write combined CDR.  + Added module that creates a combined
+    CDR of all legs of a call.  + Added method to get the first child of
+    an XmlElement.  + Do not report error if empty text children or
+    comments are found after the document root element is finished.  +
+    Added trap for unexpected restart.  + Added @ prefixed versions to
+    suppress the warning if needed.  + Log a warning if the target
+    context of a jump or include is missing.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 24 Jan 2013 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 26 Jan 2013 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -127,9 +127,26 @@
 ;critical=yes
 
 ;initquery=UPDATE cdr SET ended=true WHERE ended IS NULL OR NOT ended
-;cdr_initialize=INSERT INTO cdr VALUES(TIMESTAMP 'EPOCH' + INTERVAL '${time} s','${chan}','${address}','${direction}','${billid}','${caller}','${called}',INTERVAL '${duration} s',INTERVAL '${billtime} s',INTERVAL '${ringtime} s','${status}','${reason}',false)
-;cdr_update=UPDATE cdr SET address='${address}',direction='${direction}',billid='${billid}',caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',reason='${reason}' WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
-;cdr_finalize=UPDATE cdr SET address='${address}',direction='${direction}',billid='${billid}',caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',reason='${reason}',ended=true WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
+
+;cdr_initialize=INSERT INTO cdr VALUES(TIMESTAMP 'EPOCH' + INTERVAL '${time} s','${chan}',\
+; '${address}','${direction}','${billid}','${caller}','${called}',INTERVAL '${duration} s',\
+; INTERVAL '${billtime} s',INTERVAL '${ringtime} s','${status}','${reason}',false)
+
+;cdr_update=UPDATE cdr SET address='${address}',direction='${direction}',billid='${billid}',\
+; caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',\
+; billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',\
+; reason='${reason}' WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
+
+;cdr_finalize=UPDATE cdr SET address='${address}',direction='${direction}',\
+; billid='${billid}',caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',\
+; billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',\
+; reason='${reason}',ended=true WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
+
+;cdr_combined=INSERT INTO cdr VALUES(TIMESTAMP 'EPOCH' + INTERVAL '${time} s','${chan}',\
+; '${address}','${caller}','${called}',INTERVAL '${duration} s',INTERVAL '${billtime} s',\
+; INTERVAL '${ringtime} s','${status}','${reason}','${out_leg.chan}','${out_leg.address}',\
+; INTERVAL '${out_leg.billtime} s',INTERVAL '${out_leg.ringtime} s',\
+; INTERVAL '${out_leg.duration} s','${out_leg.reason}'
 
 
 [linetracker]

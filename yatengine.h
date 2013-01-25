@@ -681,6 +681,7 @@ public:
 
     /**
      * Retrieve the tracker parameter name
+     * @return Name of the parameter used to track message dispatching
      */
     inline const String& trackParam() const
 	{ return m_trackParam; }
@@ -1234,6 +1235,13 @@ public:
      */
     inline void setHook(MessagePostHook* hook, bool remove = false)
 	{ m_dispatcher.setHook(hook,remove); }
+
+    /**
+     * Retrieve the tracker parameter name
+     * @return Name of the parameter used to track message dispatching
+     */
+    inline static const String& trackParam()
+	{ return s_self ? s_self->m_dispatcher.trackParam() : String::empty(); }
 
     /**
      * Get a count of plugins that are actively in use

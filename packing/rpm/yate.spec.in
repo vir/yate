@@ -94,6 +94,7 @@ for small to large scale projects.
 %{_datadir}/yate/data/*
 %dir %{_libdir}/yate
 %{_libdir}/yate/cdrbuild.yate
+%{_libdir}/yate/cdrcombine.yate
 %{_libdir}/yate/cdrfile.yate
 %{_libdir}/yate/regexroute.yate
 %{_libdir}/yate/javascript.yate

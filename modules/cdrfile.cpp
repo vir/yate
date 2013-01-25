@@ -5,7 +5,7 @@
  * Write the CDR to a text file
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2006 Null Team
+ * Copyright (C) 2004-2013 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,13 +59,14 @@ public:
     CdrFileHandler(const char *name)
 	: MessageHandler(name,100,__plugin.name()),
 	  Mutex(false,"CdrFileHandler"),
-	  m_file(-1)
+	  m_file(-1), m_combined(false)
 	{ }
     virtual ~CdrFileHandler();
     virtual bool received(Message &msg);
-    void init(const char *fname, bool tabsep, const char* format);
+    void init(const char *fname, bool tabsep, bool combined, const char* format);
 private:
     int m_file;
+    bool m_combined;
     String m_format;
 };
 
@@ -78,7 +79,7 @@ CdrFileHandler::~CdrFileHandler()
     }
 }
 
-void CdrFileHandler::init(const char *fname, bool tabsep, const char* format)
+void CdrFileHandler::init(const char *fname, bool tabsep, bool combined, const char* format)
 {
     Lock lock(this);
     if (m_file >= 0) {
@@ -86,10 +87,26 @@ void CdrFileHandler::init(const char *fname, bool tabsep, const char* format)
 	m_file = -1;
     }
     m_format = format;
-    if (m_format.null())
+    m_combined = combined;
+    if (m_format.null()) {
 	m_format = tabsep
-	    ? "${time}\t${billid}\t${chan}\t${address}\t${caller}\t${called}\t${billtime}\t${ringtime}\t${duration}\t${direction}\t${status}\t${reason}"
-	    : "${time},\"${billid}\",\"${chan}\",\"${address}\",\"${caller}\",\"${called}\",${billtime},${ringtime},${duration},\"${direction}\",\"${status}\",\"${reason}\"";
+	    ? (combined
+		? "${time}\t${billid}\t${chan}\t${address}\t${caller}\t${called}"
+		    "\t${billtime}\t${ringtime}\t${duration}\t${status}\t${reason}"
+		    "\t${out_leg.chan}\t${out_leg.address}\t${out_leg.billtime}"
+		    "\t${out_leg.ringtime}\t${out_leg.duration}\t${out_leg.reason}"
+		: "${time}\t${billid}\t${chan}\t${address}\t${caller}\t${called}"
+		    "\t${billtime}\t${ringtime}\t${duration}\t${direction}\t${status}\t${reason}"
+	      )
+	    : (combined
+		? "${time},\"${billid}\",\"${chan}\",\"${address}\",\"${caller}\",\"${called}\""
+		    ",${billtime},${ringtime},${duration},\"${status}\",\"${reason}\""
+		    ",\"${out_leg.chan}\",\"${out_leg.address}\",${out_leg.billtime}"
+		    ",${out_leg.ringtime},${out_leg.duration},\"${out_leg.reason}\""
+		: "${time},\"${billid}\",\"${chan}\",\"${address}\",\"${caller}\",\"${called}\""
+		    ",${billtime},${ringtime},${duration},\"${direction}\",\"${status}\",\"${reason}\""
+	      );
+    }
     if (fname) {
 	m_file = ::open(fname,O_WRONLY|O_CREAT|O_APPEND|O_LARGEFILE,0640);
 	if (m_file < 0)
@@ -103,7 +120,7 @@ bool CdrFileHandler::received(Message &msg)
     if (!msg.getBoolValue("cdrwrite_cdrfile",true))
 	return false;
     String op(msg.getValue("operation"));
-    if (op != "finalize")
+    if (op != (m_combined ? YSTRING("combined") : YSTRING("finalize")))
 	return false;
     if (!msg.getBoolValue("cdrwrite",true))
         return false;
@@ -141,7 +158,8 @@ void CdrFilePlugin::initialize()
 	Engine::install(m_handler);
     }
     if (m_handler)
-	m_handler->init(file,cfg.getBoolValue("general","tabs",true),cfg.getValue("general","format"));
+	m_handler->init(file,cfg.getBoolValue("general","tabs",true),
+	    cfg.getBoolValue("general","combined",false),cfg.getValue("general","format"));
 }
 
 }; // anonymous namespace

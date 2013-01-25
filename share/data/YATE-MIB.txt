@@ -1850,6 +1850,20 @@ mgcpGatewayUp OBJECT-TYPE
 
 -- mgcpAlarms END
 
+-- engineAlarms BEGIN
+
+engineAlarms		OBJECT IDENTIFIER ::= { alarms 6 }
+
+unexpectedRestart OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Signal code that caused last YATE restart."
+	::= { engineAlarms 1 }
+
+-- engineAlarms END
+
 -- alarms END
 
 

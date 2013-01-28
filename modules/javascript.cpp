@@ -1373,7 +1373,7 @@ XmlElement* JsXML::getXml(const String* obj, bool take)
 	}
     }
     XmlDomParser parser;
-    if (!(parser.parse(obj->c_str()) && parser.completeText()))
+    if (!(parser.parse(obj->c_str()) || parser.completeText()))
 	return 0;
     if (!(parser.document() && parser.document()->root(true)))
 	return 0;

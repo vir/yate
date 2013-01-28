@@ -35,7 +35,7 @@
 ; timeout: int: Inter-digit timeout in milliseconds
 ;timeout=30000
 
-; retake: string: Exact sequence to exit DTMF pass-through mode
+; retake: string: Exact sequence (not regexp) to exit DTMF pass-through mode
 ;retake=###
 
 ; lang: string: Language for tones used by the pbx
@@ -88,21 +88,129 @@
 ;  the \0 .. \9 placeholders replaced with matches from the trigger
 
 
+[transfer]
+; blind transfer: make call on behalf of peer, hangup this
+; key: 1nnnnn
+trigger=\*1\([0-9]\+\)\*$
+target=\1
+
+[fortransfer]
+; put the peer on hold and dial another number
+; key: 2nnnnn
+trigger=\*2\([0-9]\+\)\*$
+target=\1
+onhangup=yes
+
+[dotransfer]
+; transfer held to active (2nd) call
+; key: *4
+trigger=\*4$
+
+[onhold]
+; toggle call on/off hold
+; key: *0
+trigger=\*0$
+
+[returnhold]
+; always return to the held peer
+; key: *7
+trigger=\*7$
+
+[conference]
+; put us and peer in an ad-hoc conference or return to conference
+; key: *3
+trigger=\*3$
+
+[returnconf]
+; always return to conference
+; key: *6
+trigger=\*6$
+
+[returntone]
+; always return to a dialtone, hang up peer
+; key: *9
+trigger=\*9$
+;operation=dialtone
+
+[secondcall]
+; hangup the peer and dial another number
+; key: 8nnnnn
+trigger=\*8\([0-9]\+\)\*$
+target=\1
+
+[seconddial]
+; execute a dial while at dialtone
+; key: nnnn*
+trigger=^\([0-9]\+\)\*$
+pbxstates=dial
+target=\1
+operation=secondcall
+
+[flush]
+; no operation, flush the buffer
+; key: #
+trigger=#$
+operation=
+pbxgreedy=yes
+pbxprompt=tone/info
+
+[flush-dial]
+; flush the buffer, return to dialtone
+; key: #
+trigger=#$
+pbxstates=dial
+pbxgreedy=yes
+pbxprompt=tone/info
+message=call.execute
+callto=tone/dial
+
+[passthrough]
+; enter DTMF pass-through mode
+; key: **
+trigger=\*\*
+pbxprompt=tone/probe/1
+
+[silence]
+; silence the dialtone, keep collecting tones
+; key: n
+trigger=^[0-9]$
+pbxstates=dial
+pastekeys=\0
+pbxgreedy=yes
+message=call.execute
+callto=tone/noise
+
+[collect]
+; keep collecting tones
+; key: nnnn
+trigger=^[0-9]\+$
+pbxstates=dial
+pastekeys=\0
+pbxgreedy=yes
+operation=
+
+[transparent]
+; send a tone as-is to the remote
+; key: n
+trigger=^[0-9]$
+
+
 ; Example: flush the key buffer with *#, play the error beep
 ;[flush]
 ;trigger=\*#$
 ;operation=
 ;pbxprompt=*
 
-
-; Example: enter DTMF pass-through mode with 3 successive asterisks
-;[passthrough]
-;trigger=\*\*\*
-;pbxprompt=tone/probe/1
-
-
 ; Example: enter conference named conf/dyn-N with key sequence #N# where N=0..9
 ;[conference]
 ;trigger=#\([0-9]\)#$
 ;message=call.conference
 ;room=conf/dyn-\1
+
+;[blessing]
+; allow the remote user to use the PBX functionality - dangerous!
+; key: *9
+;trigger=^\*9$
+;operation=setstate
+;pbxguest=no
+;id=${peerid}

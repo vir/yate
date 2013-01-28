@@ -90,13 +90,13 @@
 
 [transfer]
 ; blind transfer: make call on behalf of peer, hangup this
-; key: 1nnnnn
+; key: *1nnnnn*
 trigger=\*1\([0-9]\+\)\*$
 target=\1
 
 [fortransfer]
 ; put the peer on hold and dial another number
-; key: 2nnnnn
+; key: *2nnnnn*
 trigger=\*2\([0-9]\+\)\*$
 target=\1
 onhangup=yes
@@ -134,7 +134,7 @@ trigger=\*9$
 
 [secondcall]
 ; hangup the peer and dial another number
-; key: 8nnnnn
+; key: *8nnnnn*
 trigger=\*8\([0-9]\+\)\*$
 target=\1
 

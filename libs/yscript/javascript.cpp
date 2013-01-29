@@ -1841,8 +1841,15 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	case OpcIn:
 	case OpcOf:
 	    {
-		ExpOperation* obj = popValue(stack,context);
+		ExpOperation* obj = popOne(stack);
 		ExpOperation* fld = popOne(stack);
+		String name;
+		if (obj && obj->opcode() == OpcField) {
+		    name = obj->name();
+		    bool ok = runField(stack,*obj,context);
+		    TelEngine::destruct(obj);
+		    obj = ok ? popOne(stack) : 0;
+		}
 		if (!fld || !obj) {
 		    TelEngine::destruct(fld);
 		    TelEngine::destruct(obj);
@@ -1866,7 +1873,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		ExpWrapper* wrap = 0;
 		if (iter) {
 		    if (isOf)
-			iter->name(obj->name());
+			iter->name(name ? name : obj->name());
 		    wrap = new ExpWrapper(iter);
 #ifdef DEBUG
 		    *wrap << fld->name() << (isOf ? " of " : " in ") << obj->name();

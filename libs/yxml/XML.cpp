@@ -1560,7 +1560,7 @@ XmlSaxParser::Error XmlDocument::addChild(XmlChild* child)
 // Retrieve the document declaration
 XmlDeclaration* XmlDocument::declaration() const
 {
-    for (ObjList* o = m_beforeRoot.getChildren().skipNull(); o; o = o->skipNull()) {
+    for (ObjList* o = m_beforeRoot.getChildren().skipNull(); o; o = o->skipNext()) {
 	XmlDeclaration* d = (static_cast<XmlChild*>(o->get()))->xmlDeclaration();
 	if (d)
 	    return d;

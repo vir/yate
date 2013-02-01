@@ -903,12 +903,8 @@ bool JsCode::getOneInstruction(const char*& expr, GenObject* nested)
 	if (!getInstruction(expr,0,nested))
 	    return false;
     }
-    else {
-	if (!runCompile(expr,";}",nested))
-	    return false;
-	if (skipComments(expr) == ';')
-	    expr++;
-    }
+    else if (!runCompile(expr,";}",nested))
+	return false;
     return true;
 }
 
@@ -1138,6 +1134,8 @@ bool JsCode::parseIf(const char*& expr, GenObject* nested)
     skipComments(expr);
     const char* save = expr;
     unsigned int savedLine = m_lineNo;
+    if (*expr == ';')
+	skipComments(++expr);
     if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
 	ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
 	addOpcode(OpcLabel,cond->number());

@@ -2419,6 +2419,7 @@ bool JsParser::parse(const char* text, bool fragment)
 {
     if (TelEngine::null(text))
 	return false;
+    String::stripBOM(text);
     if (fragment)
 	return code() && static_cast<JsCode*>(code())->compile(text,this);
     JsCode* code = new JsCode;

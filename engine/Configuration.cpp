@@ -169,6 +169,7 @@ bool Configuration::load(bool warn)
     FILE *f = ::fopen(c_str(),"r");
     if (f) {
 	String sect;
+	bool start = true;
 	for (;;) {
 	    char buf[1024];
 	    if (!::fgets(buf,sizeof(buf),f))
@@ -181,6 +182,11 @@ bool Configuration::load(bool warn)
 	    if (pc)
 		*pc = 0;
 	    pc = buf;
+	    // skip over an initial UTF-8 BOM
+	    if (start) {
+		String::stripBOM(pc);
+		start = false;
+	    }
 	    while (*pc == ' ' || *pc == '\t')
 		pc++;
 	    switch (*pc) {

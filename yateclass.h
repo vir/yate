@@ -1672,6 +1672,44 @@ public:
     int fixUtf8(const char* replace = 0, unsigned int maxSeq = 4, bool overlong = false);
 
     /**
+     * Check if a string starts with UTF-8 Byte Order Mark
+     * @param str String to check for BOM
+     * @return True if the string starts with UTF-8 BOM
+     */
+    inline static bool checkBOM(const char* str)
+	{ return str && (str[0] == '\357') && (str[1] == '\273') && (str[2] == '\277'); }
+
+    /**
+     * Check if this string starts with UTF-8 Byte Order Mark
+     * @return True if the string starts with UTF-8 BOM
+     */
+    inline bool checkBOM() const
+	{ return checkBOM(c_str()); }
+
+    /**
+     * Advance a const string past an UTF-8 Byte Order Mark
+     * @param str String to check for and strip BOM
+     * @return True if the string started with UTF-8 BOM
+     */
+    inline static bool stripBOM(const char*& str)
+	{ return checkBOM(str) && (str += 3); }
+
+    /**
+     * Advance a string past an UTF-8 Byte Order Mark
+     * @param str String to check for and strip BOM
+     * @return True if the string started with UTF-8 BOM
+     */
+    inline static bool stripBOM(char*& str)
+	{ return checkBOM(str) && (str += 3); }
+
+    /**
+     * Strip an UTF-8 Byte Order Mark from the start of this string
+     * @return True if the string started with UTF-8 BOM
+     */
+    inline bool stripBOM()
+	{ return checkBOM(c_str()) && &(*this = c_str() + 3); }
+
+    /**
      * Get the hash of the contained string.
      * @return The hash of the string.
      */

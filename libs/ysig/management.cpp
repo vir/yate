@@ -339,16 +339,17 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     const unsigned char* buf = msu.getData(label.length()+1,1);
     if (!buf)
 	return false;
-    SS7MsgSNM* msg = SS7MsgSNM::parse(this,buf[0],label.type(),buf+1,len-1);
+    RefPointer<SS7MsgSNM> msg = SS7MsgSNM::parse(this,buf[0],label.type(),buf+1,len-1);
     if (!msg)
 	return false;
+    msg->deref();
 
     if (debugAt(DebugInfo)) {
 	String tmp;
 	msg->toString(tmp,label,debugAt(DebugAll));
 	const char* name = network ? network->toString().c_str() : 0;
 	Debug(this,DebugInfo,"Received %u bytes message (%p) on %s:%d%s",
-	    len,msg,name,sls,tmp.c_str());
+	    len,static_cast<void*>(msg),name,sls,tmp.c_str());
     }
 
     String addr;
@@ -747,7 +748,6 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    addr.c_str(),params.c_str(),len,tmp.c_str());
     }
 
-    TelEngine::destruct(msg);
     return true;
 }
 

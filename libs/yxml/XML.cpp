@@ -1598,11 +1598,17 @@ XmlSaxParser::Error XmlDocument::read(Stream& in, int* error)
 {
     XmlDomParser parser(static_cast<XmlParent*>(this),false);
     char buf[8096];
+    bool start = true;
     while (true) {
 	int rd = in.readData(buf,sizeof(buf) - 1);
 	if (rd > 0) {
 	    buf[rd] = 0;
-	    if (parser.parse(buf) || parser.error() == XmlSaxParser::Incomplete)
+	    const char* text = buf;
+	    if (start) {
+		String::stripBOM(text);
+		start = false;
+	    }
+	    if (parser.parse(text) || parser.error() == XmlSaxParser::Incomplete)
 		continue;
 	    break;
 	}

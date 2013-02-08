@@ -1,4 +1,4 @@
-yate (4.3.1~svn5393) UNRELEASED; urgency=low
+yate (4.3.1~svn5396) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -306,8 +306,14 @@ yate (4.3.1~svn5393) UNRELEASED; urgency=low
   * Updated to SVN revision 5393: + Fixed memory leak in SS7Management.
     + Strip UTF-8 BOM from start of configuration, XML and Javascript
     files.  + Added methods to detect UTF-8 BOM at start of strings.
+  * Updated to SVN revision 5396: + Added methods to detect UTF-8 BOM at
+    start of strings.  + Added cdrcombine project to Windows build.  +
+    Windows setup: removed accfile from client install, added cdrbuild
+    and dumbchan to client install.  + Differentiate "No component could
+    process the command" and "The component failed to process the
+    command" in rmanager control output.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 08 Feb 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 09 Feb 2013 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

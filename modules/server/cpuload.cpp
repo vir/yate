@@ -170,7 +170,7 @@ public:
     void initialize(const Configuration& params);
     inline void requestExit()
 	{ m_exit = true; }
-    bool update(const Message& msg);
+    bool update(Message& msg);
     inline Cpu* getCpu()
 	{ return m_cpu; }
 private:
@@ -279,35 +279,41 @@ void CpuUpdater::setCpu(Cpu* cpu)
 }
 
 // This method appends a target from chan.control message
-bool CpuUpdater::update(const Message& msg)
+bool CpuUpdater::update(Message& msg)
 {
     String mon = msg.getValue("operation","");
     NamedString* inc = 0;
     for (unsigned int i = 0;i < msg.count();i++) {
 	NamedString* ns = msg.getParam(i);
-	if (ns->name() == "operation" || ns->name() == "component" ||
-		ns->name() == "targetid")
+	if (!ns->name().startsWith("cpu.") || ns->name().length() <= 4)
 	    continue;
-	inc = ns;
+	inc = new NamedString(ns->name().substr(4),*ns);
     }
     if (!inc) {
 	DDebug(&s_module,DebugNote,"No target parameter for monitor %s",mon.c_str());
-	return false;
+	TelEngine::destruct(inc);
+	return TelEngine::controlReturn(&msg,true);
     }
     Lock lock(this);
+    bool ret = false;
     switch (lookup(mon,s_monitors,Unknown)) {
 	case YateUser:
-	    return m_yateUser.addTarget(*inc,m_oscillationTimer);
+	    ret = m_yateUser.addTarget(*inc,m_oscillationTimer);
+	    break;
 	case YateKernel:
-	    return m_yateSys.addTarget(*inc,m_oscillationTimer);
+	    ret = m_yateSys.addTarget(*inc,m_oscillationTimer);
+	    break;
 	case YateTotal:
-	    return m_yateTotal.addTarget(*inc,m_oscillationTimer);
+	    ret = m_yateTotal.addTarget(*inc,m_oscillationTimer);
+	    break;
 	case System:
-	    return m_system.addTarget(*inc,m_oscillationTimer);
+	    ret = m_system.addTarget(*inc,m_oscillationTimer);
+	    break;
 	default:
 	    Debug(&s_module,DebugNote,"Unknown cpu monitor %s",mon.c_str());
     }
-    return false;
+    TelEngine::destruct(inc);
+    return TelEngine::controlReturn(&msg,ret);
 }
 
 void CpuUpdater::initialize(const Configuration& params)

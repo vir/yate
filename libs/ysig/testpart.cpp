@@ -166,21 +166,21 @@ bool SS7Testing::control(NamedList& params)
 	switch (cmd) {
 	    case CMD_STOP:
 		m_timer.stop();
-		return true;
+		return TelEngine::controlReturn(&params,true);
 	    case CMD_START:
 		if (!(m_timer.interval() && m_lbl.length()))
-		    return false;
+		    return TelEngine::controlReturn(&params,false);
 		m_timer.start();
-		return sendTraffic();
+		return TelEngine::controlReturn(&params,sendTraffic());
 	    case CMD_SINGLE:
 		if (!m_lbl.length())
-		    return false;
+		    return TelEngine::controlReturn(&params,false);
 		m_timer.stop();
-		return sendTraffic();
+		return TelEngine::controlReturn(&params,sendTraffic());
 	    case CMD_RESET:
 		m_timer.stop();
 		m_lbl.assign(SS7PointCode::Other,m_lbl.opc(),m_lbl.dpc(),m_lbl.sls());
-		return true;
+		return TelEngine::controlReturn(&params,true);
 	}
     }
     return SignallingComponent::control(params);

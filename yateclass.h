@@ -2401,6 +2401,16 @@ YATE_API int lookup(const char* str, const TokenDict* tokens, int defvalue = 0, 
  */
 YATE_API const char* lookup(int value, const TokenDict* tokens, const char* defvalue = 0);
 
+class NamedList;
+
+/**
+ * Utility method to return from a chan.control handler
+ * @param params The parameters list
+ * @param ret The return value
+ * @param retVal The error message
+ * @return ret if the message was not generated from rmanager.
+ */
+YATE_API bool controlReturn(NamedList* params, bool ret, const char* retVal = 0);
 
 /**
  * A regular expression matching class.

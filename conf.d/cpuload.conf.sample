@@ -52,15 +52,16 @@
 ; reject = 78 - 100
 
 ; NOTE! : Parameters can be appended with chan.control message and with rmanager command
+; The target name must have "cpu." prefix
 ; Example: rmanager
-;  "control cpuload section target_name=interval_name,threshold_value,hysteresis_value;......"
+;  "control cpuload section cpu.target_name=interval_name,threshold_value,hysteresis_value;......"
 ; where "section" represents one from the sections above
 ; Example: chan.control
 ; Message* m = new Message("chan.control");
 ; m->addParam("targetid","cpuload");
 ; m->addParam("component","cpuload");
 ; m->addParam("operation",monitor); // One of the following : kernelLoad,userLoad,totalLoad,systemLoad
-; m->addParam("engine","interval_name,threshold_value,hysteresis_value;...... ");
+; m->addParam("cpu.engine","interval_name,threshold_value,hysteresis_value;...... ");
 ; Engine::enqueue(m); // Engine::dispatch(m);
 
 ; NOTE! : Target "engine" is reserved for engine call accept. If you want to modify engine monitors

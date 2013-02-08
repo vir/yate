@@ -850,7 +850,7 @@ bool SS7MTP3::control(Operation oper, NamedList* params)
 		if (ok)
 		    SS7Layer3::notify(-1);
 	    }
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	case Restart:
 	    if (ok) {
 		ok = false;
@@ -877,12 +877,12 @@ bool SS7MTP3::control(Operation oper, NamedList* params)
 		}
 		Debug(this,DebugNote,"Emergency resume attempt on %u links [%p]",cnt,this);
 	    }
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	case Status:
 	    printRoutes();
-	    return ok;
+	    return TelEngine::controlReturn(params,ok);;
     }
-    return false;
+    return TelEngine::controlReturn(params,false);
 }
 
 bool SS7MTP3::control(NamedList& params)

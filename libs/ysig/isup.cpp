@@ -4074,7 +4074,7 @@ bool SS7ISUP::control(NamedList& params)
 	return false;
     Lock mylock(this);
     if (!m_remotePoint)
-	return false;
+	return TelEngine::controlReturn(&params,false);
     unsigned int code1 = 1;
     if (circuits()) {
 	ObjList* o = circuits()->circuits().skipNull();
@@ -4094,7 +4094,7 @@ bool SS7ISUP::control(NamedList& params)
 		mylock.drop();
 		transmitMessage(msg,label,false);
 	    }
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case SS7MsgISUP::CQM:
 	    {
 		unsigned int code = params.getIntValue(YSTRING("circuit"),code1);
@@ -4105,7 +4105,7 @@ bool SS7ISUP::control(NamedList& params)
 		mylock.drop();
 		transmitMessage(msg,label,false);
 	    }
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case SS7MsgISUP::CCR:
 	    {
 		unsigned int code = params.getIntValue(YSTRING("circuit"),code1);
@@ -4123,25 +4123,25 @@ bool SS7ISUP::control(NamedList& params)
 		mylock.drop();
 		transmitMessage(msg,label,false);
 	    }
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case SS7MsgISUP::RSC:
 	    if (0 == (m_rscSpeedup = circuits() ? circuits()->count() : 0))
-		return false;
+		return TelEngine::controlReturn(&params,false);
 	    // Temporarily speed up reset interval to 10s or as provided
 	    m_rscTimer.interval(params,"interval",2,10,false,true);
 	    Debug(this,DebugNote,"Fast reset of %u circuits every %u ms",
 		m_rscSpeedup,(unsigned int)m_rscTimer.interval());
 	    if (m_rscTimer.started())
 		m_rscTimer.start(Time::msecNow());
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case SS7MsgISUP::BLK:
 	case SS7MsgISUP::UBL:
-	    return handleCicBlockCommand(params,cmd == SS7MsgISUP::BLK);
+	    return TelEngine::controlReturn(&params,handleCicBlockCommand(params,cmd == SS7MsgISUP::BLK));
 	case SS7MsgISUP::RLC:
 	    {
 		int code = params.getIntValue(YSTRING("circuit"));
 		if (code <= 0)
-		    return false;
+		    return TelEngine::controlReturn(&params,false);
 		SignallingMessageTimer* pending = findPendingMessage(SS7MsgISUP::RSC,code,true);
 		if (pending) {
 		    resetCircuit((unsigned int)code,false,false);
@@ -4154,12 +4154,12 @@ bool SS7ISUP::control(NamedList& params)
 		    RefPointer<SS7ISUPCall> call;
 		    findCall(code,call);
 		    if (!call)
-			return false;
+			return TelEngine::controlReturn(&params,false);
 		    mylock.drop();
 		    call->setTerminate(true,params.getValue(YSTRING("reason"),"normal"));
 		}
 	    }
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case SS7MsgISUP::UPA:
 	    if (!m_userPartAvail) {
 		const char* oldStat = statusName();
@@ -4176,13 +4176,13 @@ bool SS7ISUP::control(NamedList& params)
 		    engine()->notify(this,params);
 		}
 	    }
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case SS7MsgISUP::CtrlSave:
 	    setVerify(true,true);
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 #ifdef ISUP_HANDLE_CIC_EVENT_CONTROL
 	case SS7MsgISUP::CtrlCicEvent:
-	    return handleCicEventCommand(params);
+	    return TelEngine::controlReturn(&params,handleCicEventCommand(params));
 #endif
     }
     mylock.drop();

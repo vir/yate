@@ -81,7 +81,7 @@ Source: "Runtimes\qtxml4.dll"; DestDir: "{app}"; Components: client\qt\run
 Source: "Release\yate-service.exe"; DestDir: "{app}"; Flags: replacesameversion; Components: server
 Source: "Release\yate-console.exe"; DestDir: "{app}"; Flags: replacesameversion; Components: debug
 
-Source: "Release\server\accfile.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: client server
+Source: "Release\server\accfile.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\analog.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn
 Source: "Release\server\ysigchan.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn
 Source: "Release\server\ciscosm.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn
@@ -93,12 +93,12 @@ Source: "Release\analyzer.yate"; DestDir: "{app}\modules"; Flags: replacesamever
 Source: "Release\server\callcounters.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\callfork.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
 Source: "Release\callgen.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: debug
-Source: "Release\cdrbuild.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
+Source: "Release\cdrbuild.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: client server
 Source: "Release\cdrfile.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
 Source: "Release\cdrcombine.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
 Source: "Release\conference.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\base
 Source: "Release\client\dsoundchan.yate"; DestDir: "{app}\modules\client"; Flags: replacesameversion; Components: client
-Source: "Release\dumbchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
+Source: "Release\dumbchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: client server
 Source: "Release\extmodule.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
 Source: "Release\msgsniff.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: debug
 Source: "Release\regexroute.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: client server debug

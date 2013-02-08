@@ -394,7 +394,7 @@ bool DSoundPlay::control(NamedList& msg)
 	    outValue = 0;
 	msg.setParam("out_volume", String(outValue));
     }
-    return ok;
+    return TelEngine::controlReturn(params,ok);
 }
 
 void DSoundPlay::cleanup()
@@ -592,7 +592,7 @@ bool DSoundRec::control(TelEngine::NamedList &msg)
 
     inValue = (10 - m_rshift) * 10;
     msg.setParam("in_volume", String(inValue));
-    return ok;
+    return TelEngine::controlReturn(params,ok);
 }
 
 
@@ -615,7 +615,7 @@ bool DSoundSource::control(NamedList& msg)
 {
     if (m_dsound)
 	return m_dsound->control(msg);
-    return false;
+    return TelEngine::controlReturn(params,false);
 }
 
 

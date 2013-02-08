@@ -1019,7 +1019,7 @@ bool ConfConsumer::control(NamedList& msg)
 	m_smart = param->toBoolean();
 	ok = true;
     }
-    return DataConsumer::control(msg) || ok;
+    return TelEngine::controlReturn(&msg,DataConsumer::control(msg) || ok);
 }
 
 

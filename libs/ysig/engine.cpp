@@ -445,6 +445,9 @@ bool SignallingEngine::control(NamedList& params)
     Lock mylock(this);
     for (ObjList* l = m_components.skipNull(); l; l = l->skipNext())
 	ok = static_cast<SignallingComponent*>(l->get())->control(params) || ok;
+    // Do not add operation-status here !!
+    // The handler should return false because the message wasn't processed
+    // by any component
     return ok;
 }
 

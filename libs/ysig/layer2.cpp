@@ -254,7 +254,7 @@ bool SS7Layer2::control(NamedList& params)
     }
     if (!(cmp && toString() == cmp))
 	return false;
-    return (cmd >= 0) && control((Operation)cmd,&params);
+    return TelEngine::controlReturn(&params,(cmd >= 0) && control((Operation)cmd,&params));
 }
 
 bool SS7Layer2::getEmergency(NamedList* params, bool emg) const
@@ -433,16 +433,16 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
     switch (oper) {
 	case Pause:
 	    abortAlignment(false);
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	case Resume:
 	    if (aligned() || !m_autostart)
-		return true;
+		return TelEngine::controlReturn(params,true);
 	    // fall-through
 	case Align:
 	    startAlignment(getEmergency(params));
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	case Status:
-	    return operational();
+	    return TelEngine::controlReturn(params,operational());
 	default:
 	    return SignallingReceiver::control((SignallingInterface::Operation)oper,params);
     }

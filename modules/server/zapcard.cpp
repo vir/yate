@@ -1902,19 +1902,19 @@ bool ZapInterface::control(Operation oper, NamedList* params)
 	case EnableTx:
 	case DisableTx:
 	    if (m_readOnly == (oper == DisableTx))
-		return true;
+		return TelEngine::controlReturn(params,true);
 	    m_readOnly = (oper == DisableTx);
 	    m_sendReadOnly = false;
 	    Debug(this,DebugInfo,"Tx is %sabled [%p]",m_readOnly?"dis":"en",this);
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	case Query:
-	    return valid();
+	    return TelEngine::controlReturn(params,valid());
 	default:
 	    return SignallingInterface::control(oper,params);
     }
     if (oper == Enable) {
 	if (valid())
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	bool ok = m_device.valid() || m_device.open(m_numbufs,m_bufsize);
 	if (ok)
 	    ok = ZapWorkerClient::start(m_priority,this,debugName());
@@ -1926,7 +1926,7 @@ bool ZapInterface::control(Operation oper, NamedList* params)
 	    Debug(this,DebugWarn,"Enable failed [%p]",this);
 	    control(Disable,0);
 	}
-	return ok;
+	return TelEngine::controlReturn(params,ok);
     }
     // oper is Disable
     bool ok = valid();
@@ -1935,7 +1935,7 @@ bool ZapInterface::control(Operation oper, NamedList* params)
     m_device.close();
     if (ok)
 	Debug(this,DebugAll,"Disabled [%p]",this);
-    return true;
+    return TelEngine::controlReturn(params,true);
 }
 
 // Check if received any data in the last interval. Notify receiver

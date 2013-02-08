@@ -614,12 +614,12 @@ bool CoreAudioSource::control(NamedList& params)
 {
     DDebug(DebugAll,"CoreAudioSource::control() [%p]",this);
     if (!m_volSettable)
-	return false;
+	return TelEngine::controlReturn(params,false);
     int vol = params.getIntValue("in_volume",-1);
     if (vol == -1) {
 	Debug(DebugAll,"CoreAudioSource::control() [%p] - invalid value to set for volume",this);
-	return false;
-    }   
+	return TelEngine::controlReturn(params,false);
+    }
     Float32 volValue = vol / 100.0;
 
     bool setVolStatus = false;
@@ -650,8 +650,8 @@ bool CoreAudioSource::control(NamedList& params)
         Debug(DebugAll,"CoreAudioSource::control() [%p] - set volume failed on all channels",this);
 
     if(params.getParam("out_volume"))
-	return false;
-    return setVolStatus;
+	return TelEngine::controlReturn(params,false);
+    return TelEngine::controlReturn(params,setVolStatus);
 }
 	
 	
@@ -836,11 +836,11 @@ bool CoreAudioConsumer::control(NamedList& params)
 {
     DDebug(DebugAll,"CoreAudioConsumer::control() [%p]",this);
     if (!m_volSettable)
-	return false;
+	return TelEngine::controlReturn(&params,false);
     int vol = params.getIntValue("out_volume",-1);
     if (vol == -1) {
-    	Debug(DebugAll,"CoreAudioConsumer::control() [%p] invalid value to set for volume",this);
-    	return false;
+	Debug(DebugAll,"CoreAudioConsumer::control() [%p] invalid value to set for volume",this);
+	return TelEngine::controlReturn(&params,false);
     }
     Float32 volValue = vol / 100.0;
 
@@ -872,7 +872,7 @@ bool CoreAudioConsumer::control(NamedList& params)
     if (!setVolStatus)
         Debug(DebugAll,"CoreAudioConsumer::control() [%p] - set volume failed on all channels",this);
 
-    return setVolStatus;
+    return TelEngine::controlReturn(params,setVolStatus);
 }
 	
 CoreAudioChan::CoreAudioChan(const String& dev, unsigned int rate)

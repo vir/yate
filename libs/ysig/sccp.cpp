@@ -4401,27 +4401,27 @@ bool SS7SCCP::control(NamedList& params)
     switch (cmd) {
 	case Status:
 	    printStatus(false);
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case FullStatus:
 	    if (m_extendedMonitoring)
 		printStatus(true);
 	    else
 		Output("Extended monitoring disabled!! Full Status unavailable!");
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case EnableExtendedMonitoring:
 	    m_extendedMonitoring = true;
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case DisableExtendedMonitoring:
 	    m_extendedMonitoring = false;
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case EnablePrintMsg:
 	    m_printMsg = true;
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case DisablePrintMsg:
 	    m_printMsg = false;
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
     }
-    return true;
+    return TelEngine::controlReturn(&params,false);
 }
 
 void SS7SCCP::printStatus(bool extended)

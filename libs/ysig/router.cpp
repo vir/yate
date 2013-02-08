@@ -69,6 +69,7 @@ static const TokenDict s_dict_control[] = {
     { "show", SS7Router::Status },
     { "pause", SS7Router::Pause },
     { "resume", SS7Router::Resume },
+    { "restart", SS7Router::Restart },
     { "traffic", SS7Router::Traffic },
     { "advertise", SS7Router::Advertise },
     { "prohibit", SS7MsgSNM::TFP },
@@ -1871,13 +1872,13 @@ bool SS7Router::control(NamedList& params)
     switch (cmd) {
 	case SS7Router::Pause:
 	    disable();
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case SS7Router::Resume:
 	    if (m_started || m_restart.started())
-		return true;
+		return TelEngine::controlReturn(&params,true);
 	    // fall through
 	case SS7Router::Restart:
-	    return restart();
+	    return TelEngine::controlReturn(&params,restart());
 	case SS7Router::Traffic:
 	    if (!m_trafficSent.started())
 		m_trafficSent.start();
@@ -1886,16 +1887,16 @@ bool SS7Router::control(NamedList& params)
 	case SS7Router::Status:
 	    printRoutes();
 	    printStats();
-	    return operational();
+	    return TelEngine::controlReturn(&params,operational());
 	case SS7Router::Advertise:
 	    if (!(m_transfer && (m_started || m_phase2)))
-		return false;
+		return TelEngine::controlReturn(&params,false);
 	    notifyRoutes();
-	    return true;
+	    return TelEngine::controlReturn(&params,true);
 	case SS7MsgSNM::RST:
 	case SS7MsgSNM::RSR:
 	    if (!m_started)
-		return false;
+		return TelEngine::controlReturn(&params,false);
 	    // fall through
 	case SS7MsgSNM::TRA:
 	case SS7MsgSNM::TFP:
@@ -1932,25 +1933,25 @@ bool SS7Router::control(NamedList& params)
 		    TelEngine::destruct(l);
 		    SS7Route::State state = getRouteView(type,pc.pack(type),opc.pack(type));
 		    if (SS7Route::Unknown == state)
-			return false;
+			return TelEngine::controlReturn(&params,false);
 		    if (routeState(static_cast<SS7MsgSNM::Type>(cmd)) == state)
-			return true;
+			return TelEngine::controlReturn(&params,true);
 		    // a route state changed, advertise to the adjacent node
 		    if (!(m_transfer && m_started && m_mngmt))
-			return false;
+			return TelEngine::controlReturn(&params,false);
 		    const char* oper = lookup(state,s_dict_states);
 		    if (!oper)
-			return false;
+			return TelEngine::controlReturn(&params,false);
 		    NamedList* ctl = m_mngmt->controlCreate(oper);
 		    if (!ctl)
-			return false;
+			return TelEngine::controlReturn(&params,false);
 		    Debug(this,DebugInfo,"Requesting %s %s to %s [%p]",
 			dest->c_str(),oper,addr->c_str(),this);
 		    ctl->addParam("address",addr->c_str());
 		    ctl->addParam("destination",*dest);
 		    ctl->setParam("automatic",String::boolText(true));
 		    m_mngmt->controlExecute(ctl);
-		    return true;
+		    return TelEngine::controlReturn(&params,true);
 		}
 		String src = params.getParam(YSTRING("source"));
 		if (src.null()) {
@@ -1991,7 +1992,7 @@ bool SS7Router::control(NamedList& params)
 			sendRestart(type,pc.pack(type));
 		    }
 		}
-		return true;
+		return TelEngine::controlReturn(&params,true);
 	    }
 	    break;
 	case -1:
@@ -2002,7 +2003,7 @@ bool SS7Router::control(NamedList& params)
     }
     if (err)
 	Debug(this,DebugWarn,"Control error: %s [%p]",err.c_str(),this);
-    return false;
+   return TelEngine::controlReturn(&params,false);
 }
 
 void SS7Router::printStats()

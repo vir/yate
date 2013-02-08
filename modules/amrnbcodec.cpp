@@ -334,7 +334,7 @@ bool AmrEncoder::control(NamedList& params)
 	m_cmr = (Mode)mode;
 	ok = true;
     }
-    return AmrTrans::control(params) || ok;
+    return TelEngine::controlReturn(&params,AmrTrans::control(params) || ok);
 }
 
 

@@ -841,13 +841,13 @@ bool SS7Management::control(NamedList& params)
 			    unsigned char data[5];
 			    int len = SS7PointCode::length(t)+1;
 			    data[0] = cmd;
-			    return dest.store(t,data+1,spare) &&
+			    return TelEngine::controlReturn(&params,dest.store(t,data+1,spare) &&
 				((cmd == SS7MsgSNM::TFP) ?
 				    postpone(new SS7MSU(txSio,lbl,data,len),lbl,txSls,1000) :
-				    (transmitMSU(SS7MSU(txSio,lbl,data,len),lbl,txSls) >= 0));
+				    (transmitMSU(SS7MSU(txSio,lbl,data,len),lbl,txSls) >= 0)));
 			}
 		    }
-		    return false;
+		    return TelEngine::controlReturn(&params,false);
 		// Messages sent with just the code
 		case SS7MsgSNM::ECO:
 		case SS7MsgSNM::TRA:
@@ -862,19 +862,19 @@ bool SS7Management::control(NamedList& params)
 		case SS7MsgSNM::CNP:
 		    {
 			unsigned char data = cmd;
-			return transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,txSls) >= 0;
+			return TelEngine::controlReturn(&params,transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,txSls) >= 0);
 		    }
 		// Messages postponed with just the code
 		case SS7MsgSNM::LIN:
 		    {
 			unsigned char data = cmd;
-			return postpone(new SS7MSU(txSio,lbl,&data,1),lbl,txSls,2500,5000);
+			return TelEngine::controlReturn(&params,postpone(new SS7MSU(txSio,lbl,&data,1),lbl,txSls,2500,5000));
 		    }
 		case SS7MsgSNM::LUN:
 		case SS7MsgSNM::LFU:
 		    {
 			unsigned char data = cmd;
-			return postpone(new SS7MSU(txSio,lbl,&data,1),lbl,txSls,1200,2400);
+			return TelEngine::controlReturn(&params,postpone(new SS7MSU(txSio,lbl,&data,1),lbl,txSls,1200,2400));
 		    }
 		// Changeover messages
 		case SS7MsgSNM::COO:
@@ -883,7 +883,7 @@ bool SS7Management::control(NamedList& params)
 		case SS7MsgSNM::XCA:
 		    if (params.getBoolValue(YSTRING("emergency"),false)) {
 			unsigned char data = (SS7MsgSNM::COO == cmd) ? SS7MsgSNM::ECO : SS7MsgSNM::ECA;
-			return transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,txSls) >= 0;
+			return TelEngine::controlReturn(&params,transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,txSls) >= 0);
 		    }
 		    else {
 			int seq = params.getIntValue(YSTRING("sequence"),0) & 0x00ffffff;
@@ -913,11 +913,11 @@ bool SS7Management::control(NamedList& params)
 				break;
 			    default:
 				Debug(DebugStub,"Please implement COO for type %u",t);
-				return false;
+				return TelEngine::controlReturn(&params,false);
 			}
-			return (cmd == SS7MsgSNM::COA)
+			return TelEngine::controlReturn(&params,(cmd == SS7MsgSNM::COA)
 			    ? transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,txSls) >= 0
-			    : postpone(new SS7MSU(txSio,lbl,&data,len),lbl,txSls,1800,0,true);
+			    : postpone(new SS7MSU(txSio,lbl,&data,len),lbl,txSls,1800,0,true));
 		    }
 		// Changeback messages
 		case SS7MsgSNM::CBD:
@@ -938,11 +938,11 @@ bool SS7Management::control(NamedList& params)
 				break;
 			    default:
 				Debug(DebugStub,"Please implement CBD for type %u",t);
-				return false;
+				return TelEngine::controlReturn(&params,false);
 			}
-			return (cmd == SS7MsgSNM::CBA)
+			return TelEngine::controlReturn(&params,(cmd == SS7MsgSNM::CBA)
 			    ? transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,txSls) >= 0
-			    : postpone(new SS7MSU(txSio,lbl,&data,len),lbl,txSls,1000,2000,true);
+			    : postpone(new SS7MSU(txSio,lbl,&data,len),lbl,txSls,1000,2000,true));
 		    }
 		default:
 		    if (cmd >= 0)
@@ -952,7 +952,7 @@ bool SS7Management::control(NamedList& params)
 	}
     }
     TelEngine::destruct(l);
-    return false;
+    return TelEngine::controlReturn(&params,false);
 }
 
 void SS7Management::notify(SS7Layer3* network, int sls)

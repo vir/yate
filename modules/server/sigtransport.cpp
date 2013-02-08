@@ -206,7 +206,7 @@ public:
     bool addSocket(Socket* socket,SocketAddr& adress);
     virtual bool reliable() const
 	{ return m_type == Sctp || m_type == Tcp; }
-    virtual bool control(const NamedList &param);
+    virtual bool control(NamedList &param);
     virtual bool connected(int id) const
 	{ return m_state == Up;}
     virtual void attached(bool ual)
@@ -665,6 +665,7 @@ Transport::~Transport()
 
 void Transport::destroyed()
 {
+    SignallingComponent::destroyed();
     m_readerMutex.lock();
     TReader* tmp = m_reader;
     m_reader = 0;
@@ -686,22 +687,29 @@ void Transport::resetReader(TReader* caller)
 	TelEngine::destruct(caller);
 }
 
-bool Transport::control(const NamedList &param)
+bool Transport::control(NamedList& param)
 {
+    String cmp = param.getValue(YSTRING("component"));
+    if (!cmp)
+	return false;
+    if (cmp.startsWith(YSTRING("Transport:")) && cmp != toString())
+	return false;
+    if (toString() != String("Transport:" + cmp))
+	return false;
     String oper = param.getValue(YSTRING("operation"),YSTRING("init"));
     if (oper == YSTRING("init"))
-	return initialize(&param);
+	return TelEngine::controlReturn(&param,initialize(&param));
     else if (oper == YSTRING("add_addr")) {
 	if (!m_listener) {
 	    Debug(this,DebugWarn,"Unable to listen on another address, listener is missing");
-	    return false;
+	    return TelEngine::controlReturn(&param,false);
 	}
-	return m_listener->addAddress(param);
+	return TelEngine::controlReturn(&param,m_listener->addAddress(param));
     } else if (oper == YSTRING("reconnect")) {
 	reconnect(true);
-	return true;
+	return TelEngine::controlReturn(&param,true);
     }
-    return false;
+    return TelEngine::controlReturn(&param,false);
 }
 
 void Transport::reconnect(bool force)

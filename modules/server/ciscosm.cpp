@@ -1708,10 +1708,10 @@ bool SLT::control(Operation oper, NamedList* params)
 	case Pause:
 	    setReqStatus(OutOfService);
 	    sendManagement(Disconnect_R);
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	case Resume:
 	    if (aligned() || !m_autostart)
-		return true;
+		return TelEngine::controlReturn(params,true);
 	    // fall through
 	case Align:
 	    {
@@ -1727,9 +1727,9 @@ bool SLT::control(Operation oper, NamedList* params)
 			configure(true);
 		}
 	    }
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	case Status:
-	    return aligned() && m_status == Configured;
+	    return TelEngine::controlReturn(params,aligned() && m_status == Configured);
 	default:
 	    return false;//SignallingReceiver::control((SignallingInterface::Operation)oper,params);
     }

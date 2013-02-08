@@ -183,6 +183,9 @@ void SIGTRAN::attach(SIGTransport* trans)
     }
     if (trans) {
 	trans->attach(this);
+	SignallingEngine* engine = SignallingEngine::self();
+	if (engine)
+	    engine->insert(trans);
 	trans->deref();
     }
 }
@@ -1416,7 +1419,7 @@ bool SS7M2PA::control(NamedList& params)
     }
     if (!(cmp && toString() == cmp))
 	return false;
-    return (cmd >= 0) && control((M2PAOperations)cmd,&params);
+    return TelEngine::controlReturn(&params,(cmd >= 0) && control((M2PAOperations)cmd,&params));
 }
 
 bool SS7M2PA::control(M2PAOperations oper, NamedList* params)
@@ -1433,22 +1436,22 @@ bool SS7M2PA::control(M2PAOperations oper, NamedList* params)
 	    m_state = OutOfService;
 	    abortAlignment("Control request pause.");
 	    transmitLS();
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	case Resume:
 	    if (aligned() || !m_autostart)
-		return true;
+		return TelEngine::controlReturn(params,true);
 	case Align:
 	{
 	    m_state = getEmergency(params) ? ProvingEmergency : ProvingNormal;
 	    abortAlignment("Control request align.");
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	}
 	case Status:
-	    return operational();
+	    return TelEngine::controlReturn(params,operational());
 	case TransRestart:
-	    return restart(true);
+	    return TelEngine::controlReturn(params,restart(true));
 	default:
-	    return false;
+	    return TelEngine::controlReturn(params,false);
     }
 }
 
@@ -1949,22 +1952,22 @@ bool SS7M2UA::control(Operation oper, NamedList* params)
 		    SIGAdaptation::addTag(buf,0x0001,(u_int32_t)m_iid);
 		// Release Request
 		if (!adaptation()->transmitMSG(SIGTRAN::MAUP,4,buf,getStreamId()))
-		    return false;
+		    return TelEngine::controlReturn(params,false);
 		getSequence();
 	    }
 	    m_linkState = LinkDown;
 	    if (!m_retrieve.started())
 		SS7Layer2::notify();
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	case Resume:
 	    if (operational())
-		return true;
+		return TelEngine::controlReturn(params,true);
 	    if (!m_autostart)
-		return activate();
+		return TelEngine::controlReturn(params,activate());
 	    if (m_retrieve.started()) {
 		if (LinkDown == m_linkState)
 		    m_linkState = getEmergency(params,false) ? LinkReqEmg : LinkReq;
-		return activate();
+		return TelEngine::controlReturn(params,activate());
 	    }
 	    // fall through
 	case Align:
@@ -1982,18 +1985,19 @@ bool SS7M2UA::control(Operation oper, NamedList* params)
 		SIGAdaptation::addTag(buf,0x0302,(emg ? 2 : 3));
 		// State Request
 		if (!adaptation()->transmitMSG(SIGTRAN::MAUP,7,buf,getStreamId()))
-		    return false;
+		    return TelEngine::controlReturn(params,false);
 		buf.clear();
 		if (m_iid >= 0)
 		    SIGAdaptation::addTag(buf,0x0001,(u_int32_t)m_iid);
 		// Establish Request
-		return adaptation()->transmitMSG(SIGTRAN::MAUP,2,buf,getStreamId());
+		return TelEngine::controlReturn(params,
+			adaptation()->transmitMSG(SIGTRAN::MAUP,2,buf,getStreamId()));
 	    }
-	    return activate();
+	    return TelEngine::controlReturn(params,activate());
 	case Status:
-	    return operational();
+	    return TelEngine::controlReturn(params,operational());
 	default:
-	    return false;
+	    return TelEngine::controlReturn(params,false);
     }
 }
 

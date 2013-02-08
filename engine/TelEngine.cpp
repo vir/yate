@@ -432,6 +432,19 @@ static void dbg_dist_helper(int level, const char* buf, const char* fmt, ...)
     va_end(va);
 }
 
+bool controlReturn(NamedList* params, bool ret, const char* retVal)
+{
+    if (retVal && params)
+	params->setParam("retVal",retVal);
+    if (ret || !params || !params->getObject("Message"))
+	return ret;
+    const char* module = params->getValue("module");
+    if (!module || YSTRING("rmanager") != module)
+	return ret;
+    params->setParam("operation-status",String(ret));
+    return true;
+}
+
 Debugger::~Debugger()
 {
     if (m_name) {

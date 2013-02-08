@@ -1361,6 +1361,7 @@ bool Connection::processLine(const char *line, bool saveLine)
 	Message m("chan.control");
 	m.addParam("targetid",id);
 	m.addParam("component",id);
+	m.addParam("module","rmanager");
 	static const Regexp r("^\\(.* \\)\\?\\([^= ]\\+\\)=\\([^=]*\\)$");
 	while (ctrl) {
 	    if (!ctrl.matches(r)) {
@@ -1371,10 +1372,24 @@ bool Connection::processLine(const char *line, bool saveLine)
 	    ctrl = ctrl.matchString(1).trimBlanks();
 	}
 	if (Engine::dispatch(m)) {
-	    if (m_machine)
-		str = "%%=control:success:" + id + ":" + m.retValue() + "\r\n";
+	    NamedString* opStatus = m.getParam(YSTRING("operation-status"));
+	    String retVal;
+	    String* stringRet = m.getParam(YSTRING("retVal"));
+	    if (stringRet)
+		retVal = *stringRet;
 	    else
-		str = "Control '" + id + "' " + m.retValue().safe("OK") + "\r\n";
+		retVal = m.retValue();
+	    if (!opStatus || opStatus->toBoolean()) {
+		if (m_machine)
+		    str = "%%=control:success:" + id + ":" + retVal + "\r\n";
+		else
+		    str = "Control '" + id + "' " + retVal.safe("OK") + "\r\n";
+	    } else {
+		if (m_machine)
+		    str = "%%=control:error:" + id + ":" + retVal + "\r\n";
+		else
+		    str = "Control '" + id + "' " + retVal.safe("FAILED") + "\r\n";
+	    }
 	}
 	else
 	    str = (m_machine ? "%%=control:fail:" : "Could not control ") + str + "\r\n";

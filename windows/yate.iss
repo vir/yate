@@ -95,6 +95,7 @@ Source: "Release\callfork.yate"; DestDir: "{app}\modules"; Flags: replacesamever
 Source: "Release\callgen.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: debug
 Source: "Release\cdrbuild.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
 Source: "Release\cdrfile.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
+Source: "Release\cdrcombine.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
 Source: "Release\conference.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\base
 Source: "Release\client\dsoundchan.yate"; DestDir: "{app}\modules\client"; Flags: replacesameversion; Components: client
 Source: "Release\dumbchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server

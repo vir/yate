@@ -45,9 +45,9 @@ public:
     virtual bool runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    GenObject* resolve(ObjList& stack, String& name, GenObject* context);
 private:
     GenObject* resolveTop(ObjList& stack, const String& name, GenObject* context);
-    GenObject* resolve(ObjList& stack, String& name, GenObject* context);
     bool runStringFunction(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context);
     bool runStringField(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
@@ -125,6 +125,7 @@ public:
 	OpcUndefined,
 	OpcInclude,
 	OpcRequire,
+	OpcDelete,
     };
     inline JsCode()
 	: ExpEvaluator(C), m_label(0), m_depth(0)
@@ -295,6 +296,7 @@ static const TokenDict s_unaryOps[] =
 {
     MAKEOP("new", New),
     MAKEOP("typeof", Typeof),
+    MAKEOP("delete", Delete),
     { 0, 0 }
 };
 
@@ -1444,6 +1446,7 @@ int JsCode::getPrecedence(ExpEvaluator::Opcode oper) const
 	case OpcNeIdentity:
 	    return 4;
 	case OpcNew:
+	case OpcDelete:
 	case OpcIndex:
 	    return 12;
 	case OpcFieldOf:
@@ -1993,6 +1996,32 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    return false;
 	    }
 	    break;
+	case OpcDelete:
+	{
+	    ExpOperation* op = popOne(stack);
+	    if (!(context && op))
+		return false;
+	    if (op->opcode() != OpcField) {
+		pushOne(stack,new ExpOperation(true));
+		TelEngine::destruct(op);
+		return true;
+	    }
+	    ScriptRun* sr = static_cast<ScriptRun*>(context);
+	    JsObject* obj = 0;
+	    String name = op->name();
+	    TelEngine::destruct(op);
+	    JsContext* ctx = YOBJECT(JsContext,sr->context());
+	    if (ctx)
+		obj = YOBJECT(JsObject,ctx->resolve(stack,name,context));
+	    bool ret = false;
+	    if (obj && (!obj->frozen() || !obj->hasField(stack,name,context))
+		    && obj->toString() != YSTRING("()")) {
+		obj->params().clearParam(name);
+		ret = true;
+	    }
+	    pushOne(stack,new ExpOperation(ret));
+	    return true;
+	}
 	default:
 	    return ExpEvaluator::runOperation(stack,oper,context);
     }

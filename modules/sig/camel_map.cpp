@@ -7170,18 +7170,18 @@ const XMLMap TcapToXml::s_xmlMap[] = {
     {Regexp("^ReturnCause$"),                                  "transport.sccp",                        "ReturnCause",               TcapToXml::Element},
     {Regexp("^HopCounter$"),                                   "transport.sccp",                        "HopCounter",                TcapToXml::Element},
     {Regexp("^CallingPartyAddress\\.gt\\.encoding$"),          "transport.sccp.CallingPartyAddress.gt", "encoding",                  TcapToXml::Attribute},
-    {Regexp("^CallingPartyAddress\\.gt\\.np$"),                "transport.sccp.CallingPartyAddress.gt", "plan",                      TcapToXml::Attribute},
+    {Regexp("^CallingPartyAddress\\.gt\\.plan$"),              "transport.sccp.CallingPartyAddress.gt", "plan",                      TcapToXml::Attribute},
     {Regexp("^CallingPartyAddress\\.gt\\.nature$"),            "transport.sccp.CallingPartyAddress.gt", "nature",                    TcapToXml::Attribute},
-    {Regexp("^CallingPartyAddress\\.gt\\.tt$"),                "transport.sccp.CallingPartyAddress.gt", "translation",               TcapToXml::Attribute},
+    {Regexp("^CallingPartyAddress\\.gt\\.translation$"),       "transport.sccp.CallingPartyAddress.gt", "translation",               TcapToXml::Attribute},
     {Regexp("^CallingPartyAddress\\.gt$"),                     "transport.sccp.CallingPartyAddress",    "gt",                        TcapToXml::Element},
     {Regexp("^CallingPartyAddress\\.ssn$"),                    "transport.sccp.CallingPartyAddress",    "ssn",                       TcapToXml::Element},
     {Regexp("^CallingPartyAddress\\.route$"),                  "transport.sccp.CallingPartyAddress",    "route",                     TcapToXml::Element},
     {Regexp("^CallingPartyAddress\\.pointcode$"),              "transport.sccp.CallingPartyAddress",    "pointcode",                 TcapToXml::Element},
     {Regexp("^CallingPartyAddress\\..\\+$"),                   "transport.sccp.CallingPartyAddress",    "",                          TcapToXml::Element},
     {Regexp("^CalledPartyAddress\\.gt\\.encoding$"),           "transport.sccp.CalledPartyAddress.gt",  "encoding",                  TcapToXml::Attribute},
-    {Regexp("^CalledPartyAddress\\.gt\\.np$"),                 "transport.sccp.CalledPartyAddress.gt",  "plan",                      TcapToXml::Attribute},
+    {Regexp("^CalledPartyAddress\\.gt\\.plan$"),               "transport.sccp.CalledPartyAddress.gt",  "plan",                      TcapToXml::Attribute},
     {Regexp("^CalledPartyAddress\\.gt\\.nature$"),             "transport.sccp.CalledPartyAddress.gt",  "nature",                    TcapToXml::Attribute},
-    {Regexp("^CalledPartyAddress\\.gt\\.tt$"),                 "transport.sccp.CalledPartyAddress.gt",  "translation",               TcapToXml::Attribute},
+    {Regexp("^CalledPartyAddress\\.gt\\.translation$"),        "transport.sccp.CalledPartyAddress.gt",  "translation",               TcapToXml::Attribute},
     {Regexp("^CalledPartyAddress\\.gt$"),                      "transport.sccp.CalledPartyAddress",     "gt",                        TcapToXml::Element},
     {Regexp("^CalledPartyAddress\\.ssn$"),                     "transport.sccp.CalledPartyAddress",     "ssn",                       TcapToXml::Element},
     {Regexp("^CalledPartyAddress\\.route$"),                   "transport.sccp.CalledPartyAddress",     "route",                     TcapToXml::Element},
@@ -7583,15 +7583,9 @@ bool TcapToXml::decodeOperation(Operation* op, XmlElement* elem, DataBlock& data
 const TCAPMap XmlToTcap::s_tcapMap[] = {
     {"c",                                                 false,   ""},
     {"transport.mtp.",                                    true,    ""},
-    {"transport.sccp.CallingPartyAddress.gt.encoding",    false,  "CallingPartyAddress.gt.encoding"},
-    {"transport.sccp.CallingPartyAddress.gt.plan",        false,  "CallingPartyAddress.gt.np"},
-    {"transport.sccp.CallingPartyAddress.gt.nature",      false,  "CallingPartyAddress.gt.nature"},
-    {"transport.sccp.CallingPartyAddress.gt.translation", false,  "CallingPartyAddress.gt.tt"},
+    {"transport.sccp.CallingPartyAddress.gt.",            true,   "CallingPartyAddress.gt"},
     {"transport.sccp.CallingPartyAddress.",               true,   "CallingPartyAddress"},
-    {"transport.sccp.CalledPartyAddress.gt.encoding",     false,  "CalledPartyAddress.gt.encoding"},
-    {"transport.sccp.CalledPartyAddress.gt.plan",         false,  "CalledPartyAddress.gt.np"},
-    {"transport.sccp.CalledPartyAddress.gt.nature",       false,  "CalledPartyAddress.gt.nature"},
-    {"transport.sccp.CalledPartyAddress.gt.translation",  false,  "CalledPartyAddress.gt.tt"},
+    {"transport.sccp.CalledPartyAddress.gt.",             true,   "CalledPartyAddress.gt"},
     {"transport.sccp.CalledPartyAddress.",                true,   "CalledPartyAddress"},
     {"transport.sccp.",                                   true,   ""},
     {"transport.tcap.request-type",                       false,  "tcap.request.type"},
@@ -7945,10 +7939,14 @@ bool XmlToTcap::parse(NamedList& tcapParams, XmlElement* elem, String prefix, co
 	String find = (!TelEngine::null(prefix) ? prefix + "." + ns->name() : ns->name());
 	const TCAPMap* map = findMap(find);
 	if (map) {
-	    if (!TelEngine::null(map->name))
-		tcapParams.addParam(map->name,*ns);
-	    else
-		tcapParams.addParam(ns->name(),elem->getText());
+	    if (TelEngine::null(map->name))
+		tcapParams.addParam(find,*ns);
+	    else {
+		if (map->isPrefix)
+		    tcapParams.addParam(map->name + "." + ns->name(),*ns);
+		else
+		    tcapParams.addParam(map->name,*ns);
+	    }
 	}
     }
     if (!hasChildren) {

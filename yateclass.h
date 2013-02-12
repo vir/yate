@@ -1251,6 +1251,18 @@ public:
      */
     static const ObjList& empty();
 
+    /**
+     * Sort this list
+     * @param callbackCompare pointer to a callback function that should compare two objects.
+     * <pre>
+     *     obj1 First object of the comparation
+     *     obj2 Second object of the comparation
+     *     context Data context
+     *     return 0 if the objects are equal; positive value if obj2 > obj1; negative value if obj1 > obj2
+     * </pre>
+     * @param context Context data.
+     */
+    void sort(int (*callbackCompare)(GenObject* obj1, GenObject* obj2, void* context), void* context = 0);
 private:
     ObjList* m_next;
     GenObject* m_obj;
@@ -3800,9 +3812,10 @@ public:
     /**
      * Remove a specific parameter
      * @param param Pointer to parameter to remove
+     * @param delParam True to destroy the parameter
      * @return Reference to this NamedList
      */
-    NamedList& clearParam(NamedString* param);
+    NamedList& clearParam(NamedString* param, bool delParam = true);
 
     /**
      * Copy a parameter from another NamedList, clears it if not present there

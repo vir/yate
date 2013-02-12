@@ -45,9 +45,9 @@ public:
     virtual bool runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    GenObject* resolve(ObjList& stack, String& name, GenObject* context);
 private:
     GenObject* resolveTop(ObjList& stack, const String& name, GenObject* context);
-    GenObject* resolve(ObjList& stack, String& name, GenObject* context);
     bool runStringFunction(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context);
     bool runStringField(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
@@ -125,6 +125,7 @@ public:
 	OpcUndefined,
 	OpcInclude,
 	OpcRequire,
+	OpcDelete,
     };
     inline JsCode()
 	: ExpEvaluator(C), m_label(0), m_depth(0)
@@ -156,7 +157,7 @@ protected:
     virtual bool getSimple(const char*& expr, bool constOnly = false);
     virtual Opcode getOperator(const char*& expr);
     virtual Opcode getUnaryOperator(const char*& expr);
-    virtual Opcode getPostfixOperator(const char*& expr);
+    virtual Opcode getPostfixOperator(const char*& expr, int precedence);
     virtual const char* getOperator(Opcode oper) const;
     virtual int getPrecedence(ExpEvaluator::Opcode oper) const;
     virtual bool getSeparator(const char*& expr, bool remove);
@@ -229,7 +230,7 @@ public:
 	: ScriptRun(code,context),
 	  m_paused(false), m_opcode(0), m_index(0)
 	{ }
-    virtual Status reset();
+    virtual Status reset(bool init);
     virtual bool pause();
     virtual Status call(const String& name, ObjList& args, ExpOperation* thisObj = 0, ExpOperation* scopeObj = 0);
     virtual bool callable(const String& name);
@@ -295,6 +296,7 @@ static const TokenDict s_unaryOps[] =
 {
     MAKEOP("new", New),
     MAKEOP("typeof", Typeof),
+    MAKEOP("delete", Delete),
     { 0, 0 }
 };
 
@@ -559,6 +561,94 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	ExpEvaluator::pushOne(stack,s_null.ExpOperation::clone());
 	return true;
     }
+#define NO_PARAM_STRING_METHOD(method) \
+    { \
+	ObjList args; \
+	extractArgs(stack,oper,context,args); \
+	String s(*str); \
+	ExpEvaluator::pushOne(stack,new ExpOperation(s.method())); \
+    }
+
+    if (name == YSTRING("toLowerCase")) {
+	NO_PARAM_STRING_METHOD(toLower);
+	return true;
+    }
+    if (name == YSTRING("toUpperCase")) {
+	NO_PARAM_STRING_METHOD(toUpper);
+	return true;
+    }
+    if (name == YSTRING("trim")) {
+	NO_PARAM_STRING_METHOD(trimBlanks);
+	return true;
+    }
+#undef NO_PARAM_STRING_METHOD
+
+#define MAKE_WITH_METHOD \
+	ObjList args; \
+	const char* what = 0; \
+	int pos = 0; \
+	if (extractArgs(stack,oper,context,args)) { \
+	    if (args.skipNull()) { \
+		String* tmp = static_cast<String*>(args.skipNull()->get()); \
+		if (tmp) \
+		    what = tmp->c_str(); \
+	    } \
+	    if (args.count() >= 2) { \
+		String* tmp = static_cast<String*>(args[1]); \
+		if (tmp) \
+		    pos = tmp->toInteger(0); \
+	    } \
+	} \
+	String s(*str); 
+
+    if (name == YSTRING("startsWith")) {
+	MAKE_WITH_METHOD;
+	if (pos > 0)
+	    s = s.substr(pos);
+	ExpEvaluator::pushOne(stack,new ExpOperation(s.startsWith(what)));
+	return true;
+    }
+    if (name == YSTRING("endsWith")) {
+	MAKE_WITH_METHOD;
+	if (pos > 0)
+	    s = s.substr(0,pos);
+	ExpEvaluator::pushOne(stack,new ExpOperation(s.endsWith(what)));
+	return true; 
+    }
+#undef MAKE_WITH_METHOD
+#define SPLIT_EMPTY() do { \
+	array->push(new ExpOperation(*str)); \
+	ExpEvaluator::pushOne(stack,new ExpWrapper(array,0)); \
+	return true; \
+    } while (false);
+    if (name == YSTRING("split")) {
+	ObjList args;
+	JsArray* array = new JsArray(mutex());
+	if (!(extractArgs(stack,oper,context,args) && args.skipNull()))
+	    SPLIT_EMPTY();
+	String* s = static_cast<String*>(args[0]);
+	if (!s)
+	    SPLIT_EMPTY();
+	char ch = s->at(0);
+	unsigned int limit = 0;
+	ObjList* splits = str->split(ch);
+	if (args.count() >= 2) {
+	    String* l = static_cast<String*>(args[1]);
+	    if (l)
+		limit = l->toInteger(splits->count());
+	}
+	if (!limit)
+	    limit = splits->count();
+	int i = limit;
+	for (ObjList* o = splits->skipNull();o && i > 0;o = o->skipNext(),i--) {
+	    String* slice = static_cast<String*>(o->get());
+	    array->push(new ExpOperation(*slice));
+	}
+	ExpEvaluator::pushOne(stack,new ExpWrapper(array,0));
+	TelEngine::destruct(splits);
+	return true;
+    }
+#undef SPLIT_EMPTY
     return false;
 }
 
@@ -1393,12 +1483,14 @@ ExpEvaluator::Opcode JsCode::getUnaryOperator(const char*& expr)
     return ExpEvaluator::getUnaryOperator(expr);
 }
 
-ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr)
+ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr, int precedence)
 {
     if (inError())
 	return OpcNone;
     XDebug(this,DebugAll,"JsCode::getPostfixOperator '%.30s'",expr);
     if (skipComments(expr) == '[') {
+	// The Indexing operator has maximum priority!
+	// No need to check it.
 	if (!runCompile(++expr,']'))
 	    return OpcNone;
 	if (skipComments(expr) != ']') {
@@ -1409,10 +1501,17 @@ ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr)
 	return (Opcode)OpcIndex;
     }
     skipComments(expr);
+    const char* save = expr;
+    unsigned int savedLine = m_lineNo;
     Opcode op = ExpEvaluator::getOperator(expr,s_postfixOps);
-    if (OpcNone != op)
-	return op;
-    return ExpEvaluator::getPostfixOperator(expr);
+    if (OpcNone != op) {
+	if (getPrecedence(op) >= precedence)
+	    return op;
+	expr = save;
+	m_lineNo = savedLine;
+	return OpcNone;
+    }
+    return ExpEvaluator::getPostfixOperator(expr,precedence);
 }
 
 const char* JsCode::getOperator(Opcode oper) const
@@ -1442,12 +1541,14 @@ int JsCode::getPrecedence(ExpEvaluator::Opcode oper) const
     switch (oper) {
 	case OpcEqIdentity:
 	case OpcNeIdentity:
-	    return 4;
+	    return 40;
+	case OpcDelete:
 	case OpcNew:
-	case OpcIndex:
-	    return 12;
+	case OpcTypeof:
+	    return 110;
 	case OpcFieldOf:
-	    return 13;
+	case OpcIndex:
+	    return 140;
 	default:
 	    return ExpEvaluator::getPrecedence(oper);
     }
@@ -1993,6 +2094,33 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    return false;
 	    }
 	    break;
+	case OpcDelete:
+	{
+	    ExpOperation* op = popOne(stack);
+	    if (!(context && op))
+		return false;
+	    if (op->opcode() != OpcField) {
+		pushOne(stack,new ExpOperation(true));
+		TelEngine::destruct(op);
+		return true;
+	    }
+	    ScriptRun* sr = static_cast<ScriptRun*>(context);
+	    JsObject* obj = 0;
+	    String name = op->name();
+	    TelEngine::destruct(op);
+	    JsContext* ctx = YOBJECT(JsContext,sr->context());
+	    if (ctx)
+		obj = YOBJECT(JsObject,ctx->resolve(stack,name,context));
+	    bool ret = false;
+	    if (obj && (!obj->frozen() || !obj->hasField(stack,name,context))
+		    && obj->toString() != YSTRING("()")) {
+		obj->params().clearParam(name);
+		ret = true;
+	    }
+	    DDebug(DebugAll,"Deleted '%s' : %s",name.c_str(),String::boolText(ret));
+	    pushOne(stack,new ExpOperation(ret));
+	    return true;
+	}
 	default:
 	    return ExpEvaluator::runOperation(stack,oper,context);
     }
@@ -2204,9 +2332,9 @@ ScriptRun* JsCode::createRunner(ScriptContext* context)
 
 
 
-ScriptRun::Status JsRunner::reset()
+ScriptRun::Status JsRunner::reset(bool init)
 {
-    Status s = ScriptRun::reset();
+    Status s = ScriptRun::reset(init);
     m_opcode = code() ? static_cast<const JsCode*>(code())->m_opcodes.skipNull() : 0;
     m_index = 0;
     return s;
@@ -2222,6 +2350,7 @@ ScriptRun::Status JsRunner::resume()
 	return Invalid;
     m_paused = false;
     mylock.drop();
+    mylock.acquire(context()->mutex());
     if (!c->evaluate(*this,stack()))
 	return Failed;
     return m_paused ? Incomplete : Succeeded;
@@ -2272,7 +2401,7 @@ ScriptRun::Status JsRunner::call(const String& name, ObjList& args,
 	jsScope = 0;
     TelEngine::destruct(thisObj);
     TelEngine::destruct(scopeObj);
-    reset();
+    reset(false);
     // prepare a function call stack
     ExpOperation oper(ExpEvaluator::OpcFunc,name,args.count());
     if (!c->callFunction(stack(),oper,this,-1,func,args,jsThis,jsScope))

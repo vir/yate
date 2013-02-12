@@ -389,17 +389,17 @@ static bool decodeItuAddress(const SS7SCCP* sccp, NamedList& params,const SCCPPa
 	} else if (gti == 0x02) { // GT includes Translation Type
 	    if (length < 1)
 		break;
-	    params.addParam(gtName + ".tt", String((int)*buffer++));
+	    params.addParam(gtName + ".translation", String((int)*buffer++));
 	    length--;
 	    tmp.hexify((void*)buffer,length,' ');
 	} else if (gti == 0x03) { // GT includes tt, np & es
 	    if (length < 2)
 		break;
-	    params.addParam(gtName+ ".tt", String((int)*buffer++));
+	    params.addParam(gtName+ ".translation", String((int)*buffer++));
 	    length--;
 	    unsigned char npes = *buffer++;
 	    length--;
-	    getDictValue(params,gtName + ".np", npes >> 4,s_numberingPlan);
+	    getDictValue(params,gtName + ".plan", npes >> 4,s_numberingPlan);
 	    unsigned int es = npes & 0x0f;
 	    getDictValue(params,gtName + ".encoding", es,s_encodingScheme);
 	    switch (es) {
@@ -413,12 +413,12 @@ static bool decodeItuAddress(const SS7SCCP* sccp, NamedList& params,const SCCPPa
 	} else if (gti == 0x04) { // GT includes tt, np, es & nai
 	    if (length < 3)
 		break;
-	    params.addParam(gtName+ ".tt", String((int)*buffer++));
+	    params.addParam(gtName+ ".translation", String((int)*buffer++));
 	    length--;
 	    unsigned char npes = *buffer++;
 	    unsigned char es = npes & 0x0f;
 	    length--;
-	    getDictValue(params,gtName + ".np", npes >> 4,s_numberingPlan);
+	    getDictValue(params,gtName + ".plan", npes >> 4,s_numberingPlan);
 	    getDictValue(params,gtName + ".encoding", es,s_encodingScheme);
 	    getDictValue(params,gtName + ".nature", *buffer++ & 0x7f,s_nai);
 	    length--;
@@ -476,12 +476,12 @@ static bool decodeAnsiAddress(const SS7SCCP* sccp, NamedList& params,const SCCPP
 	if (gti == 0x01) { // GT includes tt, np & es
 	    if (length < 2)
 		break;
-	    params.addParam(gtName + ".tt", String((int)*buffer++));
+	    params.addParam(gtName + ".translation", String((int)*buffer++));
 	    length--;
 	    unsigned char npes = *buffer++;
 	    unsigned char es = npes & 0x0f;
 	    length--;
-	    getDictValue(params,gtName + ".np", npes >> 4, s_numberingPlan);
+	    getDictValue(params,gtName + ".plan", npes >> 4, s_numberingPlan);
 	    getDictValue(params,gtName + ".encoding", es,s_encodingScheme);
 	    switch (es) {
 		case 1:
@@ -494,7 +494,7 @@ static bool decodeAnsiAddress(const SS7SCCP* sccp, NamedList& params,const SCCPP
 	} else if (gti == 0x02) { // GT includes Translation Type
 	    if (length < 1)
 		break;
-	    params.addParam(gtName + ".tt", String((int)*buffer++));
+	    params.addParam(gtName + ".translation", String((int)*buffer++));
 	    length--;
 	    tmp.hexify((void*)buffer,length,' ');
 	} else {
@@ -707,8 +707,8 @@ static unsigned char encodeItuAddress(const SS7SCCP* sccp, SS7MSU& msu,
 	return data[0];
     }
     NamedString* nature = YOBJECT(NamedString,extra->getParam(preName + ".gt.nature"));
-    NamedString* translation = YOBJECT(NamedString,extra->getParam(preName + ".gt.tt"));
-    NamedString* plan = YOBJECT(NamedString,extra->getParam(preName + ".gt.np"));
+    NamedString* translation = YOBJECT(NamedString,extra->getParam(preName + ".gt.translation"));
+    NamedString* plan = YOBJECT(NamedString,extra->getParam(preName + ".gt.plan"));
     NamedString* encoding = YOBJECT(NamedString,extra->getParam(preName + ".gt.encoding"));
     bool odd = false;
     DataBlock* digits = 0;
@@ -771,7 +771,7 @@ static unsigned char encodeItuAddress(const SS7SCCP* sccp, SS7MSU& msu,
 	int nai = nature->toInteger(s_nai);
 	data[++length] = nai & 0x7f;
     } else {
-	Debug(sccp,DebugWarn,"Can not encode ITU GTI. Unknown GTI value for : nai= %s, NpEs = %s, tt = %s",
+	Debug(sccp,DebugWarn,"Can not encode ITU GTI. Unknown GTI value for : nai= %s, Plan & Encoding = %s, TranslationType = %s",
 	      nature? "present" : "missing",(plan && encoding)? "present" : "missing",translation ? "present" : "missing");
 	return 0;
     }
@@ -830,8 +830,8 @@ static unsigned char encodeAnsiAddress(const SS7SCCP* sccp, SS7MSU& msu,
 	tmp.clear(false);
 	return data[0];
     }
-    NamedString* translation = YOBJECT(NamedString,extra->getParam(preName + ".gt.tt"));
-    NamedString* plan = YOBJECT(NamedString,extra->getParam(preName + ".gt.np"));
+    NamedString* translation = YOBJECT(NamedString,extra->getParam(preName + ".gt.translation"));
+    NamedString* plan = YOBJECT(NamedString,extra->getParam(preName + ".gt.plan"));
     NamedString* encoding = YOBJECT(NamedString,extra->getParam(preName + ".gt.encoding"));
     DataBlock* digits = 0;
     bool odd = false;
@@ -865,7 +865,7 @@ static unsigned char encodeAnsiAddress(const SS7SCCP* sccp, SS7MSU& msu,
 	}
 	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
     } else {
-	Debug(sccp,DebugWarn,"Can not encode ANSI GTI. Unknown GTI value for : NpEs = %s, tt = %s",
+	Debug(sccp,DebugWarn,"Can not encode ANSI GTI. Unknown GTI value for : Plan & Encoding = %s, TranslationType = %s",
 	      (plan && encoding)? "present" : "missing",translation ? "present" : "missing");
 	return 0;
     }
@@ -3221,8 +3221,8 @@ unsigned int SS7SCCP::getAddressLength(const NamedList& params, const String& pr
     } else
 	length += data.length();
     const NamedString* nature = YOBJECT(NamedString,params.getParam(prefix + ".gt.nature"));
-    const NamedString* translation = YOBJECT(NamedString,params.getParam(prefix + ".gt.tt"));
-    const NamedString* plan = YOBJECT(NamedString,params.getParam(prefix + ".gt.np"));
+    const NamedString* translation = YOBJECT(NamedString,params.getParam(prefix + ".gt.translation"));
+    const NamedString* plan = YOBJECT(NamedString,params.getParam(prefix + ".gt.plan"));
     const NamedString* encoding = YOBJECT(NamedString,params.getParam(prefix + ".gt.encoding"));
     if (nature)
 	length++;

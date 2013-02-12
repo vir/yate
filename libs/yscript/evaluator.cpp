@@ -290,11 +290,21 @@ bool ExpEvaluator::getInstruction(const char*& expr, char stop, GenObject* neste
     return false;
 }
 
-bool ExpEvaluator::getOperand(const char*& expr, bool endOk)
+bool ExpEvaluator::getOperand(const char*& expr, bool endOk, int precedence)
 {
     if (inError())
 	return false;
     XDebug(this,DebugAll,"getOperand '%.30s'",expr);
+    if (!getOperandInternal(expr, endOk, precedence))
+	return false;
+    Opcode oper;
+    while ((oper = getPostfixOperator(expr,precedence)) != OpcNone)
+	addOpcode(oper);
+    return true;
+}
+
+bool ExpEvaluator::getOperandInternal(const char*& expr, bool endOk, int precedence)
+{
     char c = skipComments(expr);
     if (!c)
 	// end of string
@@ -310,7 +320,7 @@ bool ExpEvaluator::getOperand(const char*& expr, bool endOk)
     }
     Opcode op = getUnaryOperator(expr);
     if (op != OpcNone) {
-	if (!getOperand(expr,false))
+	if (!getOperand(expr,false,getPrecedence(op)))
 	    return false;
 	addOpcode(op);
 	return true;
@@ -480,7 +490,7 @@ ExpEvaluator::Opcode ExpEvaluator::getUnaryOperator(const char*& expr)
     return getOperator(expr,m_unaryOps);
 }
 
-ExpEvaluator::Opcode ExpEvaluator::getPostfixOperator(const char*& expr)
+ExpEvaluator::Opcode ExpEvaluator::getPostfixOperator(const char*& expr, int priority)
 {
     return OpcNone;
 }
@@ -498,40 +508,41 @@ int ExpEvaluator::getPrecedence(ExpEvaluator::Opcode oper) const
 	case OpcDecPre:
 	case OpcIncPost:
 	case OpcDecPost:
+	    return 120;
 	case OpcNeg:
 	case OpcNot:
-	    return 11;
+	case OpcLNot:
+	    return 110;
 	case OpcMul:
 	case OpcDiv:
 	case OpcMod:
 	case OpcAnd:
-	    return 10;
+	    return 100;
 	case OpcAdd:
 	case OpcSub:
 	case OpcOr:
 	case OpcXor:
-	    return 9;
+	    return 90;
 	case OpcShl:
 	case OpcShr:
-	    return 8;
+	    return 80;
 	case OpcCat:
-	    return 7;
-	// ANY, ALL, SOME = 6
-	case OpcLNot:
-	    return 5;
+	    return 70;
+	// ANY, ALL, SOME = 60
 	case OpcLt:
 	case OpcGt:
 	case OpcLe:
 	case OpcGe:
+	    return 50;
 	case OpcEq:
 	case OpcNe:
-	    return 4;
-	// IN, BETWEEN, LIKE, MATCHES = 3
+	    return 40;
+	// IN, BETWEEN, LIKE, MATCHES = 30
 	case OpcLAnd:
-	    return 2;
+	    return 20;
 	case OpcLOr:
 	case OpcLXor:
-	    return 1;
+	    return 10;
 	default:
 	    return 0;
     }

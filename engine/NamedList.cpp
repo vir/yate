@@ -127,13 +127,13 @@ NamedList& NamedList::clearParam(const String& name, char childSep)
 }
 
 // Remove a specific parameter
-NamedList& NamedList::clearParam(NamedString* param)
+NamedList& NamedList::clearParam(NamedString* param, bool delParam)
 {
     if (!param)
 	return *this;
     ObjList* o = m_params.find(param);
     if (o)
-	o->remove();
+	o->remove(delParam);
     XDebug(DebugInfo,"NamedList::clearParam(%p) found=%p",param,o);
     return *this;
 }

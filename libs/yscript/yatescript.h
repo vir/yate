@@ -545,9 +545,10 @@ protected:
     /**
      * Returns next unary postfix operator in the parsed text
      * @param expr Pointer to text to parse, gets advanced if succeeds
+     * @param precedence The precedence of the previous operator
      * @return Operator code, OpcNone on failure
      */
-    virtual Opcode getPostfixOperator(const char*& expr);
+    virtual Opcode getPostfixOperator(const char*& expr, int precedence = 0);
 
     /**
      * Helper method to get the canonical name of an operator
@@ -591,9 +592,10 @@ protected:
      * Get an operand, advance parsing pointer past it
      * @param expr Pointer to text to parse, gets advanced on success
      * @param endOk Consider reaching the end of string a success
+     * @param precedence The precedence of the previous operator
      * @return True if succeeded, must add the operand internally
      */
-    virtual bool getOperand(const char*& expr, bool endOk = true);
+    virtual bool getOperand(const char*& expr, bool endOk = true, int precedence = 0);
 
     /**
      * Get an inline simple type, usually string or number
@@ -803,6 +805,7 @@ protected:
     unsigned int m_lineNo;
 
 private:
+    bool getOperandInternal(const char*& expr, bool endOk, int precedence);
     ExpExtender* m_extender;
 };
 

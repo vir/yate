@@ -157,7 +157,7 @@ protected:
     virtual bool getSimple(const char*& expr, bool constOnly = false);
     virtual Opcode getOperator(const char*& expr);
     virtual Opcode getUnaryOperator(const char*& expr);
-    virtual Opcode getPostfixOperator(const char*& expr);
+    virtual Opcode getPostfixOperator(const char*& expr, int precedence);
     virtual const char* getOperator(Opcode oper) const;
     virtual int getPrecedence(ExpEvaluator::Opcode oper) const;
     virtual bool getSeparator(const char*& expr, bool remove);
@@ -1483,12 +1483,14 @@ ExpEvaluator::Opcode JsCode::getUnaryOperator(const char*& expr)
     return ExpEvaluator::getUnaryOperator(expr);
 }
 
-ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr)
+ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr, int precedence)
 {
     if (inError())
 	return OpcNone;
     XDebug(this,DebugAll,"JsCode::getPostfixOperator '%.30s'",expr);
     if (skipComments(expr) == '[') {
+	// The Indexing operator has maximum priority!
+	// No need to check it.
 	if (!runCompile(++expr,']'))
 	    return OpcNone;
 	if (skipComments(expr) != ']') {
@@ -1499,10 +1501,17 @@ ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr)
 	return (Opcode)OpcIndex;
     }
     skipComments(expr);
+    const char* save = expr;
+    unsigned int savedLine = m_lineNo;
     Opcode op = ExpEvaluator::getOperator(expr,s_postfixOps);
-    if (OpcNone != op)
-	return op;
-    return ExpEvaluator::getPostfixOperator(expr);
+    if (OpcNone != op) {
+	if (getPrecedence(op) >= precedence)
+	    return op;
+	expr = save;
+	m_lineNo = savedLine;
+	return OpcNone;
+    }
+    return ExpEvaluator::getPostfixOperator(expr,precedence);
 }
 
 const char* JsCode::getOperator(Opcode oper) const
@@ -1532,13 +1541,14 @@ int JsCode::getPrecedence(ExpEvaluator::Opcode oper) const
     switch (oper) {
 	case OpcEqIdentity:
 	case OpcNeIdentity:
-	    return 4;
-	case OpcNew:
+	    return 40;
 	case OpcDelete:
-	case OpcIndex:
-	    return 12;
+	case OpcNew:
+	case OpcTypeof:
+	    return 110;
 	case OpcFieldOf:
-	    return 13;
+	case OpcIndex:
+	    return 140;
 	default:
 	    return ExpEvaluator::getPrecedence(oper);
     }
@@ -2107,6 +2117,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		obj->params().clearParam(name);
 		ret = true;
 	    }
+	    DDebug(DebugAll,"Deleted '%s' : %s",name.c_str(),String::boolText(ret));
 	    pushOne(stack,new ExpOperation(ret));
 	    return true;
 	}

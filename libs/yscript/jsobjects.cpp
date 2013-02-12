@@ -22,6 +22,7 @@
  */
 
 #include "yatescript.h"
+#include <string.h>
 
 using namespace TelEngine;
 
@@ -91,6 +92,7 @@ public:
 	    params().addParam(new ExpFunction("abs"));
 	    params().addParam(new ExpFunction("max"));
 	    params().addParam(new ExpFunction("min"));
+	    params().addParam(new ExpFunction("random"));
 	}
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
@@ -466,6 +468,7 @@ JsArray::JsArray(Mutex* mtx)
     params().addParam(new ExpFunction("slice"));
     params().addParam(new ExpFunction("splice"));
     params().addParam(new ExpFunction("sort"));
+    params().addParam(new ExpFunction("indexOf"));
     params().addParam("length","0");
 }
 
@@ -678,6 +681,42 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	for (long int i = 0; i < length(); i++)
 	    result.append(params()[String((int)i)],separator);
 	ExpEvaluator::pushOne(stack,new ExpOperation(result));
+    } else if (oper.name() == YSTRING("indexOf")) {
+	ObjList args;
+	if (!extractArgs(this,stack,oper,context,args)) {
+	    Debug(DebugWarn,"Failed to extract arguments!");
+	    return false;
+	}
+	ExpOperation* op1 = static_cast<ExpOperation*>(args.remove(false));
+	if (!op1)
+	    return false;
+	int pos = 0;
+	if (args.skipNull()) {
+	    String* spos = static_cast<String*>(args.remove(false));
+	    if (spos)
+		pos = spos->toInteger(0);
+	    TelEngine::destruct(spos);
+	}
+	int index = -1;
+	for (int i = pos;i < length();i++) {
+	    ExpOperation* op2 = static_cast<ExpOperation*>(params().getParam(String(i)));
+	    if (!op2 || op2->opcode() != op1->opcode())
+		continue;
+	    ExpWrapper* w1 = YOBJECT(ExpWrapper,op1);
+	    ExpWrapper* w2 = YOBJECT(ExpWrapper,op2);
+	    if (w1 || w2) {
+		if (w1 && w2 && w1->object() == w2->object()) {
+		    index = i;
+		    break;
+		}
+	    } else if ((op1->number() == op2->number()) && (*op1 == *op2)) {
+		index = i;
+		break;
+	    }
+	}
+	TelEngine::destruct(op1);
+	ExpEvaluator::pushOne(stack,new ExpOperation(String(index)));
+	return true;
     }
     else
 	return JsObject::runNative(stack,oper,context);
@@ -776,10 +815,67 @@ bool JsArray::runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObjec
     return true;
 }
 
+class JsComparator
+{
+public:
+    JsComparator(const char* funcName, ScriptRun* runner)
+	: m_name(funcName), m_runner(runner)
+	{ }
+    const char* m_name;
+    ScriptRun* m_runner;
+};
+
+int compare(GenObject* op1, GenObject* op2, void* data)
+{
+    JsComparator* cmp = static_cast<JsComparator*>(data);
+    if (!(cmp && cmp->m_runner))
+	return ::strcmp(*(static_cast<String*>(op1)),*(static_cast<String*>(op2)));
+    ScriptRun* runner = cmp->m_runner->code()->createRunner(cmp->m_runner->context());
+    if (!runner)
+	return 0;
+    ObjList stack;
+    stack.append((static_cast<ExpOperation*>(op1))->clone());
+    stack.append((static_cast<ExpOperation*>(op2))->clone());
+    ScriptRun::Status rval = runner->call(cmp->m_name,stack);
+    int ret = 0;
+    if (ScriptRun::Succeeded == rval) {
+	String* sret = static_cast<String*>(ExpEvaluator::popOne(runner->stack()));
+	ret = sret->toInteger();
+	TelEngine::destruct(sret);
+    }
+    TelEngine::destruct(runner);
+    return ret;
+}
+
 bool JsArray::runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    // TODO
-    return false;
+    ObjList arguments;
+    ExpOperation* op = 0;
+    if (extractArgs(this,stack,oper,context,arguments))
+	op = static_cast<ExpOperation*>(arguments[0]);
+    ObjList sorted;
+    // Copy the arguments in a ObjList for sorting
+    for (int i = 0;i < length();i++) {
+	NamedString* param = params().getParam(String(i));
+	sorted.append(param);
+	params().clearParam(param,false);
+    }
+    ScriptRun* runner = YOBJECT(ScriptRun,context);
+    if (op && !runner)
+	return false;
+    JsComparator* comp = op ? new JsComparator(op->name() ,runner) : 0;
+    sorted.sort(&compare,comp);
+    delete comp;
+    int i = 0;
+    for (ObjList* o = sorted.skipNull();o;o = o->skipNext()) {
+	NamedString* slice = static_cast<NamedString*>(o->get());
+	String* name = (String*)(&slice->name());
+	*name = String(i++);
+	params().addParam(slice);
+	o->setDelete(false);
+    }
+    setLength(i);
+    return true;
 }
 
 
@@ -857,6 +953,30 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	    TelEngine::destruct(op);
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(n));
+    }
+    else if (oper.name() == YSTRING("random")) {
+	long min = 0;
+	long max = LONG_MAX;
+	ObjList args;
+	if (extractArgs(stack,oper,context,args)) {
+	    if (args.skipNull()) {
+		const String* mins = static_cast<String*>(args[0]);
+		if (mins)
+		    min = mins->toLong(0);
+	    }
+	    if (args.count() >= 2) {
+		const String* maxs = static_cast<String*>(args[1]);
+		if (maxs)
+		    max = maxs->toLong(max);
+	    }
+	}
+	if (min < 0 || max < 0 || min >= max)
+	    return false;
+	unsigned long interval = max;
+	if (min != 0)
+	    interval -= min + 1;
+	long rand = (Random::random() % interval) + min;
+	ExpEvaluator::pushOne(stack,new ExpOperation((long)rand));
     }
     else
 	return JsObject::runNative(stack,oper,context);

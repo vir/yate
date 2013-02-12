@@ -561,6 +561,94 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	ExpEvaluator::pushOne(stack,s_null.ExpOperation::clone());
 	return true;
     }
+#define NO_PARAM_STRING_METHOD(method) \
+    { \
+	ObjList args; \
+	extractArgs(stack,oper,context,args); \
+	String s(*str); \
+	ExpEvaluator::pushOne(stack,new ExpOperation(s.method())); \
+    }
+
+    if (name == YSTRING("toLowerCase")) {
+	NO_PARAM_STRING_METHOD(toLower);
+	return true;
+    }
+    if (name == YSTRING("toUpperCase")) {
+	NO_PARAM_STRING_METHOD(toUpper);
+	return true;
+    }
+    if (name == YSTRING("trim")) {
+	NO_PARAM_STRING_METHOD(trimBlanks);
+	return true;
+    }
+#undef NO_PARAM_STRING_METHOD
+
+#define MAKE_WITH_METHOD \
+	ObjList args; \
+	const char* what = 0; \
+	int pos = 0; \
+	if (extractArgs(stack,oper,context,args)) { \
+	    if (args.skipNull()) { \
+		String* tmp = static_cast<String*>(args.skipNull()->get()); \
+		if (tmp) \
+		    what = tmp->c_str(); \
+	    } \
+	    if (args.count() >= 2) { \
+		String* tmp = static_cast<String*>(args[1]); \
+		if (tmp) \
+		    pos = tmp->toInteger(0); \
+	    } \
+	} \
+	String s(*str); 
+
+    if (name == YSTRING("startsWith")) {
+	MAKE_WITH_METHOD;
+	if (pos > 0)
+	    s = s.substr(pos);
+	ExpEvaluator::pushOne(stack,new ExpOperation(s.startsWith(what)));
+	return true;
+    }
+    if (name == YSTRING("endsWith")) {
+	MAKE_WITH_METHOD;
+	if (pos > 0)
+	    s = s.substr(0,pos);
+	ExpEvaluator::pushOne(stack,new ExpOperation(s.endsWith(what)));
+	return true; 
+    }
+#undef MAKE_WITH_METHOD
+#define SPLIT_EMPTY() do { \
+	array->push(new ExpOperation(*str)); \
+	ExpEvaluator::pushOne(stack,new ExpWrapper(array,0)); \
+	return true; \
+    } while (false);
+    if (name == YSTRING("split")) {
+	ObjList args;
+	JsArray* array = new JsArray(mutex());
+	if (!(extractArgs(stack,oper,context,args) && args.skipNull()))
+	    SPLIT_EMPTY();
+	String* s = static_cast<String*>(args[0]);
+	if (!s)
+	    SPLIT_EMPTY();
+	char ch = s->at(0);
+	unsigned int limit = 0;
+	ObjList* splits = str->split(ch);
+	if (args.count() >= 2) {
+	    String* l = static_cast<String*>(args[1]);
+	    if (l)
+		limit = l->toInteger(splits->count());
+	}
+	if (!limit)
+	    limit = splits->count();
+	int i = limit;
+	for (ObjList* o = splits->skipNull();o && i > 0;o = o->skipNext(),i--) {
+	    String* slice = static_cast<String*>(o->get());
+	    array->push(new ExpOperation(*slice));
+	}
+	ExpEvaluator::pushOne(stack,new ExpWrapper(array,0));
+	TelEngine::destruct(splits);
+	return true;
+    }
+#undef SPLIT_EMPTY
     return false;
 }
 

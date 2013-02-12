@@ -3800,9 +3800,10 @@ public:
     /**
      * Remove a specific parameter
      * @param param Pointer to parameter to remove
+     * @param delParam True to destroy the parameter
      * @return Reference to this NamedList
      */
-    NamedList& clearParam(NamedString* param);
+    NamedList& clearParam(NamedString* param, bool delParam = true);
 
     /**
      * Copy a parameter from another NamedList, clears it if not present there

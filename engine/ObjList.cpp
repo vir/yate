@@ -263,6 +263,79 @@ void ObjList::clear()
     TelEngine::destruct(n);
 }
 
+static void merge(ObjList* first, ObjList* second,int (*compare)(GenObject* obj1, GenObject* obj2, void* data), void* dat)
+{
+    if (!(first && second))
+	return;
+    if (!first->skipNull()) {
+	while (second->skipNull())
+	    first->append(second->remove(false));
+	return;
+    }
+    ObjList* head = first->skipNull();
+    GenObject* current = head->get();
+    while (second->skipNull()) {
+	GenObject* next = second->remove(false);
+	while (current && compare(current,next,dat) < 1) {
+	    if (!head->skipNext()) {
+		current = 0;
+		break;
+	    }
+	    head = head->skipNext();
+	    current = head->get();
+	}
+	if (!current) {
+	    first->append(next);
+	    continue;
+	}
+	head->insert(next);
+	head = head->skipNext();
+    }
+}
+
+static void splitList(ObjList& list, ObjList& splits, int (*compare)(GenObject* obj1, GenObject* obj2, void* data), void* data)
+{
+    if (!list.skipNull())
+	return;
+    ObjList* slice = new ObjList();
+    splits.append(slice);
+    GenObject* last = list.remove(false);
+    slice->append(last);
+    while (list.skipNull()) {
+	GenObject* next = list.remove(false);
+	if (compare(last,next,data) < 1) {
+	    slice->append(next);
+	    last = next;
+	    continue;
+	}
+	slice = new ObjList();
+	slice->append(next);
+	splits.append(slice);
+	last = next;
+    }
+}
+
+void ObjList::sort(int (*callbackCompare)(GenObject* obj1, GenObject* obj2, void* data), void* data)
+{
+    if (!callbackCompare) {
+	Debug(DebugNote,"ObjList::sort called without callback method!");
+	return;
+    }
+    ObjList splits;
+    splitList(*this,splits,callbackCompare,data);
+    while (splits.skipNull()) {
+	ObjList* first = this;
+	for (ObjList* o = splits.skipNull();o;o = o->skipNext()) {
+	    ObjList* second = static_cast<ObjList*>(o->get());
+	    merge(first,second,callbackCompare,data);
+	    o->remove();
+	    o = o->skipNull();
+	    if (!o)
+		break;
+	    first = static_cast<ObjList*>(o->get());
+	}
+    }
+}
 
 ObjVector::ObjVector(unsigned int maxLen, bool autodelete)
     : m_length(maxLen), m_objects(0), m_delete(autodelete)

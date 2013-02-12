@@ -1,4 +1,4 @@
-yate (4.3.1~svn5396) UNRELEASED; urgency=low
+yate (4.3.1~svn5403) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -312,8 +312,22 @@ yate (4.3.1~svn5396) UNRELEASED; urgency=low
     and dumbchan to client install.  + Differentiate "No component could
     process the command" and "The component failed to process the
     command" in rmanager control output.
+  * Updated to SVN revision 5403: + Bug Fix. Do not remove undefined
+    variables from stack.  + Added operator delete.  + Added possibility
+    to extract a parameter from NamedList.  + Added sort method for
+    ObjList.  + to JavaScript API.  + String.trim();  +
+    String.toUpper();  + String.toLower();  + String.endsWith(String
+    match [, int fromPos]);  + String.startsWith(String match [, int
+    fromPos]);  + String.split(char c [,int maxResults]);  +
+    Array.sort([compareCallback])  + Array.indexOf(Object obj [, int
+    fromPos]);  + Math.random([int min, int max]);  + Added methods:  +
+    Changed the name of the SCCP parameters for
+    Called/CallingPartyAddress plan and translation type.  + Fixed
+    postfix operators parse.  + Changed operators precedences.  + Don't
+    do context initialization everytime the execution of the script is
+    reset.  + Lock context while evaluating instructions.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 09 Feb 2013 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 13 Feb 2013 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

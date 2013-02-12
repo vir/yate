@@ -230,7 +230,7 @@ public:
 	: ScriptRun(code,context),
 	  m_paused(false), m_opcode(0), m_index(0)
 	{ }
-    virtual Status reset();
+    virtual Status reset(bool init);
     virtual bool pause();
     virtual Status call(const String& name, ObjList& args, ExpOperation* thisObj = 0, ExpOperation* scopeObj = 0);
     virtual bool callable(const String& name);
@@ -2332,9 +2332,9 @@ ScriptRun* JsCode::createRunner(ScriptContext* context)
 
 
 
-ScriptRun::Status JsRunner::reset()
+ScriptRun::Status JsRunner::reset(bool init)
 {
-    Status s = ScriptRun::reset();
+    Status s = ScriptRun::reset(init);
     m_opcode = code() ? static_cast<const JsCode*>(code())->m_opcodes.skipNull() : 0;
     m_index = 0;
     return s;
@@ -2350,6 +2350,7 @@ ScriptRun::Status JsRunner::resume()
 	return Invalid;
     m_paused = false;
     mylock.drop();
+    mylock.acquire(context()->mutex());
     if (!c->evaluate(*this,stack()))
 	return Failed;
     return m_paused ? Incomplete : Succeeded;
@@ -2400,7 +2401,7 @@ ScriptRun::Status JsRunner::call(const String& name, ObjList& args,
 	jsScope = 0;
     TelEngine::destruct(thisObj);
     TelEngine::destruct(scopeObj);
-    reset();
+    reset(false);
     // prepare a function call stack
     ExpOperation oper(ExpEvaluator::OpcFunc,name,args.count());
     if (!c->callFunction(stack(),oper,this,-1,func,args,jsThis,jsScope))

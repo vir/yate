@@ -1631,7 +1631,7 @@ bool JsAssist::init()
     JsMessage::initialize(ctx);
     JsFile::initialize(ctx);
     JsXML::initialize(ctx);
-    if (ScriptRun::Invalid == m_runner->reset())
+    if (ScriptRun::Invalid == m_runner->reset(true))
 	return false;
     ScriptContext* chan = YOBJECT(ScriptContext,ctx->getField(m_runner->stack(),YSTRING("Channel"),m_runner));
     if (chan) {

@@ -1511,9 +1511,10 @@ public:
 
     /**
      * Resets code execution to the beginning, does not clear context
+     * @param init Initialize context
      * @return Status of the runtime after reset
      */
-    virtual Status reset();
+    virtual Status reset(bool init = false);
 
     /**
      * Execute script from where it was left, may stop and return Incomplete state
@@ -1523,9 +1524,10 @@ public:
 
     /**
      * Execute script from the beginning until it returns a final state
+     * @param init Initialize context
      * @return Final status of the runtime after code execution
      */
-    virtual Status run();
+    virtual Status run(bool init = true);
 
     /**
      * Pause the script, make it return Incomplete state

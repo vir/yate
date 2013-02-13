@@ -1015,6 +1015,7 @@ bool Transport::connectSocket()
 	return false;
     }
     m_reader->setSocket(sock);
+    mylock.drop();
     setStatus(Up);
     return true;
 }

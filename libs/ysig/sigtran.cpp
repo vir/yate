@@ -768,6 +768,7 @@ bool SIGAdaptClient::activate()
 		DataBlock data;
 		if (m_aspId != -1)
 		    addTag(data,0x0011,m_aspId);
+		mylock.drop();
 		transmitMSG(ASPSM,AspsmUP,data);
 		return true;
 	    }
@@ -777,6 +778,7 @@ bool SIGAdaptClient::activate()
 		DataBlock data;
 		if (m_traffic != TrafficUnused)
 		    addTag(data,0x000b,m_traffic);
+		mylock.drop();
 		return transmitMSG(ASPTM,AsptmACTIVE,data,1);
 	    }
 	default:

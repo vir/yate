@@ -1,4 +1,4 @@
-yate (4.3.1~svn5403) UNRELEASED; urgency=low
+yate (4.3.1~svn5405) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -326,8 +326,13 @@ yate (4.3.1~svn5403) UNRELEASED; urgency=low
     postfix operators parse.  + Changed operators precedences.  + Don't
     do context initialization everytime the execution of the script is
     reset.  + Lock context while evaluating instructions.
+  * Updated to SVN revision 5405: + Lock context while evaluating
+    instructions.  + Thanks to ximik777 for reporting it.  + Bug Fixed.
+    Resolve objects variables.  + Unlock SIGAdaptClient mutex before
+    sending a message.  + Update Transport status with reader mutex
+    unlocked.  + Fixed deadlock.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 13 Feb 2013 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 14 Feb 2013 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

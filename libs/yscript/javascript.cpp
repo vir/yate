@@ -189,6 +189,7 @@ private:
     bool callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
 	long int retIndex, JsFunction* func, ObjList& args,
 	JsObject* thisObj, JsObject* scopeObj) const;
+    void resolveObjectParams(JsObject* obj, ObjList& stack, GenObject* context) const;
     inline JsFunction* getGlobalFunction(const String& name) const
 	{ return YOBJECT(JsFunction,m_globals[name]); }
     long int m_label;
@@ -1632,7 +1633,10 @@ JsObject* JsCode::parseArray(const char*& expr, bool constOnly)
 	    TelEngine::destruct(jsa);
 	    break;
 	}
-	jsa->push(popOpcode());
+	ExpOperation* oper = popOpcode();
+	if (oper && oper->opcode() == OpcField)
+	    oper->assign(oper->name());
+	jsa->push(oper);
     }
     return jsa;
 }
@@ -1683,6 +1687,8 @@ JsObject* JsCode::parseObject(const char*& expr, bool constOnly)
 	    TelEngine::destruct(jso);
 	    break;
 	}
+	if (op->opcode() == OpcField)
+	    op->assign(op->name());
 	const_cast<String&>(op->name()) = name;
 	jso->params().setParam(op);
     }
@@ -2121,10 +2127,50 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    pushOne(stack,new ExpOperation(ret));
 	    return true;
 	}
+	case OpcCopy:
+	    if (!ExpEvaluator::runOperation(stack,oper,context))
+		return false;
+	    resolveObjectParams(YOBJECT(JsObject,stack.get()),stack,context);
+	    return true;
 	default:
 	    return ExpEvaluator::runOperation(stack,oper,context);
     }
     return true;
+}
+
+void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* context) const
+{
+    if (!(object && context))
+	return;
+    ScriptRun* sr = static_cast<ScriptRun*>(context);
+    JsContext* ctx = YOBJECT(JsContext,sr->context());
+    if (!ctx)
+	return;
+    for (unsigned int i = 0;i < object->params().length();i++) {
+	String* param = object->params().getParam(i);
+	JsObject* tmpObj = YOBJECT(JsObject,param);
+	if (tmpObj) {
+	    resolveObjectParams(tmpObj,stack,context);
+	    continue;
+	}
+	ExpOperation* op = YOBJECT(ExpOperation,param);
+	if (!op || op->opcode() != OpcField)
+	    continue;
+	String name = *op;
+	JsObject* jsobj = YOBJECT(JsObject,ctx->resolve(stack,name,context));
+	if (!jsobj)
+	    continue;
+	NamedString* ns = jsobj->getField(stack,name,context);
+	if (!ns)
+	    continue;
+	ExpOperation* objOper = YOBJECT(ExpOperation,ns);
+	NamedString* temp = 0;
+	if (objOper)
+	    temp = objOper->clone(op->name());
+	else
+	    temp = new NamedString(op->name(),*ns);
+	object->params().setParam(temp);
+    }
 }
 
 bool JsCode::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context) const

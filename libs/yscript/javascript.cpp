@@ -142,6 +142,7 @@ public:
     virtual bool initialize(ScriptContext* context) const;
     virtual bool evaluate(ScriptRun& runner, ObjList& results) const;
     virtual ScriptRun* createRunner(ScriptContext* context);
+    virtual bool null() const;
     bool link();
     JsObject* parseArray(const char*& expr, bool constOnly);
     JsObject* parseObject(const char*& expr, bool constOnly);
@@ -714,7 +715,7 @@ bool JsCode::evaluate(ScriptRun& runner, ObjList& results) const
 // Convert list to vector and fix label relocations
 bool JsCode::link()
 {
-    if (!m_opcodes.count())
+    if (!m_opcodes.skipNull())
 	return false;
     m_linked.assign(m_opcodes);
     unsigned int n = m_linked.count();
@@ -725,7 +726,7 @@ bool JsCode::link()
 	if (!l || l->opcode() != OpcLabel)
 	    continue;
 	long int lbl = l->number();
-	for (unsigned int j = 0; j < n; i++) {
+	for (unsigned int j = 0; j < n; j++) {
 	    const ExpOperation* jmp = static_cast<const ExpOperation*>(m_linked[j]);
 	    if (!jmp || jmp->number() != lbl)
 		continue;
@@ -2245,12 +2246,27 @@ bool JsCode::jumpToLabel(long int label, GenObject* context) const
     if (!context)
 	return false;
     JsRunner* runner = static_cast<JsRunner*>(context);
-    for (ObjList* l = m_opcodes.skipNull(); l; l = l->skipNext()) {
-	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
-	if (o->opcode() == OpcLabel && o->number() == label) {
-	    runner->m_opcode = l;
-	    XDebug(this,DebugInfo,"Jumped to label %ld",label);
-	    return true;
+    if (m_opcodes.skipNull()) {
+	for (ObjList* l = m_opcodes.skipNull(); l; l = l->skipNext()) {
+	    const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
+	    if (o->opcode() == OpcLabel && o->number() == label) {
+		runner->m_opcode = l;
+		XDebug(this,DebugInfo,"Jumped to label %ld",label);
+		return true;
+	    }
+	}
+    }
+    else {
+	unsigned int n = m_linked.length();
+	if (!n)
+	    return false;
+	for (unsigned int i = 0; i < n; i++) {
+	    const ExpOperation* o = static_cast<const ExpOperation*>(m_linked[i]);
+	    if (o && o->opcode() == OpcLabel && o->number() == label) {
+		runner->m_index = i;
+		XDebug(this,DebugInfo,"Jumped to index %u",i);
+		return true;
+	    }
 	}
     }
     return false;
@@ -2377,6 +2393,10 @@ ScriptRun* JsCode::createRunner(ScriptContext* context)
 }
 
 
+bool JsCode::null() const
+{
+    return !(m_opcodes.skipNull() || m_linked.count());
+}
 
 ScriptRun::Status JsRunner::reset(bool init)
 {
@@ -2607,6 +2627,8 @@ bool JsParser::parse(const char* text, bool fragment)
     DDebug(DebugAll,"Compiled: %s",code->dump().c_str());
     code->simplify();
     DDebug(DebugAll,"Simplified: %s",code->dump().c_str());
+    if (m_allowLink)
+	code->link();
     return true;
 }
 

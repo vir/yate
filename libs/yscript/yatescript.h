@@ -296,8 +296,7 @@ public:
      * Check if the expression is empty (no operands or operators)
      * @return True if the expression is completely empty
      */
-    inline bool null() const
-	{ return m_opcodes.count() == 0; }
+    virtual bool null() const;
 
     /**
      * Dump a list of operations according to current operators dictionary
@@ -2174,6 +2173,14 @@ class YSCRIPT_API JsParser : public ScriptParser
     YCLASS(JsParser,ScriptParser)
 public:
     /**
+     * Constructor
+     * @param allowLink True to allow linking of the code, false otherwise.
+     */
+    inline JsParser(bool allowLink = true)
+	: m_allowLink(allowLink)
+	{ }
+
+    /**
      * Parse a string as Javascript source code
      * @param text Source code text
      * @param fragment True if the code is just an included fragment
@@ -2231,6 +2238,13 @@ public:
 	{ m_basePath = path; }
 
     /**
+     * Set whether the Javascript code should be linked or not
+     * @param allowed True to allow linking, false otherwise
+     */
+    inline void link(bool allowed = true)
+	{ m_allowLink = allowed; }
+
+    /**
      * Parse and run a piece of Javascript code
      * @param text Source code fragment to execute
      * @param result Pointer to an optional pointer to store returned value
@@ -2267,6 +2281,7 @@ public:
 
 private:
     String m_basePath;
+    bool m_allowLink;
 };
 
 }; // namespace TelEngine

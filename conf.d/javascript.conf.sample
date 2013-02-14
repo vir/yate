@@ -14,6 +14,9 @@
 ; Never enable it in production!
 ;allow_abort=no
 
+; allow_link: boolean: Allow linking of Javascript code (jump resolving)
+;allow_link=yes
+
 
 [scripts]
 ; Add one entry in this section for each script that is to be loaded on Yate startup

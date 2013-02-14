@@ -1,4 +1,4 @@
-yate (4.3.1~svn5405) UNRELEASED; urgency=low
+yate (4.3.1~svn5408) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -331,8 +331,14 @@ yate (4.3.1~svn5405) UNRELEASED; urgency=low
     Resolve objects variables.  + Unlock SIGAdaptClient mutex before
     sending a message.  + Update Transport status with reader mutex
     unlocked.  + Fixed deadlock.
+  * Updated to SVN revision 5408: + Update Transport status with reader
+    mutex unlocked.  + Fixed deadlock.  + Changed declaration of
+    String::hash() to inline function.  + Added configuration parameter
+    to enable/disable linking.  + Do linking (jump resolving) for
+    Javascript code.  + Fixed variable name error bug introduced in rev.
+    5396.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 14 Feb 2013 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 15 Feb 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

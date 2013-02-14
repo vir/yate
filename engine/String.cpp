@@ -99,7 +99,6 @@ const char* lookup(int value, const TokenDict* tokens, const char* defvalue)
 }
 
 #define MAX_MATCH 9
-#define INIT_HASH ((unsigned)-1)
 
 class StringMatchPrivate
 {
@@ -189,13 +188,13 @@ const String& String::empty()
 }
 
 String::String()
-    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
+    : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
     XDebug(DebugAll,"String::String() [%p]",this);
 }
 
 String::String(const char* value, int len)
-    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
+    : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
     XDebug(DebugAll,"String::String(\"%s\",%d) [%p]",value,len,this);
     assign(value,len);
@@ -203,7 +202,7 @@ String::String(const char* value, int len)
 
 String::String(const String& value)
     : GenObject(),
-      m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
+      m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
     XDebug(DebugAll,"String::String(%p) [%p]",&value,this);
     if (!value.null()) {
@@ -215,7 +214,7 @@ String::String(const String& value)
 }
 
 String::String(char value, unsigned int repeat)
-    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
+    : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
     XDebug(DebugAll,"String::String('%c',%d) [%p]",value,repeat,this);
     if (value && repeat) {
@@ -231,7 +230,7 @@ String::String(char value, unsigned int repeat)
 }
 
 String::String(int value)
-    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
+    : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
     XDebug(DebugAll,"String::String(%d) [%p]",value,this);
     char buf[64];
@@ -243,7 +242,7 @@ String::String(int value)
 }
 
 String::String(unsigned int value)
-    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
+    : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
     XDebug(DebugAll,"String::String(%u) [%p]",value,this);
     char buf[64];
@@ -255,7 +254,7 @@ String::String(unsigned int value)
 }
 
 String::String(bool value)
-    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
+    : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
     XDebug(DebugAll,"String::String(%u) [%p]",value,this);
     m_string = ::strdup(boolText(value));
@@ -265,7 +264,7 @@ String::String(bool value)
 }
 
 String::String(const String* value)
-    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
+    : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
     XDebug(DebugAll,"String::String(%p) [%p]",&value,this);
     if (value && !value->null()) {
@@ -383,7 +382,7 @@ String& String::hexify(void* data, unsigned int len, char sep, bool upCase)
 void String::changed()
 {
     clearMatches();
-    m_hash = INIT_HASH;
+    m_hash = YSTRING_INIT_HASH;
     m_length = m_string ? ::strlen(m_string) : 0;
 }
 
@@ -1140,13 +1139,6 @@ String String::uriUnescape(const char* str, int* errptr)
     if (errptr)
 	*errptr = -1;
     return s;
-}
-
-unsigned int String::hash() const
-{
-    if (m_hash == INIT_HASH)
-	m_hash = hash(m_string);
-    return m_hash;
 }
 
 unsigned int String::hash(const char* value)

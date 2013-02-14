@@ -395,6 +395,7 @@ private:
 
 static String s_basePath;
 static bool s_allowAbort = false;
+static bool s_allowLink = true;
 
 UNLOAD_PLUGIN(unloadNow)
 {
@@ -1846,6 +1847,7 @@ JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath)
     m_jsCode.basePath(s_basePath);
     if (relPath)
 	m_jsCode.adjustPath(*this);
+    m_jsCode.link(s_allowLink);
     DDebug(&__plugin,DebugAll,"Loading global Javascript '%s' from '%s'",name().c_str(),c_str());
     File::getFileTime(c_str(),m_fileTime);
     if (m_jsCode.parseFile(*this))
@@ -2021,6 +2023,7 @@ bool JsModule::commandExecute(String& retVal, const String& line)
 
     JsParser parser;
     parser.basePath(s_basePath);
+    parser.link(s_allowLink);
     if (!parser.parse(cmd)) {
 	retVal << "parsing failed\r\n";
 	return true;
@@ -2187,9 +2190,11 @@ void JsModule::initialize()
 	tmp += Engine::pathSeparator();
     s_basePath = tmp;
     s_allowAbort = cfg.getBoolValue("general","allow_abort");
+    s_allowLink = cfg.getBoolValue("general","allow_link",true);
     lock();
     m_assistCode.clear();
     m_assistCode.basePath(tmp);
+    m_assistCode.link(s_allowLink);
     tmp = cfg.getValue("general","routing");
     m_assistCode.adjustPath(tmp);
     if (m_assistCode.parseFile(tmp))

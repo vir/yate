@@ -182,6 +182,11 @@ ExpEvaluator::~ExpEvaluator()
     extender(0);
 }
 
+bool ExpEvaluator::null() const
+{
+    return !m_opcodes.skipNull();
+}
+
 void ExpEvaluator::extender(ExpExtender* ext)
 {
     if (ext == m_extender)

@@ -205,6 +205,8 @@ namespace TelEngine {
 #define YSTRING(s) (s)
 #endif
 
+#define YSTRING_INIT_HASH ((unsigned) -1)
+
 /**
  * Abort execution (and coredump if allowed) if the abort flag is set.
  * This function may not return.
@@ -1725,7 +1727,12 @@ public:
      * Get the hash of the contained string.
      * @return The hash of the string.
      */
-    unsigned int hash() const;
+    inline unsigned int hash() const
+	{
+	    if (m_hash == YSTRING_INIT_HASH)
+		m_hash = hash(m_string);
+	    return m_hash;
+	}
 
     /**
      * Get the hash of an arbitrary string.

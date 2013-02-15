@@ -449,8 +449,14 @@ class Yate
 	$yate_stdout = false;
 	$yate_stderr = false;
 	$yate_output = false;
+	$yate_socket = false;
 	if ($addr) {
 	    $ok = false;
+	    if (!function_exists("socket_create")) {
+		$yate_stderr = fopen("php://stderr","w");
+		Yate::Output("PHP sockets missing, initialization failed");
+		return false;
+	    }
 	    if ($port) {
 		$yate_socket = @socket_create(AF_INET,SOCK_STREAM,SOL_TCP);
 		$ok = @socket_connect($yate_socket,$addr,$port);
@@ -468,7 +474,6 @@ class Yate
 	    $yate_output = true;
 	}
 	else {
-	    $yate_socket = false;
 	    $yate_stdin = fopen("php://stdin","r");
 	    $yate_stdout = fopen("php://stdout","w");
 	    $yate_stderr = fopen("php://stderr","w");

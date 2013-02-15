@@ -463,7 +463,7 @@ void ObjVector::clear()
 	for (unsigned int i = 0; i < len; i++)
 	    TelEngine::destruct(objs[i]);
     }
-    delete objs;
+    delete[] objs;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

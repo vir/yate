@@ -744,7 +744,7 @@ bool JsCode::link()
 		default:
 		    continue;
 	    }
-	    long int offs = i - j;
+	    long int offs = (long int)i - j;
 	    m_linked.set(new ExpOperation(op,0,offs,jmp->barrier()),j);
 	}
     }

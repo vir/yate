@@ -588,8 +588,7 @@ String& String::operator+=(const char* value)
 	    char *tmp2 = (char *) ::malloc(len+1);
 	    if (tmp2) {
 		::strncpy(tmp2,m_string,olen);
-		tmp2[olen] = 0;
-		::strncat(tmp2,value,len-olen);
+		::strncpy(tmp2+olen,value,len-olen);
 		tmp2[len] = 0;
 		m_string = tmp2;
 		::free(tmp1);

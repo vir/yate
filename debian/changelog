@@ -1,4 +1,4 @@
-yate (4.3.1~svn5412) UNRELEASED; urgency=low
+yate (4.3.1~svn5413) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -342,8 +342,10 @@ yate (4.3.1~svn5412) UNRELEASED; urgency=low
     If socket connection is required by libyate.php check if the PHP
     sockets extension is loaded.  + Slight optimization of String
     operator += by replacing the use of strncat with strncpy.
+  * Updated to SVN revision 5413: + Fixed compile error introduced in
+    rev. 5396.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 16 Feb 2013 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 19 Feb 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

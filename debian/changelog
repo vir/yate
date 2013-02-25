@@ -1,4 +1,4 @@
-yate (4.3.1~svn5413) UNRELEASED; urgency=low
+yate (4.3.1~svn5414) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -344,8 +344,11 @@ yate (4.3.1~svn5413) UNRELEASED; urgency=low
     operator += by replacing the use of strncat with strncpy.
   * Updated to SVN revision 5413: + Fixed compile error introduced in
     rev. 5396.
+  * Updated to SVN revision 5414: + Protect access to an application's
+    current transaction count.  + Bug fix: do proper sorting of
+    applications based on their load.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 19 Feb 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 26 Feb 2013 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

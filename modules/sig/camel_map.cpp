@@ -361,7 +361,7 @@ public:
     inline State state()
 	{ return m_state; }
     inline unsigned int trCount()
-	{ return m_ids.count() + m_pending.count(); }
+	{ Lock l(this); return m_ids.count() + m_pending.count(); }
     inline TcapXUser::UserType type()
 	{ return m_type; }
     inline bool addEncoding()
@@ -8515,6 +8515,7 @@ void TcapXApplication::status(NamedList& status)
 const AppCtxt* TcapXApplication::findCtxt(const String& appID, const String& remoteID)
 {
     DDebug(DebugAll,"TcapXApplication::findCtxt('%s','%s') [%p]",appID.c_str(),remoteID.c_str(),this);
+    Lock l(this);
     if (!appID.null()) {
 	Transaction* t = m_ids.findByAppID(appID);
 	if (t)
@@ -8728,30 +8729,31 @@ void TcapXUser::reorderApps(TcapXApplication* app)
     if (!appObj)
 	return;
     ObjList* next = appObj->next();
-    TcapXApplication* ins = 0;
+    // it's already at the bottom of the list
+    if (!next)
+	return;
+    unsigned int count = app->trCount() + 1;
     while (next) {
 	TcapXApplication* nextApp = static_cast<TcapXApplication*>(next->get());
 	if (nextApp) {
-	    if (app->trCount() + 1 > nextApp->trCount()) {
-		if (!ins) {
-		    ins = app;
-		    m_apps.remove(app,false);
-		}
-		next = next->next();
-	    }
-	    else {
-		if (ins) {
-		    next->insert(app);
-		    ins = 0;
-		}
+	    if (count < nextApp->trCount())
 		break;
-	    }
+	    next = next->next();
 	}
 	else
 	    break;
     }
-    if (ins)
+    if (next) {
+	if (next != appObj->next()) {
+	    m_apps.remove(app,false);
+	    next->insert(app);
+	    return;
+	}
+    }
+    else {
+	m_apps.remove(app,false);
 	m_apps.append(app);
+    }
 }
 
 void TcapXUser::statusString(String& str)

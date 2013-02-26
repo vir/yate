@@ -746,10 +746,10 @@ HandledMSU SS7TCAP::processSCCPData(SS7TCAPMessage* msg)
 	}
 
 	tr->addSCCPAddressing(msgParams,true);
+	tr->updateState(false);
 	if (sendToUser(msgParams)) {
 	    tr->setUserName(msgParams.getValue(s_tcapUser));
 	    tr->endNow(msgParams.getBoolValue(s_tcapEndNow,false));
-	    tr->updateState(false);
 
 	    if (tr->transactionType() == SS7TCAP::TC_Unidirectional
 		|| tr->transactionType() == SS7TCAP::TC_U_Abort
@@ -880,9 +880,9 @@ SS7TCAPError SS7TCAP::userRequest(NamedList& params)
 	    return error;
 	}
 	if (tr->transmitState() == SS7TCAPTransaction::PendingTransmit) {
+	    tr->updateState(true);
 	    buildSCCPData(params,tr);
 	    tr->setTransmitState(SS7TCAPTransaction::Transmitted);
-	    tr->updateState(true);
 	}
 	else if (tr->transmitState() == SS7TCAPTransaction::NoTransmit)
 	    removeTransaction(tr);

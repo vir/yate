@@ -2796,6 +2796,7 @@ public:
 
     /**
      * Get the item in the list that holds an object
+     * The item is searched sequentially in the lists, not using it's String hash
      * @param obj Pointer to the object to search for
      * @return Pointer to the found item or NULL
      */

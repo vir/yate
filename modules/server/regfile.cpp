@@ -386,12 +386,11 @@ bool StatusHandler::received(Message &msg)
 	n--;
     msg.retValue() << "name=regfile,type=misc;create=" << s_create;
     msg.retValue() << ",defined=" << n;
-    n = s_accounts.sections();
-    if (!s_accounts.getSection(0))
-	n--;
-    msg.retValue() << ",users=" << n;
+
+    unsigned int usrCount = 0;
+    String tmp;
     if (msg.getBoolValue("details",true)) {
-	msg.retValue() << ";";
+	tmp << ";";
 	unsigned int count = s_accounts.sections();
 	for (unsigned int i = 0; i < count; i ++) {
 	    NamedList* ac = s_accounts.getSection(i);
@@ -403,15 +402,17 @@ bool StatusHandler::received(Message &msg)
 	    if (first)
 		first = false;
 	    else
-		msg.retValue() << ",";
+		tmp << ",";
 	    for (char* s = const_cast<char*>(data.c_str()); *s; s++) {
 		if (*s < ' ' || *s == ',')
 		    *s = '?';
 	    }
-	    msg.retValue() << *ac << "=" << data;
+	    tmp << *ac << "=" << data;
+	    usrCount++;
 	}
     }
-    msg.retValue() << "\r\n";
+    msg.retValue() << ",users=" << usrCount;
+    msg.retValue() << tmp << "\r\n";
     return false;
 }
 

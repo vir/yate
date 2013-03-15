@@ -1110,6 +1110,7 @@ static bool s_reg_async = true;
 static bool s_multi_ringing = false;
 static bool s_refresh_nosdp = true;
 static bool s_update_target = false;
+static bool s_preventive_bye = true;
 static bool s_ignoreVia = true;          // Ignore Via headers and send answer back to the source
 static bool s_sipt_isup = false;         // Control the application/isup body processing
 static bool s_printMsg = true;           // Print sent/received SIP messages to output
@@ -5522,6 +5523,7 @@ void YateSIPConnection::hangup()
     Engine::enqueue(m);
     if (!error)
 	error = m_reason.c_str();
+    bool sendBye = true;
     switch (m_state) {
 	case Cleared:
 	    clearTransaction();
@@ -5558,7 +5560,8 @@ void YateSIPConnection::hangup()
 			m->addHeader(hl);
 		    }
 		    m->setBody(buildSIPBody());
-		    plugin.ep()->engine()->addMessage(m);
+		    if (plugin.ep()->engine()->addMessage(m) && !s_preventive_bye)
+			sendBye = false;
 		}
 		m->deref();
 	    }
@@ -5567,7 +5570,7 @@ void YateSIPConnection::hangup()
     clearTransaction();
     m_state = Cleared;
 
-    if (m_byebye && m_dialog.localTag && m_dialog.remoteTag) {
+    if (sendBye && m_byebye && m_dialog.localTag && m_dialog.remoteTag) {
 	SIPMessage* m = createDlgMsg("BYE");
 	if (m) {
 	    if (m_reason) {
@@ -8045,6 +8048,7 @@ void SIPDriver::initialize()
     s_multi_ringing = s_cfg.getBoolValue("general","multi_ringing",false);
     s_refresh_nosdp = s_cfg.getBoolValue("general","refresh_nosdp",true);
     s_update_target = s_cfg.getBoolValue("general","update_target",false);
+    s_preventive_bye = s_cfg.getBoolValue("general","preventive_bye",true);
     s_ignoreVia = s_cfg.getBoolValue("general","ignorevia",true);
     s_printMsg = s_cfg.getBoolValue("general","printmsg",true);
     s_tcpMaxpkt = getMaxpkt(s_cfg.getIntValue("general","tcp_maxpkt",4096),4096);

@@ -70,6 +70,13 @@ public:
 	{ return m_sections.length(); }
 
     /**
+     * Get the number of non null sections
+     * @return Count of sections
+     */
+    inline unsigned int count() const
+	{ return m_sections.count(); }
+
+    /**
      * Retrieve an entire section
      * @param index Index of the section
      * @return The section's content or NULL if no such section

@@ -176,6 +176,7 @@ public:
     enum Type {
 	Unknown,
 	Detect,
+	Switch,
 	Analog,
 	Digital,
     };
@@ -194,7 +195,7 @@ public:
 	{ return m_sender; }
     inline bool isCaller() const
 	{ return m_caller; }
-    static void setParams(Message& msg, Type type, int t38version = -1);
+    void setParams(Message& msg, Type type, int t38version = -1);
     Type guessType(const Message& msg);
     static int guessT38(const Message& msg, int version = 0);
 private:
@@ -229,6 +230,8 @@ static bool s_debug = false;
 static const TokenDict s_types[] = {
     { "autodetect",  FaxChan::Detect },
     { "detect",      FaxChan::Detect },
+    { "autoswitch",  FaxChan::Switch },
+    { "switch",      FaxChan::Switch },
     { "analog",      FaxChan::Analog },
     { "digital",     FaxChan::Digital },
     { 0, 0 }
@@ -658,6 +661,7 @@ bool FaxChan::startup(Message& msg)
     Type t = guessType(msg);
     switch (t) {
 	case Detect:
+	case Switch:
 	    m_t38version = guessT38(msg,m_t38version);
 	    // fall through
 	case Analog:
@@ -682,7 +686,15 @@ bool FaxChan::startup(Message& msg)
 bool FaxChan::msgAnswered(Message& msg)
 {
     if (Channel::msgAnswered(msg)) {
+	bool chg = (Switch == m_type);
 	startup(msg);
+	if (chg && (Analog == m_type)) {
+	    Message* m = message("call.update");
+	    m->addParam("operation","notify");
+	    m->addParam("audio_changed",String::boolText(true));
+	    setParams(*m,Digital,m_t38version);
+	    Engine::enqueue(m);
+	}
 	return true;
     }
     return false;
@@ -751,6 +763,10 @@ void FaxChan::setParams(Message& msg, Type type, int t38version)
 		msg.setParam("t38version",ver);
 		msg.setParam("osdp_image_T38FaxVersion",ver);
 	    }
+	case Switch:
+	    if (Unknown == m_type)
+		m_type = type;
+	    break;
 	default:
 	    break;
     }

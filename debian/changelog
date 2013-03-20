@@ -1,4 +1,4 @@
-yate (4.3.1~svn5422) UNRELEASED; urgency=low
+yate (4.3.1~svn5423) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -363,8 +363,13 @@ yate (4.3.1~svn5422) UNRELEASED; urgency=low
   * Updated to SVN revision 5422: + Do not apply minlife if higher than
     maxlife parameter.  + Compute and report the Call Attempts Per
     Second in the callgen module.
+  * Updated to SVN revision 5423: + Compute and report the Call Attempts
+    Per Second in the callgen module.  + Idle instead of yielding while
+    waiting for a socket to absorb data.  + This avoids a race condition
+    leading to segfault.  + Keep the external receiver referenced while
+    processing a watched message.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 20 Mar 2013 02:19:23 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 21 Mar 2013 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

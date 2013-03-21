@@ -1,4 +1,4 @@
-yate (4.3.1~svn5423) UNRELEASED; urgency=low
+yate (4.3.1~svn5426) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -368,8 +368,16 @@ yate (4.3.1~svn5423) UNRELEASED; urgency=low
     waiting for a socket to absorb data.  + This avoids a race condition
     leading to segfault.  + Keep the external receiver referenced while
     processing a watched message.
+  * Updated to SVN revision 5426: + This avoids a race condition leading
+    to segfault.  + Keep the external receiver referenced while
+    processing a watched message.  + Do not encode the element into the
+    ASN.1 payload if the encoding of the hexified string fails.  + Warn
+    about failing to encode hexified string.  + Warn when mandatory
+    parameters are missing.  + Properly check for attributes according
+    to component type when encoding a component.  + Added support for
+    obtaining YATE's uptime and run ID through SNMP requests.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 21 Mar 2013 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 22 Mar 2013 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

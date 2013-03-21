@@ -2744,24 +2744,35 @@ AsnValue SnmpAgent::makeQuery(const String& query, unsigned int& index, AsnMib* 
 {
     DDebug(&__plugin,DebugAll, "::makeQuery(query='%s', index='%d')",query.c_str(),index);
     AsnValue val;
-    if (query == "version") {
-	String v = Engine::runParams().getValue("version","");
+    if (query == YSTRING("version")) {
+	String v = Engine::runParams().getValue(YSTRING("version"),"");
 	val.setValue(v);
 	val.setType(AsnValue::STRING);
 	return val;
     }
-    if (query == "snmpEngineID") {
+    if (query == YSTRING("runId")) {
+	String v = Engine::runParams().getValue(YSTRING("runid"),"");
+	val.setValue(v);
+	val.setType(AsnValue::STRING);
+	return val;
+    }
+    if (query == YSTRING("upTime")) {
+	val.setValue(String(SysUsage::secRunTime()));
+	val.setType(AsnValue::COUNTER);
+	return val;
+    }
+    if (query == YSTRING("snmpEngineID")) {
 	val.setValue(m_engineId.toHexString());
 	val.setType(AsnValue::STRING);
 	return val;
     }
-    if (query == "snmpEngineBoots") {
+    if (query == YSTRING("snmpEngineBoots")) {
 	val.setValue(String(m_engineBoots));
 	val.setType(AsnValue::INTEGER);
 	return val;
     }
 
-    if (query == "yateMIBRevision" && m_mibTree) {
+    if (query == YSTRING("yateMIBRevision") && m_mibTree) {
 	String rev = m_mibTree->findRevision(query);
 	val.setValue(rev);
 	val.setType(AsnValue::STRING);

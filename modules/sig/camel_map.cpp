@@ -7748,10 +7748,11 @@ bool XmlToTcap::handleComponent(NamedList& tcapParams, XmlElement* elem, const A
     String prefix = s_tcapCompPrefix;
     prefix << "." << index; 
 
-    Operation* op = 0;
     int type = 0;
     const NamedList& comp = elem->attributes();
-    for (unsigned int i = 0; i < comp.count(); i++) {
+    NamedString* opName = 0;
+    NamedString* errName = 0;
+    for (unsigned int i = 0; i < comp.length(); i++) {
 	NamedString* ns = comp.getParam(i);
 	if (TelEngine::null(ns))
 	    continue;
@@ -7760,30 +7761,54 @@ bool XmlToTcap::handleComponent(NamedList& tcapParams, XmlElement* elem, const A
 	    tcapParams.setParam(prefix + "." + s_tcapCompType,*ns);
 	    type = SS7TCAP::lookupComponent(*ns);
 	}
-	else if (ns->name() == s_tcapOpCode) {
-	    op = (Operation*)findOperation(m_app->type(),*ns,appCtxt);
-	    if (!op) {
-		Debug(&__plugin,DebugMild,"Cannot find operation='%s' in ctxt='%s' [%p]",ns->c_str(),(appCtxt ? appCtxt->name : ""),this);
-		continue;
-	    }
-	    tcapParams.setParam(prefix + "." + s_tcapOpCode,String(op->code));
-	    tcapParams.setParam(prefix + "." + s_tcapOpCodeType,(op->local ? "local" : "global"));
-	}
-	else if (ns->name() == s_tcapErrCode) {
-	    op = (Operation*)findError(m_app->type(),*ns);
-	    if (!op) {
-		Debug(&__plugin,DebugMild,"Cannot find error='%s' [%p]",ns->c_str(),this);
-		continue;
-	    }
-	    tcapParams.setParam(prefix + "." + s_tcapErrCode,String(op->code));
-	    tcapParams.setParam(prefix + "." + s_tcapErrCodeType,(op->local ? "local" : "global"));
-	}
+	else if (ns->name() == s_tcapOpCode)
+	    opName = ns;
+	else if (ns->name() == s_tcapErrCode)
+	    errName = ns;
 	else if (ns->name() == s_tcapProblemCode)
 	    tcapParams.setParam(prefix + "." + s_tcapProblemCode,String(lookup(*ns,SS7TCAPError::s_errorTypes)));
 	else
 	    tcapParams.setParam(prefix + "." + ns->name(),*ns);
-
     }
+
+    tcapParams.setParam(s_tcapCompCount,String(index));
+
+    Operation* op = 0;
+    if (!type) {
+	Debug(&__plugin,DebugWarn,"Trying to encode component with index='%u' without component type",index);
+	return true;
+    }
+    if (type == SS7TCAP::TC_Invoke || type == SS7TCAP::TC_ResultLast || type == SS7TCAP::TC_ResultNotLast) {
+	if (opName) {
+	    op = (Operation*)findOperation(m_app->type(),*opName,appCtxt);
+	    if (!op)
+		Debug(&__plugin,DebugMild,"Cannot find operation='%s' in ctxt='%s' [%p]",opName->c_str(),(appCtxt ? appCtxt->name : ""),this);
+	    else {
+		tcapParams.setParam(prefix + "." + s_tcapOpCode,String(op->code));
+		tcapParams.setParam(prefix + "." + s_tcapOpCodeType,(op->local ? "local" : "global"));
+	    }
+	}
+	else {
+	    if (type == SS7TCAP::TC_Invoke) {
+		Debug(&__plugin,DebugWarn,"Trying to encode Invoke component with index='%u' without operationCode",index);
+		return true;
+	    }
+	}
+    }
+    else if (type == SS7TCAP::TC_U_Error) {
+	if (!errName) {
+	    Debug(&__plugin,DebugWarn,"Trying to encode U_Error component with index='%u' without errorCode",index);
+	    return true;
+	}
+	op = (Operation*)findError(m_app->type(),*errName);
+	if (!op)
+	    Debug(&__plugin,DebugMild,"Cannot find error='%s' [%p]",errName->c_str(),this);
+	else {
+	    tcapParams.setParam(prefix + "." + s_tcapErrCode,String(op->code));
+	    tcapParams.setParam(prefix + "." + s_tcapErrCodeType,(op->local ? "local" : "global"));
+	}
+    }
+
     DataBlock payload;
     bool searchArgs = (type == SS7TCAP::TC_Invoke || type == SS7TCAP::TC_U_Error ? true : false);
 
@@ -7795,7 +7820,6 @@ bool XmlToTcap::handleComponent(NamedList& tcapParams, XmlElement* elem, const A
     str.hexify(payload.data(),payload.length(),' ');
     tcapParams.setParam(prefix,str);
 
-    tcapParams.setParam(s_tcapCompCount,String(index));
     return true;
 }
 

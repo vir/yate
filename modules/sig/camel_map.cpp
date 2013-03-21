@@ -992,7 +992,10 @@ static bool encodeHex(const Parameter* param, MapCamelType* type, DataBlock& dat
 	return false;
     XDebug(&__plugin,DebugAll,"encodeHexparam=%s[%p],elem=%s[%p])",param->name.c_str(),param,elem->getTag().c_str(),elem);
     const String& text = elem->getText();
-    data.unHexify(text.c_str(),text.length(),' ');
+    if (!data.unHexify(text.c_str(),text.length(),' ')) {
+	Debug(&__plugin,DebugWarn,"Failed to parse hexified string '%s'",text.c_str());
+	return false;
+    }
     data.insert(ASNLib::buildLength(data));
     data.insert(param->tag.coding());;
     return true;

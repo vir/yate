@@ -1154,6 +1154,12 @@ public:
 	{ return m_prefixed ? m_prefixed->name() : static_cast<const String&>(m_element); }
 
     /**
+     * Set element's unprefixed tag, don't change namespace prefix
+     * @param s New element's tag
+     */
+    void setUnprefixedTag(const String& s);
+
+    /**
      * Retrieve the element's tag (without prefix)
      * @return Element tag
      */

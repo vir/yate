@@ -1,4 +1,4 @@
-yate (4.3.1~svn5427) UNRELEASED; urgency=low
+yate (4.3.1~svn5428) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -378,8 +378,10 @@ yate (4.3.1~svn5427) UNRELEASED; urgency=low
     obtaining YATE's uptime and run ID through SNMP requests.
   * Updated to SVN revision 5427: + Add new MIB and configuratin for
     support of SNMP upTime and runId requests.
+  * Updated to SVN revision 5428: + Added method used to change an
+    XMLElement's unprefixed tag.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 23 Mar 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 28 Mar 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

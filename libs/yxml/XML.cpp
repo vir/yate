@@ -1766,6 +1766,18 @@ XmlElement::~XmlElement()
 	m_element.c_str(),this);
 }
 
+// Set element's unprefixed tag, don't change namespace prefix
+void XmlElement::setUnprefixedTag(const String& s)
+{
+    if (!s || s == unprefixedTag())
+	return;
+    if (TelEngine::null(m_prefixed))
+	m_element.assign(s);
+    else
+	m_element.assign(*m_prefixed + ":" + s);
+    setPrefixed();
+}
+
 // Set inherited namespaces from a given element. Reset them anyway
 void XmlElement::setInheritedNs(const XmlElement* xml, bool inherit)
 {

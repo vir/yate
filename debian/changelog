@@ -1,4 +1,4 @@
-yate (4.3.1~svn5428) UNRELEASED; urgency=low
+yate (4.3.1~svn5431) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -380,8 +380,14 @@ yate (4.3.1~svn5428) UNRELEASED; urgency=low
     support of SNMP upTime and runId requests.
   * Updated to SVN revision 5428: + Added method used to change an
     XMLElement's unprefixed tag.
+  * Updated to SVN revision 5431: + Constified a few error related
+    parameter tables.  + Added remaining errors for MAPv3 UMTS V9.4.0  +
+    Fixed a few copy/paste errors that inserted a terminal space.  +
+    Allow encoding of a known operation in an yet unpopulated context.
+    + Added MAP contexts up to UMTS V9.4.0 with empty lists for
+    unimplemented operations.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 28 Mar 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 29 Mar 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

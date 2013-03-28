@@ -2454,6 +2454,9 @@ static const AsnTag s_ctxtCstr_53_Tag(AsnTag::Context, AsnTag::Constructor, 53);
 static const AsnTag s_ctxtCstr_57_Tag(AsnTag::Context, AsnTag::Constructor, 57);
 static const AsnTag s_ctxtCstr_59_Tag(AsnTag::Context, AsnTag::Constructor, 59);
 
+static const AsnTag s_privPrim_1_Tag(AsnTag::Private, AsnTag::Primitive, 1);
+static const AsnTag s_privPrim_3_Tag(AsnTag::Private, AsnTag::Primitive, 3);
+
 static const TokenDict s_camelPhases[] = {
     {"phase1",      1},
     {"phase2",      2},
@@ -4467,6 +4470,7 @@ static const TokenDict s_monitoringMode[] = {
     {"b-side", 1},
     {0,0}
 };
+
 static const TokenDict s_callOutcome[] = {
 // TS 100 974 v7.15.0 page 316
     {"success", 0},
@@ -4851,6 +4855,61 @@ static const Parameter s_mtForwardSMArgs[] = {
     {"",                       s_noTag,           false,   TcapXApplication::None,           0},
 };
 
+static const TokenDict s_requestedEquipmentInfo[] = {
+    {"equipmentStatus",        0x01},
+    {"bmuef",                  0x02},
+    {0, 0},
+};
+
+static const TokenDict s_equipmentStatusEnum[] = {
+    {"whiteListed", 0},
+    {"blackListed", 1},
+    {"greyListed",  2},
+    {0,0},
+};
+
+// TODO: fill it, TS 129 002 v.9.3.0 sends to TS 25.413 who sends to TR 25.994
+static const TokenDict s_uesbi_IuA[] = {
+    {0,0},
+};
+
+// TODO: fill it, TR 25.995
+static const TokenDict s_uesbi_IuB[] = {
+    {0,0},
+};
+
+static const Parameter s_bmuef[] = {
+    {"uesbi-IuA",              s_ctxtPrim_0_Tag,  true,    TcapXApplication::BitString,      s_uesbi_IuA},
+    {"uesbi-IuB",              s_ctxtPrim_1_Tag,  true,    TcapXApplication::BitString,      s_uesbi_IuB},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_checkIMEIArgV1[] = {
+    {"imei",                   s_hexTag,          false,   TcapXApplication::TBCD,           0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_checkIMEIResV1[] = {
+    {"equipmentStatus",        s_enumTag,         true,    TcapXApplication::Enumerated,     s_equipmentStatusEnum},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_checkIMEIArgs[] = {
+    {"imei",                   s_hexTag,          false,   TcapXApplication::TBCD,           0},
+    {"requestedEquipmentInfo", s_bitsTag,         true,    TcapXApplication::BitString,      s_requestedEquipmentInfo},
+    {"imsi",                   s_privPrim_1_Tag,  true,    TcapXApplication::TBCD,           0},
+    {"locationInformation",    s_privPrim_3_Tag,  true,    TcapXApplication::HexString,      0},
+    {"extensionContainer",     s_ctxtCstr_0_Tag,  true,    TcapXApplication::HexString,      0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_checkIMEIRes[] = {
+    {"equipmentStatus",        s_enumTag,         true,    TcapXApplication::Enumerated,     s_equipmentStatusEnum},
+    {"bmuef",                  s_sequenceTag,     true,    TcapXApplication::Sequence,       s_bmuef},
+    {"extensionContainer",     s_ctxtPrim_0_Tag,  true,    TcapXApplication::HexString,      0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
 static const Parameter s_moForwardSMArgs[] = {
     {"sm-RP-DA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpDa},
     {"sm-RP-OA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpOa},
@@ -5228,6 +5287,10 @@ static const Operation s_mapOps[] = {
 	s_noTag, 0,
 	s_noTag, 0
     },
+    {"checkIMEI",                     true,  43,  SS7TCAP::SuccessOrFailureReport,
+	s_noTag, s_checkIMEIArgV1,
+	s_noTag, s_checkIMEIResV1
+    },
     {"mt-forwardSM",                  true,  44,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_mtForwardSMArgs,
 	s_sequenceTag, s_forwardSMRes
@@ -5323,6 +5386,17 @@ static const Operation s_mapOps[] = {
     },
 };
 
+static const Operation s_map3Ops[] = {
+    {"checkIMEI",                     true,  43,  SS7TCAP::SuccessOrFailureReport,
+	s_sequenceTag, s_checkIMEIArgs,
+	s_sequenceTag, s_checkIMEIRes
+    },
+    {"",                              false,  0,  -1,
+	s_noTag,  0,
+	s_noTag,  0
+    },
+};
+
 static const StringList s_camelCapabOps("initialDP,assistRequestInstructions,establishTemporaryConnection,disconnectForwardConnection,"
 		"connectToResource,connect,releaseCall,requestReportBCSMEvent,eventReportBCSM,continue,resetTimer,"
 		"furnishChargingInformation,applyCharging,applyChargingReport,callInformationReport,callInformationRequest,"
@@ -5332,6 +5406,7 @@ static const StringList s_camelCapabOps("initialDP,assistRequestInstructions,est
 
 static const Capability s_camelCapab[] = {
     {"Camel",  s_camelCapabOps},
+    {"None",   s_noOps},
     {0, s_noOps},
 };
 
@@ -5990,25 +6065,25 @@ static const Operation s_camelOps[] = {
 };
 
 
-const TokenDict s_unknownSubscriberDiagnostic[] = {
+static const TokenDict s_unknownSubscriberDiagnostic[] = {
     {"imsiUnknown",                0},
     {"gprsSubscriptionUnknown",    1},
     {"npdbMismatch",               2},
     {0, 0},
 };
 
-const TokenDict s_roamingNotAllowedCause[] = {
+static const TokenDict s_roamingNotAllowedCause[] = {
     {"plmnRoamingNotAllowed",        0},
     {"operatorDeterminedBarring",    3},
     {0, 0},
 };
 
-const TokenDict s_additionalRoamingNotAllowedCause[] = {
-    {"supportedRAT-TypesNotAllowed ",  0},
+static const TokenDict s_additionalRoamingNotAllowedCause[] = {
+    {"supportedRAT-TypesNotAllowed",  0},
     {0, 0},
 };
 
-const TokenDict s_absentSubscriberReason[] = {
+static const TokenDict s_absentSubscriberReason[] = {
     {"imsiDetach",      0 },
     {"restrictedArea",  1 },
     {"noPageResponse",  2 },
@@ -6017,10 +6092,10 @@ const TokenDict s_absentSubscriberReason[] = {
     {0, 0},
 };
 
-const TokenDict s_smDeliveryFailureCause[] = {
+static const TokenDict s_smDeliveryFailureCause[] = {
     {"memoryCapacityExceeded",      0 },
     {"equipmentProtocolError",      1 },
-    {"equipmentNotSM-Equipped ",    2 },
+    {"equipmentNotSM-Equipped",     2 },
     {"unknownServiceCentre",        3 },
     {"sc-Congestion",               4 },
     {"invalidSME-Address",          5 },
@@ -6028,10 +6103,10 @@ const TokenDict s_smDeliveryFailureCause[] = {
     {0, 0},
 };
 
-const TokenDict s_networkResource[] = {
+static const TokenDict s_networkResource[] = {
     {"plmn",            0 },
     {"hlr",             1 },
-    {"vlr ",            2 },
+    {"vlr",             2 },
     {"pvlr",            3 },
     {"controllingMSC",  4 },
     {"vmsc",            5 },
@@ -6040,7 +6115,7 @@ const TokenDict s_networkResource[] = {
     {0, 0},
 };
 
-const TokenDict s_additionalNetworkResource[] = {
+static const TokenDict s_additionalNetworkResource[] = {
     {"sgsn",   0},
     {"ggsn",   1},
     {"gmlc",   2},
@@ -6052,12 +6127,37 @@ const TokenDict s_additionalNetworkResource[] = {
     {0, 0},
 };
 
-const TokenDict s_failureCauseParam[] = {
+static const TokenDict s_failureCauseParam[] = {
     {"limitReachedOnNumberOfConcurrentLocationRequests", 0},
     {0, 0},
 };
 
-const Parameter s_extensibleSystemFailure[] = {
+static const TokenDict s_unauthorizedLcscDiag[] = {
+    {"noAdditionalInformation",                        0},
+    {"clientNotInMSPrivacyExceptionList",              1},
+    {"callToClientNotSetup",                           2},
+    {"privacyOverrideNotApplicable",                   3},
+    {"disallowedByLocalRegulatoryRequirements",        4},
+    {"unauthorizedPrivacyClass",                       5},
+    {"unauthorizedCallSessionUnrelatedExternalClient", 6},
+    {"unauthorizedCallSessionRelatedExternalClient",   7},
+    {0, 0},
+};
+
+static const TokenDict s_positionMethodFailureDiag[] = {
+    {"congestion",                               0},
+    {"insufficientResources",                    1},
+    {"insufficientMeasurementData",              2},
+    {"inconsistentMeasurementData",              3},
+    {"locationProcedureNotCompleted",            4},
+    {"locationProcedureNotSupportedByTargetMS",  5},
+    {"qoSNotAttainable",                         6},
+    {"positionMethodNotAvailableInNetwork",      7},
+    {"positionMethodNotAvailableInLocationArea", 8},
+    {0, 0},
+};
+
+static const Parameter s_extensibleSystemFailure[] = {
     {"networkResource",                s_enumTag,       true,    TcapXApplication::Enumerated,    s_networkResource},
     {"extensionContainer",             s_sequenceTag,   true,    TcapXApplication::HexString,     0},
     {"additionalNetworkResource",      s_ctxtPrim_0_Tag,true,    TcapXApplication::Enumerated,    s_additionalNetworkResource},
@@ -6065,29 +6165,43 @@ const Parameter s_extensibleSystemFailure[] = {
     {"",                               s_noTag,         false,   TcapXApplication::None,          0},
 };
 
-const Parameter s_systemFailure[] = {
+static const Parameter s_systemFailure[] = {
     {"networkResource",                s_enumTag,       false,    TcapXApplication::Enumerated,    s_networkResource},
     {"extensibleSystemFailure",        s_sequenceTag,   false,    TcapXApplication::Sequence,      s_extensibleSystemFailure},
     {"",                               s_noTag,         false,    TcapXApplication::None,          0},
 };
 
-const TokenDict s_pwRegistrationFailureCause[] = {
+static const TokenDict s_pwRegistrationFailureCause[] = {
     {"undetermined",          0 },
     {"invalidFormat",         1 },
     {"newPasswordsMismatch",  2 },
     {0, 0},
 };
 
-const TokenDict s_callBarringCause[] = {
+static const TokenDict s_callBarringCause[] = {
     {"barringServiceActive",      0 },
     {"operatorBarring",           1 },
     {0, 0},
 };
 
-const Parameter s_extensibleCallBarredParam[] = {
+static const TokenDict s_cugRejectCause[] = {
+    {"incomingCallsBarredWithinCUG",                 0 },
+    {"subscriberNotMemberOfCUG",                     1 },
+    {"requestedBasicServiceViolatesCUG-Constraints", 5 },
+    {"calledPartySS-InteractionViolation",           7 },
+    {0, 0},
+};
+
+static const Parameter s_extensibleCallBarredParam[] = {
     {"callBarringCause",               s_enumTag,       true,    TcapXApplication::Enumerated,    s_callBarringCause},
     {"extensionContainer",             s_sequenceTag,   true,    TcapXApplication::HexString,     0},
     {"unauthorisedMessageOriginator",  s_ctxtPrim_1_Tag,true,    TcapXApplication::Null,          0},
+    {"",                               s_noTag,         false,   TcapXApplication::None,          0},
+};
+
+static const Parameter s_cugRejectErr[] = {
+    {"cug-RejectCause",                s_enumTag,       true,    TcapXApplication::Enumerated,    s_cugRejectCause},
+    {"extensionContainer",             s_sequenceTag,   true,    TcapXApplication::HexString,     0},
     {"",                               s_noTag,         false,   TcapXApplication::None,          0},
 };
 
@@ -6142,6 +6256,12 @@ static const Parameter s_absentSubscriberErr[] = {
     {"",                               s_noTag,           false, TcapXApplication::None,        0},
 };
 
+static const Parameter s_subscriberBusyMtSmsErr[] = {
+    {"extensionContainer",                s_sequenceTag,    true,    TcapXApplication::HexString,     0},
+    {"gprsConnectionSuspended",           s_nullTag,        true,    TcapXApplication::Null,          0},
+    {"",                                  s_noTag,          false,   TcapXApplication::None,          0},
+};
+
 static const Parameter s_smDeliveryFailureErr[] = {
     {"sm-EnumeratedDeliveryFailureCause", s_enumTag,        true,    TcapXApplication::Enumerated,    s_smDeliveryFailureCause},
     {"diagnosticInfo",                    s_hexTag,         true,    TcapXApplication::HexString,     0},
@@ -6159,6 +6279,18 @@ static const Parameter s_busySubscriberErr[] = {
     {"ccbs-Possible",                  s_ctxtPrim_0_Tag,   true,    TcapXApplication::Null,          0},
     {"ccbs-Busy",                      s_ctxtPrim_1_Tag,   true,    TcapXApplication::Null,          0},
     {"",                               s_noTag,            false,   TcapXApplication::None,          0},
+};
+
+static const Parameter s_unauthorizedLcscErr[] = {
+    {"unauthorizedLCSClient-Diagnostic",  s_ctxtPrim_0_Tag, true,    TcapXApplication::Enumerated,    s_unauthorizedLcscDiag},
+    {"extensionContainer",                s_ctxtPrim_1_Tag, true,    TcapXApplication::HexString,     0},
+    {"",                                  s_noTag,          false,   TcapXApplication::None,          0},
+};
+
+static const Parameter s_positionMethodFailureErr[] = {
+    {"positionMethodFailure-Diagnostic",  s_ctxtPrim_0_Tag, true,    TcapXApplication::Enumerated,    s_positionMethodFailureDiag},
+    {"extensionContainer",                s_ctxtPrim_1_Tag, true,    TcapXApplication::HexString,     0},
+    {"",                                  s_noTag,          false,   TcapXApplication::None,          0},
 };
 
 static const Operation s_mapErrors[] = {
@@ -6210,6 +6342,10 @@ static const Operation s_mapErrors[] = {
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
+    {"cug-Reject", true, 15, -1,
+	s_sequenceTag, s_cugRejectErr,
+	s_noTag, 0
+    },
     {"illegalSS-Operation", true, 16, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
@@ -6234,8 +6370,36 @@ static const Operation s_mapErrors[] = {
 	s_sequenceTag, s_facilityNotSupportedErr,
 	s_noTag, 0
     },
+    {"ongoingGroupCall", true, 22, -1,
+	s_sequenceTag, s_extensionContainerRes,
+	s_noTag, 0
+    },
+    {"noHandoverNumberAvailable", true, 25, -1,
+	s_noTag, 0,
+	s_noTag, 0
+    },
+    {"subsequentHandoverFailure", true, 26, -1,
+	s_noTag, 0,
+	s_noTag, 0
+    },
     {"absentSubscriber", true, 27, -1,
 	s_sequenceTag, s_absentSubscriberErr,
+	s_noTag, 0
+    },
+    {"incompatibleTerminal", true, 28, -1,
+	s_sequenceTag, s_extensionContainerRes,
+	s_noTag, 0
+    },
+    {"shortTermDenial", true, 29, -1,
+	s_sequenceTag, 0,
+	s_noTag, 0
+    },
+    {"longTermDenial", true, 30, -1,
+	s_sequenceTag, 0,
+	s_noTag, 0
+    },
+    {"subscriberBusyForMT-SMS", true, 31, -1,
+	s_sequenceTag, s_subscriberBusyMtSmsErr,
 	s_noTag, 0
     },
     {"sm-DeliveryFailure", true, 32, -1,
@@ -6274,8 +6438,16 @@ static const Operation s_mapErrors[] = {
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
+    {"targetCellOutsideGroupCallArea", true, 42, -1,
+	s_sequenceTag, s_extensionContainerRes,
+	s_noTag, 0
+    },
     {"numberOfPW-AttemptsViolation", true, 43, -1,
 	s_noTag, 0,
+	s_noTag, 0
+    },
+    {"numberChanged", true, 44, -1,
+	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
     {"busySubscriber", true, 45, -1,
@@ -6283,6 +6455,10 @@ static const Operation s_mapErrors[] = {
 	s_noTag, 0
     },
     {"noSubscriberReply", true, 46, -1,
+	s_sequenceTag, s_extensionContainerRes,
+	s_noTag, 0
+    },
+    {"forwardingFailed", true, 47, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
@@ -6294,11 +6470,43 @@ static const Operation s_mapErrors[] = {
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
+    {"noGroupCallNumberAvailable", true, 50, -1,
+	s_sequenceTag, s_extensionContainerRes,
+	s_noTag, 0
+    },
     {"resourceLimitation", true, 51, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
     {"unauthorizedRequestingNetwork", true, 52, -1,
+	s_sequenceTag, s_extensionContainerRes,
+	s_noTag, 0
+    },
+    {"unauthorizedLCSClient", true, 53, -1,
+	s_sequenceTag, s_unauthorizedLcscErr,
+	s_noTag, 0
+    },
+    {"positionMethodFailure", true, 54, -1,
+	s_sequenceTag, s_positionMethodFailureErr,
+	s_noTag, 0
+    },
+    {"unknownOrUnreachableLCSClient", true, 58, -1,
+	s_sequenceTag, s_extensionContainerRes,
+	s_noTag, 0
+    },
+    {"mm-EventNotSupported", true, 59, -1,
+	s_sequenceTag, s_extensionContainerRes,
+	s_noTag, 0
+    },
+    {"atsi-NotAllowed", true, 60, -1,
+	s_sequenceTag, s_extensionContainerRes,
+	s_noTag, 0
+    },
+    {"atm-NotAllowed", true, 61, -1,
+	s_sequenceTag, s_extensionContainerRes,
+	s_noTag, 0
+    },
+    {"informationNotAvailable", true, 62, -1,
 	s_sequenceTag, s_extensionContainerRes,
 	s_noTag, 0
     },
@@ -6449,7 +6657,7 @@ static const StringList s_networkFunctionalSsCtxtOps("registerSS,eraseSS,activat
 							"interrogateSS,registerPassword,getPassword");
 static const StringList s_networkUnstructuredSsCtxt2Ops("processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify");
 static const StringList s_networkUnstructuredSsCtxt1Ops("processUnstructuredSS-Data");
-static const StringList s_shortMsgGatewayCtxtOps("sendRoutingInfoForSM,informServiceCentre");
+static const StringList s_shortMsgGatewayCtxtOps("sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus");
 static const StringList s_shortMsgMOCtxtOps("mo-forwardSM");
 static const StringList s_forwardMsgCtxtOps("forwardSM");
 static const StringList s_shortMsgAlertCtxtOps("alertServiceCentre");
@@ -6464,8 +6672,10 @@ static const StringList s_gprsLocationInfoRetrieveCtxtOps("sendRoutingInfoForGpr
 static const StringList s_failureReportCtxtOps("failureReport");
 static const StringList s_locationSvcGatewayCtxtOps("sendRoutingInfoForLCS");
 static const StringList s_authFailureReportCtxtOps("authenticationFailureReport");
+static const StringList s_equipmentMngtCtxtOps("checkIMEI");
 
 static const OpTable s_defMapOpTable = { s_mapOps, 0};
+static const OpTable s_map3OpTable = { s_map3Ops, &s_defMapOpTable};
 
 static const AppCtxt s_mapAppCtxt[]= {
     // Network Loc Up context
@@ -6483,22 +6693,53 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"roamingNumberEnquiryContext-v2", "0.4.0.0.1.0.3.2", s_roamingNumberEnqCtxtOps, &s_defMapOpTable},
     {"roamingNumberEnquiryContext-v1", "0.4.0.0.1.0.3.1", s_roamingNumberEnqCtxtOps, &s_defMapOpTable},
 
+    // IST Alerting services
+    {"istAlertingContext-v3", "0.4.0.0.1.0.4.3", s_noOps, &s_defMapOpTable},
+
     // Location Info Retrieval Context 
     {"locationInfoRetrievalContext-v3", "0.4.0.0.1.0.5.3", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
     {"locationInfoRetrievalContext-v2", "0.4.0.0.1.0.5.2", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
     {"locationInfoRetrievalContext-v1", "0.4.0.0.1.0.5.1", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
 
+    // Call Control Transfer
+    {"callControlTransferContext-v4", "0.4.0.0.1.0.6.4", s_noOps, &s_defMapOpTable},
+    {"callControlTransferContext-v3", "0.4.0.0.1.0.6.3", s_noOps, &s_defMapOpTable},
+
     // Reporting Context
     {"reportingContext-v3", "0.4.0.0.1.0.7.3", s_reportingCtxtOps, &s_defMapOpTable},
+
+    // Call Completion control
+    {"callCompletionContext-v3", "0.4.0.0.1.0.8.3", s_noOps, &s_defMapOpTable},
+
+    // IST Service Termination
+    {"serviceTerminationContext-v3", "0.4.0.0.1.0.9.3", s_noOps, &s_defMapOpTable},
 
     // Reset context
     {"resetContext-v2", "0.4.0.0.1.0.10.2", s_resetCtxtOps, &s_defMapOpTable},
     {"resetContext-v1", "0.4.0.0.1.0.10.1", s_resetCtxtOps, &s_defMapOpTable},
 
+    // Handover Control
+    {"handoverControlContext-v3", "0.4.0.0.1.0.11.3", s_noOps, &s_defMapOpTable},
+    {"handoverControlContext-v2", "0.4.0.0.1.0.11.2", s_noOps, &s_defMapOpTable},
+    {"handoverControlContext-v1", "0.4.0.0.1.0.11.1", s_noOps, &s_defMapOpTable},
+
+    // Control of SIWF resources
+    {"sIWFSAllocationContext-v3", "0.4.0.0.1.0.12.3", s_noOps, &s_defMapOpTable},
+
+    // Equipment Management Context
+    {"equipmentMngtContext-v3", "0.4.0.0.1.0.13.3", s_equipmentMngtCtxtOps, &s_map3OpTable},
+    {"equipmentMngtContext-v2", "0.4.0.0.1.0.13.2", s_equipmentMngtCtxtOps, &s_defMapOpTable},
+    {"equipmentMngtContext-v1", "0.4.0.0.1.0.13.1", s_equipmentMngtCtxtOps, &s_defMapOpTable},
+
     // Info retrieval context
     {"infoRetrievalContext-v3", "0.4.0.0.1.0.14.3", s_infoRetrieveCtxt2Ops, &s_defMapOpTable},
     {"infoRetrievalContext-v2", "0.4.0.0.1.0.14.2", s_infoRetrieveCtxt2Ops, &s_defMapOpTable}, 
     {"infoRetrievalContext-v1", "0.4.0.0.1.0.14.1", s_infoRetrieveCtxt1Ops, &s_defMapOpTable},
+
+    // Inter-VLR retrieval context
+    {"interVlrInfoRetrievalContext-v3", "0.4.0.0.1.0.15.3", s_noOps, &s_defMapOpTable},
+    {"interVlrInfoRetrievalContext-v2", "0.4.0.0.1.0.15.2", s_noOps, &s_defMapOpTable},
+    {"interVlrInfoRetrievalContext-v1", "0.4.0.0.1.0.15.1", s_noOps, &s_defMapOpTable},
 
     // Subscriber Data Management Context
     {"subscriberDataMngtContext-v3", "0.4.0.0.1.0.16.3", s_subscriberDataCtxtOps, &s_defMapOpTable},
@@ -6526,7 +6767,12 @@ static const AppCtxt s_mapAppCtxt[]= {
     // Mobile Originated short messages
     {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", s_shortMsgMOCtxtOps, &s_defMapOpTable},
     {"shortMsgMO-RelayContext-v2", "0.4.0.0.1.0.21.2", s_forwardMsgCtxtOps, &s_defMapOpTable},
-    {"shortMsgMO-RelayContext-v1", "0.4.0.0.1.0.21.1", s_forwardMsgCtxtOps, &s_defMapOpTable},
+
+    // MO or MT short messages, context used only in MAP v1
+    {"shortMsg-RelayContext-v1", "0.4.0.0.1.0.21.1", s_forwardMsgCtxtOps, &s_defMapOpTable},
+
+    // Subscriber Data Modification notification
+    {"subscriberDataModificationNotificationContext-v3", "0.4.0.0.1.0.22.3", s_noOps, &s_defMapOpTable},
 
     // Short message alerts
     {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", s_shortMsgAlertCtxtOps, &s_defMapOpTable},
@@ -6554,20 +6800,48 @@ static const AppCtxt s_mapAppCtxt[]= {
     // Any Time Info Enquiry Context 
     {"anyTimeInfoEnquiryContext-v3", "0.4.0.0.1.0.29.3", s_anyTimeInfoEnquiryCtxOps, &s_defMapOpTable},
 
+    // Group Call control
+    {"groupCallControlContext-v3", "0.4.0.0.1.0.31.3", s_noOps, &s_defMapOpTable},
+
     // GPRS Location Update Context
     {"gprsLocationUpdateContext-v3", "0.4.0.0.1.0.32.3", s_gprsLocationUpdateCtxtOps, &s_defMapOpTable},
 
     // GPRS Location Info Retrieval Context
+    {"gprsLocationInfoRetrievalContext-v4" , "0.4.0.0.1.0.33.4", s_gprsLocationInfoRetrieveCtxtOps, &s_defMapOpTable},
     {"gprsLocationInfoRetrievalContext-v3" , "0.4.0.0.1.0.33.3", s_gprsLocationInfoRetrieveCtxtOps, &s_defMapOpTable},
 
     // Failure Report Context 
     {"failureReportContext-v3" , "0.4.0.0.1.0.34.3", s_failureReportCtxtOps, &s_defMapOpTable},
 
-    // Location Services Gateway Context 
+    // GPRS Notifying
+    {"gprsNotifyContext-v3", "0.4.0.0.1.0.35.3", s_noOps, &s_defMapOpTable},
+
+    // SS Invocation notification
+    {"ss-InvocationNotificationContext-v3", "0.4.0.0.1.0.36.3", s_noOps, &s_defMapOpTable},
+
+    // Location Services Gateway Context
     {"locationSvcGatewayContext-v3", "0.4.0.0.1.0.37.3", s_locationSvcGatewayCtxtOps, &s_defMapOpTable},
+
+    // Location Services Enquiry Context
+    {"locationSvcGatewayContext-v3", "0.4.0.0.1.0.38.3", s_noOps, &s_defMapOpTable},
 
     // Authentication Failure Report Context
     {"authenticationFailureReportContext-v3" , "0.4.0.0.1.0.39.3", s_authFailureReportCtxtOps, &s_defMapOpTable},
+
+    // MT-SMS Relay VGCS
+    {"shortMsgMT-Relay-VGCS-Context-v3", "0.4.0.0.1.0.41.3", s_noOps, &s_defMapOpTable},
+
+    // Mobility Management event notification
+    {"mm-EventReportingContext-v3", "0.4.0.0.1.0.42.3", s_noOps, &s_defMapOpTable},
+
+    // Any Time Information Handling procedures
+    {"anyTimeInfohandlingContext-v3", "0.4.0.0.1.0.43.3", s_noOps, &s_defMapOpTable},
+
+    // Resource Management
+    {"resourceManagementContext-v3", "0.4.0.0.1.0.44.3", s_noOps, &s_defMapOpTable},
+
+    // Group Call info retrieval
+    {"groupCallInfoRetControlContext-v3", "0.4.0.0.1.0.45.3", s_noOps, &s_defMapOpTable},
 
     {0, 0, s_noOps, 0},
 };
@@ -6728,7 +7002,7 @@ static const Operation* findError(TcapXUser::UserType type, const String& op)
 static bool isAppCtxtOperation(const AppCtxt* ctxt, const Operation* op)
 {
     DDebug(&__plugin,DebugAll,"isAppCtxtOperation(ctxt=%s[%p],op=%s[%p]]",(ctxt ? ctxt->name : ""),ctxt,(op ? op->name.c_str() : ""),op);
-    if (!ctxt)
+    if (!(ctxt && ctxt->ops.skipNull()))
 	return true;
     return (0 != ctxt->ops.find(op->name));
 }

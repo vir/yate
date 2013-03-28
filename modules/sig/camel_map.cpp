@@ -6004,7 +6004,7 @@ static const TokenDict s_roamingNotAllowedCause[] = {
 };
 
 static const TokenDict s_additionalRoamingNotAllowedCause[] = {
-    {"supportedRAT-TypesNotAllowed ",  0},
+    {"supportedRAT-TypesNotAllowed",  0},
     {0, 0},
 };
 
@@ -6020,7 +6020,7 @@ static const TokenDict s_absentSubscriberReason[] = {
 static const TokenDict s_smDeliveryFailureCause[] = {
     {"memoryCapacityExceeded",      0 },
     {"equipmentProtocolError",      1 },
-    {"equipmentNotSM-Equipped ",    2 },
+    {"equipmentNotSM-Equipped",     2 },
     {"unknownServiceCentre",        3 },
     {"sc-Congestion",               4 },
     {"invalidSME-Address",          5 },
@@ -6031,7 +6031,7 @@ static const TokenDict s_smDeliveryFailureCause[] = {
 static const TokenDict s_networkResource[] = {
     {"plmn",            0 },
     {"hlr",             1 },
-    {"vlr ",            2 },
+    {"vlr",             2 },
     {"pvlr",            3 },
     {"controllingMSC",  4 },
     {"vmsc",            5 },

@@ -1,4 +1,4 @@
-yate (4.3.1~svn5431) UNRELEASED; urgency=low
+yate (4.3.1~svn5433) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -386,8 +386,13 @@ yate (4.3.1~svn5431) UNRELEASED; urgency=low
     Allow encoding of a known operation in an yet unpopulated context.
     + Added MAP contexts up to UMTS V9.4.0 with empty lists for
     unimplemented operations.
+  * Updated to SVN revision 5433: + Added MAP contexts up to UMTS V9.4.0
+    with empty lists for unimplemented operations.  + Strip trailing
+    spaces from unquoted URI description.  + This eliminates a race
+    conditions affecting external watchers.  + Check the watched message
+    names list with the receiver locked.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 29 Mar 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Mon, 01 Apr 2013 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

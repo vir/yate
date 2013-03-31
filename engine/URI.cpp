@@ -97,7 +97,7 @@ void URI::parse() const
     if (tmp.matches(r1))
 	hasDesc = true;
     else {
-	static const Regexp r2("^[[:space:]]*\\([^<]\\+\\)[[:space:]]*<\\([^>]\\+\\)");
+	static const Regexp r2("^[[:space:]]*\\([^<]*[^<[:space:]]\\)[[:space:]]*<\\([^>]\\+\\)");
 	hasDesc = tmp.matches(r2);
     }
     if (hasDesc) {

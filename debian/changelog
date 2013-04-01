@@ -1,4 +1,4 @@
-yate (4.3.1~svn5433) UNRELEASED; urgency=low
+yate (4.3.1~svn5435) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -391,8 +391,15 @@ yate (4.3.1~svn5433) UNRELEASED; urgency=low
     spaces from unquoted URI description.  + This eliminates a race
     conditions affecting external watchers.  + Check the watched message
     names list with the receiver locked.
+  * Updated to SVN revision 5435: + Check the watched message names list
+    with the receiver locked.  + Fixed the rmanager display of message
+    performance warning and made it similar to sniffer.  + No longer
+    compile out message performance checking, it can be fully disabled
+    at runtime.  + Engine status now reports the number of post-dispatch
+    hooks installed.  + Fixed several race conditions in message post-
+    dispatch hooks and extmodule watchers.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Mon, 01 Apr 2013 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 02 Apr 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

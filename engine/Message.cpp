@@ -367,9 +367,9 @@ bool MessageDispatcher::dispatch(Message& msg)
 #ifdef XDEBUG
     Debugger debug("MessageDispatcher::dispatch","(%p) (\"%s\")",&msg,msg.c_str());
 #endif
-#ifndef NDEBUG
-    u_int64_t t = Time::now();
-#endif
+
+    u_int64_t t = m_warnTime ? Time::now() : 0;
+
     bool retv = false;
     ObjList *l = &m_handlers;
     Lock mylock(this);
@@ -390,16 +390,22 @@ bool MessageDispatcher::dispatch(Message& msg)
 	    // mark handler as unsafe to destroy / uninstall
 	    h->m_unsafe++;
 	    mylock.drop();
-#ifdef DEBUG
-	    u_int64_t tm = Time::now();
-#endif
+
+	    u_int64_t tm = m_warnTime ? Time::now() : 0;
+
 	    retv = h->receivedInternal(msg) || retv;
-#ifdef DEBUG
-	    tm = Time::now() - tm;
-	    if (m_warnTime && (tm > m_warnTime))
-		Debug(DebugInfo,"Message '%s' [%p] passed through %p in " FMT64U " usec",
-		    msg.c_str(),&msg,h,tm);
-#endif
+
+	    if (tm) {
+		tm = Time::now() - tm;
+		if (tm > m_warnTime) {
+		    mylock.acquire(this);
+		    const char* name = (c == m_changes) ? h->trackName().c_str() : 0;
+		    Debug(DebugInfo,"Message '%s' [%p] passed through %p%s%s%s in " FMT64U " usec",
+			msg.c_str(),&msg,h,
+			(name ? " '" : ""),(name ? name : ""),(name ? "'" : ""),tm);
+		}
+	    }
+
 	    if (retv && !msg.broadcast())
 		break;
 	    mylock.acquire(this);
@@ -433,20 +439,23 @@ bool MessageDispatcher::dispatch(Message& msg)
     }
     mylock.drop();
     msg.dispatched(retv);
-#ifndef NDEBUG
-    t = Time::now() - t;
-    if (m_warnTime && (t > m_warnTime)) {
-	unsigned n = msg.length();
-	String p;
-	for (unsigned i = 0; i < n; i++) {
-	    NamedString *s = msg.getParam(i);
-	    if (s)
-		p << "\n  ['" << s->name() << "']='" << *s << "'";
+
+    if (t) {
+	t = Time::now() - t;
+	if (t > m_warnTime) {
+	    unsigned n = msg.length();
+	    String p;
+	    p << "\r\n  retval='" << msg.retValue().safe("(null)") << "'";
+	    for (unsigned i = 0; i < n; i++) {
+		NamedString *s = msg.getParam(i);
+		if (s)
+		    p << "\r\n  param['" << s->name() << "'] = '" << *s << "'";
+	    }
+	    Debug("Performance",DebugMild,"Message %p '%s' returned %s in " FMT64U " usec%s",
+		&msg,msg.c_str(),retv ? "true" : "false",t,p.safe());
 	}
-	Debug("Performance",DebugMild,"Message %p '%s' retval '%s' returned %s in " FMT64U " usec%s",
-	    &msg,msg.c_str(),msg.retValue().c_str(),retv ? "true" : "false",t,p.safe());
     }
-#endif
+
     l = &m_hooks;
     for (; l; l=l->next()) {
 	MessagePostHook *h = static_cast<MessagePostHook*>(l->get());

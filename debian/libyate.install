@@ -72,3 +72,5 @@ debian/tmp/usr/lib/yate/javascript.yate
 debian/tmp/etc/yate/gvoice.conf
 debian/tmp/usr/lib/yate/gvoice.yate
 
+debian/tmp/usr/lib/yate/cdrcombine.yate
+

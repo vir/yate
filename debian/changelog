@@ -1,3 +1,12 @@
+yate (4.3.1~vir2013040201) UNRELEASED; urgency=low
+
+  * Merged upstream changes
+  * Added missing script 'banbrutes.php' packaging
+  * Added module 'lksctp' building and packaging
+  * Added new module 'cdrcombine' packageing
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Tue, 02 Apr 2013 15:11:15 +0400
+
 yate (4.3.1~vir2013011501) UNRELEASED; urgency=low
 
   * Merged upstream changes (version 4.3.1)

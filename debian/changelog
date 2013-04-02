@@ -1,4 +1,4 @@
-yate (4.3.1~svn5435) UNRELEASED; urgency=low
+yate (4.3.1~svn5436) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -398,8 +398,14 @@ yate (4.3.1~svn5435) UNRELEASED; urgency=low
     at runtime.  + Engine status now reports the number of post-dispatch
     hooks installed.  + Fixed several race conditions in message post-
     dispatch hooks and extmodule watchers.
+  * Updated to SVN revision 5436: + Fixed several race conditions in
+    message post-dispatch hooks and extmodule watchers.  + Added new
+    module 'cdrcombine' packageing  + Added missing script
+    'banbrutes.php' packaging  + Added module 'lksctp' building and
+    packaging  + Fixed debug symbols package creation.  + Optimized TCAP
+    transactions time out checks.  + Create a Thread for each SS7TCAP.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 02 Apr 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 03 Apr 2013 02:19:22 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

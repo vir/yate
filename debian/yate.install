@@ -2,6 +2,7 @@ debian/tmp/usr/bin/yate
 debian/tmp/usr/share/man/man8/yate.8
 
 ## scripts ##
+debian/tmp/usr/share/yate/scripts/banbrutes.php
 debian/tmp/usr/share/yate/scripts/libyate.php
 debian/tmp/usr/share/yate/scripts/libyateivr.php
 debian/tmp/usr/share/yate/scripts/libyatechan.php

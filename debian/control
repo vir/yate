@@ -83,25 +83,13 @@ Section: doc
 Architecture: all
 Description: Documentation for yate
 
-Package: libyate-dbg
-Section: libdevel
-Architecture: any
-Depends: libyate (= ${Source-Version})
-Recommends: gdb
-Description: Debug symbols for the yate library
-
 Package: yate-dbg
 Section: devel
 Architecture: any
-Depends: yate (= ${Source-Version})
+Depends: libyate (= ${Source-Version})
 Recommends: gdb
-Description: Debug symbols for the yate application
+Replaces: libyate-dbg, yate-telhw-dbg
+Description: Debug symbols for all yate applications and libraries
 
-Package: yate-telhw-dbg
-Section: devel
-Architecture: any
-Depends: yate-telhw (= ${Source-Version})
-Recommends: gdb
-Description: Debug symbols for the yate telephony hardware modules
 
 

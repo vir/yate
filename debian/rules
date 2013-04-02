@@ -104,7 +104,7 @@ binary-common:
 	dh_installman
 	dh_link
 #	dh_strip
-	dh_strip --dbg-package=libyate --dbg-package=yate --dbg-package=yate-telhw
+	dh_strip --dbg-package=yate-dbg
 	dh_compress
 	dh_fixperms
 #	dh_perl

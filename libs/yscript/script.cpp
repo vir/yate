@@ -233,12 +233,13 @@ ScriptRun::ScriptRun(ScriptCode* code, ScriptContext* context)
     if (code)
 	code->ref();
     m_code = code;
-    if (context)
+    if (context) {
 	context->ref();
+	m_context = context;
+    }
     else
-	context = new BasicContext;
-    m_context = context;
-    reset();
+	m_context = new BasicContext;
+    reset(!context);
 }
 
 ScriptRun::~ScriptRun()
@@ -257,12 +258,12 @@ const char* ScriptRun::textState(Status state)
 }
 
 // Reset script (but not the context) to initial state
-ScriptRun::Status ScriptRun::reset()
+ScriptRun::Status ScriptRun::reset(bool init)
 {
     Lock mylock(this);
     // TODO
     m_stack.clear();
-    return (m_state = (m_code && m_code->initialize(m_context)) ? Incomplete : Invalid);
+    return (m_state = (m_code && (!init || m_code->initialize(m_context))) ? Incomplete : Invalid);
 }
 
 // Resume execution, run one or more instructions of code
@@ -305,9 +306,9 @@ ScriptRun::Status ScriptRun::execute()
 }
 
 // Execute instructions until succeeds or fails
-ScriptRun::Status ScriptRun::run()
+ScriptRun::Status ScriptRun::run(bool init)
 {
-    reset();
+    reset(init);
     ScriptRun::Status s = state();
     while (Incomplete == s)
 	s = execute();

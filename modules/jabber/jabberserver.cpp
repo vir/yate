@@ -4466,33 +4466,34 @@ bool JBModule::handleClusterControl(Message& msg)
     Debug(this,DebugAll,"Handling cluster control oper=%s",oper.c_str());
     // Send yate message
     if (oper == "send")
-	return s_jabber->sendCluster(msg,&s_clusterControlSkip);
+	return TelEngine::controlReturn(&msg,
+		s_jabber->sendCluster(msg,&s_clusterControlSkip));
     // Start/stop listener
     if (oper == "listen") {
 	String name = msg.getValue("name","cluster");
 	if (msg.getBoolValue("enable")) {
 	    NamedList p(msg);
 	    p.setParam("type",lookup(JBStream::cluster,JBStream::s_typeName));
-	    return buildListener(name,p);
+	    return TelEngine::controlReturn(&msg,buildListener(name,p));
 	}
 	cancelListener(name);
-	return false;
+	return TelEngine::controlReturn(&msg,false);
     }
     // Start/stop node connection
     if (oper == "connect") {
 	const String& node = msg["node"];
 	if (!node)
-	    return false;
+	    return TelEngine::controlReturn(&msg,false);
 	bool enable = msg.getBoolValue("enable");
 	JBClusterStream* s = s_jabber->getClusterStream(node,msg,enable);
 	if (!s)
-	    return false;
+	    return TelEngine::controlReturn(&msg,false);
 	if (!enable)
 	    s->terminate(-1,true,0,XMPPError::NoError,msg.getValue("reason","dropped"));
 	TelEngine::destruct(s);
-	return true;
+	return TelEngine::controlReturn(&msg,true);
     }
-    return false;
+    return TelEngine::controlReturn(&msg,false);
 }
 
 // Build a listener from a list of parameters. Add it to the list and start it

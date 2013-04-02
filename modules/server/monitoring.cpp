@@ -327,6 +327,7 @@ public:
 	ENGINE_NODENAME     = 12,
 	ENGINE_STATE	    = 13,
 	ENGINE_CALL_ACCEPT  = 14,
+	ENGINE_UNEX_RESTART = 15,
     };
     // Constructor
     inline EngineInfo()
@@ -1063,6 +1064,7 @@ static TokenDict s_categories[] = {
     {"semaphores",		Monitor::ENGINE},
     {"waitingSemaphores",       Monitor::ENGINE},
     {"acceptStatus",		Monitor::ENGINE},
+    {"unexpectedRestart",       Monitor::ENGINE},
     // node info
     {"runAttempt",		Monitor::ENGINE},
     {"name",			Monitor::ENGINE},
@@ -1242,23 +1244,25 @@ static TokenDict s_engineQuery[] = {
     {"runAttempt",	    EngineInfo::ENGINE_RUNATTEMPT},
     {"name",		    EngineInfo::ENGINE_NODENAME},
     {"state",		    EngineInfo::ENGINE_STATE},
+    {"unexpectedRestart",   EngineInfo::ENGINE_UNEX_RESTART},
     {0,0}
 };
 
 TokenDict EngineInfo::s_engineInfo[] = {
-    {"type",	    EngineInfo::ENGINE_TYPE},
-    {"plugins",	    EngineInfo::ENGINE_PLUGINS},
-    {"handlers",    EngineInfo::ENGINE_HANDLERS},
-    {"messages",    EngineInfo::ENGINE_MESSAGES},
-    {"threads",	    EngineInfo::ENGINE_THREADS},
-    {"workers",	    EngineInfo::ENGINE_WORKERS},
-    {"mutexes",	    EngineInfo::ENGINE_MUTEXES},
-    {"locks",	    EngineInfo::ENGINE_LOCKS},
-    {"semaphores",  EngineInfo::ENGINE_SEMAPHORES},
-    {"waiting",	    EngineInfo::ENGINE_WAITING},
-    {"runattempt",  EngineInfo::ENGINE_RUNATTEMPT},
-    {"nodename",    EngineInfo::ENGINE_NODENAME},
-    {"acceptcalls", EngineInfo::ENGINE_CALL_ACCEPT},
+    {"type",                EngineInfo::ENGINE_TYPE},
+    {"plugins",             EngineInfo::ENGINE_PLUGINS},
+    {"handlers",            EngineInfo::ENGINE_HANDLERS},
+    {"messages",            EngineInfo::ENGINE_MESSAGES},
+    {"threads",             EngineInfo::ENGINE_THREADS},
+    {"workers",             EngineInfo::ENGINE_WORKERS},
+    {"mutexes",             EngineInfo::ENGINE_MUTEXES},
+    {"locks",               EngineInfo::ENGINE_LOCKS},
+    {"semaphores",          EngineInfo::ENGINE_SEMAPHORES},
+    {"waiting",             EngineInfo::ENGINE_WAITING},
+    {"runattempt",          EngineInfo::ENGINE_RUNATTEMPT},
+    {"nodename",            EngineInfo::ENGINE_NODENAME},
+    {"acceptcalls",         EngineInfo::ENGINE_CALL_ACCEPT},
+    {"lastsignal",          EngineInfo::ENGINE_UNEX_RESTART},
     {0,0}
 };
 
@@ -1618,6 +1622,12 @@ bool EngineStartHandler::received(Message& msg)
 	String notif = lookup(EngineInfo::ENGINE_RUNATTEMPT,s_engineQuery,"");
 	if (!notif.null())
 	    __plugin.sendTrap(notif,String(s_yateRun));
+    }
+    int lastsignal = Engine::runParams().getIntValue(YSTRING("lastsignal"),0);
+    if (lastsignal >= 0) {
+	String notif = lookup(EngineInfo::ENGINE_UNEX_RESTART,s_engineQuery,"");
+	if (!notif.null())
+	    __plugin.sendTrap(notif,String(lastsignal));
     }
     return false;
 };

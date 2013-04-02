@@ -1085,6 +1085,7 @@ private:
     XmlElement* m_root;                  // The root element
     XmlFragment m_beforeRoot;            // XML children before root (declaration ...)
     String m_file;                       // The file name used on load
+    XmlFragment m_afterRoot;             // XML children after root (comments, empty text)
 };
 
 
@@ -1151,6 +1152,12 @@ public:
      */
     inline const String& unprefixedTag() const
 	{ return m_prefixed ? m_prefixed->name() : static_cast<const String&>(m_element); }
+
+    /**
+     * Set element's unprefixed tag, don't change namespace prefix
+     * @param s New element's tag
+     */
+    void setUnprefixedTag(const String& s);
 
     /**
      * Retrieve the element's tag (without prefix)
@@ -1312,7 +1319,7 @@ public:
 	const String* auth = 0) const;
 
     /**
-     * Find the first child of this XmlElement
+     * Find the first XmlElement child of this XmlElement
      * @param name Optional name of the child
      * @param ns Optional child namespace
      * @param noPrefix True to compare the tag without namespace prefix, false to
@@ -1325,7 +1332,7 @@ public:
 	{ return XmlFragment::findElement(getChildren().skipNull(),name,ns,noPrefix); }
 
     /**
-     * Finds next child of this XmlElement
+     * Finds next XmlElement child of this XmlElement
      * @param prev Previous child
      * @param name Optional name of the child
      * @param ns Optional child namespace
@@ -1356,6 +1363,12 @@ public:
 	    XmlElement* c = findFirstChild(&name,ns,noPrefix);
 	    return c ? &(c->getText()) : 0;
 	}
+
+    /**
+     * Get first XmlChild of this XmlElement
+     * @return The first XmlChild found.
+     */
+     XmlChild* getFirstChild();
 
     /**
      * @return The first XmlText found in this XmlElement children
@@ -1707,6 +1720,11 @@ public:
     virtual XmlText* xmlText()
 	{ return this; }
 
+    /**
+     * Helper method to check if the text held by this XmlText contains only spaces
+     * @return False if the text contains non space characters.
+     */
+    bool onlySpaces();
 private:
     String m_text;                        // The text
 };

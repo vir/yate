@@ -5261,13 +5261,13 @@ public:
      * RemotePC : integer. Remote pointcode
      * Address Parameter:
      * 	Address parameter starts with : CallingPartyAddress or CalledPartyAddress followed by:
-     *	    .ssn         : integer (0-255) Subsequence number
-     *	    .pointcode   : integer Packed pointcode
-     *	    .gt          : string The digits of the global title
-     *	    .gt.np       : integer GT numbering plan
-     *	    .gt.encoding : integer GT encoding scheme
-     *	    .gt.tt       : integer GT Translation type
-     *	    .gt.nature   : integer Gt nature of address indicator (ITU only)
+     *	    .ssn             : integer (0-255) Subsequence number
+     *	    .pointcode       : integer Packed pointcode
+     *	    .gt              : string The digits of the global title
+     *	    .gt.plan         : integer GT numbering plan
+     *	    .gt.encoding     : integer GT encoding scheme
+     *	    .gt.translation  : integer GT Translation type
+     *	    .gt.nature       : integer Gt nature of address indicator (ITU only)
      * Importance : integer (0-7) Importance of the message! (ITU only)
      */
     virtual int sendMessage(DataBlock& data, const NamedList& params);

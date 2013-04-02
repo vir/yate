@@ -226,8 +226,8 @@ bool SignallingDumpable::control(NamedList& params, SignallingComponent* owner)
     }
     tmp = params.getParam(YSTRING("file"));
     if (tmp)
-	return setDumper(*tmp);
-    return false;
+	return TelEngine::controlReturn(&params,setDumper(*tmp));
+    return TelEngine::controlReturn(&params,false);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

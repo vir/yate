@@ -205,6 +205,8 @@ namespace TelEngine {
 #define YSTRING(s) (s)
 #endif
 
+#define YSTRING_INIT_HASH ((unsigned) -1)
+
 /**
  * Abort execution (and coredump if allowed) if the abort flag is set.
  * This function may not return.
@@ -1251,6 +1253,18 @@ public:
      */
     static const ObjList& empty();
 
+    /**
+     * Sort this list
+     * @param callbackCompare pointer to a callback function that should compare two objects.
+     * <pre>
+     *     obj1 First object of the comparation
+     *     obj2 Second object of the comparation
+     *     context Data context
+     *     return 0 if the objects are equal; positive value if obj2 > obj1; negative value if obj1 > obj2
+     * </pre>
+     * @param context Context data.
+     */
+    void sort(int (*callbackCompare)(GenObject* obj1, GenObject* obj2, void* context), void* context = 0);
 private:
     ObjList* m_next;
     GenObject* m_obj;
@@ -1672,10 +1686,53 @@ public:
     int fixUtf8(const char* replace = 0, unsigned int maxSeq = 4, bool overlong = false);
 
     /**
+     * Check if a string starts with UTF-8 Byte Order Mark
+     * @param str String to check for BOM
+     * @return True if the string starts with UTF-8 BOM
+     */
+    inline static bool checkBOM(const char* str)
+	{ return str && (str[0] == '\357') && (str[1] == '\273') && (str[2] == '\277'); }
+
+    /**
+     * Check if this string starts with UTF-8 Byte Order Mark
+     * @return True if the string starts with UTF-8 BOM
+     */
+    inline bool checkBOM() const
+	{ return checkBOM(c_str()); }
+
+    /**
+     * Advance a const string past an UTF-8 Byte Order Mark
+     * @param str String to check for and strip BOM
+     * @return True if the string started with UTF-8 BOM
+     */
+    inline static bool stripBOM(const char*& str)
+	{ return checkBOM(str) && (str += 3); }
+
+    /**
+     * Advance a string past an UTF-8 Byte Order Mark
+     * @param str String to check for and strip BOM
+     * @return True if the string started with UTF-8 BOM
+     */
+    inline static bool stripBOM(char*& str)
+	{ return checkBOM(str) && (str += 3); }
+
+    /**
+     * Strip an UTF-8 Byte Order Mark from the start of this string
+     * @return True if the string started with UTF-8 BOM
+     */
+    inline bool stripBOM()
+	{ return checkBOM(c_str()) && &(*this = c_str() + 3); }
+
+    /**
      * Get the hash of the contained string.
      * @return The hash of the string.
      */
-    unsigned int hash() const;
+    inline unsigned int hash() const
+	{
+	    if (m_hash == YSTRING_INIT_HASH)
+		m_hash = hash(m_string);
+	    return m_hash;
+	}
 
     /**
      * Get the hash of an arbitrary string.
@@ -2363,6 +2420,16 @@ YATE_API int lookup(const char* str, const TokenDict* tokens, int defvalue = 0, 
  */
 YATE_API const char* lookup(int value, const TokenDict* tokens, const char* defvalue = 0);
 
+class NamedList;
+
+/**
+ * Utility method to return from a chan.control handler
+ * @param params The parameters list
+ * @param ret The return value
+ * @param retVal The error message
+ * @return ret if the message was not generated from rmanager.
+ */
+YATE_API bool controlReturn(NamedList* params, bool ret, const char* retVal = 0);
 
 /**
  * A regular expression matching class.
@@ -2729,6 +2796,7 @@ public:
 
     /**
      * Get the item in the list that holds an object
+     * The item is searched sequentially in the lists, not using it's String hash
      * @param obj Pointer to the object to search for
      * @return Pointer to the found item or NULL
      */
@@ -3752,9 +3820,10 @@ public:
     /**
      * Remove a specific parameter
      * @param param Pointer to parameter to remove
+     * @param delParam True to destroy the parameter
      * @return Reference to this NamedList
      */
-    NamedList& clearParam(NamedString* param);
+    NamedList& clearParam(NamedString* param, bool delParam = true);
 
     /**
      * Copy a parameter from another NamedList, clears it if not present there

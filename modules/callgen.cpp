@@ -38,6 +38,7 @@ static int s_totalst = 0;
 static int s_current = 0;
 static int s_ringing = 0;
 static int s_answers = 0;
+static int s_cap10s = 0;
 
 static int s_numcalls = 0;
 static const String s_parameters("parameters");
@@ -217,8 +218,8 @@ bool GenConnection::oneCall(String* target)
     m.addParam("callto",callto);
     unsigned int lifetime = s_cfg.getIntValue(s_parameters,YSTRING("maxlife"));
     if (lifetime) {
-	int minlife = s_cfg.getIntValue(s_parameters,YSTRING("minlife"));
-	if (minlife)
+	unsigned int minlife = s_cfg.getIntValue(s_parameters,YSTRING("minlife"));
+	if (minlife && (minlife < lifetime))
 	    lifetime -= (int)(((lifetime - minlife) * (int64_t)Random::random()) / RAND_MAX);
     }
     GenConnection* conn = new GenConnection(lifetime,callto);
@@ -375,19 +376,33 @@ void GenThread::run()
 {
     Debug("CallGen",DebugInfo,"GenThread::run() [%p]",this);
     int tonext = 10000;
+    int calls = 0;
+    u_int32_t s10 = Time::secNow() / 10;
     while (!Engine::exiting()) {
 	Thread::usleep(tonext);
+	tonext = 100000;
+	if (!s_runs || (s_numcalls <= 0)) {
+	    s_cap10s = calls = 0;
+	    continue;
+	}
 	tonext = 10000;
+	u_int32_t s = (Time::secNow() / 10) - s10;
+	if (s) {
+	    s10 += s;
+	    s_cap10s = calls / s;
+	    calls = 0;
+	}
 	Lock lock(s_mutex);
-	int maxcalls = s_cfg.getIntValue(s_parameters,YSTRING("maxcalls"),5);
-	if (!s_runs || (s_current >= maxcalls) || (s_numcalls <= 0))
+	if (s_current >= s_cfg.getIntValue(s_parameters,YSTRING("maxcalls"),5))
 	    continue;
 	--s_numcalls;
 	tonext = s_cfg.getIntValue(s_parameters,YSTRING("avgdelay"),1000);
 	lock.drop();
-	GenConnection::oneCall();
 	tonext = (int)(((int64_t)Random::random() * tonext * 2000) / RAND_MAX);
+	if (GenConnection::oneCall())
+	    calls++;
     }
+    s_cap10s = 0;
 }
 
 void CleanThread::run()
@@ -489,6 +504,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	    if (maxcalls)
 		rval << " out of " << maxcalls;
 	    rval << ", " << s_numcalls << " to go";
+	    rval << ", " << (s_cap10s / 10) << "." << (s_cap10s % 10) << " CAPS";
 	}
 	s_mutex.unlock();
     }

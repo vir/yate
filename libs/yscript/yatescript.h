@@ -296,8 +296,7 @@ public:
      * Check if the expression is empty (no operands or operators)
      * @return True if the expression is completely empty
      */
-    inline bool null() const
-	{ return m_opcodes.count() == 0; }
+    virtual bool null() const;
 
     /**
      * Dump a list of operations according to current operators dictionary
@@ -545,9 +544,10 @@ protected:
     /**
      * Returns next unary postfix operator in the parsed text
      * @param expr Pointer to text to parse, gets advanced if succeeds
+     * @param precedence The precedence of the previous operator
      * @return Operator code, OpcNone on failure
      */
-    virtual Opcode getPostfixOperator(const char*& expr);
+    virtual Opcode getPostfixOperator(const char*& expr, int precedence = 0);
 
     /**
      * Helper method to get the canonical name of an operator
@@ -591,9 +591,10 @@ protected:
      * Get an operand, advance parsing pointer past it
      * @param expr Pointer to text to parse, gets advanced on success
      * @param endOk Consider reaching the end of string a success
+     * @param precedence The precedence of the previous operator
      * @return True if succeeded, must add the operand internally
      */
-    virtual bool getOperand(const char*& expr, bool endOk = true);
+    virtual bool getOperand(const char*& expr, bool endOk = true, int precedence = 0);
 
     /**
      * Get an inline simple type, usually string or number
@@ -803,6 +804,7 @@ protected:
     unsigned int m_lineNo;
 
 private:
+    bool getOperandInternal(const char*& expr, bool endOk, int precedence);
     ExpExtender* m_extender;
 };
 
@@ -1508,9 +1510,10 @@ public:
 
     /**
      * Resets code execution to the beginning, does not clear context
+     * @param init Initialize context
      * @return Status of the runtime after reset
      */
-    virtual Status reset();
+    virtual Status reset(bool init = false);
 
     /**
      * Execute script from where it was left, may stop and return Incomplete state
@@ -1520,9 +1523,10 @@ public:
 
     /**
      * Execute script from the beginning until it returns a final state
+     * @param init Initialize context
      * @return Final status of the runtime after code execution
      */
-    virtual Status run();
+    virtual Status run(bool init = true);
 
     /**
      * Pause the script, make it return Incomplete state
@@ -2169,6 +2173,14 @@ class YSCRIPT_API JsParser : public ScriptParser
     YCLASS(JsParser,ScriptParser)
 public:
     /**
+     * Constructor
+     * @param allowLink True to allow linking of the code, false otherwise.
+     */
+    inline JsParser(bool allowLink = true)
+	: m_allowLink(allowLink)
+	{ }
+
+    /**
      * Parse a string as Javascript source code
      * @param text Source code text
      * @param fragment True if the code is just an included fragment
@@ -2226,6 +2238,13 @@ public:
 	{ m_basePath = path; }
 
     /**
+     * Set whether the Javascript code should be linked or not
+     * @param allowed True to allow linking, false otherwise
+     */
+    inline void link(bool allowed = true)
+	{ m_allowLink = allowed; }
+
+    /**
      * Parse and run a piece of Javascript code
      * @param text Source code fragment to execute
      * @param result Pointer to an optional pointer to store returned value
@@ -2262,6 +2281,7 @@ public:
 
 private:
     String m_basePath;
+    bool m_allowLink;
 };
 
 }; // namespace TelEngine

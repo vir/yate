@@ -79,7 +79,7 @@ bool SignallingInterface::control(Operation oper, NamedList* params)
 {
     DDebug(this,DebugInfo,"Unhandled SignallingInterface::control(%d,%p) [%p]",
 	oper,params,this);
-    return false;
+    return TelEngine::controlReturn(params,false);
 }
 
 bool SignallingInterface::receivedPacket(const DataBlock& packet)
@@ -152,7 +152,7 @@ bool SignallingReceiver::control(SignallingInterface::Operation oper, NamedList*
     m_ifaceMutex.lock();
     RefPointer<SignallingInterface> tmp = m_interface;
     m_ifaceMutex.unlock();
-    return tmp && tmp->control(oper,params);
+    return TelEngine::controlReturn(params,tmp && tmp->control(oper,params));
 }
 
 bool SignallingReceiver::transmitPacket(const DataBlock& packet, bool repeat,

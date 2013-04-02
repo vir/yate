@@ -510,7 +510,8 @@ enum BlockState {
 };
 
 // process one context, can call itself recursively
-static bool oneContext(Message &msg, String &str, const String &context, String &ret, int depth = 0)
+static bool oneContext(Message &msg, String &str, const String &context, String &ret,
+    bool warn = false, int depth = 0)
 {
     if (context.null())
 	return false;
@@ -660,6 +661,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		continue;
 	    }
 	    setMessage(match,msg,val);
+	    warn = true;
 	    val.trimBlanks();
 	    if (val.null()) {
 		// special case: do nothing on empty target
@@ -671,15 +673,17 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		    String::boolText(ok),context.c_str());
 		return ok;
 	    }
-	    else if (val.startSkip("goto") || val.startSkip("jump")) {
+	    else if (val.startSkip("goto") || val.startSkip("jump") ||
+		((val.startSkip("@goto") || val.startSkip("@jump")) && !(warn = false))) {
 		NDebug("RegexRoute",DebugAll,"Jumping to context '%s' by rule #%u '%s'",
 		    val.c_str(),i+1,n->name().c_str());
-		return oneContext(msg,str,val,ret,depth+1);
+		return oneContext(msg,str,val,ret,warn,depth+1);
 	    }
-	    else if (val.startSkip("include") || val.startSkip("call")) {
+	    else if (val.startSkip("include") || val.startSkip("call") ||
+		((val.startSkip("@include") || val.startSkip("@call")) && !(warn = false))) {
 		NDebug("RegexRoute",DebugAll,"Including context '%s' by rule #%u '%s'",
 		    val.c_str(),i+1,n->name().c_str());
-		if (oneContext(msg,str,val,ret,depth+1)) {
+		if (oneContext(msg,str,val,ret,warn,depth+1)) {
 		    DDebug("RegexRoute",DebugAll,"Returning true from context '%s'", context.c_str());
 		    return true;
 		}
@@ -708,8 +712,10 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 	if (blockDepth)
 	    Debug("RegexRoute",DebugWarn,"There are %u blocks still open at end of context '%s'",
 		blockDepth,context.c_str());
+	DDebug("RegexRoute",DebugAll,"Returning false at end of context '%s'", context.c_str());
     }
-    DDebug("RegexRoute",DebugAll,"Returning false at end of context '%s'", context.c_str());
+    else if (warn)
+	Debug("RegexRoute",DebugWarn,"Missing target context '%s'",context.c_str());
     return false;
 }
 

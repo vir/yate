@@ -1055,6 +1055,7 @@ bool DataEndpoint::clearData(DataNode* node)
 // Change source(s) or consumer(s)
 bool DataEndpoint::control(NamedList& params)
 {
+    // TODO how do we handle this case????? operation-status
     return (m_source && m_source->control(params)) ||
 	(m_consumer && m_consumer->control(params)) ||
 	(m_peerRecord && m_peerRecord->control(params)) ||

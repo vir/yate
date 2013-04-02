@@ -169,12 +169,12 @@
 ; Functions can be inserted using $(function,param,param)
 ;
 ; First word of a matched target has a special meaning:
-; if - make a new match using the rest of the line up to the = character
+; if, and - make a new match using the rest of the line up to the = character
 ; or - alternative match using the rest of the line up to the = character
 ; return - returns immediately from the context without routing
-; include - calls another context, returns at the next entry if the other
+; include, call - calls another context, returns at the next entry if the other
 ;   context did not return successfully
-; jump - jumps another context, does not return to this context
+; jump, goto - jumps to another context, does not return to this context
 ; match - modify the matched string instead of specifying a target
 ; rename - changes the name of the message
 ; enqueue - puts a new message in the engine, parameters are taken from the
@@ -183,6 +183,7 @@
 ;   parameters are taken from the old message but placed in the new one
 ; echo - displays that line after making substitutions
 ; { - starts a block that ends on another line with }
+; The @jump, @goto, @include and @call forms suppress warning if missing target
 ;
 ; It is possible to set message parameters by appending them as name=value
 ;  while separating them with semicolons (;)

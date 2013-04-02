@@ -49,7 +49,7 @@ JUSTSIG := server/ysigchan.yate server/analog.yate \
 
 SUBDIRS :=
 MKDEPS  := ../config.status
-PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
+PROGS := cdrbuild.yate cdrcombine.yate cdrfile.yate regexroute.yate \
 	tonegen.yate tonedetect.yate wavefile.yate \
 	extmodule.yate conference.yate moh.yate pbx.yate \
 	dumbchan.yate callfork.yate mux.yate \

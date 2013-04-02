@@ -656,13 +656,13 @@ bool WpInterface::control(Operation oper, NamedList* params)
 	case EnableTx:
 	case DisableTx:
 	    if (m_readOnly == (oper == DisableTx))
-		return true;
+		return TelEngine::controlReturn(params,true);
 	    m_readOnly = (oper == DisableTx);
 	    m_sendReadOnly = false;
 	    Debug(this,DebugInfo,"Tx is %sabled [%p]",m_readOnly?"dis":"en",this);
-	    return true;
+	    return TelEngine::controlReturn(params,true);
 	case Query:
-	    return m_socket.valid() && m_thread && m_thread->running();
+	    return TelEngine::controlReturn(params,m_socket.valid() && m_thread && m_thread->running());
 	default:
 	    return SignallingInterface::control(oper,params);
     }
@@ -684,7 +684,7 @@ bool WpInterface::control(Operation oper, NamedList* params)
 	    Debug(this,DebugWarn,"Enable failed [%p]",this);
 	    control(Disable,0);
 	}
-	return ok;
+	return TelEngine::controlReturn(params,ok);
     }
     // oper is Disable
     m_timerRxUnder.stop();
@@ -695,7 +695,7 @@ bool WpInterface::control(Operation oper, NamedList* params)
     }
     m_socket.close();
     DDebug(this,DebugAll,"Disabled [%p]",this);
-    return true;
+    return TelEngine::controlReturn(params,true);
 }
 
 void WpInterface::timerTick(const Time& when)

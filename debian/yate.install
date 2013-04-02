@@ -88,3 +88,7 @@ debian/tmp/usr/lib/yate/server/cache.yate
 
 debian/tmp/etc/yate/eventlogs.conf
 debian/tmp/usr/lib/yate/server/eventlogs.yate
+
+debian/tmp/etc/yate/lksctp.conf
+debian/tmp/usr/lib/yate/server/lksctp.yate
+

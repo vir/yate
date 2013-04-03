@@ -2285,6 +2285,7 @@ static bool encodeUSI(const Parameter* param,  MapCamelType* type, DataBlock& da
     return true;
 }
 
+
 static const StringList s_locationManagementCapabOps("updateLocation,cancelLocation,purgeMS,updateGprsLocation,anyTimeInterrogation");
 static const StringList s_authenticationCapabOps("sendAuthenticationInfo,authenticationFailureReport");
 static const StringList s_subscriberDataCapabOps("insertSubscriberData,deleteSubscriberData,restoreData");
@@ -2293,9 +2294,10 @@ static const StringList s_vlrRoutingCapabOps("provideRoamingNumber,provideSubscr
 static const StringList s_traceSubscriberCapabOps("activateTraceMode,deactivateTraceMode");
 static const StringList s_servicesCapabOps("registerSS,eraseSS,activateSS,deactivateSS,interrogateSS,registerPassword,getPassword," 
 				    "processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify");
-static const StringList s_miscellaneousCapabOps("sendIMSI,readyForSM,setReportingState");
+static const StringList s_miscellaneousCapabOps("sendIMSI,readyForSM,setReportingState,sendParameters,checkIMEI");
 static const StringList s_errorRecoveryCapabOps("reset,forwardCheckSS-Indication,failureReport");
-static const StringList s_smscCapabOps("informServiceCentre,alertServiceCentre,sendRoutingInfoForSM,mo-forwardSM,mt-forwardSM,forwardSM");
+static const StringList s_smscCapabOps("informServiceCentre,alertServiceCentre,sendRoutingInfoForSM,mo-forwardSM,mt-forwardSM,forwardSM,"
+					"reportSM-DeliveryStatus");
 
 static const StringList s_noOps("");
 

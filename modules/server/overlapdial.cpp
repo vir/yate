@@ -133,9 +133,9 @@ private:
 	long wait;
 	wait = get_next_event_delay();
 	for(;;) {
-	    Debug(DebugCall,"TimerThread::run(): waiting for %ld uS", wait);
+	    XDebug(DebugCall,"TimerThread::run(): waiting for %ld uS", wait);
 	    bool b = m_signal.lock(wait); // wait for event or timeout
-	    Debug(DebugCall,"TimerThread::run(): got %s! (events: %p)", b ? "event" : "timeout", m_events);
+	    DDebug(DebugCall,"TimerThread::run(): got %s! (events: %p)", b ? "event" : "timeout", m_events);
 	    m_mutex.lock();
 	    if(Engine::exiting() || check(false)) // check exit flag
 		break;
@@ -152,7 +152,7 @@ private:
 	}
 	m_mutex.unlock(); // locked just before 'break' a fiew lines above
 	m_signal.unlock();
-	Debug(DebugCall,"TimerThread::run(): worker thread exiting, bye-bye!");
+	XDebug(DebugCall,"TimerThread::run(): worker thread exiting, bye-bye!");
     }
     Mutex m_mutex, m_running;
     Semaphore m_signal;
@@ -268,7 +268,7 @@ void OverlapDialMaster::TimerEvent()
     RefPointer<CallEndpoint> peer = getPeer();
     if (!peer)
 	return;
-    Debug(&__plugin,DebugCall,"Call '%s' overlap dial timeout, collected: '%s'",
+    DDebug(&__plugin,DebugCall,"Call '%s' overlap dial timeout, collected: '%s'",
 	    peer->id().c_str(),m_collected.c_str());
     OverlapDialMaster::checkCollectedNumberOuter(true);
 }
@@ -281,7 +281,7 @@ bool OverlapDialMaster::gotDigit(char digit)
 	return false;
 
     m_collected << digit;
-    Debug(&__plugin,DebugCall,"Call '%s' got '%c', collected: '%s'",
+    DDebug(&__plugin,DebugCall,"Call '%s' got '%c', collected: '%s'",
 	    peer->id().c_str(),digit,m_collected.c_str());
     return OverlapDialMaster::checkCollectedNumberOuter(false);
 }
@@ -292,7 +292,7 @@ void OverlapDialMaster::startStopTimer(bool start)
 	return;
     m_module.timer()->del(this);
     if(start) {
-	Debug(&__plugin,DebugCall,"Call '%s' overlap dial timer started, %u milliseconds", getPeer()->id().c_str(), m_timeout);
+	DDebug(&__plugin,DebugCall,"Call '%s' overlap dial timer started, %u milliseconds", getPeer()->id().c_str(), m_timeout);
 	m_module.timer()->add(this, m_timeout * 1000); // microseconds
     }
 }

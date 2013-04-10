@@ -35,4 +35,5 @@ engine/tables/*.h
 libs/ysig/yate-ss7test
 packing/portage/yate.ebuild
 yate-config.in
+conf.d/*.conf
 

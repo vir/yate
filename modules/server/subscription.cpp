@@ -119,10 +119,12 @@ public:
     void addListParam(NamedList& list, unsigned int index);
     inline bool isCaps(const String& capsid) const
 	{ return m_caps && *m_caps == capsid; }
+    void updateDb(const NamedList& p);
     inline void setCaps(const String& capsid, const NamedList& list) {
 	    TelEngine::destruct(m_caps);
 	    m_caps = new NamedList(capsid);
 	    m_caps->copyParams(list,"caps",'.');
+	    updateDb(list);
 	}
     // Copy parameters to a list
     void addCaps(NamedList& list, const String& prefix = String::empty());
@@ -521,6 +523,7 @@ public:
     String m_contactSetFullQuery;
     String m_contactDeleteQuery;
     String m_genericUserLoadQuery;
+    String m_capsUpdateQuery;
     UserList m_users;
     Mutex m_eventsMutex;
     ObjList m_events;
@@ -694,6 +697,12 @@ void SubscriptionState::toString(String& buf) const
 /*
  * Instance
  */
+// Store updated instance caps in database
+void Instance::updateDb(const NamedList& p) {
+    Message * m = __plugin.buildDb(__plugin.m_account,__plugin.m_capsUpdateQuery,p);
+    m = __plugin.queryDb(m);
+    TelEngine::destruct(m);
+}
 // Add prefixed parameter(s) from this instance
 void Instance::addListParam(NamedList& list, unsigned int index)
 {
@@ -1749,6 +1758,7 @@ void SubscriptionModule::initialize()
 	m_contactSetFullQuery = cfg.getValue("general","contact_set_full");
 	m_contactDeleteQuery = cfg.getValue("general","contact_delete");
 	m_genericUserLoadQuery = cfg.getValue("general","generic_roster_load");
+	m_capsUpdateQuery = cfg.getValue("general","caps_update");
 
 	if (m_userEventQuery)
 	    (new ExpireThread())->startup();

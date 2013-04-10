@@ -43,3 +43,6 @@
 
 ; contact_delete: string: Database query used to delete a specific contact
 ;contact_delete=DELETE FROM roster WHERE username='${username}' AND contact='${contact}'
+
+; caps_update: string: Database query used to update contact's capabilities list.
+;caps_update=SELECT caps_update('${contact}/${instance}', '${caps.audio}')

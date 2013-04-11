@@ -203,9 +203,11 @@ public:
 	const char* error = 0, const NamedList* params = 0,
 	const char* chan = 0);
     // Copy params
-    inline void copyParams(NamedList& dest, const NamedList& src) {
+    inline void copyParams(NamedList& dest, const NamedList& src, bool exec = false) {
 	    Lock lock(this);
-	    dest.copyParams(src,m_copyParams);
+	    const String& list = !exec ? m_copyParams : m_copyExecParams;
+	    if (list)
+		dest.copyParams(src,list);
 	}
     // Attach default path to a file if file path is missing
     void getPath(String& file);
@@ -843,7 +845,10 @@ bool FileDriver::msgExecute(Message& msg, String& dest)
     // Init call from here
     Message m("call.route");
     m.addParam("module",name());
-    m.copyParams(msg,m_copyExecParams);
+    copyParams(m,msg,true);
+    const String& cp = msg[YSTRING("copyparams")];
+    if (cp)
+	m.copyParams(msg,cp);
     String callto(msg.getValue("direct"));
     if (callto.null()) {
 	const char* targ = msg.getValue("target");
@@ -905,6 +910,9 @@ bool FileDriver::msgExecute(Message& msg, String& dest)
     m.addParam("format",format);
     m.addParam("operation",dirStr(outgoing));
     fileHolder->addFileInfo(m,copyMD5,msg.getBoolValue("getfileinfo",s_srcFileInfo));
+    const String& remoteFile = msg[YSTRING("remote_file")];
+    if (remoteFile)
+	m.setParam(YSTRING("file_name"),remoteFile);
     m.addParam("cdrtrack","false");
     bool ok = Engine::dispatch(m);
     if (ok)

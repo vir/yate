@@ -25,6 +25,19 @@
 
 using namespace TelEngine;
 
+class QueueWorker : public GenObject, public Thread
+{
+public:
+    inline QueueWorker(MessageQueue* queue)
+	: Thread("MessageQueueWorker"),m_queue(queue)
+	{}
+    virtual ~QueueWorker();
+protected:
+    virtual void run();
+private:
+    RefPointer<MessageQueue> m_queue;
+};
+
 Message::Message(const char* name, const char* retval, bool broadcast)
     : NamedList(name),
       m_return(retval), m_data(0), m_notify(false), m_broadcast(broadcast)
@@ -518,5 +531,135 @@ void MessageDispatcher::setHook(MessagePostHook* hook, bool remove)
 MessageNotifier::~MessageNotifier()
 {
 }
+
+/**
+ * class MessageQueue
+ */
+
+static const char* s_queueMutexName = "MessageQueue";
+
+MessageQueue::MessageQueue(const char* queueName, int numWorkers)
+    : Mutex(true,s_queueMutexName), m_filters(queueName), m_count(0)
+{
+    XDebug(DebugAll,"Creating MessageQueue for %s",queueName);
+    for (int i = 0;i < numWorkers;i ++) {
+	QueueWorker* worker = new QueueWorker(this);
+	worker->startup();
+	m_workers.append(worker);
+    }
+    m_append = &m_messages;
+}
+
+void MessageQueue::received(Message& msg)
+{
+    Engine::dispatch(msg);
+}
+
+MessageQueue::~MessageQueue()
+{
+    XDebug(DebugAll,"Destroying MessageQueue for %s",m_filters.c_str());
+}
+
+void MessageQueue::clear()
+{
+    Lock myLock(this);
+    for (ObjList* o = m_workers.skipNull();o;o = o->skipNext()) {
+	QueueWorker* worker = static_cast<QueueWorker*>(o->get());
+	worker->cancel();
+	o->setDelete(false);
+    }
+    m_workers.clear();
+    m_messages.clear();
+}
+
+bool MessageQueue::enqueue(Message* msg)
+{
+    if (!msg)
+	return false;
+    Lock myLock(this);
+    m_append = m_append->append(msg);
+    m_count++;
+    return true;
+}
+
+bool MessageQueue::dequeue()
+{
+    Lock myLock(this);
+    ObjList* o = m_messages.skipNull();
+    if (!o)
+	return false;
+    if (m_messages.next() == m_append)
+	m_append = &m_messages;
+    Message* msg = static_cast<Message*>(m_messages.remove(false));
+    if (!msg)
+	return false;
+    m_count--;
+    myLock.drop();
+    received(*msg);
+    TelEngine::destruct(msg);
+    return true;
+}
+
+void MessageQueue::addFilter(const char* name, const char* value)
+{
+    Lock myLock(this);
+    m_filters.setParam(name,value);
+}
+
+void MessageQueue::removeFilter(const String& name)
+{
+    Lock myLock(this);
+    m_filters.clearParam(name);
+}
+
+bool MessageQueue::matchesFilter(const Message& msg)
+{
+    Lock myLock(this);
+    if (msg != m_filters)
+	return false;
+    for (unsigned int i = 0;i < m_filters.length();i++) {
+	NamedString* param = m_filters.getParam(i);
+	if (!param)
+	    continue;
+	NamedString* match = msg.getParam(param->name());
+	if (!match || *match != *param)
+	    return false;
+    }
+    return true;
+}
+
+void MessageQueue::removeThread(Thread* thread)
+{
+    if (!thread)
+	return;
+    Lock myLock(this);
+    m_workers.remove((GenObject*)thread,false);
+}
+
+/**
+ * class QueueWorker
+ */
+
+QueueWorker::~QueueWorker()
+{
+    if (m_queue)
+	m_queue->removeThread(this);
+    m_queue = 0;
+}
+
+void QueueWorker::run()
+{
+    if (!m_queue)
+	return;
+    while (true) {
+	if (!m_queue->count()) {
+	    Thread::idle(true);
+	    continue;
+	}
+	m_queue->dequeue();
+	Thread::check(true);
+    }
+}
+
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

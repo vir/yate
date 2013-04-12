@@ -576,36 +576,6 @@ String& String::operator=(const char* value)
     return *this;
 }
 
-String& String::operator+=(const char* value)
-{
-    if (value && !*value)
-	value = 0;
-    if (value) {
-	if (m_string) {
-	    int olen = length();
-	    int len = ::strlen(value)+olen;
-	    char *tmp1 = m_string;
-	    char *tmp2 = (char *) ::malloc(len+1);
-	    if (tmp2) {
-		::strncpy(tmp2,m_string,olen);
-		::strncpy(tmp2+olen,value,len-olen);
-		tmp2[len] = 0;
-		m_string = tmp2;
-		::free(tmp1);
-	    }
-	    else
-		Debug("String",DebugFail,"malloc(%d) returned NULL!",len+1);
-	}
-	else {
-	    m_string = ::strdup(value);
-	    if (!m_string)
-		Debug("String",DebugFail,"strdup() returned NULL!");
-	}
-	changed();
-    }
-    return *this;
-}
-
 String& String::operator=(char value)
 {
     char buf[2] = {value,0};
@@ -721,6 +691,38 @@ String& String::operator>>(bool& store)
 		return *this;
 	    }
 	}
+    }
+    return *this;
+}
+
+String& String::append(const char* value, int len)
+{
+    if (len && value && *value) {
+	if (len < 0) {
+	    if (!m_string) {
+		m_string = ::strdup(value);
+		if (!m_string)
+		    Debug("String",DebugFail,"strdup() returned NULL!");
+		changed();
+		return *this;
+	    }
+	    len = ::strlen(value);
+	}
+	int olen = length();
+	len += olen;
+	char *tmp1 = m_string;
+	char *tmp2 = (char *) ::malloc(len+1);
+	if (tmp2) {
+	    if (m_string)
+		::strncpy(tmp2,m_string,olen);
+	    ::strncpy(tmp2+olen,value,len-olen);
+	    tmp2[len] = 0;
+	    m_string = tmp2;
+	    ::free(tmp1);
+	}
+	else
+	    Debug("String",DebugFail,"malloc(%d) returned NULL!",len+1);
+	changed();
     }
     return *this;
 }
@@ -1031,15 +1033,19 @@ String String::msgEscape(const char* str, char extraEsc)
     if (TelEngine::null(str))
 	return s;
     char c;
-    while ((c=*str++)) {
-	if ((unsigned char)c < ' ' || c == ':' || c == extraEsc) {
+    const char* pos = str;
+    char buff[3] =  {'%', '%', '\0'};
+    while ((c=*pos++)) {
+	if ((unsigned char)c < ' ' || c == ':' || c == extraEsc)
 	    c += '@';
-	    s += '%';
-	}
-	else if (c == '%')
-	    s += c;
-	s += c;
+	else if (c != '%')
+	    continue;
+	buff[1] = c;
+	s.append(str,pos - str - 1);
+	s += buff;
+	str = pos;
     }
+    s += str;
     return s;
 }
 
@@ -1056,6 +1062,7 @@ String String::msgUnescape(const char* str, int* errptr, char extraEsc)
 	if ((unsigned char)c < ' ') {
 	    if (errptr)
 		*errptr = (pos-str) - 1;
+	    s.append(str,pos - str - 1);
 	    return s;
 	}
 	else if (c == '%') {
@@ -1065,11 +1072,15 @@ String String::msgUnescape(const char* str, int* errptr, char extraEsc)
 	    else if (c != '%') {
 		if (errptr)
 		    *errptr = (pos-str) - 1;
+		s.append(str,pos - str - 1);
 		return s;
 	    }
+	    s.append(str,pos - str - 2);
+	    s += c;
+	    str = pos;
 	}
-	s += c;
     }
+    s += str;
     if (errptr)
 	*errptr = -1;
     return s;

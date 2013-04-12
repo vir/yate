@@ -1938,7 +1938,8 @@ public:
      * Appending operator for strings.
      * @see TelEngine::strcat
      */
-    String& operator+=(const char* value);
+    inline String& operator+=(const char* value)
+	{ return append(value,-1); }
 
     /**
      * Appending operator for single characters.
@@ -2046,6 +2047,14 @@ public:
      * Stream style extraction operator for booleans
      */
     String& operator>>(bool& store);
+
+    /**
+     * Append a string to the current string
+     * @param value String from which to append
+     * @param len Length of the data to copy, -1 for full string
+     * @return Reference to the String
+     */
+    String& append(const char* value, int len);
 
     /**
      * Conditional appending with a separator

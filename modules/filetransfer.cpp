@@ -130,6 +130,9 @@ class FileConsumer : public DataConsumer, public FileHolder
 public:
     FileConsumer(const String& file, NamedList* params = 0, const char* chan = 0,
 	const char* format = "data");
+    // Check if file should be overwritten
+    inline bool overWrite() const
+	{ return m_overWrite; }
     // Set drop chan id
     inline void setDropChan(const String& id)
 	{ m_dropChan = id; }
@@ -161,6 +164,7 @@ private:
     bool m_terminated;
     bool m_delTemp;                      // Delete temporary file
     bool m_createPath;                   // Create file path
+    bool m_overWrite;                    // Overwright existing file
 };
 
 // File source worker
@@ -574,7 +578,7 @@ FileConsumer::FileConsumer(const String& file, NamedList* params, const char* ch
     m_notifyPercent(s_notifyPercent),
     m_percent(0),
     m_startTime(0), m_terminated(false), m_delTemp(true),
-    m_createPath(false)
+    m_createPath(false), m_overWrite(false)
 {
     toNativeSeparators(m_fileName);
     __plugin.getPath(m_fileName);
@@ -585,6 +589,7 @@ FileConsumer::FileConsumer(const String& file, NamedList* params, const char* ch
 	m_md5HexDigest = params->getValue("file_md5");
 	m_fileTime = params->getIntValue("file_time");
 	m_createPath = params->getBoolValue(YSTRING("create_path"));
+	m_overWrite = params->getBoolValue(YSTRING("overwrite"));
 	__plugin.copyParams(m_params,*params);
     }
     Debug(&__plugin,DebugAll,"FileConsumer('%s') [%p]",m_fileName.c_str(),this);
@@ -598,17 +603,32 @@ FileConsumer::FileConsumer(const String& file, NamedList* params, const char* ch
 
 unsigned long FileConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
+    if (m_terminated)
+	return 0;
+
     if (!m_startTime) {
 	m_startTime = Time::now();
 	FileDriver::notifyStatus(false,m_notify,"start",m_fileName,0,m_fileSize,0,
 	    &m_params,m_dropChan);
 	// Check file existence
 	if (fileExists(true,false)) {
-	    terminate("File exists");
-	    Debug(&__plugin,DebugNote,
-		"FileConsumer(%s) failed to start: temporary file already exists! [%p]",
-		m_fileName.c_str(),this);
-	    return 0;
+	    if (!m_overWrite) {
+		terminate("File exists");
+		Debug(&__plugin,DebugNote,
+		    "FileConsumer(%s) failed to start: temporary file already exists! [%p]",
+		    m_fileName.c_str(),this);
+		return 0;
+	    }
+	    int code = 0;
+	    if (!File::remove(m_tmpFileName,&code)) {
+		String error;
+		Thread::errorString(error,code);
+		terminate(error);
+		Debug(&__plugin,DebugNote,
+		    "FileConsumer(%s) failed to delete temporary file. %d: '%s' [%p]",
+		    m_fileName.c_str(),code,error.c_str(),this);
+		return 0;
+	    }
 	}
 	else if (m_createPath) {
 	    String error;
@@ -693,7 +713,7 @@ void FileConsumer::terminate(const char* error)
 	    break;
 	}
 	// Check file existence
-	if (fileExists(false,true)) {
+	if (!m_overWrite && fileExists(false,true)) {
 	    err = "File exists";
 	    break;
 	}
@@ -889,7 +909,7 @@ bool FileDriver::msgExecute(Message& msg, String& dest)
 	}
 	else {
 	    cons = new FileConsumer(dest.matchString(2),&msg,0,format);
-	    ok = !cons->fileExists();
+	    ok = cons->overWrite() || !cons->fileExists();
 	    if (ok)
 		addConsumer(cons);
 	    else
@@ -960,7 +980,7 @@ bool FileDriver::msgExecute(Message& msg, String& dest)
     }
     else {
 	cons = new FileConsumer(dest.matchString(2),&msg,0,format);
-	if (!cons->fileExists()) {
+	if (cons->overWrite() || !cons->fileExists()) {
 	    addConsumer(cons);
 	    fileHolder = static_cast<FileHolder*>(cons);
 	}

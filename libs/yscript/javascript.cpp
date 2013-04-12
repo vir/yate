@@ -2250,7 +2250,7 @@ bool JsCode::jumpToLabel(long int label, GenObject* context) const
 	for (ObjList* l = m_opcodes.skipNull(); l; l = l->skipNext()) {
 	    const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
 	    if (o->opcode() == OpcLabel && o->number() == label) {
-		runner->m_opcode = l;
+		runner->m_opcode = l->skipNext();
 		XDebug(this,DebugInfo,"Jumped to label %ld",label);
 		return true;
 	    }

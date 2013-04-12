@@ -811,6 +811,10 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 		return false;
 	}
 	JsHandler* h = new JsHandler(*name,priority,*func,context);
+	ExpOperation* filterName = static_cast<ExpOperation*>(args[3]);
+	ExpOperation* filterValue = static_cast<ExpOperation*>(args[4]);
+	if (filterName && filterValue && *filterName)
+	    h->setFilter(*filterName,*filterValue);
 	m_handlers.append(h);
 	Engine::install(h);
     }
@@ -2231,8 +2235,8 @@ bool JsModule::received(Message& msg, int id)
 	    }
 	    break;
 	case Halt:
-	    JsGlobal::unloadAll();
 	    s_engineStop = true;
+	    JsGlobal::unloadAll();
 	    return false;
     } // switch (id)
     return ChanAssistList::received(msg,id);

@@ -157,8 +157,8 @@ public:
     bool link();
     inline bool traceable() const
 	{ return m_traceable; }
-    JsObject* parseArray(const char*& expr, bool constOnly);
-    JsObject* parseObject(const char*& expr, bool constOnly);
+    JsObject* parseArray(ParsePoint& expr, bool constOnly);
+    JsObject* parseObject(ParsePoint& expr, bool constOnly);
     inline const NamedList& pragmas() const
 	{ return m_pragmas; }
     inline static unsigned int getLineNo(unsigned int line)
@@ -175,20 +175,20 @@ protected:
 	{ m_traceable = allowed; }
     void setBaseFile(const String& file);
     virtual void formatLineNo(String& buf, unsigned int line) const;
-    virtual bool getString(const char*& expr);
+    virtual bool getString(ParsePoint& expr);
     virtual bool getEscape(const char*& expr, String& str, char sep);
     virtual bool keywordChar(char c) const;
     virtual int getKeyword(const char* str) const;
-    virtual char skipComments(const char*& expr, GenObject* context = 0);
-    virtual int preProcess(const char*& expr, GenObject* context = 0);
-    virtual bool getInstruction(const char*& expr, char stop, GenObject* nested);
-    virtual bool getSimple(const char*& expr, bool constOnly = false);
-    virtual Opcode getOperator(const char*& expr);
-    virtual Opcode getUnaryOperator(const char*& expr);
-    virtual Opcode getPostfixOperator(const char*& expr, int precedence);
+    virtual char skipComments(ParsePoint& expr, GenObject* context = 0);
+    virtual int preProcess(ParsePoint& expr, GenObject* context = 0);
+    virtual bool getInstruction(ParsePoint& expr, char stop, GenObject* nested);
+    virtual bool getSimple(ParsePoint& expr, bool constOnly = false);
+    virtual Opcode getOperator(ParsePoint& expr);
+    virtual Opcode getUnaryOperator(ParsePoint& expr);
+    virtual Opcode getPostfixOperator(ParsePoint& expr, int precedence);
     virtual const char* getOperator(Opcode oper) const;
     virtual int getPrecedence(ExpEvaluator::Opcode oper) const;
-    virtual bool getSeparator(const char*& expr, bool remove);
+    virtual bool getSeparator(ParsePoint& expr, bool remove);
     virtual bool runOperation(ObjList& stack, const ExpOperation& oper, GenObject* context) const;
     virtual bool runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context) const;
     virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context) const;
@@ -198,17 +198,17 @@ private:
     ObjList m_included;
     ObjList m_globals;
     NamedList m_pragmas;
-    bool preProcessInclude(const char*& expr, bool once, GenObject* context);
-    bool preProcessPragma(const char*& expr, GenObject* context);
-    bool getOneInstruction(const char*& expr, GenObject* nested);
-    bool parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested);
-    bool parseIf(const char*& expr, GenObject* nested);
-    bool parseSwitch(const char*& expr, GenObject* nested);
-    bool parseFor(const char*& expr, GenObject* nested);
-    bool parseWhile(const char*& expr, GenObject* nested);
-    bool parseVar(const char*& expr);
-    bool parseTry(const char*& expr, GenObject* nested);
-    bool parseFuncDef(const char*& expr, bool publish);
+    bool preProcessInclude(ParsePoint& expr, bool once, GenObject* context);
+    bool preProcessPragma(ParsePoint& expr, GenObject* context);
+    bool getOneInstruction(ParsePoint& expr, GenObject* nested);
+    bool parseInner(ParsePoint& expr, JsOpcode opcode, ParseNested* nested);
+    bool parseIf(ParsePoint& expr, GenObject* nested);
+    bool parseSwitch(ParsePoint& expr, GenObject* nested);
+    bool parseFor(ParsePoint& expr, GenObject* nested);
+    bool parseWhile(ParsePoint& expr, GenObject* nested);
+    bool parseVar(ParsePoint& expr);
+    bool parseTry(ParsePoint& expr, GenObject* nested);
+    bool parseFuncDef(ParsePoint& expr, bool publish);
     bool evalList(ObjList& stack, GenObject* context) const;
     bool evalVector(ObjList& stack, GenObject* context) const;
     bool jumpToLabel(long int label, GenObject* context) const;
@@ -391,13 +391,13 @@ public:
 	{ return nested ? static_cast<ParseNested*>(nested)->find(opcode) : 0; }
     inline static ParseNested* findMatch(GenObject* nested, JsCode::JsOpcode opcode)
 	{ return nested ? static_cast<ParseNested*>(nested)->findMatch(opcode) : 0; }
-    static bool parseInner(GenObject* nested, JsCode::JsOpcode opcode, const char*& expr)
+    static bool parseInner(GenObject* nested, JsCode::JsOpcode opcode, ParsePoint& expr)
 	{ ParseNested* inner = findMatch(nested,opcode);
 	    return inner && inner->parseInner(expr,opcode); }
 protected:
     virtual bool isMatch(JsCode::JsOpcode opcode)
 	{ return false; }
-    inline bool parseInner(const char*& expr, JsCode::JsOpcode opcode)
+    inline bool parseInner(ParsePoint& expr, JsCode::JsOpcode opcode)
 	{ return m_code->parseInner(expr,opcode,this); }
     inline ParseNested* find(JsCode::JsOpcode opcode)
 	{ return (opcode == m_opcode) ? this :
@@ -967,7 +967,7 @@ void JsCode::formatLineNo(String& buf, unsigned int line) const
     buf << (file ? file->toString().c_str() : "???") << ":" << (line & 0xffffff);
 }
 
-bool JsCode::getString(const char*& expr)
+bool JsCode::getString(ParsePoint& expr)
 {
     if (inError())
 	return false;
@@ -1102,7 +1102,7 @@ int JsCode::getKeyword(const char* str) const
     return len;
 }
 
-char JsCode::skipComments(const char*& expr, GenObject* context)
+char JsCode::skipComments(ParsePoint& expr, GenObject* context)
 {
     char c = skipWhites(expr);
     while (c == '/') {
@@ -1138,7 +1138,7 @@ void JsCode::setBaseFile(const String& file)
     m_lineNo = ((idx + 1) << 24) | 1;
 }
 
-bool JsCode::preProcessInclude(const char*& expr, bool once, GenObject* context)
+bool JsCode::preProcessInclude(ParsePoint& expr, bool once, GenObject* context)
 {
     if (m_depth > 5)
 	return gotError("Possible recursive include");
@@ -1162,12 +1162,12 @@ bool JsCode::preProcessInclude(const char*& expr, bool once, GenObject* context)
 			idx = m_included.index(s);
 		    }
 		    // use the upper bits of line # for file index
-		    unsigned int savedLine = m_lineNo;
-		    m_lineNo = ((idx + 1) << 24) | 1;
+		    unsigned int savedLine = expr.m_lineNo;
+		    expr.m_lineNo = m_lineNo = ((idx + 1) << 24) | 1;
 		    m_depth++;
 		    ok = parser->parseFile(str,true);
 		    m_depth--;
-		    m_lineNo = savedLine;
+		    expr.m_lineNo = m_lineNo = savedLine;
 		}
 	    }
 	    return ok || gotError("Failed to include " + str);
@@ -1177,13 +1177,14 @@ bool JsCode::preProcessInclude(const char*& expr, bool once, GenObject* context)
     return gotError("Expecting include file",expr);
 }
 
-bool JsCode::preProcessPragma(const char*& expr, GenObject* context)
+bool JsCode::preProcessPragma(ParsePoint& expr, GenObject* context)
 {
     skipComments(expr);
     int len = ExpEvaluator::getKeyword(expr);
     if (len <= 0)
 	return gotError("Expecting pragma code",expr);
-    const char* str = expr + len;
+    ParsePoint str = expr;
+    str += len;
     char c = skipComments(str);
     if (c == '"' || c == '\'') {
 	String val;
@@ -1197,7 +1198,7 @@ bool JsCode::preProcessPragma(const char*& expr, GenObject* context)
     return gotError("Expecting pragma string",expr);
 }
 
-int JsCode::preProcess(const char*& expr, GenObject* context)
+int JsCode::preProcess(ParsePoint& expr, GenObject* context)
 {
     int rval = -1;
     for (;;) {
@@ -1225,49 +1226,67 @@ int JsCode::preProcess(const char*& expr, GenObject* context)
     }
 }
 
-bool JsCode::getOneInstruction(const char*& expr, GenObject* nested)
+bool JsCode::getOneInstruction(ParsePoint& expr, GenObject* nested)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getOneInstruction %p '%.30s'",nested,expr);
+    XDebug(this,DebugAll,"JsCode::getOneInstruction %p '%.30s'",nested,(const char*)expr);
+    const char* savedSeps = expr.m_searchedSeps;
     if (skipComments(expr) == '{') {
+	expr.m_searchedSeps = "}";
 	if (!getInstruction(expr,0,nested))
 	    return false;
     }
-    else if (!runCompile(expr,";}",nested))
-	return false;
+    else {
+	expr.m_searchedSeps = ";}";
+	if (!runCompile(expr,";}",nested))
+	    return false;
+	if (skipComments(expr)  == ';') {
+	    expr.m_foundSep = ';';
+	    expr++;
+	}
+    }
+    expr.m_searchedSeps = savedSeps;
+    if (!expr.m_searchedSeps || expr.m_count)
+	expr.m_foundSep = 0;
     return true;
 }
 
-bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
+bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getInstruction %p '%.1s' '%.30s'",nested,&stop,expr);
+    XDebug(this,DebugAll,"JsCode::getInstruction %p '%.1s' 'separators=%s' 'count=%u' '%.30s'",nested,&stop,expr.m_searchedSeps,
+	   expr.m_count,(const char*)expr);
     if (skipComments(expr) == '{') {
 	if (stop == ')')
 	    return false;
 	expr++;
+	expr.m_count++;
 	for (;;) {
 	    if (!runCompile(expr,'}',nested))
 		return false;
 	    bool sep = false;
 	    while (skipComments(expr) && getSeparator(expr,true))
 		sep = true;
-	    if (*expr == '}' || !sep)
+	    if (*expr.m_expr == '}' || !sep)
 		break;
 	}
 	if (*expr != '}')
 	    return gotError("Expecting '}'",expr);
 	expr++;
+	expr.m_foundSep = '}';
+	if (expr.m_count > 0)
+	    expr.m_count--;
 	return true;
     }
     else if (*expr == ';') {
 	expr++;
+	expr.m_foundSep = ';';
 	return true;
     }
-    const char* saved = expr;
-    unsigned int savedLine = m_lineNo;
+    expr.m_foundSep = 0;
+    ParsePoint saved = expr;
     Opcode op = ExpEvaluator::getOperator(expr,s_instr);
     switch ((JsOpcode)op) {
 	case (JsOpcode)OpcNone:
@@ -1294,7 +1313,6 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    return parseIf(expr,nested);
 	case OpcElse:
 	    expr = saved;
-	    m_lineNo = savedLine;
 	    return false;
 	case OpcSwitch:
 	    return parseSwitch(expr,nested);
@@ -1304,7 +1322,7 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    return parseWhile(expr,nested);
 	case OpcCase:
 	    if (!ParseNested::parseInner(nested,OpcCase,expr)) {
-		m_lineNo = savedLine;
+		expr.m_lineNo = saved.m_lineNo;
 		return gotError("case not inside switch",saved);
 	    }
 	    if (skipComments(expr) != ':')
@@ -1313,7 +1331,7 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    break;
 	case OpcDefault:
 	    if (!ParseNested::parseInner(nested,OpcDefault,expr)) {
-		m_lineNo = savedLine;
+		expr.m_lineNo = saved.m_lineNo;
 		return gotError("Unexpected default instruction",saved);
 	    }
 	    if (skipComments(expr) != ':')
@@ -1322,7 +1340,7 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    break;
 	case OpcBreak:
 	    if (!ParseNested::parseInner(nested,OpcBreak,expr)) {
-		m_lineNo = savedLine;
+		expr.m_lineNo = saved.m_lineNo;
 		return gotError("Unexpected break instruction",saved);
 	    }
 	    if (skipComments(expr) != ';')
@@ -1330,7 +1348,7 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    break;
 	case OpcCont:
 	    if (!ParseNested::parseInner(nested,OpcCont,expr)) {
-		m_lineNo = savedLine;
+		expr.m_lineNo = saved.m_lineNo;
 		return gotError("Unexpected continue instruction",saved);
 	    }
 	    if (skipComments(expr) != ';')
@@ -1391,7 +1409,7 @@ private:
 };
 
 // Parse keywords inner to specific instructions
-bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
+bool JsCode::parseInner(ParsePoint& expr, JsOpcode opcode, ParseNested* nested)
 {
     switch (*nested) {
 	case OpcFor:
@@ -1400,11 +1418,11 @@ bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
 		ParseLoop* block = static_cast<ParseLoop*>(nested);
 		switch (opcode) {
 		    case OpcBreak:
-			XDebug(this,DebugAll,"Parsing loop:break '%.30s'",expr);
+			XDebug(this,DebugAll,"Parsing loop:break '%.30s'",(const char*)expr);
 			addOpcode((Opcode)OpcJump,block->m_lblBreak);
 			break;
 		    case OpcCont:
-			XDebug(this,DebugAll,"Parsing loop:continue '%.30s'",expr);
+			XDebug(this,DebugAll,"Parsing loop:continue '%.30s'",(const char*)expr);
 			addOpcode((Opcode)OpcJump,block->m_lblCont);
 			break;
 		    default:
@@ -1421,7 +1439,7 @@ bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
 			    return gotError("Encountered case after default",expr);
 			if (!getSimple(expr,true))
 			    return gotError("Expecting case constant",expr);
-			XDebug(this,DebugAll,"Parsing switch:case: '%.30s'",expr);
+			XDebug(this,DebugAll,"Parsing switch:case: '%.30s'",(const char*)expr);
 			block->m_state = ParseSwitch::InCase;
 			block->m_cases.append(popOpcode());
 			addOpcode(OpcLabel,++m_label);
@@ -1430,13 +1448,13 @@ bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
 		    case OpcDefault:
 			if (block->state() == ParseSwitch::InDefault)
 			    return gotError("Duplicate default case",expr);
-			XDebug(this,DebugAll,"Parsing switch:default: '%.30s'",expr);
+			XDebug(this,DebugAll,"Parsing switch:default: '%.30s'",(const char*)expr);
 			block->m_state = ParseSwitch::InDefault;
 			block->m_lblDefault = ++m_label;
 			addOpcode(OpcLabel,block->m_lblDefault);
 			break;
 		    case OpcBreak:
-			XDebug(this,DebugAll,"Parsing switch:break '%.30s'",expr);
+			XDebug(this,DebugAll,"Parsing switch:break '%.30s'",(const char*)expr);
 			addOpcode((Opcode)OpcJump,static_cast<ParseSwitch*>(nested)->m_lblBreak);
 			break;
 		    default:
@@ -1450,8 +1468,9 @@ bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
     return true;
 }
 
-bool JsCode::parseIf(const char*& expr, GenObject* nested)
+bool JsCode::parseIf(ParsePoint& expr, GenObject* nested)
 {
+    XDebug(this,DebugAll,"JsCode::parseIf() '%.30s'",(const char*)expr);
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
     if (!runCompile(++expr,')'))
@@ -1463,10 +1482,7 @@ bool JsCode::parseIf(const char*& expr, GenObject* nested)
     if (!getOneInstruction(expr,nested))
 	return false;
     skipComments(expr);
-    const char* save = expr;
-    unsigned int savedLine = m_lineNo;
-    if (*expr == ';')
-	skipComments(++expr);
+    ParsePoint save = expr;
     if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
 	ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
 	addOpcode(OpcLabel,cond->number());
@@ -1476,13 +1492,12 @@ bool JsCode::parseIf(const char*& expr, GenObject* nested)
     }
     else {
 	expr = save;
-	m_lineNo = savedLine;
 	addOpcode(OpcLabel,cond->number());
     }
     return true;
 }
 
-bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
+bool JsCode::parseSwitch(ParsePoint& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
@@ -1494,6 +1509,8 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
     if (skipComments(++expr) != '{')
 	return gotError("Expecting '{'",expr);
     expr++;
+    const char* savedSeps = expr.m_searchedSeps;
+    expr.m_searchedSeps = "";
     ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
     ParseSwitch parseStack(this,nested,++m_label);
     for (;;) {
@@ -1508,6 +1525,9 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
     if (*expr != '}')
 	return gotError("Expecting '}'",expr);
     expr++;
+    expr.m_searchedSeps = savedSeps;
+    if (!expr.m_searchedSeps || expr.m_count)
+	expr.m_foundSep = 0;
     // implicit break at end
     addOpcode((Opcode)OpcJump,parseStack.m_lblBreak);
     addOpcode(OpcLabel,jump->number());
@@ -1528,7 +1548,7 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
     return true;
 }
 
-bool JsCode::parseFor(const char*& expr, GenObject* nested)
+bool JsCode::parseFor(ParsePoint& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
@@ -1585,7 +1605,7 @@ bool JsCode::parseFor(const char*& expr, GenObject* nested)
     return true;
 }
 
-bool JsCode::parseWhile(const char*& expr, GenObject* nested)
+bool JsCode::parseWhile(ParsePoint& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
@@ -1607,11 +1627,11 @@ bool JsCode::parseWhile(const char*& expr, GenObject* nested)
     return true;
 }
 
-bool JsCode::parseVar(const char*& expr)
+bool JsCode::parseVar(ParsePoint& expr)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"parseVar '%.30s'",expr);
+    XDebug(this,DebugAll,"parseVar '%.30s'",(const char*)expr);
     skipComments(expr);
     int len = ExpEvaluator::getKeyword(expr);
     if (len <= 0 || expr[len] == '(')
@@ -1624,7 +1644,7 @@ bool JsCode::parseVar(const char*& expr)
     return true;
 }
 
-bool JsCode::parseTry(const char*& expr, GenObject* nested)
+bool JsCode::parseTry(ParsePoint& expr, GenObject* nested)
 {
     addOpcode((Opcode)OpcTry);
     ParseNested parseStack(this,nested,OpcTry);
@@ -1649,9 +1669,9 @@ bool JsCode::parseTry(const char*& expr, GenObject* nested)
     return true;
 }
 
-bool JsCode::parseFuncDef(const char*& expr, bool publish)
+bool JsCode::parseFuncDef(ParsePoint& expr, bool publish)
 {
-    XDebug(this,DebugAll,"JsCode::parseFuncDef '%.30s'",expr);
+    XDebug(this,DebugAll,"JsCode::parseFuncDef '%.30s'",(const char*)expr);
     skipComments(expr);
     int len = getKeyword(expr);
     String name;
@@ -1700,11 +1720,11 @@ bool JsCode::parseFuncDef(const char*& expr, bool publish)
     return true;
 }
 
-ExpEvaluator::Opcode JsCode::getOperator(const char*& expr)
+ExpEvaluator::Opcode JsCode::getOperator(ParsePoint& expr)
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getOperator '%.30s'",expr);
+    XDebug(this,DebugAll,"JsCode::getOperator '%.30s'",(const char*)expr);
     skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_operators);
     if (OpcNone != op)
@@ -1712,11 +1732,11 @@ ExpEvaluator::Opcode JsCode::getOperator(const char*& expr)
     return ExpEvaluator::getOperator(expr);
 }
 
-ExpEvaluator::Opcode JsCode::getUnaryOperator(const char*& expr)
+ExpEvaluator::Opcode JsCode::getUnaryOperator(ParsePoint& expr)
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getUnaryOperator '%.30s'",expr);
+    XDebug(this,DebugAll,"JsCode::getUnaryOperator '%.30s'",(const char*)expr);
     skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_unaryOps);
     if (OpcNone != op)
@@ -1724,11 +1744,11 @@ ExpEvaluator::Opcode JsCode::getUnaryOperator(const char*& expr)
     return ExpEvaluator::getUnaryOperator(expr);
 }
 
-ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr, int precedence)
+ExpEvaluator::Opcode JsCode::getPostfixOperator(ParsePoint& expr, int precedence)
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getPostfixOperator '%.30s'",expr);
+    XDebug(this,DebugAll,"JsCode::getPostfixOperator '%.30s'",(const char*)expr);
     if (skipComments(expr) == '[') {
 	// The Indexing operator has maximum priority!
 	// No need to check it.
@@ -1742,14 +1762,12 @@ ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr, int precedenc
 	return (Opcode)OpcIndex;
     }
     skipComments(expr);
-    const char* save = expr;
-    unsigned int savedLine = m_lineNo;
+    ParsePoint save = expr;
     Opcode op = ExpEvaluator::getOperator(expr,s_postfixOps);
     if (OpcNone != op) {
 	if (getPrecedence(op) >= precedence)
 	    return op;
 	expr = save;
-	m_lineNo = savedLine;
 	return OpcNone;
     }
     return ExpEvaluator::getPostfixOperator(expr,precedence);
@@ -1795,13 +1813,14 @@ int JsCode::getPrecedence(ExpEvaluator::Opcode oper) const
     }
 }
 
-bool JsCode::getSeparator(const char*& expr, bool remove)
+bool JsCode::getSeparator(ParsePoint& expr, bool remove)
 {
     if (inError())
 	return false;
     switch (skipComments(expr)) {
-	case ']':
 	case ';':
+	    expr.m_foundSep =';';
+	case ']':
 	    if (remove)
 		expr++;
 	    return true;
@@ -1809,14 +1828,13 @@ bool JsCode::getSeparator(const char*& expr, bool remove)
     return ExpEvaluator::getSeparator(expr,remove);
 }
 
-bool JsCode::getSimple(const char*& expr, bool constOnly)
+bool JsCode::getSimple(ParsePoint& expr, bool constOnly)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getSimple(%s) '%.30s'",String::boolText(constOnly),expr);
+    XDebug(this,DebugAll,"JsCode::getSimple(%s) '%.30s'",String::boolText(constOnly),(const char*)expr);
     skipComments(expr);
-    const char* save = expr;
-    unsigned int savedLine = m_lineNo;
+    ParsePoint save = expr;
     switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_constants)) {
 	case OpcFalse:
 	    addOpcode(false);
@@ -1833,7 +1851,6 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
 	case OpcFuncDef:
 	    if (constOnly) {
 		expr = save;
-		m_lineNo = savedLine;
 		return false;
 	    }
 	    return parseFuncDef(expr,false);
@@ -1850,7 +1867,7 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
 }
 
 // Parse an inline Javascript Array: [ item1, item2, ... ]
-JsObject* JsCode::parseArray(const char*& expr, bool constOnly)
+JsObject* JsCode::parseArray(ParsePoint& expr, bool constOnly)
 {
     if (skipComments(expr) != '[')
 	return 0;
@@ -1883,7 +1900,7 @@ JsObject* JsCode::parseArray(const char*& expr, bool constOnly)
 
 
 // Parse an inline Javascript Object: { prop1: value1, "prop 2": value2, ... }
-JsObject* JsCode::parseObject(const char*& expr, bool constOnly)
+JsObject* JsCode::parseObject(ParsePoint& expr, bool constOnly)
 {
     if (skipComments(expr) != '{')
 	return 0;
@@ -3267,14 +3284,18 @@ bool JsParser::parse(const char* text, bool fragment, const char* file)
     if (TelEngine::null(text))
 	return false;
     String::stripBOM(text);
+    ParsePoint expr(text,0,0,file);
     if (fragment)
-	return code() && static_cast<JsCode*>(code())->compile(text,this);
+	return code() && static_cast<JsCode*>(code())->compile(expr,this);
     JsCode* code = new JsCode;
     setCode(code);
     code->deref();
-    if (!TelEngine::null(file))
+    expr.m_eval = code;
+    if (!TelEngine::null(file)) {
 	code->setBaseFile(file);
-    if (!code->compile(text,this)) {
+	expr.m_fileName = file;
+    }
+    if (!code->compile(expr,this)) {
 	setCode(0);
 	return false;
     }
@@ -3307,7 +3328,8 @@ ScriptRun::Status JsParser::eval(const String& text, ExpOperation** result, Scri
 JsObject* JsParser::parseJSON(const char* text)
 {
     JsCode* code = new JsCode;
-    JsObject* jso = code->parseObject(text,true);
+    ParsePoint pp(text,code);
+    JsObject* jso = code->parseObject(pp,true);
     TelEngine::destruct(code);
     return jso;
 }

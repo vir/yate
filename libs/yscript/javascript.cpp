@@ -582,19 +582,19 @@ bool JsContext::runFunction(ObjList& stack, const ExpOperation& oper, GenObject*
     }
     if (name == YSTRING("parseInt")) {
 	long int val = ExpOperation::nonInteger();
-	ExpOperation* op1 = popValue(stack,context);
+	ObjList args;
+	extractArgs(stack,oper,context,args);
+	ExpOperation* op1 = static_cast<ExpOperation*>(args[0]);
 	if (op1) {
-	    ExpOperation* op2 = popValue(stack,context);
+	    int base = 0;
+	    ExpOperation* op2 = static_cast<ExpOperation*>(args[1]);
 	    if (op2) {
-		int base = op1->number();
-		if (base >= 0)
-		    val = op2->trimSpaces().toLong(val,base);
+		base = op2->valInteger();
+		if (base < 2 || base > 36)
+		    base = 0;
 	    }
-	    else
-		val = op1->trimSpaces().toLong(val);
-	    TelEngine::destruct(op2);
+	    val = op1->trimSpaces().toLong(val,base);
 	}
-	TelEngine::destruct(op1);
 	ExpEvaluator::pushOne(stack,new ExpOperation(val));
 	return true;
     }
@@ -784,6 +784,45 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	return true;
     }
 #undef SPLIT_EMPTY
+    if (name == YSTRING("toString")) {
+	ObjList args;
+	extractArgs(stack,oper,context,args);
+	ExpOperation* op = YOBJECT(ExpOperation,str);
+	if (op && op->isInteger()) {
+	    ExpOperation* tmp = static_cast<ExpOperation*>(args[0]);
+	    int radix = tmp ? tmp->valInteger() : 0;
+	    if (radix < 2 || radix > 36)
+		radix = 10;
+	    static const char s_base[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+	    long int n = op->valInteger();
+	    bool neg = false;
+	    if (n < 0) {
+		n = -n;
+		neg = true;
+	    }
+	    String s;
+	    char buf[2];
+	    buf[1] = '\0';
+	    do {
+		buf[0] = s_base[n % radix];
+		s = buf + s;
+	    } while ((n = n / radix));
+	    tmp = static_cast<ExpOperation*>(args[1]);
+	    int len = tmp ? tmp->valInteger() : 0;
+	    if (len > 1) {
+		if (neg)
+		    len--;
+		while (len > (int)s.length())
+		    s = "0" + s;
+	    }
+	    if (neg)
+		s = "-" + s;
+	    ExpEvaluator::pushOne(stack,new ExpOperation(s));
+	    return true;
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(*str));
+	return true;
+    }
     return false;
 }
 

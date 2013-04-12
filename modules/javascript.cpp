@@ -302,11 +302,15 @@ public:
 	    params().addParam(new ExpFunction("put"));
 	    params().addParam(new ExpFunction("getOwner"));
 	    params().addParam(new ExpFunction("getParent"));
+	    params().addParam(new ExpFunction("unprefixedTag"));
+	    params().addParam(new ExpFunction("getTag"));
 	    params().addParam(new ExpFunction("getAttribute"));
 	    params().addParam(new ExpFunction("setAttribute"));
+	    params().addParam(new ExpFunction("removeAttribute"));
 	    params().addParam(new ExpFunction("addChild"));
 	    params().addParam(new ExpFunction("getChild"));
 	    params().addParam(new ExpFunction("getChildren"));
+	    params().addParam(new ExpFunction("clearChildren"));
 	    params().addParam(new ExpFunction("addText"));
 	    params().addParam(new ExpFunction("getText"));
 	    params().addParam(new ExpFunction("getChildText"));
@@ -1176,6 +1180,22 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	else
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
+    else if (oper.name() == YSTRING("unprefixedTag")) {
+	if (argc != 0)
+	    return false;
+	if (m_xml)
+	    ExpEvaluator::pushOne(stack,new ExpOperation(m_xml->unprefixedTag(),m_xml->unprefixedTag()));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+    }
+    else if (oper.name() == YSTRING("getTag")) {
+	if (argc != 0)
+	    return false;
+	if (m_xml)
+	    ExpEvaluator::pushOne(stack,new ExpOperation(m_xml->getTag(),m_xml->getTag()));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+    }
     else if (oper.name() == YSTRING("getAttribute")) {
 	if (argc != 1)
 	    return false;
@@ -1203,6 +1223,15 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    m_xml->removeAttribute(*name);
 	else
 	    m_xml->setAttribute(*name,*val);
+    }
+    else if (oper.name() == YSTRING("removeAttribute")) {
+	if (argc != 1)
+	    return false;
+	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
+	if (!name)
+	    return false;
+	if (m_xml)
+	    m_xml->removeAttribute(*name);
     }
     else if (oper.name() == YSTRING("addChild")) {
 	if (argc < 1 || argc > 2)
@@ -1272,6 +1301,12 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	}
 	else
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+    }
+    else if (oper.name() == YSTRING("clearChildren")) {
+	if (argc)
+	    return false;
+	if (m_xml)
+	    m_xml->clearChildren();
     }
     else if (oper.name() == YSTRING("addText")) {
 	if (argc != 1)

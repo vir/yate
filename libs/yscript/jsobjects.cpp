@@ -334,8 +334,12 @@ bool JsObject::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* co
 	params().setParam(ef->ExpOperation::clone());
     else {
 	ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
-	if (w)
+	if (w) {
+	    JsFunction* jsf = YOBJECT(JsFunction,w->object());
+	    if (jsf)
+		jsf->firstName(oper.name());
 	    params().setParam(w->clone(oper.name()));
+	}
 	else
 	    params().setParam(new NamedString(oper.name(),oper));
     }

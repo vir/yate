@@ -62,7 +62,7 @@ bool ScriptParser::parseFile(const char* name, bool fragment)
     if (f.readData(text,(int)len) != len)
 	return false;
     text[len] = '\0';
-    return parse(text,fragment);
+    return parse(text,fragment,name);
 }
 
 void ScriptParser::setCode(ScriptCode* code)
@@ -81,7 +81,7 @@ ScriptContext* ScriptParser::createContext() const
     return new BasicContext;
 }
 
-ScriptRun* ScriptParser::createRunner(ScriptCode* code, ScriptContext* context) const
+ScriptRun* ScriptParser::createRunner(ScriptCode* code, ScriptContext* context, const char* title) const
 {
     if (!code)
 	return 0;

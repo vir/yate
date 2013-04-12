@@ -26,6 +26,8 @@
 #include <yatescript.h>
 #include <yatexml.h>
 
+#define NATIVE_TITLE "[native code]"
+
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -401,12 +403,15 @@ private:
 };
 
 static String s_basePath;
+static bool s_engineStop = false;
 static bool s_allowAbort = false;
+static bool s_allowTrace = false;
 static bool s_allowLink = true;
 
 UNLOAD_PLUGIN(unloadNow)
 {
     if (unloadNow) {
+	s_engineStop = true;
 	JsGlobal::unloadAll();
 	return __plugin.unload();
     }
@@ -1007,14 +1012,14 @@ void JsMessage::initialize(ScriptContext* context)
 
 bool JsHandler::received(Message& msg)
 {
-    if (!m_code)
+    if (s_engineStop || !m_code)
 	return false;
     DDebug(&__plugin,DebugInfo,"Running %s(message) handler for '%s'",
 	m_function.name().c_str(),c_str());
 #ifdef DEBUG
     u_int64_t tm = Time::now();
 #endif
-    ScriptRun* runner = m_code->createRunner(m_context);
+    ScriptRun* runner = m_code->createRunner(m_context,NATIVE_TITLE);
     if (!runner)
 	return false;
     JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),false);
@@ -1638,7 +1643,7 @@ JsAssist::~JsAssist()
     if (m_runner) {
 	ScriptContext* context = m_runner->context();
 	if (m_runner->callable("onUnload")) {
-	    ScriptRun* runner = m_runner->code()->createRunner(context);
+	    ScriptRun* runner = m_runner->code()->createRunner(context,NATIVE_TITLE);
 	    if (runner) {
 		ObjList args;
 		runner->call("onUnload",args);
@@ -1690,7 +1695,7 @@ bool JsAssist::init()
     }
     if (!m_runner->callable("onLoad"))
 	return true;
-    ScriptRun* runner = m_runner->code()->createRunner(m_runner->context());
+    ScriptRun* runner = m_runner->code()->createRunner(m_runner->context(),NATIVE_TITLE);
     if (runner) {
 	ObjList args;
 	runner->call("onLoad",args);
@@ -1807,7 +1812,7 @@ bool JsAssist::runFunction(const String& name, Message& msg)
 #ifdef DEBUG
     u_int64_t tm = Time::now();
 #endif
-    ScriptRun* runner = __plugin.parser().createRunner(m_runner->context());
+    ScriptRun* runner = __plugin.parser().createRunner(m_runner->context(),NATIVE_TITLE);
     if (!runner)
 	return false;
 
@@ -1886,6 +1891,7 @@ JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath)
     if (relPath)
 	m_jsCode.adjustPath(*this);
     m_jsCode.link(s_allowLink);
+    m_jsCode.trace(s_allowTrace);
     DDebug(&__plugin,DebugAll,"Loading global Javascript '%s' from '%s'",name().c_str(),c_str());
     File::getFileTime(c_str(),m_fileTime);
     if (m_jsCode.parseFile(*this))
@@ -1898,7 +1904,7 @@ JsGlobal::~JsGlobal()
 {
     DDebug(&__plugin,DebugAll,"Unloading global Javascript '%s'",name().c_str());
     if (m_jsCode.callable("onUnload")) {
-	ScriptRun* runner = m_jsCode.createRunner(m_context);
+	ScriptRun* runner = m_jsCode.createRunner(m_context,NATIVE_TITLE);
 	if (runner) {
 	    ObjList args;
 	    runner->call("onUnload",args);
@@ -2089,11 +2095,12 @@ bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* con
     JsParser parser;
     parser.basePath(s_basePath);
     parser.link(s_allowLink);
+    parser.trace(s_allowTrace);
     if (!parser.parse(cmd)) {
 	retVal << "parsing failed\r\n";
 	return true;
     }
-    ScriptRun* runner = parser.createRunner(context);
+    ScriptRun* runner = parser.createRunner(context,"[command line]");
     if (!context) {
 	JsObject::initialize(runner->context());
 	JsEngine::initialize(runner->context());
@@ -2225,6 +2232,7 @@ bool JsModule::received(Message& msg, int id)
 	    break;
 	case Halt:
 	    JsGlobal::unloadAll();
+	    s_engineStop = true;
 	    return false;
     } // switch (id)
     return ChanAssistList::received(msg,id);
@@ -2238,7 +2246,7 @@ bool JsModule::received(Message& msg, int id, ChanAssist* assist)
 ChanAssist* JsModule::create(Message& msg, const String& id)
 {
     lock();
-    ScriptRun* runner = m_assistCode.createRunner();
+    ScriptRun* runner = m_assistCode.createRunner(0,NATIVE_TITLE);
     unlock();
     if (!runner)
 	return 0;
@@ -2270,11 +2278,13 @@ void JsModule::initialize()
 	tmp += Engine::pathSeparator();
     s_basePath = tmp;
     s_allowAbort = cfg.getBoolValue("general","allow_abort");
+    s_allowTrace = cfg.getBoolValue("general","allow_trace");
     s_allowLink = cfg.getBoolValue("general","allow_link",true);
     lock();
     m_assistCode.clear();
     m_assistCode.basePath(tmp);
     m_assistCode.link(s_allowLink);
+    m_assistCode.trace(s_allowTrace);
     tmp = cfg.getValue("general","routing");
     m_assistCode.adjustPath(tmp);
     if (m_assistCode.parseFile(tmp))

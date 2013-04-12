@@ -442,9 +442,12 @@ bool ExpEvaluator::getFunction(const char*& expr)
     skipComments(expr);
     int len = getKeyword(expr);
     const char* s = expr+len;
+    unsigned int savedLine = m_lineNo;
     skipComments(expr);
-    if ((len <= 0) || (skipComments(s) != '('))
+    if ((len <= 0) || (skipComments(s) != '(')) {
+	m_lineNo = savedLine;
 	return false;
+    }
     s++;
     int argc = 0;
     // parameter list
@@ -452,6 +455,7 @@ bool ExpEvaluator::getFunction(const char*& expr)
 	if (!runCompile(s,')')) {
 	    if (!argc && (skipComments(s) == ')'))
 		break;
+	    m_lineNo = savedLine;
 	    return false;
 	}
 	argc++;
@@ -1262,9 +1266,11 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		pushOne(stack,val);
 		ExpOperation op((Opcode)(oper.opcode() & ~OpcAssign),
 		    oper.name(),oper.number(),oper.barrier());
+		op.lineNumber(oper.lineNumber());
 		if (!runOperation(stack,op,context))
 		    return false;
-		static const ExpOperation assign(OpcAssign);
+		ExpOperation assign(OpcAssign);
+		assign.lineNumber(oper.lineNumber());
 		return runOperation(stack,assign,context);
 	    }
 	    Debug(this,DebugStub,"Please implement operation %u '%s'",

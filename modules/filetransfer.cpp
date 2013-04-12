@@ -147,6 +147,8 @@ protected:
     virtual void destroyed();
     // Terminate: close file, notify, check MD5 (if used)
     void terminate(const char* error = 0);
+    // Make sure a file path exists
+    bool createPath(String* error);
 private:
     String m_notify;                     // Target id to notify
     String m_tmpFileName;
@@ -158,6 +160,7 @@ private:
     u_int64_t m_startTime;
     bool m_terminated;
     bool m_delTemp;                      // Delete temporary file
+    bool m_createPath;                   // Create file path
 };
 
 // File source worker
@@ -313,6 +316,16 @@ static unsigned int getIntValue(const NamedList& params, const char* param, unsi
 inline String& dirStr(bool outgoing)
 {
     return outgoing ? s_dirSend : s_dirRecv;
+}
+
+// Make sure a path contains only current system path separators
+static void toNativeSeparators(String& path)
+{
+    char repl = (*Engine::pathSeparator() == '/') ? '\\' : '/';
+    char* s = (char*)path.c_str();
+    for (unsigned int i = 0; i < path.length(); i++, s++)
+	if (*s == repl)
+	    *s = *Engine::pathSeparator();
 }
 
 
@@ -560,8 +573,10 @@ FileConsumer::FileConsumer(const String& file, NamedList* params, const char* ch
     m_notifyProgress(s_notifyProgress),
     m_notifyPercent(s_notifyPercent),
     m_percent(0),
-    m_startTime(0), m_terminated(false), m_delTemp(true)
+    m_startTime(0), m_terminated(false), m_delTemp(true),
+    m_createPath(false)
 {
+    toNativeSeparators(m_fileName);
     __plugin.getPath(m_fileName);
     if (params) {
 	m_notify = params->getValue("notify");
@@ -569,10 +584,11 @@ FileConsumer::FileConsumer(const String& file, NamedList* params, const char* ch
 	m_fileSize = params->getIntValue("file_size",0);
 	m_md5HexDigest = params->getValue("file_md5");
 	m_fileTime = params->getIntValue("file_time");
+	m_createPath = params->getBoolValue(YSTRING("create_path"));
 	__plugin.copyParams(m_params,*params);
     }
     Debug(&__plugin,DebugAll,"FileConsumer('%s') [%p]",m_fileName.c_str(),this);
-    if (m_fileName && !(m_fileName.endsWith("/") || m_fileName.endsWith("\\"))) {
+    if (m_fileName && m_fileName[m_fileName.length() - 1] != *Engine::pathSeparator()) {
 	m_tmpFileName << m_fileName << ".tmp";
 	m_delTemp = !File::exists(m_tmpFileName);
     }
@@ -593,6 +609,13 @@ unsigned long FileConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 		"FileConsumer(%s) failed to start: temporary file already exists! [%p]",
 		m_fileName.c_str(),this);
 	    return 0;
+	}
+	else if (m_createPath) {
+	    String error;
+	    if (!createPath(&error)) {
+		terminate(error);
+		return 0;
+	    }
 	}
 	m_delTemp = true;
 	if (!m_file.openPath(m_tmpFileName,true,false,true,true,true)) {
@@ -705,6 +728,57 @@ void FileConsumer::terminate(const char* error)
 	}
 	Engine::enqueue(m);
     }
+}
+
+// Make sure a file path exists
+bool FileConsumer::createPath(String* error)
+{
+    const String& orig = m_tmpFileName;
+    if (!orig)
+	return true;
+    char sep = *Engine::pathSeparator();
+    int pos = orig.rfind(sep);
+    if (pos <= 0)
+	return true;
+    String path = orig.substr(0,pos);
+    ObjList list;
+    bool exists = false;
+    while (path) {
+	exists = File::exists(path);
+	if (exists)
+	    break;
+	int pos = path.rfind(sep);
+	if (pos < 0)
+	    break;
+	String* s = new String(path.substr(pos + 1));
+	if (!TelEngine::null(s))
+	    list.insert(s);
+	else
+	    TelEngine::destruct(s);
+	path = path.substr(0,pos);
+    }
+    int code = 0;
+    bool ok = true;
+    if (path && !exists)
+	ok = File::mkDir(path,&code);
+    while (ok) {
+	ObjList* o = list.skipNull();
+	if (!o)
+	    break;
+	path.append(*static_cast<String*>(o->get()),Engine::pathSeparator());
+	o->remove();
+	ok = File::mkDir(path,&code);
+    }
+    if (ok)
+	return true;
+    String tmp;
+    if (!error)
+	error = &tmp;
+    Thread::errorString(*error,code);
+    Debug(&__plugin,DebugNote,
+	"FileConsumer(%s) failed to create path for '%s'. %d: '%s' [%p]",
+	m_fileName.c_str(),orig.c_str(),code,error->c_str(),this);
+    return false;
 }
 
 
@@ -1151,7 +1225,7 @@ bool FileDriver::notifyStatus(bool send, const String& id, const char* status,
 void FileDriver::getPath(String& file)
 {
     // Check if the file already have a path separator
-    if (-1 != file.find('/') || -1 != file.find('\\'))
+    if (-1 != file.find(*Engine::pathSeparator()))
 	return;
     Lock lock(this);
     if (s_path)

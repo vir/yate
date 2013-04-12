@@ -9,7 +9,8 @@ fi
 
 PACKAGE_RELEASE="1"
 PACKAGE_STATUS="alpha"
-PACKAGE_REVISION=`cat packing/revision.txt 2>/dev/null`
+PACKAGE_REVISION=`svn info 2>/dev/null | sed -n 's,^Revision: *,,p'`
+test -z "$PACKAGE_REVISION" && PACKAGE_REVISION=`cat "$srcdir/packing/revision.txt" 2>/dev/null`
 
 PACKAGE_VERSION_MAJOR="${PACKAGE_VERSION%%.*}"
 PACKAGE_VERSION_MINOR="${PACKAGE_VERSION#*.}"

@@ -68,6 +68,7 @@ static TokenDict sip_responses[] = {
     { "Extension Required", 421 },
     { "Session Timer Too Small", 422 },
     { "Interval Too Brief", 423 },
+    { "Bad Location Information", 424 },
     { "Use Identity Header", 428 },
     { "Provide Referrer Identity", 429 },
     { "Flow Failed", 430 },                                // RFC5626
@@ -76,6 +77,8 @@ static TokenDict sip_responses[] = {
     { "Unsupported Certificate", 437 },
     { "Invalid Identity Header", 438 },
     { "First Hop Lacks Outbound Support", 439 },           // RFC5626
+    { "Max-Breadth Exceeded", 440 },
+    { "Bad Info Package", 469 },
     { "Consent Needed", 470 },
     { "Temporarily Unavailable", 480 },
     { "Call/Transaction Does Not Exist", 481 },

@@ -1421,11 +1421,6 @@ int ExpEvaluator::evaluate(Array& results, unsigned int index, GenObject* contex
 
 void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
 {
-    const char* name = getOperator(oper.opcode());
-    if (name) {
-	res << name;
-	return;
-    }
     switch (oper.opcode()) {
 	case OpcPush:
 	case OpcCopy:
@@ -1441,7 +1436,13 @@ void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
 	    res << oper.name() << "(" << (int)oper.number() << ")";
 	    break;
 	default:
-	    res << "[" << oper.opcode() << "]";
+	    {
+	        const char* name = getOperator(oper.opcode());
+		if (name)
+		    res << name;
+		else 
+		    res << "[" << oper.opcode() << "]";
+	    }
 	    if (oper.number() && oper.isInteger())
 		res << "(" << (int)oper.number() << ")";
     }

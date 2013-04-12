@@ -203,13 +203,15 @@ private:
 };
 
 #define MKDEBUG(lvl) params().addParam(new ExpOperation((long int)Debug ## lvl,"Debug" # lvl))
-class JsEngine : public JsObject
+class JsEngine : public JsObject, public DebugEnabler
 {
     YCLASS(JsEngine,JsObject)
 public:
     inline JsEngine(Mutex* mtx)
-	: JsObject("Engine",mtx,true), m_worker(0)
+	: JsObject("Engine",mtx,true),
+	  m_worker(0), m_debugName("javascript")
 	{
+	    debugChain(&__plugin);
 	    MKDEBUG(Fail);
 	    MKDEBUG(Test);
 	    MKDEBUG(GoOn);
@@ -229,6 +231,7 @@ public:
 	    params().addParam(new ExpFunction("idle"));
 	    params().addParam(new ExpFunction("dump_r"));
 	    params().addParam(new ExpFunction("print_r"));
+	    params().addParam(new ExpFunction("debugName"));
 	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
 	    params().addParam(new ExpFunction("setInterval"));
 	    params().addParam(new ExpFunction("clearInterval"));
@@ -243,6 +246,7 @@ protected:
     virtual void destroyed();
 private:
     JsEngineWorker* m_worker;
+    String m_debugName;
 };
 #undef MKDEBUG
 
@@ -303,6 +307,7 @@ public:
     inline void setMsg(Message* message, bool owned = false)
 	{ m_message = message; m_owned = owned; }
     static void initialize(ScriptContext* context);
+    void runAsync(ObjList& stack, Message* msg);
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
     void getColumn(ObjList& stack, const ExpOperation* col, GenObject* context);
@@ -507,6 +512,22 @@ private:
     long int m_val;
 };
 
+class JsMsgAsync : public ScriptAsync
+{
+    YCLASS(JsMsgAsync,ScriptAsync)
+public:
+    inline JsMsgAsync(ScriptRun* runner, ObjList* stack, JsMessage* jsMsg, Message* msg)
+	: ScriptAsync(runner),
+	  m_stack(stack), m_msg(jsMsg), m_message(msg)
+	{ XDebug(DebugAll,"JsMsgAsync"); }
+    virtual bool run()
+	{ m_msg->runAsync(*m_stack,m_message); return true; }
+private:
+    ObjList* m_stack;
+    RefPointer<JsMessage> m_msg;
+    Message* m_message;
+};
+
 static String s_basePath;
 static bool s_engineStop = false;
 static bool s_allowAbort = false;
@@ -582,7 +603,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 		level = DebugAll;
 	    else if (level < limit)
 		level = limit;
-	    Debug(&__plugin,level,"%s",str.c_str());
+	    Debug(this,level,"%s",str.c_str());
 	}
     }
     else if (oper.name() == YSTRING("sleep")) {
@@ -669,6 +690,24 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 		return false;
 	    printRecursive(op);
 	    TelEngine::destruct(op);
+	}
+	else
+	    return false;
+    }
+    else if (oper.name() == YSTRING("debugName")) {
+	if (oper.number() == 0)
+	    ExpEvaluator::pushOne(stack,new ExpOperation(m_debugName));
+	else if (oper.number() == 1) {
+	    ExpOperation* op = popValue(stack,context);
+	    String tmp;
+	    if (op && !JsParser::isNull(*op))
+		tmp = *op;
+	    TelEngine::destruct(op);
+	    tmp.trimSpaces();
+	    if (tmp.null())
+		tmp = "javascript";
+	    m_debugName = tmp;
+	    debugName(m_debugName);
 	}
 	else
 	    return false;
@@ -928,12 +967,23 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
     else if (oper.name() == YSTRING("dispatch")) {
-	if (oper.number() != 0)
+	if (oper.number() > 1)
 	    return false;
+	ObjList args;
+	extractArgs(stack,oper,context,args);
 	bool ok = false;
 	if (m_owned && m_message) {
 	    Message* m = m_message;
 	    clearMsg();
+	    ExpOperation* async = static_cast<ExpOperation*>(args[0]);
+	    if (async && async->valBoolean()) {
+		ScriptRun* runner = YOBJECT(ScriptRun,context);
+		if (!runner)
+		    return false;
+		runner->insertAsync(new JsMsgAsync(runner,&stack,this,m));
+		runner->pause();
+		return true;
+	    }
 	    ok = Engine::dispatch(*m);
 	    m_message = m;
 	    m_owned = true;
@@ -1045,6 +1095,18 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
+}
+
+void JsMessage::runAsync(ObjList& stack, Message* msg)
+{
+    bool ok = Engine::dispatch(*msg);
+    if ((m_message || m_owned) && (msg != m_message))
+	Debug(&__plugin,DebugWarn,"Message replaced while async dispatching!");
+    else {
+	m_message = msg;
+	m_owned = true;
+    }
+    ExpEvaluator::pushOne(stack,new ExpOperation(ok));
 }
 
 bool JsMessage::installHook(ObjList& stack, const ExpOperation& oper, GenObject* context)

@@ -1243,6 +1243,11 @@ public:
     void clear();
 
     /**
+     * Remove all empty objects in the list
+     */
+    void compact();
+
+    /**
      * Get the automatic delete flag
      * @return True if will delete on destruct, false otherwise
      */

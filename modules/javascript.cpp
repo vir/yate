@@ -195,12 +195,14 @@ class JsMessage : public JsObject
 public:
 
     inline JsMessage(Mutex* mtx)
-	: JsObject("Message",mtx,true), m_message(0), m_owned(false)
+	: JsObject("Message",mtx,true),
+	  m_message(0), m_owned(false), m_trackPrio(true)
 	{
 	    XDebug(&__plugin,DebugAll,"JsMessage::JsMessage() [%p]",this);
 	}
     inline JsMessage(Message* message, Mutex* mtx, bool owned)
-	: JsObject("Message",mtx), m_message(message), m_owned(owned)
+	: JsObject("Message",mtx),
+	  m_message(message), m_owned(owned), m_trackPrio(true)
 	{
 	    XDebug(&__plugin,DebugAll,"JsMessage::JsMessage(%p) [%p]",message,this);
 	    params().addParam(new ExpFunction("enqueue"));
@@ -231,6 +233,7 @@ public:
 	{
 	    construct->params().addParam(new ExpFunction("install"));
 	    construct->params().addParam(new ExpFunction("uninstall"));
+	    construct->params().addParam(new ExpFunction("trackName"));
 	}
     inline void clearMsg()
 	{ m_message = 0; m_owned = false; }
@@ -243,8 +246,10 @@ protected:
     void getRow(ObjList& stack, const ExpOperation* row, GenObject* context);
     void getResult(ObjList& stack, const ExpOperation& row, const ExpOperation& col, GenObject* context);
     ObjList m_handlers;
+    String m_trackName;
     Message* m_message;
     bool m_owned;
+    bool m_trackPrio;
 };
 
 class JsHandler : public MessageHandler
@@ -815,6 +820,12 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	ExpOperation* filterValue = static_cast<ExpOperation*>(args[4]);
 	if (filterName && filterValue && *filterName)
 	    h->setFilter(*filterName,*filterValue);
+	if (m_trackName) {
+	    if (m_trackPrio)
+		h->trackName(m_trackName + ":" + String(priority));
+	    else
+		h->trackName(m_trackName);
+	}
 	m_handlers.append(h);
 	Engine::install(h);
     }
@@ -833,6 +844,31 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	if (!name)
 	    return false;
 	m_handlers.remove(*name);
+    }
+    else if (oper.name() == YSTRING("trackName")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 0:
+		ExpEvaluator::pushOne(stack,new ExpOperation(m_trackName,oper.name()));
+		break;
+	    case 1:
+	    case 2:
+		{
+		    ExpOperation* name = static_cast<ExpOperation*>(args[0]);
+		    ExpOperation* prio = static_cast<ExpOperation*>(args[1]);
+		    if (!name)
+			return false;
+		    m_trackName = *name;
+		    m_trackName.trimSpaces();
+		    if (prio)
+			m_trackPrio = prio->valBoolean();
+		    else
+			m_trackPrio = true;
+		}
+		break;
+	    default:
+		return false;
+	}
     }
     else
 	return JsObject::runNative(stack,oper,context);

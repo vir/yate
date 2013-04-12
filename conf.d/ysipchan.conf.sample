@@ -219,6 +219,10 @@
 ; auth_foreign: bool: Attempt to authenticate nonces not generated locally
 ;auth_foreign=disable
 
+; body_encoding: keyword: Encoding used for received generic binary bodies
+;  Can be one of: base64, hex, hexs, raw
+;body_encoding=base64
+
 ; flags: int: Miscellaneous SIP engine flags for broken implementations
 ; See SIPMessage::Flags and SIPMessage::complete() in the source for gory details
 ;flags=0

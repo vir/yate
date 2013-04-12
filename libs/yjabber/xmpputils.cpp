@@ -1528,8 +1528,8 @@ XmlElement* XMPPUtils::getXml(GenObject* gen)
 {
     if (!gen)
 	return 0;
-    NamedPointer* np = static_cast<NamedPointer*>(gen->getObject("NamedPointer"));
-    XmlElement* xml = np ? static_cast<XmlElement*>(np->userObject("XmlElement")) : 0;
+    NamedPointer* np = static_cast<NamedPointer*>(gen->getObject(YATOM("NamedPointer")));
+    XmlElement* xml = np ? static_cast<XmlElement*>(np->userObject(YATOM("XmlElement"))) : 0;
     if (xml)
 	np->takeData();
     return xml;

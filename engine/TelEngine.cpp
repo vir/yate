@@ -436,7 +436,7 @@ bool controlReturn(NamedList* params, bool ret, const char* retVal)
 {
     if (retVal && params)
 	params->setParam("retVal",retVal);
-    if (ret || !params || !params->getObject("Message"))
+    if (ret || !params || !params->getObject(YATOM("Message")))
 	return ret;
     const char* module = params->getValue("module");
     if (!module || YSTRING("rmanager") != module)
@@ -711,7 +711,7 @@ RefObject::~RefObject()
 
 void* RefObject::getObject(const String& name) const
 {
-    if (name == YSTRING("RefObject"))
+    if (name == YATOM("RefObject"))
 	return (void*)this;
     return GenObject::getObject(name);
 }

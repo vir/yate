@@ -690,9 +690,9 @@ bool AttachHandler::received(Message &msg)
     if (src.null() && cons.null())
 	return false;
 
-    DataEndpoint *dd = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    DataEndpoint *dd = static_cast<DataEndpoint*>(msg.userObject(YATOM("DataEndpoint")));
     if (!dd) {
-	CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+	CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
 	if (ch)
 	    dd = ch->setEndpoint();
     }

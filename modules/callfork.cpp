@@ -524,7 +524,7 @@ bool ForkMaster::msgProgress(Message& msg, const String& dest)
     if (m_fake || !dataEp) {
 	const CallEndpoint* call = slave->getPeer();
 	if (!call)
-	    call = static_cast<const CallEndpoint*>(msg.userObject("CallEndpoint"));
+	    call = static_cast<const CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
 	if (call) {
 	    dataEp = call->getEndpoint();
 	    if (dataEp) {

@@ -144,9 +144,9 @@ public:
     ~JsCode();
     virtual void* getObject(const String& name) const
     {
-	if (name == YSTRING("JsCode"))
+	if (name == YATOM("JsCode"))
             return const_cast<JsCode*>(this);
-	if (name == YSTRING("ExpEvaluator"))
+	if (name == YATOM("ExpEvaluator"))
             return const_cast<ExpEvaluator*>((const ExpEvaluator*)this);
 	return ScriptCode::getObject(name);
     }
@@ -2603,7 +2603,7 @@ ScriptRun* JsCode::createRunner(ScriptContext* context, const char* title)
 
 bool JsCode::null() const
 {
-    return !(m_opcodes.skipNull() || m_linked.count());
+    return m_linked.null() && !m_opcodes.skipNull();
 }
 
 ScriptRun::Status JsRunner::reset(bool init)

@@ -3486,7 +3486,7 @@ bool YSocksPlugin::handleChanSocks(Message& msg)
 	return false;
 
     RefObject* userdata = msg.userData();
-    CallEndpoint* cp = static_cast<CallEndpoint*>(userdata ? userdata->getObject("CallEndpoint") : 0);
+    CallEndpoint* cp = static_cast<CallEndpoint*>(userdata ? userdata->getObject(YATOM("CallEndpoint")) : 0);
     if (!cp) {
 	Debug(&__plugin,DebugMild,"%s without data endpoint",msg.c_str());
 	return 0;

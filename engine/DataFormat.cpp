@@ -467,7 +467,7 @@ void DataConsumer::destroyed()
 
 void* DataConsumer::getObject(const String& name) const
 {
-    if (name == YSTRING("DataConsumer"))
+    if (name == YATOM("DataConsumer"))
 	return const_cast<DataConsumer*>(this);
     return DataNode::getObject(name);
 }
@@ -692,7 +692,7 @@ void DataSource::synchronize(unsigned long tStamp)
 
 void* DataSource::getObject(const String& name) const
 {
-    if (name == YSTRING("DataSource"))
+    if (name == YATOM("DataSource"))
 	return const_cast<DataSource*>(this);
     return DataNode::getObject(name);
 }
@@ -725,7 +725,7 @@ void DataEndpoint::destroyed()
 
 void* DataEndpoint::getObject(const String& name) const
 {
-    if (name == YSTRING("DataEndpoint"))
+    if (name == YATOM("DataEndpoint"))
 	return const_cast<DataEndpoint*>(this);
     return RefObject::getObject(name);
 }
@@ -1153,7 +1153,7 @@ DataTranslator::~DataTranslator()
 
 void* DataTranslator::getObject(const String& name) const
 {
-    if (name == YSTRING("DataTranslator"))
+    if (name == YATOM("DataTranslator"))
 	return const_cast<DataTranslator*>(this);
     return DataConsumer::getObject(name);
 }

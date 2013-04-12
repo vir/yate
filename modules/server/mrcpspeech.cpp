@@ -238,7 +238,7 @@ bool AttachHandler::received(Message& msg)
 	snif.clear();
     if (cons.null() && snif.null())
 	return false;
-    CallEndpoint* ch = static_cast<CallEndpoint *>(msg.userObject("CallEndpoint"));
+    CallEndpoint* ch = static_cast<CallEndpoint *>(msg.userObject(YATOM("CallEndpoint")));
     if (ch) {
 	if (cons) {
 	    MrcpConsumer* c = new MrcpConsumer(ch->id(),cons,msg.getValue("format","slin"));
@@ -274,8 +274,8 @@ bool RecordHandler::received(Message& msg)
     String id(msg.getValue("id"));
     if (!src.startsWith("mrcp/"))
 	return false;
-    CallEndpoint* ch = static_cast<CallEndpoint *>(msg.userObject("CallEndpoint"));
-    RefPointer<DataEndpoint> de = static_cast<DataEndpoint *>(msg.userObject("DataEndpoint"));
+    CallEndpoint* ch = static_cast<CallEndpoint *>(msg.userObject(YATOM("CallEndpoint")));
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint *>(msg.userObject(YATOM("DataEndpoint")));
     if (ch) {
 	id = ch->id();
 	if (!de)

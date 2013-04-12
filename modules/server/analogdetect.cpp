@@ -276,7 +276,7 @@ bool ADModule::chanAttach(Message& msg)
     String type = msg.getValue("consumer");
     if (type.startSkip(plugin.prefix(),false)) {
 	if (sender)
-	    src = static_cast<DataSource*>(sender->getObject("DataSource"));
+	    src = static_cast<DataSource*>(sender->getObject(YATOM("DataSource")));
 	if (src)
 	    detect = 1;
 	else

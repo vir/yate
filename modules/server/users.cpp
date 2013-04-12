@@ -346,7 +346,7 @@ bool UsersModule::queryDb(const String& account, const String& query,
 		ok = msg.getIntValue("affected") >= 1;
 	}
 	else {
-	    Array* a = static_cast<Array*>(msg.userObject("Array"));
+	    Array* a = static_cast<Array*>(msg.userObject(YATOM("Array")));
 	    String* res = a ? YOBJECT(String,a->get(0,1)) : 0;
 	    ok = res && (res->toInteger() != 0);
 	}

@@ -1049,7 +1049,7 @@ bool QtWindow::setParams(const NamedList& params)
 	bool ok = true;
 	for (unsigned int i = 0; i < n; i++) {
 	    NamedString* ns = params.getParam(i);
-	    NamedList* nl = static_cast<NamedList*>(ns ? ns->getObject("NamedList") : 0);
+	    NamedList* nl = static_cast<NamedList*>(ns ? ns->getObject(YATOM("NamedList")) : 0);
 	    if (!(nl && ns->name()))
 		continue;
 	    // Find the widget and set its params
@@ -3641,7 +3641,7 @@ bool QtClient::getProperty(QObject* obj, const char* name, String& value)
 	return false;
     QVariant var = obj->property(name);
     if (var.type() == QVariant::StringList) {
-	NamedList* l = static_cast<NamedList*>(value.getObject("NamedList"));
+	NamedList* l = static_cast<NamedList*>(value.getObject(YATOM("NamedList")));
 	if (l)
 	    copyParams(*l,var.toStringList());
 	else

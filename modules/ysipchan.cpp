@@ -1010,9 +1010,9 @@ public:
 	: m_data(0), m_socket(sock)
 	{}
     virtual void* getObject(const String& name) const {
-	    if (name == YSTRING("DataBlock"))
+	    if (name == YATOM("DataBlock"))
 		return m_data;
-	    if (name == YSTRING("Socket*"))
+	    if (name == YATOM("Socket*"))
 		return (void*)m_socket;
 	    return RefObject::getObject(name);
 	}
@@ -1802,11 +1802,11 @@ static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdp
 	DataBlock* data = 0;
 	msg = "isup.encode";
 	if (Engine::dispatch(msg)) {
-	    NamedString* ns = msg.getParam(YSTRING("rawdata"));
+	    NamedString* ns = msg.getParam(YATOM("rawdata"));
 	    if (ns) {
-		NamedPointer* np = static_cast<NamedPointer*>(ns->getObject(YSTRING("NamedPointer")));
+		NamedPointer* np = static_cast<NamedPointer*>(ns->getObject(YATOM("NamedPointer")));
 		if (np)
-		    data = static_cast<DataBlock*>(np->userObject(YSTRING("DataBlock")));
+		    data = static_cast<DataBlock*>(np->userObject(YATOM("DataBlock")));
 	    }
 	}
 	if (data && data->length()) {
@@ -3700,9 +3700,9 @@ void* YateUDPParty::getTransport()
 // Get an object from this one
 void* YateUDPParty::getObject(const String& name) const
 {
-    if (name == YSTRING("YateUDPParty"))
+    if (name == YATOM("YateUDPParty"))
 	return (void*)this;
-    if (name == YSTRING("YateSIPUDPTransport") || name == YSTRING("YateSIPTransport"))
+    if (name == YATOM("YateSIPUDPTransport") || name == YATOM("YateSIPTransport"))
 	return m_transport;
     return SIPParty::getObject(name);
 }
@@ -3770,9 +3770,9 @@ void* YateTCPParty::getTransport()
 // Get an object from this one
 void* YateTCPParty::getObject(const String& name) const
 {
-    if (name == YSTRING("YateTCPParty"))
+    if (name == YATOM("YateTCPParty"))
 	return (void*)this;
-    if (name == YSTRING("YateSIPTCPTransport") || name == YSTRING("YateSIPTransport"))
+    if (name == YATOM("YateSIPTCPTransport") || name == YATOM("YateSIPTransport"))
 	return m_transport;
     return SIPParty::getObject(name);
 }

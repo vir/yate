@@ -91,7 +91,7 @@ static CallEndpoint* locateChan(const String& id, bool peer = false)
     m.addParam("id",id);
     if (!Engine::dispatch(m))
 	return 0;
-    CallEndpoint* ce = static_cast<CallEndpoint*>(m.userObject("CallEndpoint"));
+    CallEndpoint* ce = static_cast<CallEndpoint*>(m.userObject(YATOM("CallEndpoint")));
     if (!ce)
 	return 0;
     return peer ? ce->getPeer() : ce;
@@ -190,9 +190,9 @@ bool AttachHandler::received(Message &msg)
     if (!(src || cons || ovr || repl))
 	return false;
 
-    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject(YSTRING("DataEndpoint")));
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject(YATOM("DataEndpoint")));
     if (!de) {
-	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject(YSTRING("CallEndpoint")));
+	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
 	if (ch) {
 	    DataEndpoint::commonMutex().lock();
 	    de = ch->getEndpoint(msg.getValue(YSTRING("media"),"audio"));
@@ -248,9 +248,9 @@ bool RecordHandler::received(Message &msg)
     if (!(call || peer))
 	return false;
 
-    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject(YSTRING("DataEndpoint")));
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject(YATOM("DataEndpoint")));
     if (!de) {
-	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject(YSTRING("CallEndpoint")));
+	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
 	if (ch) {
 	    DataEndpoint::commonMutex().lock();
 	    de = ch->getEndpoint(msg.getValue(YSTRING("media"),"audio"));

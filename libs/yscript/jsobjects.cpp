@@ -531,7 +531,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	if (!last)
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
 	else {
-	    NamedPointer* np = (NamedPointer*)last->getObject(YSTRING("NamedPointer"));
+	    NamedPointer* np = (NamedPointer*)last->getObject(YATOM("NamedPointer"));
 	    if (!np)
 		ExpEvaluator::pushOne(stack,new ExpOperation(*last));
 	    else
@@ -570,14 +570,14 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    ExpWrapper* obj = YOBJECT(ExpWrapper,op);
 	    if (!obj)
 		continue;
-	    JsArray* ja = (JsArray*)obj->getObject(YSTRING("JsArray"));
+	    JsArray* ja = (JsArray*)obj->getObject(YATOM("JsArray"));
 	    if (ja) {
 		for (long int i = 0; i < ja->length(); i++)
 		    array->params().addParam(String((int)(i + array->length())),ja->params().getValue(String((int)i)));
 		array->setLength(array->length() + ja->length());
 	    }
 	    else {
-		JsObject* jo = (JsObject*)obj->getObject(YSTRING("JsObject"));
+		JsObject* jo = (JsObject*)obj->getObject(YATOM("JsObject"));
 		if (jo) {
 		    array->params().addParam(new NamedPointer(String((unsigned int)array->length()),jo));
 		    array->setLength(array->length() + 1);
@@ -663,7 +663,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    ExpWrapper* obj = YOBJECT(ExpWrapper,op);
 	    if (!obj)
 		continue;
-	    JsObject* jo = (JsObject*)obj->getObject(YSTRING("JsObject"));
+	    JsObject* jo = (JsObject*)obj->getObject(YATOM("JsObject"));
 	    if (!jo)
 		continue;
 	    jo->ref();

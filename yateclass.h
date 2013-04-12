@@ -201,8 +201,10 @@ namespace TelEngine {
 
 #ifdef HAVE_BLOCK_RETURN
 #define YSTRING(s) (*({static const String str(s);&str;}))
+#define YATOM(s) (*({static const String* str(0);str ? str : String::atom(str,s);}))
 #else
 #define YSTRING(s) (s)
+#define YATOM(s) (s)
 #endif
 
 #define YSTRING_INIT_HASH ((unsigned) -1)
@@ -604,6 +606,13 @@ class Mutex;
 constant YSTRING(const char* string);
 
 /**
+ * Macro to create a shared static String if supported by compiler, use with caution
+ * @param string Literal constant string
+ * @return A const String& if supported, literal string if not supported
+ */
+constant YATOM(const char* string);
+
+/**
  * Macro to create a GenObject class from a base class and implement @ref GenObject::getObject
  * @param type Class that is declared
  * @param base Base class that is inherited
@@ -668,17 +677,17 @@ void YNOCOPY(class type);
 
 #define YCLASS(type,base) \
 public: virtual void* getObject(const String& name) const \
-{ return (name == YSTRING(#type)) ? const_cast<type*>(this) : base::getObject(name); }
+{ return (name == YATOM(#type)) ? const_cast<type*>(this) : base::getObject(name); }
 
 #define YCLASS2(type,base1,base2) \
 public: virtual void* getObject(const String& name) const \
-{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
+{ if (name == YATOM(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   return tmp ? tmp : base2::getObject(name); }
 
 #define YCLASS3(type,base1,base2,base3) \
 public: virtual void* getObject(const String& name) const \
-{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
+{ if (name == YATOM(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   if (tmp) return tmp; \
   tmp = base2::getObject(name); \
@@ -686,23 +695,23 @@ public: virtual void* getObject(const String& name) const \
 
 #define YCLASSIMP(type,base) \
 void* type::getObject(const String& name) const \
-{ return (name == YSTRING(#type)) ? const_cast<type*>(this) : base::getObject(name); }
+{ return (name == YATOM(#type)) ? const_cast<type*>(this) : base::getObject(name); }
 
 #define YCLASSIMP2(type,base1,base2) \
 void* type::getObject(const String& name) const \
-{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
+{ if (name == YATOM(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   return tmp ? tmp : base2::getObject(name); }
 
 #define YCLASSIMP3(type,base1,base2,base3) \
 void* type::getObject(const String& name) const \
-{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
+{ if (name == YATOM(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   if (tmp) return tmp; \
   tmp = base2::getObject(name); \
   return tmp ? tmp : base3::getObject(name); }
 
-#define YOBJECT(type,pntr) (static_cast<type*>(GenObject::getObject(YSTRING(#type),pntr)))
+#define YOBJECT(type,pntr) (static_cast<type*>(GenObject::getObject(YATOM(#type),pntr)))
 
 #define YNOCOPY(type) private: \
 type(const type&); \
@@ -1327,6 +1336,12 @@ public:
      * @return Count of items
      */
     unsigned int count() const;
+
+    /**
+     * Check if the vector is empty
+     * @return True if the vector contains no objects
+     */
+    bool null() const;
 
     /**
      * Get the object at a specific index in vector
@@ -1975,12 +1990,14 @@ public:
     /**
      * Fast equality operator.
      */
-    bool operator==(const String& value) const;
+    inline bool operator==(const String& value) const
+	{ return (this == &value) || ((hash() == value.hash()) && operator==(value.c_str())); }
 
     /**
      * Fast inequality operator.
      */
-    bool operator!=(const String& value) const;
+    inline bool operator!=(const String& value) const
+	{ return (this != &value) && ((hash() != value.hash()) || operator!=(value.c_str())); }
 
     /**
      * Case-insensitive equality operator.
@@ -2327,6 +2344,14 @@ public:
     inline String uriUnescape(int* errptr = 0) const
 	{ return uriUnescape(c_str(),errptr); }
 
+    /**
+     * Atom string support helper
+     * @param str Reference to variable to hold the atom string
+     * @param val String value to allocate to the atom
+     * @return Pointer to shared atom string
+     */
+    static const String* atom(const String*& str, const char* val);
+
 protected:
     /**
      * Called whenever the value changed (except in constructors).
@@ -2529,6 +2554,39 @@ private:
     bool matches(const char* value, StringMatchPrivate* matchlist) const;
     mutable void* m_regexp;
     int m_flags;
+};
+
+/**
+ * Indirected shared string offering access to atom strings
+ * @short Atom string holder
+ */
+class Atom
+{
+public:
+    /**
+     * Constructor
+     * @param value Atom's string value
+     */
+    inline explicit Atom(const char* value)
+	: m_atom(0)
+	{ String::atom(m_atom,value); }
+
+    /**
+     * Conversion to "const String &" operator
+     * @return Pointer to the atom String
+     */
+    inline operator const String&() const
+	{ return *m_atom; }
+
+    /**
+     * String method call operator
+     * @return Pointer to the atom String
+     */
+    inline const String* operator->() const
+	{ return m_atom; }
+
+private:
+    const String* m_atom;
 };
 
 /**

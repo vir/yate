@@ -348,7 +348,7 @@ public:
     inline RefList()
 	{ }
     virtual void* getObject(const String& name) const
-	{ return (name == YSTRING("ObjList")) ? (void*)&m_list : RefObject::getObject(name); }
+	{ return (name == YATOM("ObjList")) ? (void*)&m_list : RefObject::getObject(name); }
     inline ObjList& list()
 	{ return m_list; }
 private:

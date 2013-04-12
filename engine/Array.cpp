@@ -53,7 +53,7 @@ Array::~Array()
 
 void* Array::getObject(const String& name) const
 {
-    if (name == YSTRING("Array"))
+    if (name == YATOM("Array"))
 	return const_cast<Array*>(this);
     return RefObject::getObject(name);
 }

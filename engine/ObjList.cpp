@@ -45,7 +45,7 @@ ObjList::~ObjList()
 
 void* ObjList::getObject(const String& name) const
 {
-    if (name == YSTRING("ObjList"))
+    if (name == YATOM("ObjList"))
 	return const_cast<ObjList*>(this);
     return GenObject::getObject(name);
 }
@@ -365,7 +365,7 @@ ObjVector::~ObjVector()
 
 void* ObjVector::getObject(const String& name) const
 {
-    if (name == YSTRING("ObjVector"))
+    if (name == YATOM("ObjVector"))
 	return const_cast<ObjVector*>(this);
     return GenObject::getObject(name);
 }
@@ -406,6 +406,16 @@ unsigned int ObjVector::count() const
 	if (m_objects[i])
 	    c++;
     return c;
+}
+
+bool ObjVector::null() const
+{
+    if (!m_objects)
+	return true;
+    for (unsigned int i = 0; i < m_length; i++)
+	if (m_objects[i])
+	    return false;
+    return true;
 }
 
 int ObjVector::index(const GenObject* obj) const

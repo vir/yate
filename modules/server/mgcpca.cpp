@@ -899,7 +899,7 @@ MGCPSpan* MGCPSpan::findNotify(const String& id, const String& epId)
 
 MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& ep)
     : SignallingCircuitSpan(params.getValue("debugname",name),
-	static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
+	static_cast<SignallingCircuitGroup*>(params.getObject(YATOM("SignallingCircuitGroup")))),
       m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
       m_rtpForward(false), m_sdpForward(false), m_rtpForcedFwd(false), m_fxo(false), m_fxs(false),
       m_ntfyMatch(true), m_rqntEmbed(true), m_rqntCheck(true), m_rqntType(RqntOnce)
@@ -1384,12 +1384,12 @@ MGCPCircuit::~MGCPCircuit()
 void* MGCPCircuit::getObject(const String& name) const
 {
     if (connected()) {
-	if (name == YSTRING("DataSource"))
+	if (name == YATOM("DataSource"))
 	    return m_source;
-	if (name == YSTRING("DataConsumer"))
+	if (name == YATOM("DataConsumer"))
 	    return m_consumer;
     }
-    if (name == YSTRING("MGCPCircuit"))
+    if (name == YATOM("MGCPCircuit"))
 	return (void*)this;
     return SignallingCircuit::getObject(name);
 }

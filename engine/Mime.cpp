@@ -94,7 +94,7 @@ MimeHeaderLine::~MimeHeaderLine()
 
 void* MimeHeaderLine::getObject(const String& name) const
 {
-    if (name == YSTRING("MimeHeaderLine"))
+    if (name == YATOM("MimeHeaderLine"))
 	return const_cast<MimeHeaderLine*>(this);
     return NamedString::getObject(name);
 }
@@ -316,7 +316,7 @@ MimeAuthLine::MimeAuthLine(const MimeAuthLine& original, const char* newName)
 
 void* MimeAuthLine::getObject(const String& name) const
 {
-    if (name == YSTRING("MimeAuthLine"))
+    if (name == YATOM("MimeAuthLine"))
 	return const_cast<MimeAuthLine*>(this);
     return MimeHeaderLine::getObject(name);
 }
@@ -592,7 +592,7 @@ MimeMultipartBody::MimeMultipartBody(const MimeMultipartBody& original)
 // Find object by class name, descend into parts
 void* MimeMultipartBody::getObject(const String& name) const
 {
-    if (name == YSTRING("MimeMultipartBody"))
+    if (name == YATOM("MimeMultipartBody"))
 	return const_cast<MimeMultipartBody*>(this);
     void* res = MimeBody::getObject(name);
     if (res)

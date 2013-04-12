@@ -3922,7 +3922,7 @@ bool ClientDriver::setConference(const String& id, bool in, const String* confNa
 	Engine::dispatch(m);
 	CallEndpoint* cp = 0;
 	if (m.userData())
-	    cp = static_cast<CallEndpoint*>(m.userData()->getObject("CallEndpoint"));
+	    cp = static_cast<CallEndpoint*>(m.userData()->getObject(YATOM("CallEndpoint")));
 	const char* reason = "Unable to locate peer";
 	if (cp) {
 	    ok = chan->connect(cp,"Conference terminated");

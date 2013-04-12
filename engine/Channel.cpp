@@ -96,7 +96,7 @@ Mutex& CallEndpoint::commonMutex()
 
 void* CallEndpoint::getObject(const String& name) const
 {
-    if (name == YSTRING("CallEndpoint"))
+    if (name == YATOM("CallEndpoint"))
 	return const_cast<CallEndpoint*>(this);
     return RefObject::getObject(name);
 }
@@ -359,9 +359,9 @@ Channel::~Channel()
 
 void* Channel::getObject(const String& name) const
 {
-    if (name == YSTRING("Channel"))
+    if (name == YATOM("Channel"))
 	return const_cast<Channel*>(this);
-    if (name == YSTRING("MessageNotifier"))
+    if (name == YATOM("MessageNotifier"))
 	return static_cast<MessageNotifier*>(const_cast<Channel*>(this));
     return CallEndpoint::getObject(name);
 }
@@ -994,7 +994,7 @@ Module::~Module()
 
 void* Module::getObject(const String& name) const
 {
-    if (name == YSTRING("Module"))
+    if (name == YATOM("Module"))
 	return const_cast<Module*>(this);
     return Plugin::getObject(name);
 }
@@ -1261,7 +1261,7 @@ Driver::Driver(const char* name, const char* type)
 
 void* Driver::getObject(const String& name) const
 {
-    if (name == YSTRING("Driver"))
+    if (name == YATOM("Driver"))
 	return const_cast<Driver*>(this);
     return Module::getObject(name);
 }

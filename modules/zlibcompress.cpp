@@ -448,7 +448,7 @@ bool ZLibModule::received(Message& msg, int id)
 	    return false;
 	if (msg.getBoolValue("test"))
 	    return true;
-	Compressor** pp = static_cast<Compressor**>(msg.userObject("Compressor*"));
+	Compressor** pp = static_cast<Compressor**>(msg.userObject(YATOM("Compressor*")));
 	if (!pp) {
 	    Debug(this,DebugGoOn,"No pointer in %s message",msg.c_str());
 	    return false;

@@ -181,6 +181,8 @@ void StringMatchPrivate::fixup()
 
 
 static const String s_empty;
+static ObjList s_atoms;
+static Mutex s_mutex(false,"Atom");
 
 const String& String::empty()
 {
@@ -209,6 +211,8 @@ String::String(const String& value)
 	m_string = ::strdup(value.c_str());
 	if (!m_string)
 	    Debug("String",DebugFail,"strdup() returned NULL!");
+	else
+	    m_length = value.length();
 	changed();
     }
 }
@@ -222,6 +226,7 @@ String::String(char value, unsigned int repeat)
 	if (m_string) {
 	    ::memset(m_string,value,repeat);
 	    m_string[repeat] = 0;
+	    m_length = repeat;
 	}
 	else
 	    Debug("String",DebugFail,"malloc(%d) returned NULL!",repeat+1);
@@ -271,6 +276,8 @@ String::String(const String* value)
 	m_string = ::strdup(value->c_str());
 	if (!m_string)
 	    Debug("String",DebugFail,"strdup() returned NULL!");
+	else
+	    m_length = value->length();
 	changed();
     }
 }
@@ -310,6 +317,7 @@ String& String::assign(const char* value, int len)
 		data[len] = 0;
 		char* odata = m_string;
 		m_string = data;
+		m_length = len;
 		changed();
 		if (odata)
 		    ::free(odata);
@@ -332,6 +340,7 @@ String& String::assign(char value, unsigned int repeat)
 	    data[repeat] = 0;
 	    char* odata = m_string;
 	    m_string = data;
+	    m_length = repeat;
 	    changed();
 	    if (odata)
 		::free(odata);
@@ -367,6 +376,7 @@ String& String::hexify(void* data, unsigned int len, char sep, bool upCase)
 	    *d = '\0';
 	    char* odata = m_string;
 	    m_string = data;
+	    m_length = repeat;
 	    changed();
 	    if (odata)
 		::free(odata);
@@ -383,7 +393,10 @@ void String::changed()
 {
     clearMatches();
     m_hash = YSTRING_INIT_HASH;
-    m_length = m_string ? ::strlen(m_string) : 0;
+    if (!m_string)
+	m_length = 0;
+    else if (!m_length)
+	m_length = ::strlen(m_string);
 }
 
 void String::clear()
@@ -567,6 +580,7 @@ String& String::operator=(const char* value)
     if (value != c_str()) {
 	char *tmp = m_string;
 	m_string = value ? ::strdup(value) : 0;
+	m_length = 0;
 	if (value && !m_string)
 	    Debug("String",DebugFail,"strdup() returned NULL!");
 	changed();
@@ -701,6 +715,7 @@ String& String::append(const char* value, int len)
 	if (len < 0) {
 	    if (!m_string) {
 		m_string = ::strdup(value);
+		m_length = 0;
 		if (!m_string)
 		    Debug("String",DebugFail,"strdup() returned NULL!");
 		changed();
@@ -718,6 +733,7 @@ String& String::append(const char* value, int len)
 	    ::strncpy(tmp2+olen,value,len-olen);
 	    tmp2[len] = 0;
 	    m_string = tmp2;
+	    m_length = len;
 	    ::free(tmp1);
 	}
 	else
@@ -773,6 +789,7 @@ String& String::append(const ObjList* list, const char* separator, bool force)
     }
     newStr[olen] = 0;
     m_string = newStr;
+    m_length = olen;
     ::free(oldStr);
     changed();
     return *this;
@@ -799,20 +816,6 @@ bool String::operator!=(const char* value) const
     if (!m_string)
 	return value && *value;
     return (!value) || ::strcmp(m_string,value);
-}
-
-bool String::operator==(const String& value) const
-{
-    if (hash() != value.hash())
-	return false;
-    return operator==(value.c_str());
-}
-
-bool String::operator!=(const String& value) const
-{
-    if (hash() != value.hash())
-	return true;
-    return operator!=(value.c_str());
 }
 
 bool String::operator&=(const char* value) const
@@ -1345,7 +1348,7 @@ int String::fixUtf8(const char* replace, unsigned int maxSeq, bool overlong)
 
 void* String::getObject(const String& name) const
 {
-    if (name == YSTRING("String"))
+    if (name == YATOM("String"))
 	return const_cast<String*>(this);
     return GenObject::getObject(name);
 }
@@ -1353,6 +1356,26 @@ void* String::getObject(const String& name) const
 const String& String::toString() const
 {
     return *this;
+}
+
+const String* String::atom(const String*& str, const char* val)
+{
+    if (!str) {
+	s_mutex.lock();
+	if (!str) {
+	    if (TelEngine::null(val))
+		str = &s_empty;
+	    else {
+		str = static_cast<const String*>(s_atoms[val]);
+		if (!str) {
+		    str = new String(val);
+		    s_atoms.insert(str);
+		}
+	    }
+	}
+	s_mutex.unlock();
+    }
+    return str;
 }
 
 
@@ -1469,7 +1492,7 @@ const String& NamedString::toString() const
 
 void* NamedString::getObject(const String& name) const
 {
-    if (name == YSTRING("NamedString"))
+    if (name == YATOM("NamedString"))
 	return (void*)this;
     return String::getObject(name);
 }
@@ -1504,7 +1527,7 @@ GenObject* NamedPointer::takeData()
 
 void* NamedPointer::getObject(const String& name) const
 {
-    if (name == YSTRING("NamedPointer"))
+    if (name == YATOM("NamedPointer"))
 	return (void*)this;
     void* p = NamedString::getObject(name);
     if (p)

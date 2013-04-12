@@ -3997,6 +3997,7 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
 	m.copyParam(*params,"caller");
 	m.copyParam(*params,"called");
 	m.copyParam(*params,"billid");
+	m.copyParam(*params,"expires");
     }
     if (authLine && m_foreignAuth) {
 	m.addParam("auth",*authLine);
@@ -4661,6 +4662,16 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     msg.addParam("number",addr.getUser());
     msg.addParam("sip_uri",t->getURI());
     msg.addParam("sip_callid",t->getCallID());
+    String tmp(message->getHeader("Expires"));
+    if (tmp.null())
+	tmp = hl->getParam("expires");
+    int expires = tmp.toInteger(-1);
+    if (expires < 0)
+	expires = s_expires_def;
+    if (expires > s_expires_max)
+	expires = s_expires_max;
+    tmp = expires;
+    msg.setParam("expires",tmp);
     String user;
     int age = t->authUser(user,false,&msg);
     DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
@@ -4712,15 +4723,6 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     msg.setParam("ip_port",String(rport));
     msg.setParam("ip_transport",message->getParty()->getProtoName());
 
-    bool dereg = false;
-    String tmp(message->getHeader("Expires"));
-    if (tmp.null())
-	tmp = hl->getParam("expires");
-    int expires = tmp.toInteger(-1);
-    if (expires < 0)
-	expires = s_expires_def;
-    if (expires > s_expires_max)
-	expires = s_expires_max;
     if (expires && (expires < s_expires_min)) {
 	tmp = s_expires_min;
 	SIPMessage* r = new SIPMessage(t->initialMessage(),423);
@@ -4729,8 +4731,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	r->deref();
 	return;
     }
-    tmp = expires;
-    msg.setParam("expires",tmp);
+    bool dereg = false;
     if (!expires) {
 	msg = "user.unregister";
 	dereg = true;

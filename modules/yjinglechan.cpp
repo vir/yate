@@ -774,8 +774,11 @@ void YJGEngine::processEvent(JGEvent* event)
     }
     plugin.lock();
     YJGConnection* conn = static_cast<YJGConnection*>(session->userData());
-    if (conn)
-	conn->ref();
+    if (conn && !conn->ref()) {
+	plugin.unlock();
+	delete event;
+	return;
+    }
     plugin.unlock();
     if (conn) {
 	if (!conn->handleEvent(event) || event->final())
@@ -792,8 +795,10 @@ void YJGEngine::processEvent(JGEvent* event)
 		// Constructor failed ?
 		if (conn->state() == YJGConnection::Pending)
 		    TelEngine::destruct(conn);
-		else if (!conn->route())
+		else if (!conn->route()) {
+		    Lock lck(plugin);
 		    event->session()->userData(0);
+		}
 	    }
 	    else if (!ok) {
 		Debug(&plugin,DebugWarn,"Refusing new Jingle call, full or exiting");
@@ -1496,8 +1501,8 @@ void YJGConnection::hangup(const char* reason, const char* text)
     m->setParam("status","hangup");
     m->setParam("reason",m_reason);
     Engine::enqueue(m);
+    JGSession* sess = 0;
     if (m_session) {
-	m_session->userData(0);
 	int res = lookup(m_reason,s_errMap,JGSession::ReasonUnknown);
 	XmlElement* xml = 0;
 	switch (res) {
@@ -1516,9 +1521,17 @@ void YJGConnection::hangup(const char* reason, const char* text)
 		xml = m_session->createReason(res,text);
 	}
 	m_session->hangup(xml);
-	TelEngine::destruct(m_session);
+	sess = m_session;
+	m_session = 0;
     }
     Debug(this,DebugCall,"Hangup. reason=%s [%p]",m_reason.c_str(),this);
+    lock.drop();
+    if (sess) {
+	plugin.lock();
+	sess->userData(0);
+	plugin.unlock();
+	TelEngine::destruct(sess);
+    }
 }
 
 // Handle Jingle events

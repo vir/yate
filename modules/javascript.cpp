@@ -222,6 +222,10 @@ public:
 	    if (Engine::exiting())
 		while (m_handlers.remove(false))
 		    ;
+	    for (ObjList* o = m_hooks.skipNull();o;o = o->skipNext()) {
+		MessageHook* hook = static_cast<MessageHook*>(o->get());
+		Engine::uninstallHook(hook);
+	    }
 	}
     virtual NamedList* nativeParams() const
 	{ return m_message; }
@@ -233,6 +237,8 @@ public:
 	{
 	    construct->params().addParam(new ExpFunction("install"));
 	    construct->params().addParam(new ExpFunction("uninstall"));
+	    construct->params().addParam(new ExpFunction("uninstallHook"));
+	    construct->params().addParam(new ExpFunction("installHook"));
 	    construct->params().addParam(new ExpFunction("trackName"));
 	}
     inline void clearMsg()
@@ -245,7 +251,9 @@ protected:
     void getColumn(ObjList& stack, const ExpOperation* col, GenObject* context);
     void getRow(ObjList& stack, const ExpOperation* row, GenObject* context);
     void getResult(ObjList& stack, const ExpOperation& row, const ExpOperation& col, GenObject* context);
+    bool installHook(ObjList& stack, const ExpOperation& oper, GenObject* context);
     ObjList m_handlers;
+    ObjList m_hooks;
     String m_trackName;
     Message* m_message;
     bool m_owned;
@@ -277,6 +285,41 @@ private:
     ExpFunction m_function;
     RefPointer<ScriptContext> m_context;
     RefPointer<ScriptCode> m_code;
+};
+
+class JsMessageQueue : public MessageQueue
+{
+    YCLASS(JsMessageQueue,MessageQueue)
+public:
+    inline JsMessageQueue(const ExpFunction* received,const char* name, unsigned threads, const ExpFunction* trap, unsigned trapLunch, GenObject* context)
+	: MessageQueue(name,threads), m_receivedFunction(0), m_trapFunction(0), m_trapLunch(trapLunch), m_trapCalled(false)
+	{
+	    ScriptRun* runner = YOBJECT(ScriptRun,context);
+	    if (runner) {
+		m_context = runner->context();
+		m_code = runner->code();
+	    }
+	    if (received)
+		m_receivedFunction = new ExpFunction(received->name(),1);
+	    if (trap)
+		m_trapFunction = new ExpFunction(trap->name(),0);
+	}
+    virtual ~JsMessageQueue()
+    {
+	TelEngine::destruct(m_receivedFunction);
+	TelEngine::destruct(m_trapFunction);
+    }
+    virtual bool enqueue(Message* msg);
+    bool matchesFilters(const NamedList& filters);
+protected:
+    virtual void received(Message& msg);
+private:
+    ExpFunction* m_receivedFunction;
+    ExpFunction* m_trapFunction;
+    RefPointer<ScriptContext> m_context;
+    RefPointer<ScriptCode> m_code;
+    unsigned int m_trapLunch;
+    bool m_trapCalled;
 };
 
 class JsFile : public JsObject
@@ -845,6 +888,30 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    return false;
 	m_handlers.remove(*name);
     }
+    else if (oper.name() == YSTRING("installHook"))
+	return installHook(stack,oper,context);
+    else if (oper.name() == YSTRING("uninstallHook")) {
+	ObjList args;
+	if (extractArgs(stack,oper,context,args) < 1)
+	    return false;
+	ObjList* o = args.skipNull();
+	ExpOperation* name = static_cast<ExpOperation*>(o->get());
+	NamedList hook(*name);
+	for (;o;o = o->skipNext()) {
+	    ExpOperation* filter = static_cast<ExpOperation*>(o->get());
+	    ObjList* pair = filter->split('=',false);
+	    if (pair->count() == 2)
+		hook.addParam(*(static_cast<String*>((*pair)[0])), *(static_cast<String*>((*pair)[1])));
+	    TelEngine::destruct(pair);
+	}
+	for (o = m_hooks.skipNull();o;o = o->skipNext()) {
+	    JsMessageQueue* queue = static_cast<JsMessageQueue*>(o->get());
+	    if (!queue->matchesFilters(hook))
+		continue;
+	    Engine::uninstallHook(queue);
+	    m_hooks.remove(queue);
+	}
+    }
     else if (oper.name() == YSTRING("trackName")) {
 	ObjList args;
 	switch (extractArgs(stack,oper,context,args)) {
@@ -873,6 +940,66 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
+}
+
+bool JsMessage::installHook(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    ObjList args;
+    unsigned int argsCount = extractArgs(stack,oper,context,args);
+    if (argsCount < 2)
+	return false;
+    ObjList* o = args.skipNull();
+    const ExpFunction* receivedFunc = YOBJECT(ExpFunction,o->get());
+    if (!receivedFunc) {
+	JsFunction* jsf = YOBJECT(JsFunction,o->get());
+	if (jsf)
+	    receivedFunc = jsf->getFunc();
+    }
+    if (receivedFunc) {
+	if (argsCount < 3)
+	    return false;
+	o = o->skipNext();
+    }
+    ExpOperation* name = static_cast<ExpOperation*>(o->get());
+    if (TelEngine::null(name))
+	return false;
+    o = o->skipNext();
+    ExpOperation* threads = static_cast<ExpOperation*>(o->get());
+    int threadsCount = threads->toInteger(-1);
+    if (threadsCount < 1)
+	return false;
+    o = o->skipNext();
+    const ExpFunction* trapFunction = 0;
+    int trapLunch = 0;
+    while (o) {
+	trapFunction = YOBJECT(ExpFunction,o->get());
+	if (!trapFunction) {
+	    JsFunction* jsf = YOBJECT(JsFunction,o->get());
+	    if (jsf)
+		trapFunction = jsf->getFunc();
+	}
+	if (!trapFunction)
+	    break;
+	o = o->skipNext();
+	if (!o)
+	    return false;
+	ExpOperation* trap = static_cast<ExpOperation*>(o->get());
+	trapLunch = trap->toInteger(-1);
+	if (trapLunch < 0)
+	    return false;
+	o = o->skipNext();
+    }
+    JsMessageQueue* msgQueue = new JsMessageQueue(receivedFunc,*name,threadsCount,trapFunction,trapLunch,context);
+    for (;o;o = o->skipNext()) {
+	ExpOperation* filter = static_cast<ExpOperation*>(o->get());
+	ObjList* pair = filter->split('=',false);
+	if (pair->count() == 2)
+	    msgQueue->addFilter(*(static_cast<String*>((*pair)[0])), *(static_cast<String*>((*pair)[1])));
+	TelEngine::destruct(pair);
+    }
+    msgQueue->ref();
+    m_hooks.append(msgQueue);
+    return Engine::installHook(msgQueue);
 }
 
 void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* context)
@@ -1086,6 +1213,65 @@ bool JsHandler::received(Message& msg)
     return ok;
 }
 
+void JsMessageQueue::received(Message& msg)
+{
+    if (s_engineStop || !m_code)
+	return;
+    if (!m_receivedFunction) {
+	MessageQueue::received(msg);
+	return;
+    }
+    ScriptRun* runner = m_code->createRunner(m_context,NATIVE_TITLE);
+    if (!runner)
+	return;
+    JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),false);
+    jm->ref();
+    ObjList args;
+    args.append(new ExpWrapper(jm,"message"));
+    runner->call(m_receivedFunction->name(),args);
+    jm->clearMsg();
+    TelEngine::destruct(jm);
+    TelEngine::destruct(runner);
+}
+
+bool JsMessageQueue::enqueue(Message* msg)
+{
+    if (!count())
+	m_trapCalled = false;
+    bool ret = MessageQueue::enqueue(msg);
+    if (!ret || !m_trapLunch || !m_trapFunction || m_trapCalled || count() < m_trapLunch)
+	return ret;
+    if (s_engineStop || !m_code)
+	return ret;
+
+    ScriptRun* runner = m_code->createRunner(m_context,NATIVE_TITLE);
+    if (!runner)
+	return ret;
+    ObjList args;
+    runner->call(m_trapFunction->name(),args);
+    TelEngine::destruct(runner);
+    m_trapCalled = true;
+    return ret;
+}
+
+bool JsMessageQueue::matchesFilters(const NamedList& filters)
+{
+    const NamedList origFilters = getFilters();
+    if (origFilters != filters)
+	return false;
+    unsigned int ofCount = origFilters.count(), fcount = filters.count();
+    if (ofCount != fcount)
+	return false;
+    if (!ofCount)
+	return true;
+    for (unsigned int i = 0;i < origFilters.length();i++) {
+	NamedString* param = origFilters.getParam(i);
+	NamedString* secParam = filters.getParam(*param);
+	if (!secParam || *secParam != *param)
+	    return false;
+    }
+    return true;
+}
 
 bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {

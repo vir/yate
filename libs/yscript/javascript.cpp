@@ -794,7 +794,8 @@ bool JsContext::runStringField(GenObject* obj, const String& name, ObjList& stac
 
 bool JsContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(DebugAll,"JsContext::runAssign '%s'='%s' [%p]",oper.name().c_str(),oper.c_str(),this);
+    XDebug(DebugAll,"JsContext::runAssign '%s'='%s' (%s) [%p]",
+	oper.name().c_str(),oper.c_str(),oper.typeOf(),this);
     String name = oper.name();
     GenObject* o = resolve(stack,name,context);
     if (o && o != this) {
@@ -1988,25 +1989,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		ExpOperation* op = popValue(stack,context);
 		if (!op)
 		    return gotError("Stack underflow",oper.lineNumber());
-		switch (op->opcode()) {
-		    case OpcPush:
-		    case OpcCopy:
-			{
-			    const char* txt = "string";
-			    ExpWrapper* w = YOBJECT(ExpWrapper,op);
-			    if (w)
-				txt = w->object() ? "object" : "undefined";
-			    else if (op->isInteger())
-				txt = "number";
-			    pushOne(stack,new ExpOperation(txt));
-			}
-			break;
-		    case OpcFunc:
-			pushOne(stack,new ExpOperation("function"));
-			break;
-		    default:
-			pushOne(stack,new ExpOperation("internal"));
-		}
+		pushOne(stack,new ExpOperation(op->typeOf()));
 		TelEngine::destruct(op);
 	    }
 	    break;

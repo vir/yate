@@ -893,13 +893,7 @@ ExpOperation* ExpEvaluator::popOne(ObjList& stack)
     }
     stack.remove(o,false);
 #ifdef DEBUG
-#ifdef XDEBUG
-    Debug(DebugAll,"popOne: %p%s%s",o,
-	(YOBJECT(ExpFunction,o) ? " function" : ""),
-	(YOBJECT(ExpWrapper,o) ? " wrapper" : ""));
-#else
-    Debug(DebugAll,"popOne: %p",o);
-#endif
+    Debug(DebugAll,"popOne: %p%s%s",o,(o ? " " : ""),(o ? o->typeOf() : ""));
 #endif
     return o;
 }
@@ -916,14 +910,8 @@ ExpOperation* ExpEvaluator::popAny(ObjList& stack)
     }
     stack.remove(o,false);
 #ifdef DEBUG
-#ifdef XDEBUG
-    Debug(DebugAll,"popAny: %p%s%s '%s'",o,
-	(YOBJECT(ExpFunction,o) ? " function" : ""),
-	(YOBJECT(ExpWrapper,o) ? " wrapper" : ""),
-	(o ? o->name().safe() : (const char*)0));
-#else
-    Debug(DebugAll,"popAny: %p '%s'",o,(o ? o->name().safe() : (const char*)0));
-#endif
+    Debug(DebugAll,"popAny: %p%s%s '%s'",o,(o ? " " : ""),
+	(o ? o->typeOf() : ""),(o ? o->name().safe() : (const char*)0));
 #endif
     return o;
 }
@@ -1479,6 +1467,19 @@ bool ExpOperation::valBoolean() const
     return isInteger() ? (number() != 0) : !null();
 }
 
+const char* ExpOperation::typeOf() const
+{
+    switch (opcode()) {
+	case ExpEvaluator::OpcPush:
+	case ExpEvaluator::OpcCopy:
+	    return isInteger() ? "number" : "string";
+	case ExpEvaluator::OpcFunc:
+	    return "function";
+	default:
+	    return "internal";
+    }
+}
+
 ExpOperation* ExpOperation::clone(const char* name) const
 {
     ExpOperation* op = new ExpOperation(*this,name);
@@ -1519,6 +1520,17 @@ ExpOperation* ExpWrapper::copy(Mutex* mtx) const
     static_cast<String&>(*op) = *this;
     op->lineNumber(lineNumber());
     return op;
+}
+
+const char* ExpWrapper::typeOf() const
+{
+    switch (opcode()) {
+	case ExpEvaluator::OpcPush:
+	case ExpEvaluator::OpcCopy:
+	    return object() ? "object" : "undefined";
+	default:
+	    return ExpOperation::typeOf();
+    }
 }
 
 bool ExpWrapper::valBoolean() const

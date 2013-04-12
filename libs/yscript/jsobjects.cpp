@@ -312,8 +312,13 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    ExpWrapper* w = YOBJECT(ExpWrapper,param);
 	    if (w)
 		ExpEvaluator::pushOne(stack,w->clone(oper.name()));
-	    else
-		ExpEvaluator::pushOne(stack,new ExpOperation(*param,oper.name(),true));
+	    else {
+		bool num = true;
+		ExpOperation* o = YOBJECT(ExpOperation,param);
+		if (o && !o->isInteger())
+		    num = false;
+		ExpEvaluator::pushOne(stack,new ExpOperation(*param,oper.name(),num));
+	    }
 	}
     }
     else
@@ -323,8 +328,8 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
 
 bool JsObject::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(DebugAll,"JsObject::runAssign() '%s'='%s' in '%s' [%p]",
-	oper.name().c_str(),oper.c_str(),toString().c_str(),this);
+    XDebug(DebugAll,"JsObject::runAssign() '%s'='%s' (%s) in '%s' [%p]",
+	oper.name().c_str(),oper.c_str(),oper.typeOf(),toString().c_str(),this);
     if (frozen()) {
 	Debug(DebugWarn,"Object '%s' is frozen",toString().c_str());
 	return false;
@@ -341,7 +346,7 @@ bool JsObject::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    params().setParam(w->clone(oper.name()));
 	}
 	else
-	    params().setParam(new NamedString(oper.name(),oper));
+	    params().setParam(oper.clone());
     }
     return true;
 }

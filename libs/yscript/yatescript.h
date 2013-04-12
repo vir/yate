@@ -977,6 +977,12 @@ public:
     virtual bool valBoolean() const;
 
     /**
+     * Retrieve the name of the type of the value of this operation
+     * @return Name of the type of the value
+     */
+    virtual const char* typeOf() const;
+
+    /**
      * Clone and rename method
      * @param name Name of the cloned operation
      * @return New operation instance
@@ -1084,6 +1090,12 @@ public:
      * @return True if the wrapped object is to be interpreted as true value
      */
     virtual bool valBoolean() const;
+
+    /**
+     * Retrieve the name of the type of the value of this operation
+     * @return Name of the type of the value
+     */
+    virtual const char* typeOf() const;
 
     /**
      * Clone and rename method

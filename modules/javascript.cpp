@@ -712,7 +712,7 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	switch (oper.number()) {
 	    case 0:
 		if (m_message)
-		    ExpEvaluator::pushOne(stack,new ExpOperation(m_message->retValue()));
+		    ExpEvaluator::pushOne(stack,new ExpOperation(m_message->retValue(),0,true));
 		else
 		    ExpEvaluator::pushOne(stack,JsParser::nullClone());
 		break;
@@ -864,7 +864,7 @@ void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* co
 		for (int r = 1; r <= rows; r++) {
 		    GenObject* o = arr->get(idx,r);
 		    if (o)
-			jsa->push(new ExpOperation(o->toString()));
+			jsa->push(new ExpOperation(o->toString(),0,true));
 		    else
 			jsa->push(JsParser::nullClone());
 		}
@@ -883,7 +883,7 @@ void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* co
 		for (int r = 1; r <= rows; r++) {
 		    GenObject* o = arr->get(c,r);
 		    if (o)
-			jsa->push(new ExpOperation(o->toString()));
+			jsa->push(new ExpOperation(o->toString(),*name,true));
 		    else
 			jsa->push(JsParser::nullClone());
 		}
@@ -914,7 +914,7 @@ void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* conte
 			    continue;
 			GenObject* o = arr->get(c,idx);
 			if (o)
-			    jso->params().setParam(new ExpOperation(o->toString(),*name));
+			    jso->params().setParam(new ExpOperation(o->toString(),*name,true));
 			else
 			    jso->params().setParam((JsParser::nullClone(*name)));
 		    }
@@ -934,7 +934,7 @@ void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* conte
 			continue;
 		    GenObject* o = arr->get(c,r);
 		    if (o)
-			jso->params().setParam(new ExpOperation(o->toString(),*name));
+			jso->params().setParam(new ExpOperation(o->toString(),*name,true));
 		    else
 			jso->params().setParam((JsParser::nullClone(*name)));
 		}
@@ -970,7 +970,7 @@ void JsMessage::getResult(ObjList& stack, const ExpOperation& row, const ExpOper
 	    if (c >= 0 && c < cols) {
 		GenObject* o = arr->get(c,r + 1);
 		if (o) {
-		    ExpEvaluator::pushOne(stack,new ExpOperation(o->toString()));
+		    ExpEvaluator::pushOne(stack,new ExpOperation(o->toString(),0,true));
 		    return;
 		}
 	    }

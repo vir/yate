@@ -917,7 +917,7 @@ bool Connection::processChar(unsigned char c)
 	m_cursorPos++;
 	if (m_echoing) {
 	    writeStr(tmp);
-	    writeBufferTail(m_cursorPos);
+	    writeBufferTail();
 	}
     }
     return false;

@@ -50,6 +50,7 @@ protected:
     virtual bool commandExecute(String& retVal, const String& line);
     virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
 private:
+    bool evalContext(String& retVal, const String& cmd, ScriptContext* context = 0);
     JsParser m_assistCode;
 };
 
@@ -91,6 +92,8 @@ public:
 	{ return m_message; }
     inline void handled()
 	{ m_handled = true; }
+    inline ScriptContext* context()
+	{ return m_runner ? m_runner->context() : 0; }
     Message* getMsg(ScriptRun* runner) const;
     static const char* stateName(State st);
 private:
@@ -2009,7 +2012,7 @@ static const char* s_cmds[] = {
     0
 };
 
-static const char* s_cmdsLine = "  javascript {info|eval instructions...|reload script}";
+static const char* s_cmdsLine = "  javascript {info|eval[=context] instructions...|reload script}";
 
 
 JsModule::JsModule()
@@ -2053,9 +2056,36 @@ bool JsModule::commandExecute(String& retVal, const String& line)
     if (cmd.startSkip("reload") && cmd.trimSpaces())
 	return JsGlobal::reloadScript(cmd);
 
-    if (!(cmd.startSkip("eval") && cmd.trimSpaces()))
-	return false;
+    if (cmd.startSkip("eval=",false) && cmd.trimSpaces()) {
+	String scr;
+	cmd.extractTo(" ",scr).trimSpaces();
+	if (scr.null() || cmd.null())
+	    return false;
+	Lock mylock(this);
+	JsGlobal* script = static_cast<JsGlobal*>(JsGlobal::globals()[scr]);
+	if (script) {
+	    RefPointer<ScriptContext> ctxt = script->context();
+	    mylock.drop();
+	    return evalContext(retVal,cmd,ctxt);
+	}
+	JsAssist* assist = static_cast<JsAssist*>(calls()[scr]);
+	if (assist) {
+	    RefPointer<ScriptContext> ctxt = assist->context();
+	    mylock.drop();
+	    return evalContext(retVal,cmd,ctxt);
+	}
+	retVal << "Cannot find script context: " << scr << "\n\r";
+	return true;
+    }
 
+    if (cmd.startSkip("eval") && cmd.trimSpaces())
+	return evalContext(retVal,cmd);
+
+    return false;
+}
+
+bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* context)
+{
     JsParser parser;
     parser.basePath(s_basePath);
     parser.link(s_allowLink);
@@ -2063,12 +2093,14 @@ bool JsModule::commandExecute(String& retVal, const String& line)
 	retVal << "parsing failed\r\n";
 	return true;
     }
-    ScriptRun* runner = parser.createRunner();
-    JsObject::initialize(runner->context());
-    JsEngine::initialize(runner->context());
-    JsMessage::initialize(runner->context());
-    JsFile::initialize(runner->context());
-    JsXML::initialize(runner->context());
+    ScriptRun* runner = parser.createRunner(context);
+    if (!context) {
+	JsObject::initialize(runner->context());
+	JsEngine::initialize(runner->context());
+	JsMessage::initialize(runner->context());
+	JsFile::initialize(runner->context());
+	JsXML::initialize(runner->context());
+    }
     ScriptRun::Status st = runner->run();
     if (st == ScriptRun::Succeeded) {
 	while (ExpOperation* op = ExpEvaluator::popOne(runner->stack())) {
@@ -2089,6 +2121,19 @@ bool JsModule::commandComplete(Message& msg, const String& partLine, const Strin
     if (partLine.null() || (partLine == "help"))
 	itemComplete(msg.retValue(),name(),partWord);
     else if (partLine == name()) {
+	static const String s_eval("eval=");
+	if (partWord.startsWith(s_eval)) {
+	    lock();
+	    ListIterator iter(JsGlobal::globals());
+	    while (JsGlobal* script = static_cast<JsGlobal*>(iter.get()))
+		if (!script->name().null())
+		    itemComplete(msg.retValue(),s_eval + script->name(),partWord);
+	    iter.assign(calls());
+	    while (JsAssist* assist = static_cast<JsAssist*>(iter.get()))
+		itemComplete(msg.retValue(),s_eval + assist->id(),partWord);
+	    unlock();
+	    return true;
+	}
 	for (const char** list = s_cmds; *list; list++)
 	    itemComplete(msg.retValue(),*list,partWord);
 	return true;

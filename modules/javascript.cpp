@@ -28,8 +28,13 @@
 
 #define NATIVE_TITLE "[native code]"
 
+#define MIN_CALLBACK_INTERVAL Thread::idleMsec()
+
 using namespace TelEngine;
 namespace { // anonymous
+
+class JsEngineWorker;
+class JsEngine;
 
 class JsModule : public ChanAssistList
 {
@@ -154,13 +159,56 @@ protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
 
+class JsTimeEvent : public RefObject
+{
+public:
+    JsTimeEvent(JsEngineWorker* worker, const ExpFunction& callback, unsigned int interval,bool repeatable, unsigned int id);
+    void processTimeout(const Time& when);
+    inline bool repeatable() const
+	{ return m_repeat; }
+    inline u_int64_t fireTime() const
+	{ return m_fire; }
+    inline bool timeout(const Time& when) const
+	{ return when.msec() >= m_fire; }
+    inline unsigned int getId() const
+	{ return m_id; }
+private:
+    JsEngineWorker* m_worker;
+    ExpFunction m_callbackFunction;
+    unsigned int m_interval;
+    u_int64_t m_fire;
+    bool m_repeat;
+    unsigned int m_id;
+};
+
+class JsEngineWorker : public Thread
+{
+public:
+    JsEngineWorker(JsEngine* engine, ScriptContext* context, ScriptCode* code);
+    ~JsEngineWorker();
+    unsigned int addEvent(const ExpFunction& callback, unsigned int interval, bool repeat);
+    bool removeEvent(unsigned int id, bool repeatable);
+    ScriptContext* getContext();
+    ScriptCode* getCode();
+protected:
+    virtual void run();
+    void postponeEvent(JsTimeEvent* ev);
+private:
+    ObjList m_events;
+    Mutex m_eventsMutex;
+    unsigned int m_id;
+    ScriptContext* m_context;
+    ScriptCode* m_code;
+    JsEngine* m_engine;
+};
+
 #define MKDEBUG(lvl) params().addParam(new ExpOperation((long int)Debug ## lvl,"Debug" # lvl))
 class JsEngine : public JsObject
 {
     YCLASS(JsEngine,JsObject)
 public:
     inline JsEngine(Mutex* mtx)
-	: JsObject("Engine",mtx,true)
+	: JsObject("Engine",mtx,true), m_worker(0)
 	{
 	    MKDEBUG(Fail);
 	    MKDEBUG(Test);
@@ -182,10 +230,19 @@ public:
 	    params().addParam(new ExpFunction("dump_r"));
 	    params().addParam(new ExpFunction("print_r"));
 	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
+	    params().addParam(new ExpFunction("setInterval"));
+	    params().addParam(new ExpFunction("clearInterval"));
+	    params().addParam(new ExpFunction("setTimeout"));
+	    params().addParam(new ExpFunction("clearTimeout"));
 	}
     static void initialize(ScriptContext* context);
+    inline void resetWorker()
+	{ m_worker = 0; }
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    virtual void destroyed();
+private:
+    JsEngineWorker* m_worker;
 };
 #undef MKDEBUG
 
@@ -616,9 +673,57 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	else
 	    return false;
     }
+    else if (oper.name() == YSTRING("setInterval") || oper.name() == YSTRING("setTimeout")) {
+	ObjList args;
+	if (extractArgs(stack,oper,context,args) < 2)
+	    return false;
+	const ExpFunction* callback = YOBJECT(ExpFunction,args[0]);
+	if (!callback) {
+	    JsFunction* jsf = YOBJECT(JsFunction,args[0]);
+	    if (jsf)
+		callback = jsf->getFunc();
+	}
+	if (!callback)
+	    return false;
+	ExpOperation* interval = static_cast<ExpOperation*>(args[1]);
+	if (!m_worker) {
+	    ScriptRun* runner = YOBJECT(ScriptRun,context);
+	    if (!runner)
+		return false;
+	    ScriptContext* scontext = runner->context();
+	    ScriptCode* scode = runner->code();
+	    if (!(scontext && scode))
+		return false;
+	    m_worker = new JsEngineWorker(this,scontext,scode);
+	    m_worker->startup();
+	}
+	unsigned int id = m_worker->addEvent(*callback,interval->toInteger(),
+		oper.name() == YSTRING("setInterval"));
+	ExpEvaluator::pushOne(stack,new ExpOperation((long int)id));
+    }
+    else if (oper.name() == YSTRING("clearInterval") || oper.name() == YSTRING("clearTimeout")) {
+	if (!m_worker)
+	    return false;
+	ObjList args;
+	if (!extractArgs(stack,oper,context,args))
+	    return false;
+	ExpOperation* id = static_cast<ExpOperation*>(args[0]);
+	bool ret = m_worker->removeEvent(id->valInteger(),oper.name() == YSTRING("clearInterval"));
+	ExpEvaluator::pushOne(stack,new ExpOperation(ret));
+    }
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
+}
+
+void JsEngine::destroyed()
+{
+    JsObject::destroyed();
+    if (!m_worker)
+	return;
+    m_worker->cancel();
+    while (m_worker)
+	Thread::idle();
 }
 
 void JsEngine::initialize(ScriptContext* context)
@@ -1661,6 +1766,138 @@ void JsXML::initialize(ScriptContext* context)
 	addConstructor(params,"XML",new JsXML(mtx));
 }
 
+/**
+ * class JsTimeEvent
+ */
+
+JsTimeEvent::JsTimeEvent(JsEngineWorker* worker, const ExpFunction& callback,
+	unsigned int interval,bool repeatable, unsigned int id)
+    : m_worker(worker), m_callbackFunction(callback.name(),1),
+    m_interval(interval), m_repeat(repeatable), m_id(id)
+{
+    XDebug(&__plugin,DebugAll,"Created new JsTimeEvent(%u,%s) [%p]",interval,
+	   String::boolText(repeatable),this);
+    m_fire = Time::msecNow() + m_interval;
+}
+
+void JsTimeEvent::processTimeout(const Time& when)
+{
+    if (m_repeat)
+	m_fire = when.msec() + m_interval;
+    ScriptCode* code = m_worker->getCode();
+    ScriptContext* context = m_worker->getContext();
+    while (code && context) {
+	ScriptRun* runner = code->createRunner(context,NATIVE_TITLE);
+	if (!runner)
+	    break;
+	ObjList args;
+	runner->call(m_callbackFunction.name(),args);
+	TelEngine::destruct(runner);
+	break;
+    }
+    TelEngine::destruct(code);
+    TelEngine::destruct(context);
+}
+
+/**
+ * class JsEngineWorker
+ */
+
+JsEngineWorker::JsEngineWorker(JsEngine* engine, ScriptContext* context, ScriptCode* code)
+    : Thread("JsScheduler"), m_eventsMutex(false,"JsEngine"), m_id(0), m_context(context), m_code(code),
+    m_engine(engine)
+{
+    DDebug(&__plugin,DebugAll,"Creating JsEngineWorker [%p]",this);
+}
+
+JsEngineWorker::~JsEngineWorker()
+{
+    DDebug(&__plugin,DebugAll,"Destroing JsEngineWorker [%p]",this);
+    if (m_engine)
+	m_engine->resetWorker();
+}
+
+unsigned int JsEngineWorker::addEvent(const ExpFunction& callback, unsigned int interval, bool repeat)
+{
+    Lock myLock(m_eventsMutex);
+    if (interval < MIN_CALLBACK_INTERVAL)
+	interval = MIN_CALLBACK_INTERVAL;
+    // TODO find a better way to generate the id's
+    postponeEvent(new JsTimeEvent(this,callback,interval,repeat,++m_id));
+    return m_id;
+}
+
+bool JsEngineWorker::removeEvent(unsigned int id, bool repeatable)
+{
+    Lock myLock(m_eventsMutex);
+    for (ObjList* o = m_events.skipNull();o ; o = o->skipNext()) {
+	JsTimeEvent* ev = static_cast<JsTimeEvent*>(o->get());
+	if (ev->getId() != id)
+	    continue;
+	if (ev->repeatable() != repeatable)
+	    return false;
+	o->remove();
+	return true;
+    }
+    return false;
+}
+
+void JsEngineWorker::run()
+{
+    while (true) {
+	Time t;
+	Lock myLock(m_eventsMutex);
+	ObjList* o = m_events.skipNull();
+	if (!o) {
+	    myLock.drop();
+	    Thread::idle(true);
+	    continue;
+	}
+	RefPointer<JsTimeEvent> ev = static_cast<JsTimeEvent*>(o->get());
+	myLock.drop();
+	if (!ev->timeout(t)) {
+	    Thread::idle(true);
+	    continue;
+	}
+	ev->processTimeout(t);
+	if (!ev->repeatable()) {
+	    myLock.acquire(m_eventsMutex);
+	    m_events.remove(ev);
+	    continue;
+	}
+	myLock.acquire(m_eventsMutex);
+	if (m_events.remove(ev,false))
+	    postponeEvent(ev);
+    }
+}
+
+void JsEngineWorker::postponeEvent(JsTimeEvent* evnt)
+{
+    if (!evnt)
+	return;
+    for (ObjList* o = m_events.skipNull();o;o = o->skipNext()) {
+	JsTimeEvent* ev = static_cast<JsTimeEvent*>(o->get());
+	if (ev->fireTime() <= evnt->fireTime())
+	    continue;
+	o->insert(evnt);
+	return;
+    }
+    m_events.append(evnt);
+}
+
+ScriptCode* JsEngineWorker::getCode()
+{
+    if (m_code && m_code->ref())
+	return m_code;
+    return 0;
+}
+
+ScriptContext* JsEngineWorker::getContext()
+{
+    if (m_context && m_context->ref())
+	return m_context;
+    return 0;
+}
 
 bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {

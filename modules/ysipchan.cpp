@@ -61,7 +61,7 @@ class SIPDriver;
 // 1 minute
 #define BIND_RETRY_MAX 60000
 
-static TokenDict dict_errors[] = {
+static const TokenDict dict_errors[] = {
     { "incomplete", 484 },
     { "noroute", 404 },
     { "noroute", 604 },
@@ -99,7 +99,7 @@ static TokenDict dict_errors[] = {
 
 static const char s_dtmfs[] = "0123456789*#ABCDF";
 
-static TokenDict info_signals[] = {
+static const TokenDict info_signals[] = {
     { "*", 10 },
     { "#", 11 },
     { "A", 12 },
@@ -1081,10 +1081,17 @@ public:
 class SipHandler : public MessageHandler
 {
 public:
+    enum {
+	BodyRaw = 0,
+	BodyBase64 = 1,
+	BodyHex = 2,
+	BodyHexS = 3,
+    };
     SipHandler()
 	: MessageHandler("xsip.generate",110,plugin.name())
 	{ }
     virtual bool received(Message &msg);
+    static const TokenDict s_bodyEnc[];
 };
 
 static ObjList s_lines;
@@ -1128,6 +1135,7 @@ static String s_sslKeyFile;              // File containing the key of the SSL c
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
 static int s_expires_max = EXPIRES_MAX;
+static int s_defEncoding = SipHandler::BodyBase64;
 
 static String s_statusCmd = "status";
 
@@ -1180,6 +1188,14 @@ const TokenDict YateSIPTransport::s_statusName[] = {
     { 0, 0 },
 };
 
+// Body encodings
+const TokenDict SipHandler::s_bodyEnc[] = {
+    { "raw",    BodyRaw},
+    { "base64", BodyBase64},
+    { "hex",    BodyHex},
+    { "hexs",   BodyHexS},
+    { 0, 0 },
+};
 
 // Generate a transport id index when needed
 static inline unsigned int getTransIndex()
@@ -4894,11 +4910,27 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	else if (message->body) {
 	    const DataBlock& binBody = message->body->getBody();
 	    String bodyText;
-	    Base64 b64(binBody.data(),binBody.length(),false);
-	    b64.encode(bodyText);
-	    b64.clear(false);
+	    int enc = s_defEncoding;
+	    switch (enc) {
+		case SipHandler::BodyRaw:
+		    bodyText.assign((const char*)binBody.data(),binBody.length());
+		    break;
+		case SipHandler::BodyHex:
+		    bodyText.hexify(binBody.data(),binBody.length());
+		    break;
+		case SipHandler::BodyHexS:
+		    bodyText.hexify(binBody.data(),binBody.length(),' ');
+		    break;
+		default:
+		    enc = SipHandler::BodyBase64;
+		    {
+			Base64 b64(binBody.data(),binBody.length(),false);
+			b64.encode(bodyText);
+			b64.clear(false);
+		    }
+	    }
 	    m.addParam("xsip_type",message->body->getType());
-	    m.addParam("xsip_body_encoding","base64");
+	    m.addParam("xsip_body_encoding",lookup(enc,SipHandler::s_bodyEnc));
 	    m.addParam("xsip_body",bodyText);
 	}
     }
@@ -7767,15 +7799,24 @@ bool SipHandler::received(Message &msg)
 	else {
 	    DataBlock binBody;
 	    bool ok = false;
-	    if (bodyEnc == YSTRING("base64")) {
-		Base64 b64;
-		b64 << body;
-		ok = b64.decode(binBody);
+	    switch (bodyEnc.toInteger(s_bodyEnc)) {
+		case BodyRaw:
+		    binBody.append(body);
+		    ok = true;
+		case BodyHex:
+		    ok = binBody.unHexify(body,body.length());
+		    break;
+		case BodyHexS:
+		    ok = binBody.unHexify(body,body.length(),' ');
+		    break;
+		case BodyBase64:
+		    {
+			Base64 b64;
+			b64 << body;
+			ok = b64.decode(binBody);
+		    }
+		    break;
 	    }
-	    else if (bodyEnc == YSTRING("hex"))
-		ok = binBody.unHexify(body,body.length());
-	    else if (bodyEnc == YSTRING("hexs"))
-		ok = binBody.unHexify(body,body.length(),' ');
 
 	    if (ok)
 		sip->setBody(new MimeBinaryBody(type,(const char*)binBody.data(),binBody.length()));
@@ -8054,6 +8095,7 @@ void SIPDriver::initialize()
     s_printMsg = s_cfg.getBoolValue("general","printmsg",true);
     s_tcpMaxpkt = getMaxpkt(s_cfg.getIntValue("general","tcp_maxpkt",4096),4096);
     s_lineKeepTcpOffline = s_cfg.getBoolValue("general","line_keeptcpoffline",!Engine::clientMode());
+    s_defEncoding = s_cfg.getIntValue("general","body_encoding",SipHandler::s_bodyEnc,SipHandler::BodyBase64);
     s_sipt_isup = s_cfg.getBoolValue("sip-t","isup",false);
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);

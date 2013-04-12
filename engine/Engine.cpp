@@ -1376,7 +1376,6 @@ int Engine::engineInit()
     install(new EngineHelp);
     loadPlugins();
     Debug(DebugAll,"Loaded %d plugins",plugins.count());
-    internalStatisticsStart();
     if (s_super_handle >= 0) {
 	install(new EngineSuperHandler);
 	if (s_restarts)
@@ -1392,6 +1391,7 @@ int Engine::engineInit()
     ::signal(SIGTERM,sighandler);
     Debug(DebugAll,"Engine dispatching start message");
     dispatch("engine.start",true);
+    internalStatisticsStart();
     setStatus(SERVICE_RUNNING);
 #ifndef _WINDOWS
     ::signal(SIGHUP,sighandler);

@@ -660,7 +660,7 @@ public:
  * No new methods are provided - we only need the multiple inheritance.
  * @short Post-dispatching message hook that can be added to a list
  */
-class YATE_API MessagePostHook : public GenObject, public MessageNotifier
+class YATE_API MessagePostHook : public RefObject, public MessageNotifier
 {
 };
 
@@ -752,7 +752,7 @@ public:
      * Clear all the message handlers and post-dispatch hooks
      */
     inline void clear()
-	{ m_handlers.clear(); m_hooks.clear(); }
+	{ m_handlers.clear(); m_hookAppend = &m_hooks; m_hooks.clear(); }
 
     /**
      * Get the number of messages waiting in the queue
@@ -765,6 +765,12 @@ public:
      * @return Count of handlers
      */
     unsigned int handlerCount();
+
+    /**
+     * Get the number of post-handling hooks in this dispatcher
+     * @return Count of hooks
+     */
+    unsigned int postHookCount();
 
     /**
      * Install or remove a hook to catch messages after being dispatched
@@ -785,9 +791,14 @@ private:
     ObjList m_handlers;
     ObjList m_messages;
     ObjList m_hooks;
+    Mutex m_hookMutex;
+    ObjList* m_msgAppend;
+    ObjList* m_hookAppend;
     String m_trackParam;
     unsigned int m_changes;
     u_int64_t m_warnTime;
+    int m_hookCount;
+    bool m_hookHole;
 };
 
 /**
@@ -1407,6 +1418,13 @@ public:
      */
     inline unsigned int handlerCount()
 	{ return m_dispatcher.handlerCount(); }
+
+    /**
+     * Get the number of post-handling hooks in the dispatcher
+     * @return Count of hooks
+     */
+    inline unsigned int postHookCount()
+	{ return m_dispatcher.postHookCount(); }
 
     /**
      * Loads the plugins from an extra plugins directory or just an extra plugin

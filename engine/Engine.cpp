@@ -414,6 +414,7 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ";plugins=" << plugins.count();
     msg.retValue() << ",inuse=" << Engine::self()->usedPlugins();
     msg.retValue() << ",handlers=" << Engine::self()->handlerCount();
+    msg.retValue() << ",hooks=" << Engine::self()->postHookCount();
     msg.retValue() << ",messages=" << Engine::self()->messageCount();
     msg.retValue() << ",supervised=" << (s_super_handle >= 0);
     msg.retValue() << ",runattempt=" << s_run_attempt;

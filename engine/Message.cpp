@@ -299,7 +299,10 @@ bool MessageRelay::receivedInternal(Message& msg)
 
 MessageDispatcher::MessageDispatcher(const char* trackParam)
     : Mutex(false,"MessageDispatcher"),
-      m_trackParam(trackParam), m_changes(0), m_warnTime(0)
+      m_hookMutex(false,"PostHooks"),
+      m_msgAppend(&m_messages), m_hookAppend(&m_hooks),
+      m_trackParam(trackParam), m_changes(0), m_warnTime(0),
+      m_hookCount(0), m_hookHole(false)
 {
     XDebug(DebugInfo,"MessageDispatcher::MessageDispatcher('%s') [%p]",trackParam,this);
 }
@@ -469,12 +472,33 @@ bool MessageDispatcher::dispatch(Message& msg)
 	}
     }
 
-    l = &m_hooks;
-    for (; l; l=l->next()) {
-	MessagePostHook *h = static_cast<MessagePostHook*>(l->get());
-	if (h)
-	    h->dispatched(msg,retv);
+    m_hookMutex.lock();
+    if (m_hookHole && !m_hookCount) {
+	// compact the list, remove the holes
+	for (l = &m_hooks; l; l = l->next()) {
+	    while (!l->get()) {
+		if (!l->next())
+		    break;
+		if (l->next() == m_hookAppend)
+		    m_hookAppend = &m_hooks;
+		l->remove();
+	    }
+	}
+	m_hookHole = false;
     }
+    m_hookCount++;
+    for (l = m_hooks.skipNull(); l; l = l->skipNext()) {
+	RefPointer<MessagePostHook> ph = static_cast<MessagePostHook*>(l->get());
+	if (ph) {
+	    m_hookMutex.unlock();
+	    ph->dispatched(msg,retv);
+	    ph = 0;
+	    m_hookMutex.lock();
+	}
+    }
+    m_hookCount--;
+    m_hookMutex.unlock();
+
     return retv;
 }
 
@@ -483,13 +507,15 @@ bool MessageDispatcher::enqueue(Message* msg)
     Lock lock(this);
     if (!msg || m_messages.find(msg))
 	return false;
-    m_messages.append(msg);
+    m_msgAppend = m_msgAppend->append(msg);
     return true;
 }
 
 bool MessageDispatcher::dequeueOne()
 {
     lock();
+    if (m_messages.next() == m_msgAppend)
+	m_msgAppend = &m_messages;
     Message* msg = static_cast<Message *>(m_messages.remove(false));
     unlock();
     if (!msg)
@@ -517,14 +543,26 @@ unsigned int MessageDispatcher::handlerCount()
     return m_handlers.count();
 }
 
+unsigned int MessageDispatcher::postHookCount()
+{
+    Lock lock(m_hookMutex);
+    return m_hooks.count();
+}
+
 void MessageDispatcher::setHook(MessagePostHook* hook, bool remove)
 {
-    lock();
-    if (remove)
-	m_hooks.remove(hook,false);
+    m_hookMutex.lock();
+    if (remove) {
+	// zero the hook, we'll compact it later when safe
+	ObjList* l = m_hooks.find(hook);
+	if (l) {
+	    l->set(0,false);
+	    m_hookHole = true;
+	}
+    }
     else
-	m_hooks.append(hook);
-    unlock();
+	m_hookAppend = m_hookAppend->append(hook);
+    m_hookMutex.unlock();
 }
 
 

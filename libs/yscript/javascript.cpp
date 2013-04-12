@@ -79,6 +79,12 @@ protected:
 	{ obj->ref(); }
 };
 
+struct JsEntry
+{
+    long int number;
+    unsigned int index;
+};
+
 class JsCode : public ScriptCode, public ExpEvaluator
 {
     friend class TelEngine::JsFunction;
@@ -133,9 +139,9 @@ public:
     };
     inline JsCode()
 	: ExpEvaluator(C),
-	  m_pragmas(""), m_label(0), m_depth(0), m_traceable(false)
+	  m_pragmas(""), m_label(0), m_depth(0), m_entries(0), m_traceable(false)
 	{ debugName("JsCode"); }
-
+    ~JsCode();
     virtual void* getObject(const String& name) const
     {
 	if (name == YSTRING("JsCode"))
@@ -218,6 +224,7 @@ private:
 	{ return YOBJECT(JsFunction,m_globals[name]); }
     long int m_label;
     int m_depth;
+    JsEntry* m_entries;
     bool m_traceable;
 };
 
@@ -811,6 +818,11 @@ bool JsContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* c
 }
 
 
+JsCode::~JsCode()
+{
+    delete[] m_entries;
+}
+
 // Initialize standard globals in the execution context
 bool JsCode::initialize(ScriptContext* context) const
 {
@@ -845,14 +857,19 @@ bool JsCode::link()
     if (!m_opcodes.skipNull())
 	return false;
     m_linked.assign(m_opcodes);
+    delete[] m_entries;
+    m_entries = 0;
     unsigned int n = m_linked.count();
     if (!n)
 	return false;
+    unsigned int entries = 0;
     for (unsigned int i = 0; i < n; i++) {
 	const ExpOperation* l = static_cast<const ExpOperation*>(m_linked[i]);
 	if (!l || l->opcode() != OpcLabel)
 	    continue;
 	long int lbl = l->number();
+	if (lbl >= 0 && l->barrier())
+	    entries++;
 	for (unsigned int j = 0; j < n; j++) {
 	    const ExpOperation* jmp = static_cast<const ExpOperation*>(m_linked[j]);
 	    if (!jmp || jmp->number() != lbl)
@@ -876,6 +893,19 @@ bool JsCode::link()
 	    newJump->lineNumber(jmp->lineNumber());
 	    m_linked.set(newJump,j);
 	}
+    }
+    if (entries) {
+	m_entries = new JsEntry[entries+1];
+	unsigned int e = 0;
+	for (unsigned int j = 0; j < n; j++) {
+	    const ExpOperation* l = static_cast<const ExpOperation*>(m_linked[j]);
+	    if (l && l->barrier() && l->opcode() == OpcLabel && l->number() >= 0) {
+		m_entries[e].number = l->number();
+		m_entries[e++].index = j;
+	    }
+	}
+	m_entries[entries].number = -1;
+	m_entries[entries].index = 0;
     }
     return true;
 }
@@ -1609,7 +1639,7 @@ bool JsCode::parseFuncDef(const char*& expr, bool publish)
 	return gotError("Expecting '{'",expr);
     expr++;
     ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
-    ExpOperation* lbl = addOpcode(OpcLabel,++m_label);
+    ExpOperation* lbl = addOpcode(OpcLabel,++m_label,true);
     for (;;) {
 	if (!runCompile(expr,'}'))
 	    return false;
@@ -2421,6 +2451,15 @@ bool JsCode::jumpToLabel(long int label, GenObject* context) const
 	}
     }
     else {
+	if (m_entries) {
+	    for (const JsEntry* e = m_entries; e->number >= 0; e++) {
+		if (e->number == label) {
+		    runner->m_index = e->index;
+		    XDebug(this,DebugInfo,"Fast jumped to index %u",e->index);
+		    return true;
+		}
+	    }
+	}
 	unsigned int n = m_linked.length();
 	if (!n)
 	    return false;

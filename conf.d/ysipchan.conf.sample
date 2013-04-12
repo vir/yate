@@ -223,6 +223,9 @@
 ;  Can be one of: base64, hex, hexs, raw
 ;body_encoding=base64
 
+; async_generic: bool: Process generic SIP messages asynchronously in their own thread
+;async_generic=enable
+
 ; flags: int: Miscellaneous SIP engine flags for broken implementations
 ; See SIPMessage::Flags and SIPMessage::complete() in the source for gory details
 ;flags=0

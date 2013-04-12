@@ -598,7 +598,7 @@ void ModuleLine::setCallSetupDetector()
     // Dispatch message
     DataSource* src = 0;
     if (circuit())
-	src = static_cast<DataSource*>(circuit()->getObject("DataSource"));
+	src = static_cast<DataSource*>(circuit()->getObject(YATOM("DataSource")));
     Message msg("chan.attach");
     msg.userData(src);
     msg.addParam("consumer",m_detector);
@@ -617,7 +617,7 @@ void ModuleLine::setCallSetupDetector()
 	}
 	DataConsumer* cons = 0;
 	if (msg.userData())
-	    cons = static_cast<DataConsumer*>(msg.userData()->getObject("DataConsumer"));
+	    cons = static_cast<DataConsumer*>(msg.userData()->getObject(YATOM("DataConsumer")));
 	if (cons && cons->ref())
 	    m_callSetupDetector = cons;
 	else
@@ -2007,9 +2007,9 @@ bool AnalogChannel::setAudio(bool in)
     SignallingCircuit* cic = m_line ? m_line->circuit() : 0;
     if (cic) {
 	if (in)
-	    setSource(static_cast<DataSource*>(cic->getObject("DataSource")));
+	    setSource(static_cast<DataSource*>(cic->getObject(YATOM("DataSource"))));
 	else
-	    setConsumer(static_cast<DataConsumer*>(cic->getObject("DataConsumer")));
+	    setConsumer(static_cast<DataConsumer*>(cic->getObject(YATOM("DataConsumer"))));
     }
 
     DataNode* res = in ? (DataNode*)getSource() : (DataNode*)getConsumer();
@@ -2269,7 +2269,7 @@ bool AnalogCallRec::disconnect(const char* reason)
 // DataSource1: called's source
 void* AnalogCallRec::getObject(const String& name) const
 {
-    int who = (name == "DataSource0") ? 0 : (name == "DataSource1" ? 1 : -1);
+    int who = (name == YATOM("DataSource0")) ? 0 : (name == YATOM("DataSource1") ? 1 : -1);
     if (who == -1)
 	return CallEndpoint::getObject(name);
 
@@ -2278,7 +2278,7 @@ void* AnalogCallRec::getObject(const String& name) const
 	 target = m_fxsCaller ? m_line : fxo();
     else
 	 target = m_fxsCaller ? fxo() : m_line;
-    return (target && target->circuit()) ? target->circuit()->getObject("DataSource") : 0;
+    return (target && target->circuit()) ? target->circuit()->getObject(YATOM("DataSource")) : 0;
 }
 
 // Create data source. Route and execute
@@ -2295,7 +2295,7 @@ bool AnalogCallRec::startRecording()
     DataSource* src = 0;
     String buflen;
     if (m_line && m_line->circuit()) {
-	src = static_cast<DataSource*>(m_line->circuit()->getObject("DataSource"));
+	src = static_cast<DataSource*>(m_line->circuit()->getObject(YATOM("DataSource")));
 	m_line->circuit()->getParam("buflen",buflen);
     }
     if (src)
@@ -2314,7 +2314,7 @@ bool AnalogCallRec::startRecording()
     if (!Engine::dispatch(m))
 	Debug(this,DebugNote,"Error attaching data mux '%s' [%p]",m->getValue("error"),this);
     else if (m->userData())
-	setSource(static_cast<DataSource*>(m->userData()->getObject("DataSource")));
+	setSource(static_cast<DataSource*>(m->userData()->getObject(YATOM("DataSource"))));
     TelEngine::destruct(m);
     if (!getSource()) {
 	m_reason = "nodata";

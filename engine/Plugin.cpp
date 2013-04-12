@@ -41,7 +41,7 @@ Plugin::~Plugin()
 
 void* Plugin::getObject(const String& name) const
 {
-    if (name == YSTRING("Plugin"))
+    if (name == YATOM("Plugin"))
 	return const_cast<Plugin*>(this);
     return GenObject::getObject(name);
 }

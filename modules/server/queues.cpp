@@ -222,8 +222,8 @@ CallsQueue* CallsQueue::create(const char* name, const NamedList& params)
 	Debug(&__plugin,DebugWarn,"Query on '%s' failed: '%s'",s_account.c_str(),query.c_str());
 	return 0;
     }
-    Array* res = static_cast<Array*>(m.userObject("Array"));
-    if (!res || (m.getIntValue("rows") != 1)) {
+    Array* res = static_cast<Array*>(m.userObject(YATOM("Array")));
+    if (!res || (m.getIntValue(YSTRING("rows")) != 1)) {
 	Debug(&__plugin,DebugWarn,"Missing queue '%s'",name);
 	return 0;
     }
@@ -442,14 +442,14 @@ void CallsQueue::startACD()
 	Debug(&__plugin,DebugWarn,"Query on '%s' failed: '%s'",s_account.c_str(),query.c_str());
 	return;
     }
-    Array* res = static_cast<Array*>(msg.userObject("Array"));
-    if (!res || (msg.getIntValue("rows") < 1))
+    Array* res = static_cast<Array*>(msg.userObject(YATOM("Array")));
+    if (!res || (msg.getIntValue(YSTRING("rows")) < 1))
 	return;
     for (int i = 1; i < res->getRows(); i++) {
 	NamedList params("");
 	copyArrayParams(params,res,i);
-	const char* callto = params.getValue("location");
-	const char* user = params.getValue("username");
+	const char* callto = params.getValue(YSTRING("location"));
+	const char* user = params.getValue(YSTRING("username"));
 	if (!(callto && user))
 	    continue;
 	QueuedCall* call = markCall(user);

@@ -519,7 +519,7 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy, Gen
 	const GenObject* o = l->get();
 	if (!o)
 	    continue;
-	const MimeHeaderLine* t = static_cast<const MimeHeaderLine*>(o->getObject("MimeHeaderLine"));
+	const MimeHeaderLine* t = static_cast<const MimeHeaderLine*>(o->getObject(YATOM("MimeHeaderLine")));
 	if (!t || (t->name() |= hdr))
 	    continue;
 	// remember this line for foreign authentication

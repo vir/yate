@@ -534,7 +534,7 @@ bool SslHandler::received(Message& msg)
 	return 0 != __plugin.findContext(msg);
     }
     addRand(msg.msgTime());
-    Socket** ppSock = static_cast<Socket**>(msg.userObject("Socket*"));
+    Socket** ppSock = static_cast<Socket**>(msg.userObject(YATOM("Socket*")));
     if (!ppSock) {
 	Debug(&__plugin,DebugGoOn,"SslHandler: No pointer to Socket");
 	return false;
@@ -767,7 +767,7 @@ bool CipherHandler::received(Message& msg)
     const String* name = msg.getParam("cipher");
     if (!name)
 	return false;
-    Cipher** ppCipher = static_cast<Cipher**>(msg.userObject("Cipher*"));
+    Cipher** ppCipher = static_cast<Cipher**>(msg.userObject(YATOM("Cipher*")));
 #ifndef OPENSSL_NO_AES
     if (*name == "aes_ctr") {
 	if (ppCipher)

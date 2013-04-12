@@ -364,9 +364,9 @@ void AAAHandler::indirectQuery(String& query)
     prepareQuery(m,m_account,query,true);
     query.clear();
     // query must return exactly one row, one column
-    if (!Engine::dispatch(m) || (m.getIntValue("rows") != 1) || (m.getIntValue("columns") != 1))
+    if (!Engine::dispatch(m) || (m.getIntValue(YSTRING("rows")) != 1) || (m.getIntValue(YSTRING("columns")) != 1))
 	return;
-    Array* a = static_cast<Array*>(m.userObject("Array"));
+    Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
     if (!a)
 	return;
     query = YOBJECT(String,a->get(0,1));
@@ -449,7 +449,7 @@ bool AAAHandler::received(Message& msg)
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("rows") >=1)
 		{
-		    Array* a = static_cast<Array*>(m.userObject("Array"));
+		    Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
 		    if (!copyParams(msg,a,m_result)) {
 			Debug(&module,DebugWarn,"Misconfigured result column for '%s'",name().c_str());
 			msg.setParam("error","failure");
@@ -471,7 +471,7 @@ bool AAAHandler::received(Message& msg)
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("rows") >=1)
 		{
-		    Array* a = static_cast<Array*>(m.userObject("Array"));
+		    Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
 		    copyParams(msg,a,m_result);
 		}
 	    return false;
@@ -488,7 +488,7 @@ bool AAAHandler::received(Message& msg)
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("rows") >=1)
 		{
-		    Array* a = static_cast<Array*>(m.userObject("Array"));
+		    Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
 		    copyParams(msg,a,m_result);
 		    if (msg.retValue().null())
 		    {
@@ -645,7 +645,7 @@ Array* EventNotify::queryDatabase(Message& msg, const String& notifier,
     if (!Engine::dispatch(msg))
 	return 0;
     rows = msg.getIntValue("rows",0);
-    Array* subscriptions = static_cast<Array*>(msg.userObject("Array"));
+    Array* subscriptions = static_cast<Array*>(msg.userObject(YATOM("Array")));
     if (!(subscriptions && rows))
 	return 0;
     DDebug(&module,DebugAll,
@@ -827,7 +827,7 @@ bool SubscribeHandler::received(Message& msg)
     }
 
     Message* notify = new Message("resource.notify");
-    Array* a = static_cast<Array*>(m.userObject("Array"));
+    Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
     if (subscribe) {
 	copyParams2(*notify,a,1);
 	notify->addParam("subscriptionstate","active");
@@ -884,7 +884,7 @@ bool SubscribeTimerHandler::received(Message& msg)
 	m_nextTime = t + m_expireTime;
     else
 	return false;
-	
+
     if(!m_queryExpire)
 	return false;
 
@@ -898,7 +898,7 @@ bool SubscribeTimerHandler::received(Message& msg)
 	return false;
 
     int rows = m.getIntValue("rows",0);
-    Array* a = static_cast<Array*>(m.userObject("Array"));
+    Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
     if(!a || rows < 1)
 	return false;
     for(int i = 1; i <= rows; i++) {
@@ -1168,7 +1168,7 @@ bool AccountsModule::received(Message &msg, int id)
 	    if (rows>0) {
 		for (int i=1 ; i<=rows ; i++) {
 		    Message *m1= new Message("user.login");
-		    Array* a = static_cast<Array*>(m.userObject("Array"));
+		    Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
 		    copyParams2(*m1,a, i);
 		    Engine::enqueue(m1);
 		} 

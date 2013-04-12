@@ -2119,7 +2119,7 @@ protected:
     inline bool peerHasSource(Message& msg) {
     	    CallEndpoint* ch = getPeer();
 	    if (!ch)
-		ch = static_cast<CallEndpoint*>(msg.userObject(YSTRING("CallEndpoint")));
+		ch = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
 	    return ch && ch->getSource();
 	}
     // Check if our consumer's source sent any data

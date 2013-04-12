@@ -126,7 +126,7 @@ void MultiRouter::setup(int priority)
 
 bool MultiRouter::received(Message& msg, int id)
 {
-    CallEndpoint* call = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+    CallEndpoint* call = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
     bool first = false;
     CallInfo* info = 0;
     String chanid(msg.getValue("id"));

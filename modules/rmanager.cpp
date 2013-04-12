@@ -156,7 +156,7 @@ public:
 	{ }
     void* getObject(const String& name) const
     {
-	if (name == "Socket*")
+	if (name == YATOM("Socket*"))
 	    return m_sock;
 	return RefObject::getObject(name);
     }

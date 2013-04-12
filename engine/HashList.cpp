@@ -48,7 +48,7 @@ HashList::~HashList()
 
 void* HashList::getObject(const String& name) const
 {
-    if (name == YSTRING("HashList"))
+    if (name == YATOM("HashList"))
 	return const_cast<HashList*>(this);
     return GenObject::getObject(name);
 }

@@ -1383,7 +1383,7 @@ PresenceUser* UserList::askDatabase(const String& name)
     u_int64_t start = Time::now();
 #endif
     PresenceUser* u = 0;
-    Array* a = static_cast<Array*>(m->userObject("Array"));
+    Array* a = static_cast<Array*>(m->userObject(YATOM("Array")));
     int rows = 0;
     int cols = 0;
     ObjList** columns = 0;
@@ -1473,7 +1473,7 @@ void GenericUserList::load()
     clear();
     if (!m)
 	return;
-    Array* a = static_cast<Array*>(m->userObject("Array"));
+    Array* a = static_cast<Array*>(m->userObject(YATOM("Array")));
     if (!a) {
 	TelEngine::destruct(m);
 	return;
@@ -1651,7 +1651,7 @@ bool SubMessageHandler::received(Message& msg)
 		u_int64_t start = Time::now();
 		unsigned int n = 0;
 		unsigned int nc = 0;
-		Array* a = static_cast<Array*>(m->userObject("Array"));
+		Array* a = static_cast<Array*>(m->userObject(YATOM("Array")));
 		ObjList** columns = 0;
 		String** titles = 0;
 		int rows = 0;
@@ -1845,7 +1845,7 @@ Array* SubscriptionModule::notifyRosterUpdate(const char* username, const char* 
     m = queryDb(m);
     Array* data = 0;
     if (m && m->getIntValue("rows") >= 1) {
-	data = static_cast<Array*>(m->userObject("Array"));
+	data = static_cast<Array*>(m->userObject(YATOM("Array")));
 	if (data && data->ref())
 	    m->userData(0);
 	else
@@ -2557,8 +2557,8 @@ bool SubscriptionModule::handleUserRosterQuery(const String& user, const String*
     m = queryDb(m);
     if (!m)
 	return false;
-    bool hierarchical = msg.getBoolValue("hierarchical");
-    Array* a = static_cast<Array*>(m->userObject("Array"));
+    bool hierarchical = msg.getBoolValue(YSTRING("hierarchical"));
+    Array* a = static_cast<Array*>(m->userObject(YATOM("Array")));
     int rows = 0;
     int cols = 0;
     unsigned int n = 0;

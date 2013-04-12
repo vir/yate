@@ -1542,7 +1542,7 @@ bool ExpWrapper::valBoolean() const
 
 void* ExpWrapper::getObject(const String& name) const
 {
-    if (name == YSTRING("ExpWrapper"))
+    if (name == YATOM("ExpWrapper"))
 	return const_cast<ExpWrapper*>(this);
     void* obj = ExpOperation::getObject(name);
     if (obj)

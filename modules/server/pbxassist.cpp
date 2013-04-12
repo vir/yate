@@ -195,7 +195,7 @@ PBXList::~PBXList()
 
 ChanAssist* PBXList::create(Message& msg, const String& id)
 {
-    if (msg == "chan.startup" || msg.userObject("Channel")) {
+    if (msg == "chan.startup" || msg.userObject(YATOM("Channel"))) {
 	// if a filter is set try to match it
 	if (s_filter && (s_filterFail == s_filter.matches(id)))
 	    return 0;
@@ -424,7 +424,7 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
     if ((reason == "hold") || (reason == "park") || (reason == "intrusion")) {
 	String onhold = m_keep.getValue("onhold",s_onhold);
 	if (onhold) {
-	    Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
+	    Channel* c = static_cast<Channel*>(msg.userObject(YATOM("Channel")));
 	    if (!c)
 		return false;
 	    Message *m = c->message("call.execute",false,true);
@@ -534,7 +534,7 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
     }
 
     if (!m_guest && (state() != "new")) {
-	Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
+	Channel* c = static_cast<Channel*>(msg.userObject(YATOM("Channel")));
 	if (!c)
 	    return false;
 	Message *m = c->message("call.execute",false,true);
@@ -874,7 +874,7 @@ bool PBXAssist::operConference(Message& msg)
 	    return errorBeep("conference failed");
     }
     else {
-	Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
+	Channel* c = static_cast<Channel*>(msg.userObject(YATOM("Channel")));
 	if (!c)
 	    return errorBeep("no channel");
 	if (!room)
@@ -1006,7 +1006,7 @@ bool PBXAssist::operReturnConf(Message& msg)
 {
     if ((state() == "conference") || (state() == "new") || m_room.null())
 	return errorBeep("cannot return to conference");
-    Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
+    Channel* c = static_cast<Channel*>(msg.userObject(YATOM("Channel")));
     if (!c)
 	return errorBeep("no channel");
     bool owner = msg.getBoolValue("confowner",m_keep.getBoolValue("pbxconfowner",s_confOwner));

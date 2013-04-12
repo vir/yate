@@ -1195,7 +1195,7 @@ void YStunSocketFilter::processBindResult(YStunMessage* msg)
  */
 bool StunHandler::received(Message& msg)
 {
-    Socket* socket = static_cast<Socket*>(msg.userObject("Socket"));
+    Socket* socket = static_cast<Socket*>(msg.userObject(YATOM("Socket")));
     if (!socket) {
 	Debug(&iplugin,DebugGoOn,"StunHandler: No socket to install filter for.");
 	return true;

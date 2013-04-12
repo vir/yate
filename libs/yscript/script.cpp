@@ -102,9 +102,9 @@ bool ScriptParser::callable(const String& name)
 // RTTI Interface access
 void* ScriptContext::getObject(const String& name) const
 {
-    if (name == YSTRING("ScriptContext"))
+    if (name == YATOM("ScriptContext"))
 	return const_cast<ScriptContext*>(this);
-    if (name == YSTRING("ExpExtender"))
+    if (name == YATOM("ExpExtender"))
 	return const_cast<ExpExtender*>(static_cast<const ExpExtender*>(this));
     return RefObject::getObject(name);
 }

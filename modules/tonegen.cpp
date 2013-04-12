@@ -1010,11 +1010,11 @@ DataBlock* getRawData(Message& msg)
     NamedString* data = msg.getParam("rawdata");
     if (!data)
 	return 0;
-    NamedPointer* p = static_cast<NamedPointer*>(data->getObject("NamedPointer"));
+    NamedPointer* p = static_cast<NamedPointer*>(data->getObject(YATOM("NamedPointer")));
     if (!p)
 	return 0;
     GenObject* gen = p->userData();
-    if (!(gen && gen->getObject("DataBlock")))
+    if (!(gen && gen->getObject(YATOM("DataBlock"))))
 	return 0;
     return static_cast<DataBlock*>(p->takeData());
 }
@@ -1033,9 +1033,9 @@ bool AttachHandler::received(Message& msg)
     if (src.null() && ovr.null() && repl.null())
 	return false;
 
-    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject(YATOM("DataEndpoint")));
     if (!de) {
-	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
 	if (ch) {
 	    DataEndpoint::commonMutex().lock();
 	    de = ch->setEndpoint();

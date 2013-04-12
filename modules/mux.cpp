@@ -178,7 +178,7 @@ inline DataSource* getChannelSource(GenObject* target, unsigned int channel)
     chNo << "DataSource" << channel;
     GenObject* ret = (GenObject*)target->getObject(chNo);
     chNo.clear();
-    return ret ? static_cast<DataSource*>(ret->getObject("DataSource")) : 0;
+    return ret ? static_cast<DataSource*>(ret->getObject(YATOM("DataSource"))) : 0;
 }
 
 

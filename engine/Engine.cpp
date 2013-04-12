@@ -237,6 +237,8 @@ static Mutex s_eventsMutex(false,"EventsList");
 static ObjList s_events;
 static String s_startMsg;
 static SharedVars s_vars;
+static Mutex s_hooksMutex(true,"HooksList");
+static ObjList s_hooks;
 
 const TokenDict Engine::s_callAccept[] = {
     {"accept",      Engine::Accept},
@@ -1515,6 +1517,12 @@ int Engine::engineCleanup()
     CapturedEvent::capturing(false);
     setStatus(SERVICE_STOP_PENDING);
     ::signal(SIGINT,SIG_DFL);
+    Lock myLock(s_hooksMutex);
+    for (ObjList* o = s_hooks.skipNull();o;o = o->skipNext()) {
+	MessageHook* mh = static_cast<MessageHook*>(o->get());
+	mh->clear();
+    }
+    myLock.drop();
     dispatch("engine.halt",true);
     checkPoint();
     Thread::msleep(200);
@@ -1839,9 +1847,23 @@ bool Engine::uninstall(MessageHandler* handler)
     return s_self ? s_self->m_dispatcher.uninstall(handler) : false;
 }
 
-bool Engine::enqueue(Message* msg)
+bool Engine::enqueue(Message* msg, bool skipHooks)
 {
-    return (msg && s_self) ? s_self->m_dispatcher.enqueue(msg) : false;
+    if (!msg)
+	return false;
+    if (!skipHooks) {
+	Lock myLock(s_hooksMutex);
+	for (ObjList* o = s_hooks.skipNull();o;o = o->skipNext()) {
+	    MessageHook* hook = static_cast<MessageHook*>(o->get());
+	    if (!hook || !hook->matchesFilter(*msg))
+		continue;
+	    RefPointer<MessageHook> rhook = hook;
+	    myLock.drop();
+	    rhook->enqueue(msg);
+	    return true;
+	}
+    }
+    return s_self ? s_self->m_dispatcher.enqueue(msg) : false;
 }
 
 bool Engine::dispatch(Message* msg)
@@ -1862,6 +1884,24 @@ bool Engine::dispatch(const char* name, bool broadcast)
     if (nodeName())
 	msg.addParam("nodename",nodeName());
     return s_self->m_dispatcher.dispatch(msg);
+}
+
+bool Engine::installHook(MessageHook* hook)
+{
+    Lock myLock(s_hooksMutex);
+    if (!hook || s_hooks.find(hook))
+	return false;
+    s_hooks.append(hook);
+    return true;
+}
+
+void Engine::uninstallHook(MessageHook* hook)
+{
+    if (!hook)
+	return;
+    Lock myLock(s_hooksMutex);
+    hook->clear();
+    s_hooks.remove(hook);
 }
 
 unsigned int Engine::runId()

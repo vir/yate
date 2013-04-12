@@ -80,6 +80,15 @@ ObjList* HashList::find(const GenObject* obj) const
     return found;
 }
 
+ObjList* HashList::find(const GenObject* obj, unsigned int hash) const
+{
+    XDebug(DebugAll,"HashList::find(%p,%u) [%p]",obj,hash,this);
+    if (!obj)
+	return 0;
+    unsigned int i = hash % m_size;
+    return m_lists[i] ? m_lists[i]->find(obj) : 0;
+}
+
 ObjList* HashList::find(const String& str) const
 {
     XDebug(DebugAll,"HashList::find(\"%s\") [%p]",str.c_str(),this);

@@ -2870,6 +2870,14 @@ public:
     ObjList* find(const GenObject* obj) const;
 
     /**
+     * Get the item in the list that holds an object
+     * @param obj Pointer to the object to search for
+     * @param hash Object hash used to identify the list it belongs to
+     * @return Pointer to the found item or NULL
+     */
+    ObjList* find(const GenObject* obj, unsigned int hash) const;
+
+    /**
      * Get the item in the list that holds an object by String value
      * @param str String value (toString) of the object to search for
      * @return Pointer to the first found item or NULL
@@ -3012,6 +3020,7 @@ private:
     ObjList* m_objList;
     HashList* m_hashList;
     GenObject** m_objects;
+    unsigned int* m_hashes;
     unsigned int m_length;
     unsigned int m_current;
 };

@@ -25,13 +25,13 @@
 using namespace TelEngine;
 
 ListIterator::ListIterator(ObjList& list, int offset)
-    : m_objects(0)
+    : m_objects(0), m_hashes(0)
 {
     assign(list,offset);
 }
 
 ListIterator::ListIterator(HashList& list, int offset)
-    : m_objects(0)
+    : m_objects(0), m_hashes(0)
 {
     assign(list,offset);
 }
@@ -40,6 +40,8 @@ ListIterator::~ListIterator()
 {
     m_length = 0;
     delete[] m_objects;
+    if (m_hashes)
+	delete[] m_hashes;
 }
 
 void ListIterator::clear()
@@ -51,6 +53,11 @@ void ListIterator::clear()
     GenObject** tmp = m_objects;
     m_objects = 0;
     delete[] tmp;
+    if (m_hashes) {
+	unsigned int* tmph = m_hashes;
+	m_hashes = 0;
+	delete[] tmph;
+    }
 }
 
 void ListIterator::assign(ObjList& list, int offset)
@@ -80,6 +87,7 @@ void ListIterator::assign(HashList& list, int offset)
     if (!m_length)
 	return;
     m_objects = new GenObject* [m_length];
+    m_hashes = new unsigned int[m_length];
     offset = (m_length - offset) % m_length;
     unsigned int i = 0;
     for (unsigned int n = 0; n < list.length(); n++) {
@@ -89,7 +97,9 @@ void ListIterator::assign(HashList& list, int offset)
 	for (l = l->skipNull(); i < m_length; l = l->skipNext()) {
 	    if (!l)
 		break;
-	    m_objects[((i++) + offset) % m_length] = l->get();
+	    unsigned int idx = ((i++) + offset) % m_length;
+	    m_objects[idx] = l->get();
+	    m_hashes[idx] = l->get()->toString().hash();
 	}
     }
     while (i < m_length)
@@ -108,7 +118,7 @@ GenObject* ListIterator::get(unsigned int index) const
 	    return obj;
     }
     else if (m_hashList) {
-	if (m_hashList->find(obj) && obj->alive())
+	if (m_hashList->find(obj,m_hashes[index]) && obj->alive())
 	    return obj;
     }
     return 0;

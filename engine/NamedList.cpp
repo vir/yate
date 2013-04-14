@@ -243,6 +243,24 @@ void NamedList::dump(String& str, const char* separator, char quote, bool force)
     }
 }
 
+void NamedList::toHStore(String& str) const
+{
+    const ObjList *p = m_params.skipNull();
+    bool first = true;
+    for (; p; p = p->skipNext()) {
+	if(first)
+	    first = false;
+	else
+	    str << ", ";
+        const NamedString* s = static_cast<const NamedString *>(p->get());
+	str << "\"" << s->name().sqlEscape('\"') << "\" => ";
+	if(s->null())
+	    str << "NULL";
+	else
+	    str << "\"" << s->sqlEscape('\"') << "\"";
+    }
+}
+
 int NamedList::getIndex(const NamedString* param) const
 {
     if (!param)
@@ -332,6 +350,14 @@ int NamedList::replaceParams(String& str, bool sqlEsc, char extraEsc) const
 	    String def;
 	    String tmp = str.substr(p1+2,p2-p1-2);
 	    tmp.trimBlanks();
+	    if (tmp == YSTRING("$hstore")) {
+		tmp.clear();
+		toHStore(tmp);
+		str = str.substr(0,p1) + tmp + str.substr(p2+1);
+		p1 += tmp.length();
+		cnt++;
+		continue;
+	    }
 	    int pq = tmp.find('$');
 	    if (pq >= 0) {
 		// param is in ${<name>$<default>} format

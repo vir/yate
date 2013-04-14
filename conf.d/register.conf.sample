@@ -118,6 +118,8 @@
 ;query=SELECT location,(CASE WHEN location IS NULL THEN 'offline' ELSE NULL END) AS error FROM users WHERE username='${called}'
 ;result=location
 ;priority=120
+; namevaluepairs: boolean: true if query returns name-value pairs instead of usual format
+;namevaluepairs=no
 
 
 [call.cdr]

@@ -1,3 +1,11 @@
+yate (4.3.1~vir2013041501) UNRELEASED; urgency=low
+
+  * Merged my 'hstore' branch - postgres 'hstore' type support.
+  * Merged my 'tranposedb' branch - support for multile 'field', 'value'
+    records returned by routing query.
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Mon, 15 Apr 2013 14:22:13 +0400
+
 yate (4.3.1~vir2013040202) UNRELEASED; urgency=low
 
   * Fixed debug symbols package creation.

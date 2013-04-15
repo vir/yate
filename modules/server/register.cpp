@@ -66,8 +66,10 @@ public:
     virtual void chkConfig();
 
 protected:
+    bool copyParams(Message &msg, Array *a, const String& resultName);
     void indirectQuery(String& query);
     int m_type;
+    bool m_queryReturnsNameValuePairs;
     String m_query;
     String m_result;
     String m_account;
@@ -272,11 +274,32 @@ static void copyParams2(Message &msg, Array* a, int row = 0)
 // copy parameters from multiple SQL result rows to a Message
 // returns true if resultName was found in columns
 
-static bool copyParams(Message &msg, Array *a, const String& resultName)
+bool AAAHandler::copyParams(Message &msg, Array *a, const String& resultName)
 {
     if (!a)
 	return false;
     bool ok = false;
+    if(m_queryReturnsNameValuePairs) {
+	if(a->getColumns() != 2) {
+	    Debug(&module,DebugWarn,"Query returned %d columns, not 2.",a->getColumns());
+	    return false;
+	}
+	for (int j=1;j<a->getRows();j++) {
+	    const String* name = YOBJECT(String,a->get(0, j));
+	    if (!(name && *name)) {
+		Debug(&module,DebugWarn,"No field name in row %d, skipping remaining rows.",j);
+		break;
+	    }
+	    bool res = (*name == resultName);
+	    ok = ok || res;
+	    const String* s = YOBJECT(String,a->get(1,j));
+	    if (res)
+		msg.retValue() = s;
+	    else
+		msg.setParam(*name,s?s->c_str():"");
+	}
+	return ok;
+    }
     FallBackRoute* fallback = 0;
     for (int j=1; j <a->getRows();j++) {
 	Message* m = (j <= 1) ? &msg : new Message(msg);
@@ -323,6 +346,7 @@ static bool copyParams(Message &msg, Array *a, const String& resultName)
 
 AAAHandler::AAAHandler(const char* hname, int type, int prio)
     : MessageHandler(hname,prio),m_type(type)
+    , m_queryReturnsNameValuePairs(false)
 {
 }
 
@@ -345,6 +369,7 @@ const String& AAAHandler::name() const
 bool AAAHandler::loadQuery()
 {
     m_query = s_cfg.getValue(name(),"query");
+    m_queryReturnsNameValuePairs = s_cfg.getBoolValue(name(), "namevaluepairs", false);
     indirectQuery(m_query);
     return !m_query.null();
 }

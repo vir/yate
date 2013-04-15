@@ -808,7 +808,10 @@ bool Channel::callRouted(Message& msg)
 void Channel::callAccept(Message& msg)
 {
     status("accepted");
-    setMaxcall(msg,m_driver ? m_driver->timeout() : 0);
+    int defTout = m_driver ? m_driver->timeout() : -1;
+    if (defTout <= 0)
+	defTout = -1;
+    setMaxcall(msg,defTout);
     if (m_billid.null())
 	m_billid = msg.getValue(YSTRING("billid"));
     m_targetid = msg.getValue(YSTRING("targetid"));

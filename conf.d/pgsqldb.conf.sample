@@ -46,3 +46,8 @@
 ; poolsize: int: Number of connections to establish for this account
 ; Minimum number of connections is 1
 ;poolsize=1
+
+; listen: string: Comma-separated list of notification channels to listen to.
+; Received notifications will be converted into 'database.notify' messages.
+; See postgresql documentation on 'LISTEN' and 'NOTIFY' commands.
+;listen=event1,ev2,ev3

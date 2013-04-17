@@ -1129,7 +1129,7 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
     }
     else if (oper.name() == YSTRING("getTime")) {
 	// Returns the time in milliseconds since UNIX Epoch
-	ExpEvaluator::pushOne(stack,new ExpOperation(1000 * ((long int)m_time) + m_msec));
+	ExpEvaluator::pushOne(stack,new ExpOperation(1000 * ((long int)m_time) + (long int)m_msec));
     }
     else if (oper.name() == YSTRING("getTimezoneOffset")) {
 	// Returns the UTC to local difference in minutes, positive goes west

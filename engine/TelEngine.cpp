@@ -499,27 +499,39 @@ unsigned int Debugger::formatTime(char* buf, Formatting format)
 	    t -= s_timestamp;
 	unsigned int s = (unsigned int)(t / 1000000);
 	unsigned int u = (unsigned int)(t % 1000000);
-	if (Textual == format || TextLocal == format) {
-	    time_t sec = (time_t)s;
-	    struct tm tmp;
-	    if (TextLocal == format)
+	switch (format) {
+	    case Textual:
+	    case TextLocal:
+	    case TextSep:
+	    case TextLSep:
+		{
+		    time_t sec = (time_t)s;
+		    struct tm tmp;
+		    if (TextLocal == format || TextLSep == format)
 #ifdef _WINDOWS
-		_localtime_s(&tmp,&sec);
+			_localtime_s(&tmp,&sec);
 #else
-		localtime_r(&sec,&tmp);
+			localtime_r(&sec,&tmp);
 #endif
-	    else
+		    else
 #ifdef _WINDOWS
-		_gmtime_s(&tmp,&sec);
+			_gmtime_s(&tmp,&sec);
 #else
-		gmtime_r(&sec,&tmp);
+			gmtime_r(&sec,&tmp);
 #endif
-	    ::sprintf(buf,"%04d%02d%02d%02d%02d%02d.%06u ",
-		tmp.tm_year+1900,tmp.tm_mon+1,tmp.tm_mday,
-		tmp.tm_hour,tmp.tm_min,tmp.tm_sec,u);
+		    if (Textual == format || TextLocal == format)
+			::sprintf(buf,"%04d%02d%02d%02d%02d%02d.%06u ",
+			    tmp.tm_year+1900,tmp.tm_mon+1,tmp.tm_mday,
+			    tmp.tm_hour,tmp.tm_min,tmp.tm_sec,u);
+		    else
+			::sprintf(buf,"%04d-%02d-%02d_%02d:%02d:%02d.%06u ",
+			    tmp.tm_year+1900,tmp.tm_mon+1,tmp.tm_mday,
+			    tmp.tm_hour,tmp.tm_min,tmp.tm_sec,u);
+		}
+		break;
+	    default:
+		::sprintf(buf,"%07u.%06u ",s,u);
 	}
-	else
-	    ::sprintf(buf,"%07u.%06u ",s,u);
 	return ::strlen(buf);
     }
     buf[0] = '\0';

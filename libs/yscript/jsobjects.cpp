@@ -47,7 +47,8 @@ class JsDate : public JsObject
     YCLASS(JsDate,JsObject)
 public:
     inline JsDate(Mutex* mtx)
-	: JsObject("Date",mtx,true)
+	: JsObject("Date",mtx,true),
+	  m_time(0), m_msec(0), m_offs(0)
 	{
 	    params().addParam(new ExpFunction("getDate"));
 	    params().addParam(new ExpFunction("getDay"));
@@ -58,6 +59,7 @@ public:
 	    params().addParam(new ExpFunction("getMonth"));
 	    params().addParam(new ExpFunction("getSeconds"));
 	    params().addParam(new ExpFunction("getTime"));
+	    params().addParam(new ExpFunction("getTimezoneOffset"));
 
 	    params().addParam(new ExpFunction("getUTCDate"));
 	    params().addParam(new ExpFunction("getUTCDay"));
@@ -72,13 +74,23 @@ public:
 	{
 	    construct->params().addParam(new ExpFunction("now"));
 	}
+    virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
 protected:
-    inline JsDate(Mutex* mtx, const char* name)
-	: JsObject(mtx,name)
+    inline JsDate(Mutex* mtx, u_int64_t msecs, bool local = false)
+	: JsObject("Date",mtx),
+	  m_time(msecs / 1000), m_msec(msecs % 1000), m_offs(Time::timeZone())
+	{ if (local) m_time -= m_offs; }
+    inline JsDate(Mutex* mtx, const char* name, unsigned int time, unsigned int msec, unsigned int offs)
+	: JsObject(mtx,name),
+	  m_time(time), m_msec(msec), m_offs(offs)
 	{ }
     virtual JsObject* clone(const char* name) const
-	{ return new JsDate(mutex(),name); }
+	{ return new JsDate(mutex(),name,m_time,m_msec,m_offs); }
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+private:
+    unsigned int m_time;
+    unsigned int m_msec;
+    int m_offs;
 };
 
 // Math class - not really an object, all methods are static
@@ -993,6 +1005,52 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 }
 
 
+JsObject* JsDate::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsDate::runConstructor '%s'(%ld)",oper.name().c_str(),oper.number());
+    ObjList args;
+    JsObject* obj = 0;
+    switch (extractArgs(stack,oper,context,args)) {
+	case 0:
+	    obj = new JsDate(mutex(),Time::msecNow());
+	    break;
+	case 1:
+	    {
+		ExpOperation* val = static_cast<ExpOperation*>(args[0]);
+		if (val && val->isInteger())
+		    obj = new JsDate(mutex(),val->number());
+	    }
+	    break;
+	case 3:
+	case 6:
+	case 7:
+	    {
+		unsigned int parts[7];
+		for (int i = 0; i < 7; i++) {
+		    parts[i] = 0;
+		    ExpOperation* val = static_cast<ExpOperation*>(args[i]);
+		    if (val) {
+			if (val->isInteger())
+			    parts[i] = val->number();
+			else
+			    return 0;
+		    }
+		}
+		// Date components use local time, month starts from 0
+		if (parts[1] < 12)
+		    parts[1]++;
+		u_int64_t time = Time::toEpoch(parts[0],parts[1],parts[2],parts[3],parts[4],parts[5]);
+		obj = new JsDate(mutex(),1000 * time + parts[6],true);
+	    }
+	    break;
+	default:
+	    return 0;
+    }
+    if (obj && ref())
+	obj->params().addParam(new ExpWrapper(this,protoName()));
+    return obj;
+}
+
 bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(DebugAll,"JsDate::runNative() '%s' in '%s' [%p]",
@@ -1004,103 +1062,146 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
     else if (oper.name() == YSTRING("getDate")) {
 	// Returns the day of the month for the specified date according to local time.
 	// The value returned by getDate is an integer between 1 and 31.
-	// !NOTE : assuming that the date for this object is kept in params()
-	unsigned int time = params().getIntValue("time");
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
-	if (Time::toDateTime(time,year,month,day,hour,minute,sec))
+	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
 	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)day));
 	else
 	    return false;
     }
     else if (oper.name() == YSTRING("getDay")) {
 	// Get the day of the week for the date (0 is Sunday and returns values 0-6)
-	// TODO
+	int year = 0;
+	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0, wday = 0;
+	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec,&wday))
+	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)wday));
+	else
+	    return false;
     }
     else if (oper.name() == YSTRING("getFullYear")) {
 	// Returns the year of the specified date according to local time.
-	// !NOTE : assuming that the date for this object is kept in params()
-	unsigned int time = params().getIntValue("time");
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
-	if (Time::toDateTime(time,year,month,day,hour,minute,sec))
+	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
 	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)year));
 	else
 	    return false;
     }
     else if (oper.name() == YSTRING("getHours")) {
 	// Returns the hour ( 0 - 23) of the specified date according to local time.
-	// !NOTE : assuming that the date for this object is kept in params()
-	unsigned int time = params().getIntValue("time");
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
-	if (Time::toDateTime(time,year,month,day,hour,minute,sec))
+	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
 	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)hour));
 	else
 	    return false;
     }
     else if (oper.name() == YSTRING("getMilliseconds")) {
-	// TODO
+	// Returns just the milliseconds part ( 0 - 999 )
+	ExpEvaluator::pushOne(stack,new ExpOperation((long int)m_msec));
     }
     else if (oper.name() == YSTRING("getMinutes")) {
 	// Returns the minute ( 0 - 59 ) of the specified date according to local time.
-	// !NOTE : assuming that the date for this object is kept in params()
-	unsigned int time = params().getIntValue("time");
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
-	if (Time::toDateTime(time,year,month,day,hour,minute,sec))
+	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
 	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)minute));
 	else
 	    return false;
     }
     else if (oper.name() == YSTRING("getMonth")) {
-	// Returns the minute ( 0 - 11 ) of the specified date according to local time.
-	// !NOTE : assuming that the date for this object is kept in params()
-	unsigned int time = params().getIntValue("time");
+	// Returns the month ( 0 - 11 ) of the specified date according to local time.
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
-	if (Time::toDateTime(time,year,month,day,hour,minute,sec))
+	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
 	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)month - 1));
 	else
 	    return false;
     }
     else if (oper.name() == YSTRING("getSeconds")) {
 	// Returns the second ( 0 - 59 ) of the specified date according to local time.
-	// !NOTE : assuming that the date for this object is kept in params()
-	unsigned int time = params().getIntValue("time");
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
-	if (Time::toDateTime(time,year,month,day,hour,minute,sec))
+	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
 	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)sec));
 	else
 	    return false;
     }
     else if (oper.name() == YSTRING("getTime")) {
-	// TODO
+	// Returns the time in milliseconds since UNIX Epoch
+	ExpEvaluator::pushOne(stack,new ExpOperation(1000 * ((long int)m_time) + m_msec));
+    }
+    else if (oper.name() == YSTRING("getTimezoneOffset")) {
+	// Returns the UTC to local difference in minutes, positive goes west
+	ExpEvaluator::pushOne(stack,new ExpOperation((long int)(m_offs / -60)));
     }
     else if (oper.name() == YSTRING("getUTCDate")) {
-	// TODO
+	// Returns the day of the month for the specified date according to local time.
+	// The value returned by getDate is an integer between 1 and 31.
+	int year = 0;
+	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
+	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
+	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)day));
+	else
+	    return false;
     }
     else if (oper.name() == YSTRING("getUTCDay")) {
-	// TODO
+	// Get the day of the week for the date (0 is Sunday and returns values 0-6)
+	int year = 0;
+	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0, wday = 0;
+	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec,&wday))
+	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)wday));
+	else
+	    return false;
     }
     else if (oper.name() == YSTRING("getUTCFullYear")) {
-	// TODO
+	// Returns the year of the specified date according to local time.
+	int year = 0;
+	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
+	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
+	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)year));
+	else
+	    return false;
     }
     else if (oper.name() == YSTRING("getUTCHours")) {
-	// TODO
+	// Returns the hour ( 0 - 23) of the specified date according to local time.
+	int year = 0;
+	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
+	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
+	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)hour));
+	else
+	    return false;
     }
     else if (oper.name() == YSTRING("getUTCMilliseconds")) {
-	// TODO
+	// Returns just the milliseconds part ( 0 - 999 )
+	ExpEvaluator::pushOne(stack,new ExpOperation((long int)m_msec));
     }
     else if (oper.name() == YSTRING("getUTCMinutes")) {
-	// TODO
+	// Returns the minute ( 0 - 59 ) of the specified date according to local time.
+	int year = 0;
+	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
+	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
+	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)minute));
+	else
+	    return false;
     }
     else if (oper.name() == YSTRING("getUTCMonth")) {
-	// TODO
+	// Returns the month ( 0 - 11 ) of the specified date according to local time.
+	int year = 0;
+	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
+	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
+	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)month - 1));
+	else
+	    return false;
     }
     else if (oper.name() == YSTRING("getUTCSeconds")) {
-	// TODO
+	// Returns the second ( 0 - 59 ) of the specified date according to local time.
+	int year = 0;
+	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
+	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
+	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)sec));
+	else
+	    return false;
     }
     else
 	return JsObject::runNative(stack,oper,context);

@@ -158,6 +158,20 @@ fi
 AC_SUBST(HAVE_SOCKADDR_LEN)
 AC_MSG_RESULT([$have_sockaddr_len])
 
+HAVE_GMTOFF=""
+AC_MSG_CHECKING([for tm.tm_gmtoff presence])
+have_gmtoff="no"
+AC_TRY_COMPILE([
+#include <time.h>
+],[
+struct tm t;
+t.tm_gmtoff = 3600;
+],have_gmtoff="yes")
+AC_MSG_RESULT([$have_gmtoff])
+if [[ "$have_gmtoff" = "yes" ]]; then
+HAVE_GMTOFF="-DHAVE_GMTOFF"
+fi
+AC_SUBST(HAVE_GMTOFF)
 
 HAVE_POLL=no
 AC_ARG_ENABLE(poll,AC_HELP_STRING([--enable-poll],[Use poll() on sockets (default: yes)]),want_poll=$enableval,want_poll=yes)

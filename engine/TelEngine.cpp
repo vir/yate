@@ -632,7 +632,8 @@ unsigned int Time::toEpoch(int year, unsigned int month, unsigned int day,
 
 // Split a given EPOCH time into its date/time components
 bool Time::toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
-    unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec)
+    unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec,
+    unsigned int* wDay)
 {
 #ifdef _WINDOWS
     FILETIME ft;
@@ -651,6 +652,8 @@ bool Time::toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
     hour = st.wHour;
     minute = st.wMinute;
     sec = st.wSecond;
+    if (wDay)
+	*wDay = st.wDayOfWeek;
 #else
     struct tm t;
     time_t time = (time_t)epochTimeSec;
@@ -662,11 +665,31 @@ bool Time::toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
     hour = t.tm_hour;
     minute = t.tm_min;
     sec = t.tm_sec;
+    if (wDay)
+	*wDay = t.tm_wday;
 #endif
     DDebug(DebugAll,"Time::toDateTime(%u,%d,%u,%u,%u,%u,%u)",
 	epochTimeSec,year,month,day,hour,minute,sec);
     return true;
 }
+
+int Time::timeZone()
+{
+#ifdef _WINDOWS
+    int diff = 0;
+    _get_timezone(&diff);
+    return -diff;
+#else
+#ifdef HAVE_GMTOFF
+    struct tm t;
+    time_t time = (time_t)secNow();
+    if (localtime_r(&time,&t))
+	return t.tm_gmtoff;
+#endif
+    return -timezone;
+#endif
+}
+
 
 static Random s_random;
 static Mutex s_randomMutex(false,"Random");

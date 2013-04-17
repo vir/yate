@@ -3194,10 +3194,12 @@ public:
      * @param hour The hour component of the time (0 to 23)
      * @param minute The minute component of the time (0 to 59)
      * @param sec The seconds component of the time (0 to 59)
+     * @param wDay The day of the week (optional)
      * @return True on succes, false if conversion failed
      */
     static bool toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
-	unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec);
+	unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec,
+	unsigned int* wDay = 0);
 
     /**
      * Check if an year is a leap one
@@ -3206,6 +3208,12 @@ public:
      */
     static inline bool isLeap(unsigned int year)
 	{ return (year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)); }
+
+    /**
+     * Retrieve the difference between local time and UTC in seconds east of UTC
+     * @return Difference between local time and UTC in seconds
+     */
+    static int timeZone();
 
 private:
     u_int64_t m_time;

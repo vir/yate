@@ -1,3 +1,9 @@
+yate (4.3.1~vir2013041701) UNRELEASED; urgency=low
+
+  * Added postgres async notifications support
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 17 Apr 2013 09:26:09 +0400
+
 yate (4.3.1~vir2013041501) UNRELEASED; urgency=low
 
   * Merged my 'hstore' branch - postgres 'hstore' type support.

@@ -512,6 +512,8 @@ public:
 	Absolute,  // from EPOCH (1-1-1970)
 	Textual,   // absolute GMT in YYYYMMDDhhmmss.uuuuuu format
 	TextLocal, // local time in YYYYMMDDhhmmss.uuuuuu format
+	TextSep,   // absolute GMT in YYYY-MM-DD_hh:mm:ss.uuuuuu format
+	TextLSep,  // local time in YYYY-MM-DD_hh:mm:ss.uuuuuu format
     };
 
     /**

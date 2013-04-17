@@ -464,7 +464,7 @@ bool EngineEventHandler::received(Message &msg)
 	ev = new CapturedEvent(level,*text);
     else {
 	// build a full text with timestamp and sender
-	char tstamp[24];
+	char tstamp[30];
 	Debugger::formatTime(tstamp);
 	ev = new CapturedEvent(level,tstamp);
 	*ev << "<" << *type << "> " << *text;
@@ -1977,7 +1977,9 @@ static void usage(bool client, FILE* f)
 "     t            Timestamp debugging messages relative to program start\n"
 "     e            Timestamp debugging messages based on EPOCH (1-1-1970 GMT)\n"
 "     f            Timestamp debugging in GMT format YYYYMMDDhhmmss.uuuuuu\n"
+"     F            Timestamp debugging in GMT format YYYY-MM-DD_hh:mm:ss.uuuuuu\n"
 "     z            Timestamp debugging in local timezone YYYYMMDDhhmmss.uuuuuu\n"
+"     Z            Timestamp debugging in local timezone YYYY-MM-DD_hh:mm:ss.uuuuuu\n"
     ,client ? "" :
 #ifdef _WINDOWS
 "   --service      Run as Windows service\n"
@@ -2229,6 +2231,12 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 				    break;
 				case 'z':
 				    tstamp = Debugger::TextLocal;
+				    break;
+				case 'F':
+				    tstamp = Debugger::TextSep;
+				    break;
+				case 'Z':
+				    tstamp = Debugger::TextLSep;
 				    break;
 				default:
 				    initUsrPath(s_usrpath);

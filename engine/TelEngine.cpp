@@ -676,9 +676,12 @@ bool Time::toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
 int Time::timeZone()
 {
 #ifdef _WINDOWS
-    int diff = 0;
-    _get_timezone(&diff);
-    return -diff;
+    struct tm t;
+    time_t time = (time_t)secNow();
+    _localtime_s(&t,&time);
+    if (t.tm_isdst)
+	return -(_timezone + _dstbias);
+    return -_timezone;
 #else
 #ifdef HAVE_GMTOFF
     struct tm t;

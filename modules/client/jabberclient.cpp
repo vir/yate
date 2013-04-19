@@ -2675,8 +2675,10 @@ bool JBModule::commandComplete(Message& msg, const String& partLine,
 	partLine.c_str(),partWord.c_str());
 
     // No line or 'help': complete module name
-    if (partLine.null() || partLine == "help")
-	return Module::itemComplete(msg.retValue(),name(),partWord);
+    if (partLine.null() || partLine == "help") {
+	Module::itemComplete(msg.retValue(),name(),partWord);
+	return false;
+    }
     // Line is module name: complete module commands
     if (partLine == name()) {
 	for (const String* list = s_cmds; list->length(); list++)

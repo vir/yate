@@ -1521,7 +1521,7 @@ public:
 
     /**
      * Add Result Set Management (XEP-0059) set element child data to a parameter list
-     * @param rsn The element in RSM namespace
+     * @param rsm The element in RSM namespace
      * @param params List of parameters to add the RSM data
      * @param prefix Prefix for RSM parameters
      */

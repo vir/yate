@@ -36,6 +36,7 @@
  */
 namespace TelEngine {
 
+class Flags32;                           // Keeps a 32bit length flag mask
 class NamedInt;                          // A named integer value
 class Window;                            // A generic window
 class UIWidget;                          // A custom widget
@@ -54,7 +55,109 @@ class MucRoomMember;                     // A MUC room member
 class MucRoom;                           // An account's MUC room contact
 class DurationUpdate;                    // Class used to update UI durations
 class ClientSound;                       // A sound file
+class ClientFileItem;                    // Base class for file/dir items
+class ClientDir;                         // A directory
+class ClientFile;                        // A file
 
+
+/**
+ * This class keeps a 32bit length flag mask
+ * @short A 32 bit length list of flags
+ */
+class YATE_API Flags32
+{
+public:
+    /**
+     * Constructor
+     */
+    inline Flags32()
+	: m_flags(0)
+	{}
+
+    /**
+     * Constructor
+     * @param value Flags value
+     */
+    inline Flags32(u_int32_t value)
+	: m_flags(value)
+	{}
+
+    /**
+     * Retrieve flags value
+     * @return The flags
+     */
+    inline u_int32_t flags() const
+	{ return m_flags; }
+
+    /**
+     * Set flags
+     * @param mask Flag(s) to set
+     */
+    inline void set(u_int32_t mask)
+	{ m_flags = m_flags | mask; }
+
+    /**
+     * Reset flags
+     * @param mask Flag(s) to reset
+     */
+    inline void reset(u_int32_t mask)
+	{ m_flags = m_flags & ~mask; }
+
+    /**
+     * Check if a mask of flags is set
+     * @param mask Flag(s) to check
+     * @return The flags of mask which are set, 0 if no mask flag is set
+     */
+    inline u_int32_t flag(u_int32_t mask) const
+	{ return (m_flags & mask); }
+
+    /**
+     * Set or reset flags
+     * @param mask Flag(s)
+     * @param on True to set, false to reset
+     */
+    inline void changeFlag(u_int32_t mask, bool on) {
+	    if (on)
+		set(mask);
+	    else
+		reset(mask);
+	}
+
+    /**
+     * Set or reset flags, check if changed
+     * @param mask Flag(s)
+     * @param on True to set, false to reset
+     * @return True if any flag contained in mask changed
+     */
+    inline bool changeFlagCheck(u_int32_t mask, bool ok) {
+	    if ((0 != flag(mask)) == ok)
+		return false;
+	    changeFlag(mask,ok);
+	    return true;
+	}
+
+    /**
+     * Change flags
+     * @param value New flags value
+     */
+    inline void change(u_int32_t value)
+	{ m_flags = value; }
+
+    /**
+     * Conversion to u_int32_t operator
+     */
+    inline operator u_int32_t() const
+	{ return m_flags; }
+
+    /**
+     * Asignement from int operator
+     */
+    inline const Flags32& operator=(int value)
+	{ m_flags = value; return *this; }
+
+protected:
+    u_int32_t m_flags;
+};
 
 /**
  * This class holds a name integer value
@@ -62,6 +165,7 @@ class ClientSound;                       // A sound file
  */
 class YATE_API NamedInt: public String
 {
+    YCLASS(NamedInt,String)
 public:
     /**
      * Constructor
@@ -150,6 +254,7 @@ private:
  */
 class YATE_API Window : public GenObject
 {
+    YCLASS(Window,GenObject)
     friend class Client;
     YNOCOPY(Window); // no automatic copies please
 public:
@@ -396,6 +501,14 @@ public:
     virtual bool clearTable(const String& name);
 
     /**
+     * Show or hide control busy state
+     * @param name Name of the element
+     * @param on True to show, false to hide
+     * @return True if all the operations were successfull
+     */
+    virtual bool setBusy(const String& name, bool on) = 0;
+
+    /**
      * Get an element's text
      * @param name Name of the element
      * @param text The destination string
@@ -419,6 +532,14 @@ public:
      * @return True if the operation was successfull
      */
     virtual bool getSelect(const String& name, String& item) = 0;
+
+    /**
+     * Retrieve an element's multiple selection
+     * @param name Name of the element
+     * @param items List to be to filled with selection's contents
+     * @return True if the operation was successfull
+     */
+    virtual bool getSelect(const String& name, NamedList& items) = 0;
 
     /**
      * Build a menu from a list of parameters.
@@ -634,6 +755,7 @@ private:
 
 class YATE_API UIWidget : public String
 {
+    YCLASS(UIWidget,String)
     YNOCOPY(UIWidget); // no automatic copies please
 public:
     /**
@@ -766,6 +888,14 @@ public:
 	{ return false; }
 
     /**
+     * Retrieve widget's multiple selection
+     * @param items List to be to filled with selection's contents
+     * @return True if the operation was successfull
+     */
+    virtual bool getSelect(NamedList& items)
+	{ return false; }
+
+    /**
      * Append or insert text lines to this widget
      * @param lines List containing the lines
      * @param max The maximum number of lines allowed to be displayed. Set to 0 to ignore
@@ -809,6 +939,7 @@ public:
  */
 class YATE_API UIFactory : public String
 {
+    YCLASS(UIFactory,String)
     YNOCOPY(UIFactory); // no automatic copies please
 public:
     /**
@@ -863,6 +994,7 @@ private:
  */
 class YATE_API Client : public MessageReceiver
 {
+    YCLASS(Client,MessageReceiver)
     friend class Window;
     friend class ClientChannel;
     friend class ClientDriver;
@@ -889,6 +1021,7 @@ public:
 	EngineStart,
 	TransferNotify,
 	UserData,
+	FileInfo,
 	// Starting value for custom relays
 	MsgIdCount
     };
@@ -1148,6 +1281,16 @@ public:
     virtual bool select(Window* wnd, const String& name, const String& item, const String& text = String::empty());
 
     /**
+     * Handle 'select' with multiple items actions from user interface. Enqueue an ui.event message if
+     *  the action is not handled by a client logic
+     * @param wnd The window in which the user selected the object
+     * @param name The action's name
+     * @param items List containing the selection
+     * @return True if the action was handled by a client logic
+     */
+    virtual bool select(Window* wnd, const String& name, const NamedList& items);
+
+    /**
      * Check if the client is using more then 1 thread
      * @return True if the client is using more then 1 thread
      */
@@ -1209,7 +1352,8 @@ public:
     bool addTableRow(const String& name, const String& item, const NamedList* data = 0,
 	bool atStart = false, Window* wnd = 0, Window* skip = 0);
 
-    /** Append or update several table rows at once
+    /** 
+     * Append or update several table rows at once
      * @param name Name of the element
      * @param data Parameters to initialize the rows with
      * @param prefix Prefix to match (and remove) in parameter names
@@ -1270,6 +1414,16 @@ public:
 	Window* wnd = 0, Window* skip = 0);
 
     /**
+     * Show or hide control busy state
+     * @param name Name of the element
+     * @param on True to show, false to hide
+     * @param wnd Optional window owning the element
+     * @param skip Optional window to skip if wnd is 0
+     * @return True if all the operations were successfull
+     */
+    bool setBusy(const String& name, bool on, Window* wnd = 0, Window* skip = 0);
+
+    /**
      * Get an element's text
      * @param name Name of the element
      * @param text The destination string
@@ -1282,6 +1436,16 @@ public:
 
     bool getCheck(const String& name, bool& checked, Window* wnd = 0, Window* skip = 0);
     bool getSelect(const String& name, String& item, Window* wnd = 0, Window* skip = 0);
+
+    /**
+     * Retrieve an element's multiple selection
+     * @param name Name of the element
+     * @param items List to be to filled with selection's contents
+     * @param wnd Optional window owning the element
+     * @param skip Optional window to skip if wnd is 0
+     * @return True if the operation was successfull
+     */
+    bool getSelect(const String& name, NamedList& items, Window* wnd = 0, Window* skip = 0);
 
     /**
      * Build a menu from a list of parameters and add it to a target.
@@ -1780,6 +1944,16 @@ public:
     static void plain2html(String& buf, bool spaceEol = false);
 
     /**
+     * Find a list parameter by its value
+     * @param list The list
+     * @param value Parameter value
+     * @param skip Optional parameter to skip
+     * @return NamedString pointer, 0 if not found
+     */
+    static NamedString* findParamByValue(NamedList& list, const String& value,
+	NamedString* skip = 0);
+
+    /**
      * Decode flags from dictionary values found in a list of parameters
      * Flags are allowed to begin with '!' to reset
      * @param dict The dictionary containing the flags
@@ -1849,6 +2023,13 @@ public:
      */
     static bool removeLastNameInPath(String& dest, const String& path, char sep = 0,
 	const String& equalOnly = String::empty());
+
+    /**
+     * Add a formatted log line
+     * @param format Text format
+     * @return True on success
+     */
+    static bool addToLogFormatted(const char* format, ...);
 
     static Configuration s_settings;     // Client settings
     static Configuration s_actions;      // Logic preferrences
@@ -1924,6 +2105,7 @@ protected:
  */
 class YATE_API ClientChannel : public Channel
 {
+    YCLASS(ClientChannel,Channel)
     friend class ClientDriver;
     YNOCOPY(ClientChannel); // no automatic copies please
 public:
@@ -2321,6 +2503,7 @@ protected:
  */
 class YATE_API ClientDriver : public Driver
 {
+    YCLASS(ClientDriver,Driver)
     friend class ClientChannel;          // Reset active channel's id
     YNOCOPY(ClientDriver);               // No automatic copies please
 public:
@@ -2451,6 +2634,7 @@ protected:
  */
 class YATE_API ClientLogic : public GenObject
 {
+    YCLASS(ClientLogic,GenObject)
     friend class Client;
     YNOCOPY(ClientLogic); // no automatic copies please
 public:
@@ -2516,6 +2700,16 @@ public:
      */
     virtual bool select(Window* wnd, const String& name, const String& item,
 	const String& text = String::empty())
+	{ return false; }
+
+    /**
+     * Handle 'select' with multiple items actions from user interface
+     * @param wnd The window in which the user did something
+     * @param name The object's name
+     * @param items List of selected items
+     * @return True if the action was handled
+     */
+    virtual bool select(Window* wnd, const String& name, const NamedList& items)
 	{ return false; }
 
     /**
@@ -3032,6 +3226,7 @@ private:
     int m_prio;                          // Logics priority
 };
 
+class FtManager;
 
 /**
  * This class implements the default client behaviour.
@@ -3039,6 +3234,7 @@ private:
  */
 class YATE_API DefaultLogic : public ClientLogic
 {
+    YCLASS(DefaultLogic,ClientLogic)
     YNOCOPY(DefaultLogic); // no automatic copies please
 public:
     /**
@@ -3081,6 +3277,15 @@ public:
      */
     virtual bool select(Window* wnd, const String& name, const String& item,
 	const String& text = String::empty());
+
+    /**
+     * Handle 'select' with multiple items actions from user interface
+     * @param wnd The window in which the user did something
+     * @param name The object's name
+     * @param items List of selected items
+     * @return True if the action was handled
+     */
+    virtual bool select(Window* wnd, const String& name, const NamedList& items);
 
     /**
      * Set a client's parameter. Save the settings file and/or update interface
@@ -3544,6 +3749,14 @@ protected:
     virtual bool handleUserData(Message& msg, bool& stopLogic);
 
     /**
+     * Handle file.info messages.
+     * @param msg The message
+     * @param stopLogic Stop notifying other logics if set to true on return
+     * @return True if handled
+     */
+    virtual bool handleFileInfo(Message& msg, bool& stopLogic);
+
+    /**
      * Show a generic notification
      * @param text Notification text
      * @param account Optional concerned account
@@ -3628,8 +3841,29 @@ private:
     bool handleChanShowExtra(Window* wnd, bool show, const String& chan, bool conf);
     // Handle conf/transfer start actions in channel item
     bool handleChanItemConfTransfer(bool conf, const String& name, Window* wnd);
+    // Handle file share(d) related action
+    bool handleFileShareAction(Window* wnd, const String& name, NamedList* params);
+    // Handle file share(d) related select
+    bool handleFileShareSelect(Window* wnd, const String& name, const String& item,
+	const String& text, const NamedList* items);
+    // Handle file share(d) item changes from UI
+    bool handleFileShareItemChanged(Window* wnd, const String& name, const String& item,
+	const NamedList& params);
+    // Handle file share(d) drop events
+    bool handleFileShareDrop(bool askOnly, Window* wnd, const String& name,
+	NamedList& params, bool& retVal);
+    // Handle list item change action
+    bool handleListItemChanged(Window* wnd, const String& list, const String& item,
+	const NamedList& params);
+    // Handle drop events
+    bool handleDrop(bool askOnly, Window* wnd, const String& name,
+	NamedList& params);
+    // Handle file share info changed notification
+    void handleFileSharedChanged(ClientAccount* a, const String& contact,
+	const String& inst);
 
     ClientAccountList* m_accounts;       // Accounts list (always valid)
+    FtManager* m_ftManager;              // Private file manager
 };
 
 
@@ -3641,6 +3875,7 @@ class YATE_API ClientAccount : public RefObject, public Mutex
 {
     friend class ClientContact;
     friend class MucRoom;
+    YCLASS(ClientAccount,RefObject)
     YNOCOPY(ClientAccount); // no automatic copies please
 public:
     /**
@@ -3947,6 +4182,7 @@ private:
  */
 class YATE_API ClientAccountList : public String, public Mutex
 {
+    YCLASS(ClientAccountList,String)
     YNOCOPY(ClientAccountList); // no automatic copies please
 public:
     /**
@@ -4100,8 +4336,17 @@ private:
 class YATE_API ClientContact : public RefObject
 {
     friend class ClientAccount;
+    YCLASS(ClientContact,RefObject)
     YNOCOPY(ClientContact); // no automatic copies please
 public:
+    /**
+     * Subscription flags
+     */
+    enum Subscription {
+	SubFrom = 0x01,
+	SubTo = 0x02,
+    };
+
     /**
      * Constructor. Append itself to the owner's list
      * @param owner The contact's owner
@@ -4150,6 +4395,34 @@ public:
      */
     inline void setUri(const char* u)
 	{ m_uri = u; }
+
+    /**
+     * Retrieve contact subscription
+     * @return Contact subscription string
+     */
+    inline const String& subscriptionStr() const
+	{ return m_subscription; }
+
+    /**
+     * Check if contact is subscribed to our presence
+     * @return True if contact is subscribed to our presence
+     */
+    inline bool subscriptionFrom() const
+	{ return 0 != m_sub.flag(SubFrom); }
+
+    /**
+     * Check we are subscribed to contact's presence
+     * @return True if we are subscribed to contact's presence
+     */
+    inline bool subscriptionTo() const
+	{ return 0 != m_sub.flag(SubTo); }
+
+    /**
+     * Set contact's subscription
+     * @param value Subscription value
+     * @return True if changed
+     */
+    bool setSubscription(const String& value);
 
     /**
      * Get the resource list of this contact
@@ -4249,10 +4522,8 @@ public:
      * @param inst Instance name
      * @return Destination string
      */
-    inline String& buildInstanceId(String& dest, const String& inst = String::empty()) {
-	    dest << m_id << "|" << inst.uriEscape('|');
-	    return dest;
-	}
+    inline String& buildInstanceId(String& dest, const String& inst = String::empty())
+	{ return buildContactInstanceId(dest,m_id,inst); }
 
     /**
      * Build a string from prefix and contact id hash
@@ -4482,6 +4753,82 @@ public:
     virtual bool removeResource(const String& id);
 
     /**
+     * Retrieve files and folders we share with this contact
+     * @return List of files and folders we share with this contact
+     */
+    inline NamedList& share()
+	{ return m_share; }
+
+    /**
+     * Check if the list of share contains something
+     * @return True if share list is not empty
+     */
+    inline bool haveShare() const
+	{ return 0 != m_share.getParam(0); }
+
+    /**
+     * (re)load share list
+     */
+    virtual void updateShare();
+
+    /**
+     * Save share list
+     */
+    virtual void saveShare();
+
+    /**
+     * Clear share list
+     */
+    virtual void clearShare();
+
+    /**
+     * Set a directory we share with this contact
+     * If share name is not empty it must be unique. Fails if another share has the same name
+     * @param name Share name
+     * @param path Directory path
+     * @param save True to save now if changed
+     * @return True if changed
+     */
+    virtual bool setShareDir(const String& name, const String& path, bool save = true);
+
+    /**
+     * Remove a share item
+     * @param name Share name
+     * @param save True to save now if changed
+     * @return True if changed
+     */
+    virtual bool removeShare(const String& name, bool save = true);
+
+    /**
+     * Retrieve shared data
+     * @return Shared data list
+     */
+    inline ObjList& shared()
+	{ return m_shared; }
+
+    /**
+     * Check if the list of shared contains something
+     * @return True if shared list is not empty
+     */
+    bool haveShared() const;
+
+    /**
+     * Retrieve shared data for a given resource
+     * @param name Resource name
+     * @param create True to create if not found
+     * @return True if changed
+     */
+    virtual ClientDir* getShared(const String& name, bool create = false);
+
+    /**
+     * Remove shared data
+     * @param name Resource name to remove, empty to remove all
+     * @param removed Optional pointer to removed directory
+     * @return True if changed
+     */
+    virtual bool removeShared(const String& name = String::empty(), ClientDir** removed = 0);
+
+    /**
      * Build a contact id to be used in UI (all strings are URI escaped using extra '|' character)
      * @param dest Destination string
      * @param account Account owning the contact
@@ -4517,6 +4864,19 @@ public:
     static void splitContactInstanceId(const String& src, String& account,
 	String& contact, String* instance = 0);
 
+    /**
+     * Build a contact instance id to be used in UI
+     * @param dest Destination string
+     * @param cId Contact id
+     * @param inst Instance name
+     * @return Destination string
+     */
+    static inline String& buildContactInstanceId(String& dest, const String& cId,
+	const String& inst = String::empty()) {
+	    dest << cId << "|" << inst.uriEscape('|');
+	    return dest;
+	}
+
     // Chat window prefix
     static String s_chatPrefix;
     // Docked chat window name
@@ -4529,7 +4889,6 @@ public:
     static String s_chatInput;
 
     String m_name;                       // Contact's display name
-    String m_subscription;               // Presence subscription state
     NamedList m_params;                  // Optional contact extra params
 
 protected:
@@ -4554,11 +4913,15 @@ protected:
     ClientAccount* m_owner;              // The account owning this contact
     bool m_online;                       // Online flag
     String m_id;                         // The contact's id
+    String m_subscription;               // Presence subscription state
+    Flags32 m_sub;                       // Subscription flags
     URI m_uri;                           // The contact's URI
     ObjList m_resources;                 // The contact's resource list
     ObjList m_groups;                    // The group(s) this contact belongs to
     bool m_dockedChat;                   // Docked chat flag
     String m_chatWndName;                // Chat window name if any
+    NamedList m_share;                   // List of files and folders we share
+    ObjList m_shared;                    // List of shared. Each entry is a ClientDir whose name is the resource
 };
 
 /**
@@ -4585,19 +4948,29 @@ public:
     };
 
     /**
+     * Resource capabilities
+     */
+    enum Capability {
+	CapAudio = 0x00000001,           // Audio
+	CapFileTransfer = 0x00000002,    // File transfer support
+	CapFileInfo = 0x00000004,        // File info share support
+	CapRsm = 0x00000008,             // Result set management support
+    };
+
+    /**
      * Constructor
      * @param id The resource's id
      * @param name Optional display name. Defaults to the id's value if 0
      * @param audio True (default) if the resource has audio capability
      */
     inline explicit ClientResource(const char* id, const char* name = 0, bool audio = true)
-	: m_id(id), m_name(name ? name : id), m_audio(audio), m_fileTransfer(false),
+	: m_id(id), m_name(name ? name : id), m_caps(audio ? CapAudio : 0),
 	m_priority(0), m_status(Offline)
 	{ }
 
     /**
      * Get a string representation of this object
-     * @return The account's id
+     * @return The resource id
      */
     virtual const String& toString() const
 	{ return m_id; }
@@ -4631,28 +5004,27 @@ public:
 	{ return m_text ? m_text.c_str() : statusDisplayText(m_status); }
 
     /**
+     * Retrieve resource capabilities
+     * @return Resource capabilities flags
+     */
+    inline Flags32& caps()
+	{ return m_caps; }
+
+    /**
      * Update resource audio capability
      * @param ok The new audio capability value
      * @return True if changed
      */
-    inline bool setAudio(bool ok) {
-	    if (m_audio == ok)
-		return false;
-	    m_audio = ok;
-	    return true;
-	}
+    inline bool setAudio(bool ok)
+	{ return m_caps.changeFlagCheck(CapAudio,ok); }
 
     /**
      * Update resource file transfer capability
      * @param ok The new file transfer value
      * @return True if changed
      */
-    inline bool setFileTransfer(bool ok) {
-	    if (m_fileTransfer == ok)
-		return false;
-	    m_fileTransfer = ok;
-	    return true;
-	}
+    inline bool setFileTransfer(bool ok)
+	{ return m_caps.changeFlagCheck(CapFileTransfer,ok); }
 
     /**
      * Update resource priority
@@ -4704,10 +5076,14 @@ public:
      */
     static const TokenDict s_statusName[];
 
+    /**
+     * resource.notify capability names
+     */
+    static const TokenDict s_resNotifyCaps[];
+
     String m_id;                         // The resource id
     String m_name;                       // Resource display name
-    bool m_audio;                        // Audio capability flag
-    bool m_fileTransfer;                 // File transfer capability flag
+    Flags32 m_caps;                      // Resource capabilities
     int m_priority;                      // Resource priority
     int m_status;                        // Resource status
     String m_text;                       // Resource status text
@@ -5089,6 +5465,7 @@ private:
  */
 class YATE_API DurationUpdate : public RefObject
 {
+    YCLASS(DurationUpdate,RefObject)
     YNOCOPY(DurationUpdate); // no automatic copies please
 public:
     /**
@@ -5195,6 +5572,7 @@ protected:
  */
 class YATE_API ClientSound : public String
 {
+    YCLASS(ClientSound,String)
     YNOCOPY(ClientSound); // no automatic copies please
 public:
     /**
@@ -5378,6 +5756,224 @@ protected:
     bool m_started;
     bool m_stereo;
     String m_channel;                    // Utility channel using this sound
+};
+
+/**
+ * Base class for file/dir items
+ * @short A file/directory item
+ */
+class YATE_API ClientFileItem : public GenObject
+{
+    YCLASS(ClientFileItem,GenObject)
+    YNOCOPY(ClientFileItem); // no automatic copies please
+public:
+    /**
+     * Constructor
+     * @param name Item name
+     */
+    inline ClientFileItem(const char* name)
+	: m_name(name)
+	{}
+
+    /**
+     * Retrieve the item name
+     * @return Item name
+     */
+    inline const String& name() const
+	{ return m_name; }
+
+    /**
+     * Check if this item is a directory
+     * @return ClientDir pointer or 0
+     */
+    virtual ClientDir* directory()
+	{ return 0; }
+
+    /**
+     * Check if this item is a file
+     * @return ClientDir pointer or 0
+     */
+    virtual ClientFile* file()
+	{ return 0; }
+
+    /**
+     * Retrieve the item name
+     * @return Item name
+     */
+    virtual const String& toString() const
+	{ return name(); }
+
+private:
+    ClientFileItem() {}                  // No default constructor
+    String m_name;
+};
+
+/**
+ * This class holds directory info
+ * @short A directory
+ */
+class YATE_API ClientDir: public ClientFileItem
+{
+    YCLASS(ClientDir,ClientFileItem)
+public:
+    /**
+     * Constructor
+     * @param name Directory name
+     */
+    inline ClientDir(const char* name)
+	: ClientFileItem(name), m_updated(false)
+	{}
+
+    /**
+     * Copy constructor. Copy known children types
+     * @param other Source object
+     */
+    inline ClientDir(const ClientDir& other)
+	: ClientFileItem(other.name()), m_updated(other.updated())
+	{ copyChildren(other.m_children); }
+
+    /**
+     * Retrieve the children list
+     * @return Children list
+     */
+    inline ObjList& children()
+	{ return m_children; }
+
+    /**
+     * Check if children were updated
+     * @return True if children list was updated
+     */
+    inline bool updated() const
+	{ return m_updated; }
+
+    /**
+     * Set children updated flag
+     * @return New value for children updated flag
+     */
+    inline void updated(bool on)
+	{ m_updated = on; }
+
+    /**
+     * Recursively check if all (sub)directores were updated
+     * @return True if all (sub)directores were updated
+     */
+    bool treeUpdated() const;
+
+    /**
+     * Build and add a sub-directory if not have one already
+     * Replace an existing file with the same name
+     * @param path Directory name
+     * @return ClientDir pointer or 0 on failure
+     */
+    ClientDir* addDir(const String& name);
+
+    /**
+     * Build sub directories from path
+     * @param path Directory path
+     * @param sep Path separator
+     * @return ClientDir pointer or 0 on failure
+     */
+    ClientDir* addDirPath(const String& path, const char* sep = "/");
+
+    /**
+     * Add a copy of known children types
+     * @param list List of ClientFileItem objects to copy
+     */
+    void copyChildren(const ObjList& list);
+
+    /**
+     * Add a list of children, consume the objects
+     * @param list List of ClientFileItem objects to add
+     */
+    void addChildren(ObjList& list);
+
+    /**
+     * Add an item. Remove another item with the same name if exists
+     * @param item Item to add
+     * @return True on success
+     */
+    bool addChild(ClientFileItem* item);
+
+    /**
+     * Find a child by path
+     * @param path Item path
+     * @param sep Path separator
+     * @return ClientFileItem pointer or 0
+     */
+    ClientFileItem* findChild(const String& path, const char* sep = "/");
+
+    /**
+     * Find a child by name
+     * @param name Item name
+     * @return ClientFileItem pointer or 0
+     */
+    inline ClientFileItem* findChildName(const String& name) {
+	    ObjList* o = m_children.find(name);
+	    return o ? static_cast<ClientFileItem*>(o->get()) : 0;
+	}
+
+    /**
+     * Check if this item is a directory
+     * @return ClientDir pointer
+     */
+    virtual ClientDir* directory()
+	{ return this; }
+
+protected:
+    ObjList m_children;
+    bool m_updated;
+};
+
+/**
+ * This class holds file info
+ * @short A file
+ */
+class YATE_API ClientFile: public ClientFileItem
+{
+    YCLASS(ClientFile,ClientFileItem)
+public:
+    /**
+     * Constructor
+     * @param name File name
+     * @param params Optional file parameters
+     */
+    inline ClientFile(const char* name, const NamedList* params = 0)
+	: ClientFileItem(name), m_params("") {
+	    if (params)
+		m_params.copyParams(*params);
+	}
+
+    /**
+     * Copy constructor
+     * @param other Source object
+     */
+    inline ClientFile(const ClientFile& other)
+	: ClientFileItem(other.name()), m_params(other.params())
+	{}
+
+    /**
+     * Retrieve item parameters
+     * @return Item parameters
+     */
+    inline NamedList& params()
+	{ return m_params; }
+
+    /**
+     * Retrieve item parameters
+     * @return Item parameters
+     */
+    inline const NamedList& params() const
+	{ return m_params; }
+
+    /**
+     * Check if this item is a file
+     * @return ClientFile pointer
+     */
+    virtual ClientFile* file()
+	{ return this; }
+
+protected:
+    NamedList m_params;
 };
 
 }; // namespace TelEngine

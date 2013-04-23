@@ -22,9 +22,12 @@
 
 
 #include "yatecbase.h"
-
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdarg.h>
+
+#ifndef OUT_BUFFER_SIZE
+#define OUT_BUFFER_SIZE 8192
+#endif
 
 using namespace TelEngine;
 
@@ -55,6 +58,7 @@ public:
 	updateTableRow,
 	updateTableRows,
 	clearTable,
+	setBusy,
 	getText,
 	getCheck,
 	getSelect,
@@ -324,6 +328,15 @@ const TokenDict ClientResource::s_statusName[] = {
     {0,0}
 };
 
+// resource.notify capability names
+const TokenDict ClientResource::s_resNotifyCaps[] = {
+    {"audio", ClientResource::CapAudio},
+    {"filetransfer", ClientResource::CapFileTransfer},
+    {"fileinfoshare", ClientResource::CapFileInfo},
+    {"resultsetmngt", ClientResource::CapRsm},
+    {0,0}
+};
+
 // MucRoomMember affiliations
 const TokenDict MucRoomMember::s_affName[] = {
     {"owner",   MucRoomMember::Owner},
@@ -388,15 +401,17 @@ static inline bool callLogicToggle(ClientLogic* logic, Window* wnd, const String
 // Utility function used in Client::select()
 // Output a debug message and calls a logic's select method
 static inline bool callLogicSelect(ClientLogic* logic, Window* wnd, const String& name,
-    const String& item, const String& text)
+    const String& item, const String& text, const NamedList* items)
 {
     if (!logic)
 	return false;
     DDebug(ClientDriver::self(),DebugAll,
-	"Logic(%s) select='%s' item='%s' in window (%p,%s) [%p]",
-	logic->toString().c_str(),name.c_str(),item.c_str(),
+	"Logic(%s) select='%s' item='%s' items=%p in window (%p,%s) [%p]",
+	logic->toString().c_str(),name.c_str(),item.c_str(),items,
 	wnd,wnd ? wnd->id().c_str() : "",logic);
-    return logic->select(wnd,name,item,text);
+    if (!items)
+	return logic->select(wnd,name,item,text);
+    return logic->select(wnd,name,*items);
 }
 
 // Utility function used to check for action/toggle/select preferences
@@ -496,40 +511,37 @@ bool Window::related(const Window* wnd) const
 bool Window::setParams(const NamedList& params)
 {
     bool ok = true;
-    unsigned int l = params.length();
-    for (unsigned int i = 0; i < l; i++) {
-	const NamedString* s = params.getParam(i);
-	if (s) {
-	    String n(s->name());
-	    if (n == YSTRING("title"))
-		title(*s);
-	    if (n == YSTRING("context"))
-		context(*s);
-	    else if (n.startSkip("show:",false) || n.startSkip("display:",false))
-		ok = setShow(n,s->toBoolean()) && ok;
-	    else if (n.startSkip("active:",false))
-		ok = setActive(n,s->toBoolean()) && ok;
-	    else if (n.startSkip("focus:",false))
-		ok = setFocus(n,s->toBoolean()) && ok;
-	    else if (n.startSkip("check:",false))
-		ok = setCheck(n,s->toBoolean()) && ok;
-	    else if (n.startSkip("select:",false))
-		ok = setSelect(n,*s) && ok;
-	    else if (n.startSkip("image:",false))
-		ok = setImage(n,*s) && ok;
-	    else if (n.startSkip("property:",false)) {
-		// Set property: object_name:property_name=value
-		int pos = n.find(':');
-		if (pos > 0)
-		    ok = setProperty(n.substr(0,pos),n.substr(pos + 1),*s) && ok;
-		else
-		    ok = false;
-	    }
-	    else if (n.find(':') < 0)
-		ok = setText(n,*s) && ok;
+    NamedIterator iter(params);
+    for (const NamedString* s = 0; 0 != (s = iter.get());) {
+	String n(s->name());
+	if (n == YSTRING("title"))
+	    title(*s);
+	if (n == YSTRING("context"))
+	    context(*s);
+	else if (n.startSkip("show:",false) || n.startSkip("display:",false))
+	    ok = setShow(n,s->toBoolean()) && ok;
+	else if (n.startSkip("active:",false))
+	    ok = setActive(n,s->toBoolean()) && ok;
+	else if (n.startSkip("focus:",false))
+	    ok = setFocus(n,s->toBoolean()) && ok;
+	else if (n.startSkip("check:",false))
+	    ok = setCheck(n,s->toBoolean()) && ok;
+	else if (n.startSkip("select:",false))
+	    ok = setSelect(n,*s) && ok;
+	else if (n.startSkip("image:",false))
+	    ok = setImage(n,*s) && ok;
+	else if (n.startSkip("property:",false)) {
+	    // Set property: object_name:property_name=value
+	    int pos = n.find(':');
+	    if (pos > 0)
+	        ok = setProperty(n.substr(0,pos),n.substr(pos + 1),*s) && ok;
 	    else
-		ok = false;
+	        ok = false;
 	}
+	else if (n.find(':') < 0)
+	    ok = setText(n,*s) && ok;
+	else
+	    ok = false;
     }
     return ok;
 }
@@ -837,6 +849,9 @@ void ClientThreadProxy::process()
 	case clearTable:
 	    m_rval = client->clearTable(m_name,m_wnd,m_skip);
 	    break;
+	case setBusy:
+	    m_rval = client->setBusy(m_name,m_bool,m_wnd,m_skip);
+	    break;
 	case getText:
 	    m_rval = client->getText(m_name,*m_rtext,m_rbool ? *m_rbool : false,m_wnd,m_skip);
 	    break;
@@ -844,7 +859,10 @@ void ClientThreadProxy::process()
 	    m_rval = client->getCheck(m_name,*m_rbool,m_wnd,m_skip);
 	    break;
 	case getSelect:
-	    m_rval = client->getSelect(m_name,*m_rtext,m_wnd,m_skip);
+	    if (!m_params)
+		m_rval = client->getSelect(m_name,*m_rtext,m_wnd,m_skip);
+	    else
+		m_rval = client->getSelect(m_name,*const_cast<NamedList*>(m_params),m_wnd,m_skip);
 	    break;
 	case getOptions:
 	    m_rval = client->getOptions(m_name,const_cast<NamedList*>(m_params),m_wnd,m_skip);
@@ -1796,6 +1814,28 @@ bool Client::clearTable(const String& name, Window* wnd, Window* skip)
     return ok;
 }
 
+// Show or hide control busy state
+bool Client::setBusy(const String& name, bool on, Window* wnd, Window* skip)
+{
+    if (!valid())
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setBusy,name,on,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->setBusy(name,on);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->setBusy(name,on) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
 // function for obtaining the text from the "name" widget
 bool Client::getText(const String& name, String& text, bool richText, Window* wnd, Window* skip)
 {
@@ -1851,6 +1891,25 @@ bool Client::getSelect(const String& name, String& item, Window* wnd, Window* sk
     for (; l; l = l->next()) {
 	wnd = static_cast<Window*>(l->get());
 	if (wnd && (wnd != skip) && wnd->getSelect(name,item))
+	    return true;
+    }
+    return false;
+}
+
+// Retrieve an element's multiple selection
+bool Client::getSelect(const String& name, NamedList& items, Window* wnd, Window* skip)
+{
+    if (!valid())
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::getSelect,name,&items,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->getSelect(name,items);
+    for (ObjList* l = m_windows.skipNull(); l; l = l->skipNext()) {
+	wnd = static_cast<Window*>(l->get());
+	if ((wnd != skip) && wnd->getSelect(name,items))
 	    return true;
     }
     return false;
@@ -2256,39 +2315,68 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
     return false;
 }
 
-// Handle selection changes (list selection changes, focus changes ...)
-bool Client::select(Window* wnd, const String& name, const String& item, const String& text)
+// Handle different select() methods
+static bool handleSelect(ObjList& logics, Window* wnd, const String& name,
+    const String& item, const String& text, const NamedList* items)
 {
     static const String sect = "select";
-
-    XDebug(ClientDriver::self(),DebugAll,
-	"Select name='%s' item='%s' in window (%p,%s)",
-	name.c_str(),item.c_str(),wnd,wnd ? wnd->id().c_str() : "");
 
     String substitute = name;
     String handle;
     bool only = false, prefer = false, ignore = false, bailout = false;
     bool ok = false;
-    if (hasOverride(s_actions.getSection(sect),substitute,handle,only,prefer,ignore,bailout) &&
+    if (hasOverride(Client::s_actions.getSection(sect),substitute,handle,only,prefer,ignore,bailout) &&
 	(only || prefer)) {
-	ok = callLogicSelect(findLogic(handle),wnd,substitute,item,text);
+	ok = callLogicSelect(Client::findLogic(handle),wnd,substitute,item,text,items);
 	bailout = only || ok;
     }
     if (bailout)
 	return ok;
-    for(ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+    for(ObjList* o = logics.skipNull(); o; o = o->skipNext()) {
 	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
 	if (ignore && handle == logic->toString())
 	    continue;
-	if (callLogicSelect(logic,wnd,substitute,item,text))
+	if (callLogicSelect(logic,wnd,substitute,item,text,items))
 	    return true;
     }
     // Not processed: enqueue event
-    Message* m = eventMessage("select",wnd,substitute);
-    m->addParam("item",item);
-    m->addParam("text",text,false);
+    Message* m = Client::eventMessage("select",wnd,substitute);
+    if (!items) {
+	m->addParam("item",item);
+	m->addParam("text",text,false);
+    }
+    else {
+	NamedIterator iter(*items);
+	String prefix = "item.";
+	int n = 0;
+	for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	    String pref = prefix;
+	    pref << n++;
+	    m->addParam(pref,ns->name());
+	    if (*ns)
+		m->addParam(pref + ".text",*ns);
+	}
+    }
     Engine::enqueue(m);
     return false;
+}
+
+// Handle selection changes (list selection changes, focus changes ...)
+bool Client::select(Window* wnd, const String& name, const String& item, const String& text)
+{
+    XDebug(ClientDriver::self(),DebugAll,
+	"Select name='%s' item='%s' in window (%p,%s)",
+	name.c_str(),item.c_str(),wnd,wnd ? wnd->id().c_str() : "");
+    return handleSelect(s_logics,wnd,name,item,text,0);
+}
+
+// Handle 'select' with multiple items actions from user interface
+bool Client::select(Window* wnd, const String& name, const NamedList& items)
+{
+    XDebug(ClientDriver::self(),DebugAll,
+	"Select name='%s' items=%p in window (%p,%s)",
+	name.c_str(),&items,wnd,wnd ? wnd->id().c_str() : "");
+    return handleSelect(s_logics,wnd,name,String::empty(),String::empty(),&items);
 }
 
 // function for setting the current line
@@ -3065,6 +3153,20 @@ void Client::plain2html(String& buf, bool spaceEol)
     }
 }
 
+// Find a list parameter by its value
+NamedString* Client::findParamByValue(NamedList& list, const String& value,
+    NamedString* skip)
+{
+    NamedIterator iter(list);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (skip && skip == ns)
+	    continue;
+	if (*ns == value)
+	    return (NamedString*)ns;
+    }
+    return 0;
+}
+
 static bool lookupFlag(const char* what, const TokenDict* dict, int& flags)
 {
     bool on = true;
@@ -3177,6 +3279,18 @@ bool Client::removeLastNameInPath(String& dest, const String& path, char sep,
     return ok;
 }
 
+// Add a formatted log line
+bool Client::addToLogFormatted(const char* format, ...)
+{
+    char buf[OUT_BUFFER_SIZE];
+    va_list va;
+    va_start(va,format);
+    ::vsnprintf(buf,sizeof(buf) - 1,format,va);
+    va_end(va);
+    dbg_client_func(buf,-1);
+    return true;
+}
+
 // Build an 'ui.event' message
 Message* Client::eventMessage(const String& event, Window* wnd, const char* name,
 	NamedList* params)
@@ -3186,14 +3300,8 @@ Message* Client::eventMessage(const String& event, Window* wnd, const char* name
 	m->addParam("window",wnd->id());
     m->addParam("event",event);
     m->addParam("name",name,false);
-    if (params) {
-	unsigned int n = params->count();
-	for (unsigned int i = 0; i < n; i++) {
-	    NamedString* p = params->getParam(i);
-	    if (p)
-		m->addParam(p->name(),*p);
-	}
-    }
+    if (params)
+	m->copyParams(*params);
     return m;
 }
 
@@ -4132,8 +4240,10 @@ void ClientAccount::setContact(ClientContact* contact)
 	m_contact->m_owner = 0;
     TelEngine::destruct(m_contact);
     m_contact = contact;
-    if (m_contact)
+    if (m_contact) {
 	m_contact->m_owner = this;
+	m_contact->setSubscription("both");
+    }
 }
 
 // Get this account's resource
@@ -4809,7 +4919,7 @@ void ClientAccountList::removeAccount(const String& id)
 ClientContact::ClientContact(ClientAccount* owner, const char* id, const char* name,
     const char* uri)
     : m_name(name ? name : id), m_params(""), m_owner(owner), m_online(false),
-    m_uri(uri), m_dockedChat(false)
+    m_uri(uri), m_dockedChat(false), m_share("")
 {
     m_dockedChat = Client::valid() && Client::self()->getBoolOpt(Client::OptDockedChat);
     m_id = id ? id : uri;
@@ -4817,6 +4927,7 @@ ClientContact::ClientContact(ClientAccount* owner, const char* id, const char* n
 	owner,m_id.c_str(),m_uri.c_str(),this);
     if (m_owner)
 	m_owner->appendContact(this);
+    updateShare();
     // Generate chat window name
     buildIdHash(m_chatWndName,s_chatPrefix);
 }
@@ -4825,7 +4936,7 @@ ClientContact::ClientContact(ClientAccount* owner, const char* id, const char* n
 ClientContact::ClientContact(ClientAccount* owner, const NamedList& params, const char* id,
     const char* uri)
     : m_name(params.getValue(YSTRING("name"),params)), m_params(""),
-    m_owner(owner), m_online(false), m_uri(uri), m_dockedChat(false)
+    m_owner(owner), m_online(false), m_uri(uri), m_dockedChat(false), m_share("")
 {
     m_dockedChat = Client::valid() && Client::self()->getBoolOpt(Client::OptDockedChat);
     m_id = id ? id : params.c_str();
@@ -4833,13 +4944,15 @@ ClientContact::ClientContact(ClientAccount* owner, const NamedList& params, cons
 	owner,m_id.c_str(),m_uri.c_str(),this);
     if (m_owner)
 	m_owner->appendContact(this);
+    updateShare();
     // Generate chat window name
     buildIdHash(m_chatWndName,s_chatPrefix);
 }
 
 // Constructor. Append itself to the owner's list
 ClientContact::ClientContact(ClientAccount* owner, const char* id, bool mucRoom)
-    : m_params(""), m_owner(owner), m_online(false), m_id(id), m_dockedChat(false)
+    : m_params(""), m_owner(owner), m_online(false), m_id(id), m_dockedChat(false),
+    m_share("")
 {
     if (m_owner)
 	m_owner->appendContact(this,mucRoom);
@@ -4847,6 +4960,23 @@ ClientContact::ClientContact(ClientAccount* owner, const char* id, bool mucRoom)
 	m_dockedChat = Client::valid() && Client::self()->getBoolOpt(Client::OptDockedChat);
 	buildIdHash(m_chatWndName,s_chatPrefix);
     }
+    updateShare();
+}
+
+// Set contact's subscription
+bool ClientContact::setSubscription(const String& value)
+{
+    if (m_subscription == value)
+	return false;
+    m_subscription = value;
+    m_sub = 0;
+    if (m_subscription == YSTRING("both"))
+	m_sub = SubFrom | SubTo;
+    else if (m_subscription == YSTRING("from"))
+	m_sub = SubFrom;
+    else if (m_subscription == YSTRING("to"))
+	m_sub = SubTo;
+    return true;
 }
 
 // Check if this contact has a chat widget (window or docked item)
@@ -5219,7 +5349,7 @@ ClientResource* ClientContact::findAudioResource(bool ref)
     Lock lock(m_owner);
     ObjList* o = m_resources.skipNull();
     for (; o; o = o->skipNext())
-	if ((static_cast<ClientResource*>(o->get()))->m_audio)
+	if ((static_cast<ClientResource*>(o->get()))->caps().flag(ClientResource::CapAudio))
 	    break;
     if (!o)
 	return 0;
@@ -5233,7 +5363,7 @@ ClientResource* ClientContact::findFileTransferResource(bool ref)
     Lock lock(m_owner);
     ObjList* o = m_resources.skipNull();
     for (; o; o = o->skipNext())
-	if ((static_cast<ClientResource*>(o->get()))->m_fileTransfer)
+	if ((static_cast<ClientResource*>(o->get()))->caps().flag(ClientResource::CapFileTransfer))
 	    break;
     if (!o)
 	return 0;
@@ -5292,6 +5422,156 @@ bool ClientContact::removeResource(const String& id)
 	"Account(%s) contact='%s' removed resource '%s' [%p]",
 	m_owner ? m_owner->toString().c_str() : "",m_uri.c_str(),id.c_str(),this);
     return true;
+}
+
+// (re)load shared list
+void ClientContact::updateShare()
+{
+    m_share.clearParams();
+    if (!(account() && uri()))
+	return;
+    NamedList* sect = account()->m_cfg.getSection("share " + uri());
+    if (!sect)
+	return;
+    for (int n = 1; true; n++) {
+	String s(n);
+	NamedString* ns = sect->getParam(s);
+	if (!ns)
+	    break;
+	if (!*ns)
+	    continue;
+	setShareDir((*sect)[s + ".name"],*ns,false);
+    }
+}
+
+// Save share list
+void ClientContact::saveShare()
+{
+    if (!(account() && uri()))
+	return;
+    String tmp;
+    tmp << "share " << uri();
+    NamedList* sect = account()->m_cfg.getSection(tmp);
+    bool changed = false;
+    if (haveShare()) {
+	if (!sect)
+	    sect = account()->m_cfg.createSection(tmp);
+	sect->clearParams();
+	NamedIterator iter(m_share);
+	int n = 1;
+	for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	    String s(n++);
+	    sect->addParam(s,ns->name());
+	    if (*ns && *ns != ns->name())
+		sect->addParam(s + ".name",*ns);
+	}
+	changed = true;
+    }
+    else if (sect) {
+	changed = true;
+	account()->m_cfg.clearSection(tmp);
+    }
+    if (!changed)
+	return;
+    if (account()->m_cfg.save())
+	return;
+    int code = Thread::lastError();
+    String s;
+    Thread::errorString(s,code);
+    Debug(ClientDriver::self(),DebugNote,
+	"Account(%s) contact='%s' failed to save shared: %d %s [%p]",
+	m_owner ? m_owner->toString().c_str() : "",m_uri.c_str(),code,s.c_str(),this);
+}
+
+// Clear share list
+void ClientContact::clearShare()
+{
+    if (!haveShare())
+	return;
+    m_share.clearParams();
+    saveShare();
+}
+
+// Set a share directory
+bool ClientContact::setShareDir(const String& shareName, const String& dirPath, bool save)
+{
+    String path;
+    if (!Client::removeEndsWithPathSep(path,dirPath))
+	return false;
+    String name = shareName;
+    if (!name)
+	Client::getLastNameInPath(name,path);
+    NamedString* ns = m_share.getParam(path);
+    NamedString* other = Client::findParamByValue(m_share,name,ns);
+    if (other)
+	return false;
+    bool changed = false;
+    if (ns) {
+	if (*ns != name) {
+	    changed = true;
+	    *ns = name;
+	}
+    }
+    else {
+	changed = true;
+	m_share.addParam(path,name);
+    }
+    if (changed && save)
+	saveShare();
+    return changed;
+}
+
+// Remove a shared item
+bool ClientContact::removeShare(const String& name, bool save)
+{
+    NamedString* ns = m_share.getParam(name);
+    if (!ns)
+	return false;
+    m_share.clearParam(ns);
+    if (save)
+	saveShare();
+    return true;
+}
+
+// Check if the list of shared contains something
+bool ClientContact::haveShared() const
+{
+    for (ObjList* o = m_shared.skipNull(); o; o = o->skipNext()) {
+	ClientDir* d = static_cast<ClientDir*>(o->get());
+	if (d->children().skipNull())
+	    return true;
+    }
+    return false;
+}
+
+// Retrieve shared data for a given resource
+ClientDir* ClientContact::getShared(const String& name, bool create)
+{
+    if (!name)
+	return 0;
+    ObjList* o = m_shared.find(name);
+    if (!o && create)
+	o = m_shared.append(new ClientDir(name));
+    return o ? static_cast<ClientDir*>(o->get()) : 0;
+}
+
+// Remove shared data
+bool ClientContact::removeShared(const String& name, ClientDir** removed)
+{
+    bool chg = false;
+    if (name) {
+	GenObject* gen = m_shared.remove(name,false);
+	chg = (gen != 0);
+	if (removed)
+	    *removed = static_cast<ClientDir*>(gen);
+	else
+	    TelEngine::destruct(gen);
+    }
+    else {
+	chg = (0 != m_shared.skipNull());
+	m_shared.clear();
+    }
+    return chg;
 }
 
 // Split a contact instance id in account/contact/instance parts
@@ -5818,6 +6098,136 @@ void ClientSound::doStop()
     }
     m_channel = "";
     m_started = false;
+}
+
+
+//
+// ClientDir
+//
+// Recursively check if all (sub)directores were updated
+bool ClientDir::treeUpdated() const
+{
+    if (!m_updated)
+	return false;
+    for (ObjList* o = m_children.skipNull(); o; o = o->skipNext()) {
+	ClientFileItem* it = static_cast<ClientFileItem*>(o->get());
+	ClientDir* dir = it->directory();
+	if (dir && !dir->treeUpdated())
+	    return false;
+    }
+    return true;
+}
+
+// Build and add a sub-directory if not have one already
+ClientDir* ClientDir::addDir(const String& name)
+{
+    if (!name)
+	return 0;
+    ClientFileItem* it = findChild(name);
+    if (it) {
+	if (it->directory())
+	    return it->directory();
+    }
+    ClientDir* d = new ClientDir(name);
+    addChild(d);
+    return d;
+}
+
+// Build sub directories from path
+ClientDir* ClientDir::addDirPath(const String& path, const char* sep)
+{
+    if (!path)
+	return 0;
+    if (TelEngine::null(sep))
+	return addDir(path);
+    int pos = path.find(sep);
+    if (pos < 0)
+	return addDir(path);
+    String rest = path.substr(pos + 1);
+    String name = path.substr(0,pos);
+    ClientDir* d = this;
+    if (name)
+	d = addDir(name);
+    if (!d)
+	return 0;
+    return rest ? d->addDirPath(rest) : d;
+}
+
+// Add a copy of known children types
+void ClientDir::copyChildren(const ObjList& list)
+{
+    for (ObjList* o = list.skipNull(); o; o = o->skipNext()) {
+	ClientFileItem* item = static_cast<ClientFileItem*>(o->get());
+	if (item->file())
+	    addChild(new ClientFile(*item->file()));
+	else if (item->directory())
+	    addChild(new ClientDir(*item->directory()));
+    }
+}
+
+// Add a list of children, consume the objects
+void ClientDir::addChildren(ObjList& list)
+{
+    for (ObjList* o = list.skipNull(); o; o = o->skipNull()) {
+	ClientFileItem* item = static_cast<ClientFileItem*>(o->remove(false));
+	addChild(item);
+    }
+}
+
+// Add/replace an item
+bool ClientDir::addChild(ClientFileItem* item)
+{
+    if (!item)
+	return false;
+    ObjList* last = 0;
+    for (ObjList* o = m_children.skipNull(); o; o = o->skipNext()) {
+	ClientFileItem* it = static_cast<ClientFileItem*>(o->get());
+	if (it == item)
+	    return true;
+	if (it->name() == item->name()) {
+	    o->remove();
+	    o->append(item);
+	    return true;
+	}
+	ObjList* tmp = o->skipNext();
+	if (!tmp) {
+	    last = o;
+	    break;
+	}
+	o = tmp;
+    }
+    if (last)
+	last->append(item);
+    else
+	m_children.append(item);
+    return true;
+}
+
+// Find a child by path
+ClientFileItem* ClientDir::findChild(const String& path, const char* sep)
+{
+    if (!path)
+	return 0;
+    if (TelEngine::null(sep))
+	return findChildName(path);
+    int pos = path.find(sep);
+    if (pos < 0)
+	return findChildName(path);
+    String rest = path.substr(pos + 1);
+    String name = path.substr(0,pos);
+    if (!name)
+	return findChild(rest,sep);
+    ClientFileItem* ch = findChildName(name);
+    if (!ch)
+	return 0;
+    // Nothing more in the path, return found child
+    if (!name)
+	return ch;
+    // Found child can't contain children: error
+    ClientDir* d = ch->directory();
+    if (d)
+	return d->findChild(rest,sep);
+    return 0;
 }
 
 

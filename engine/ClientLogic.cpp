@@ -24,8 +24,6 @@
 
 #include "yatecbase.h"
 
-#include <stdio.h>
-
 namespace TelEngine {
 
 // A client wizard
@@ -212,30 +210,146 @@ private:
 };
 
 // This class holds a pending request sent by the client
-class PendingRequest : public String
+class PendingRequest : public RefObject
 {
 public:
-    inline PendingRequest(const char* id, const String& account, const String& target)
-	: String(id), m_account(account), m_target(target),
-	m_mucServer(false), m_mucRooms(false)
-	{}
-    // Find an item
-    static inline PendingRequest* find(const String& name) {
-	    ObjList* o = s_items.find(name);
+    enum Type {
+	SharedQuery,
+    };
+    inline PendingRequest(int type, const char* rid, const String& account, const String& target,
+	const String& instance = String::empty())
+	: m_id(rid), m_type(type), m_account(account), m_target(target),
+	m_instance(instance), m_msg(0), m_timeToSend(0) {
+	    if (!rid)
+		buildId(m_id,type,account,target,instance,String::empty());
+	}
+    ~PendingRequest()
+	{ TelEngine::destruct(m_msg); }
+    inline const String& requestId() const
+	{ return m_id; }
+    inline int type() const
+	{ return m_type; }
+    inline const String& account() const
+	{ return m_account; }
+    inline const String& target() const
+	{ return m_target; }
+    inline const String& instance() const
+	{ return m_instance; }
+    inline Message* buildMessageTo(const char* msg, const char* oper = 0) {
+	    Message* m = Client::buildMessage(msg,account(),oper);
+	    m->addParam("to",target(),false);
+	    m->addParam("to_instance",instance(),false);
+	    m->addParam("id",requestId(),false);
+	    return m;
+	}
+    virtual const String& toString() const
+	{ return requestId(); }
+    // Set pending message and logics tick
+    inline bool setPendingMsg(Message* m, u_int64_t delayUs) {
+	    if (!(m && delayUs))
+		return false;
+	    m_msg = m;
+	    m_timeToSend = m->msgTime() + delayUs;
+	    Client::setLogicsTick();
+	    return true;
+	}
+    // Send pending message. Return true if still pending and set logics tick
+    inline bool sendPendingMsg(const Time& time) {
+	    if (!m_msg)
+		return false;
+	    if (!m_timeToSend || m_timeToSend <= time) {
+		Engine::enqueue(m_msg);
+		m_msg = 0;
+		m_timeToSend = 0;
+		return false;
+	    }
+	    Client::setLogicsTick();
+	    return true;
+	}
+    // Find an item. This method is not thread safe
+    static inline PendingRequest* find(const String& rid) {
+	    ObjList* o = s_items.find(rid);
 	    return o ? static_cast<PendingRequest*>(o->get()) : 0;
+	}
+    // Check if an item is in the list. This method is thread safe
+    static inline bool hasRequest(const String& rid) {
+	    Lock lck(s_mutex);
+	    return 0 != find(rid);
+	}
+    // Find an item. This method is thread safe
+    static inline bool find(const String& rid, RefPointer<PendingRequest>& r) {
+	    Lock lck(s_mutex);
+	    r = find(rid);
+	    return r != 0;
+	}
+    // Safely remove an item
+    static inline void remove(const String& rid) {
+	    Lock lck(s_mutex);
+	    s_items.remove(rid);
 	}
     // Remove all account's requests
     static void clear(const String& account);
-    // Request info/items from target
-    static PendingRequest* request(bool info, ClientAccount* acc, const String& target,
-	bool mucserver);
-    // Request MUC rooms from target
-    static bool requestMucRooms(ClientAccount* acc, const String& target);
+    // Remove all contacts's requests
+    static void cancel(ClientContact* c, const String& res = String::empty());
+    // Build request id
+    static void buildIdNoType(String& buf, const String& acc, const String& target,
+	const String& res, const String& extra = String::empty(), bool addTime = true);
+    // Build request id
+    static inline void buildIdNoType(String& buf, ClientContact& c, const String& res,
+	const String& extra = String::empty(), bool addTime = true)
+	{ buildIdNoType(buf,c.accountName(),c.uri(),res,extra,addTime); }
+    // Build request id
+    static inline void buildId(String& buf, int type, const String& acc, const String& target,
+	const String& res, const String& extra = String::empty(), bool addTime = true) {
+	    buf << type;
+	    if (!acc)
+		return;
+	    buf << "_";
+	    buildIdNoType(buf,acc,target,res,extra,addTime);
+	}
+    // Start a request, consume the objects
+    static bool start(PendingRequest* r, Message* m, u_int64_t delayUs = 0);
+
     static ObjList s_items;
+    static Mutex s_mutex;
+
+private:
+    String m_id;
+
+protected:
+    int m_type;
     String m_account;                    // The account
     String m_target;                     // Request target
-    bool m_mucServer;                    // True if we are searching for MUC services
-    bool m_mucRooms;                     // True if we are serching for MUC rooms
+    String m_instance;                   // Target instance
+    Message* m_msg;
+    u_int64_t m_timeToSend;
+};
+
+class SharedPendingRequest : public PendingRequest
+{
+public:
+    inline SharedPendingRequest(const char* id, const String& account, const String& target,
+	const String& instance = String::empty())
+	: PendingRequest(SharedQuery,id,account,target,instance),
+	m_dir(true), m_index(0)
+	{}
+    // Build message for request
+    Message* buildMessage();
+    // Start the request
+    static inline bool start(ClientContact* c, ClientResource* res,
+	const String& what = String::empty(), bool dir = true,
+	unsigned int index = 0, u_int64_t delayUs = 0)	{
+	    return c && start(c->accountName(),c->uri(),
+		res ? res->toString() : String::empty(),what,dir,index,delayUs);
+	}
+    // Start the request
+    static bool start(const String& account, const String& contact, const String& inst,
+	const String& what = String::empty(), bool dir = true,
+	unsigned int index = 0, u_int64_t delayUs = 0);
+
+    bool m_dir;
+    String m_what;
+    unsigned int m_index;
 };
 
 // Chat state notificator
@@ -277,12 +391,302 @@ private:
 	m_paused(0), m_inactive(0)
 	{ updateTimers(time); }
     static u_int64_t s_pauseInterval;    // Interval to send paused notification
-    static u_int64_t s_inactiveInterval;     // Interval to send gone notification
+    static u_int64_t s_inactiveInterval; // Interval to send gone notification
     static ObjList s_items;              // Item list
     bool m_mucRoom;                      // Regular contact or muc room
     bool m_mucMember;                    // Room member
     u_int64_t m_paused;                  // Time to send paused
-    u_int64_t m_inactive;                    // Time to send gone
+    u_int64_t m_inactive;                // Time to send gone
+};
+
+class FtDownloadFileJob;
+class FtDownloadDirContentJob;
+class FtManager;
+class FTManagerTimer;
+
+// Base class for file transfer jobs
+class FtJob : public String
+{
+public:
+    enum State {
+	NotFound = 0,
+	Idle,
+	Pending,                         // Waiting for operation to start
+	Running,                         // Running
+	Finished
+    };
+    inline FtJob(const String& itemId)
+	: String(itemId),
+	m_state(Idle)
+	{}
+    virtual FtDownloadFileJob* downloadFileJob()
+	{ return 0; }
+    virtual FtDownloadDirContentJob* downloadDirContentJob()
+	{ return 0; }
+    virtual void drop();
+    virtual void destruct();
+    // Drop a list of jobs. Reset job's notify id and add it to upd if non 0
+    static unsigned int dropJobs(ObjList& jobs, int newState, NamedList* upd = 0);
+
+    int m_state;
+    String m_notifyId;                   // Progress notify id
+    String m_dropId;
+
+private:
+    FtJob() {}
+};
+
+// A download file job
+class FtDownloadDirContentJob : public FtJob
+{
+public:
+    inline FtDownloadDirContentJob(const String& localPath, const String& downloadPath,
+	const String& name)
+	: FtJob(localPath),
+	m_downloadPath(downloadPath), m_dir(name)
+	{}
+    virtual FtDownloadDirContentJob* downloadDirContentJob()
+	{ return this; }
+    virtual void drop();
+
+    String m_downloadPath;
+    ClientDir m_dir;
+};
+
+// A download dir content job
+class FtDownloadFileJob : public FtJob
+{
+public:
+    inline FtDownloadFileJob(const String& localPath, const String& dName,
+	const NamedList& params)
+	: FtJob(localPath),
+	m_file(params)
+	{ m_file.assign(dName); }
+    virtual FtDownloadFileJob* downloadFileJob()
+	{ return this; }
+
+    NamedList m_file;                    // Download path along with file parameters
+};
+
+// Base class for file transfer items
+class FtItem : public Mutex, public RefObject
+{
+public:
+    FtItem(FtManager* owner, const String& itemId, const String& acc,
+	const String& cUri, const String& inst);
+    inline bool match(const String& account,
+	const String& contact = String::empty())
+	{ return m_account == account && (!contact || m_contactUri == contact); }
+    virtual bool setOnline(bool online);
+    virtual void cancel() = 0;
+    virtual const String& toString() const
+	{ return m_id; }
+
+protected:
+    virtual void destroyed();
+
+    String m_id;
+    FtManager* m_owner;
+    bool m_online;
+    String m_dbg;
+    String m_account;
+    String m_contactUri;
+    String m_instance;
+    String m_contactName;
+    String m_target;
+    String m_refreshWnd;
+    String m_refreshName;
+};
+
+// A list of batch download(ing) items
+class DownloadBatch : public FtItem
+{
+public:
+    DownloadBatch(FtManager* owner, const String& itemId, const String& acc,
+	const String& cUri, const String& inst);
+    inline bool haveJobs()
+	{ return (0 != m_fileDownloads.skipNull()) || (0 != m_retrieve.skipNull()); }
+    // Add a shared item
+    void addItem(ClientFileItem& item, const String& path, const String& itemPath,
+	const String& refreshWnd, const String& refreshName);
+    // Timer tick handler. Return false to exit
+    bool timerTick(const Time& time = Time());
+    // Handle file transfer notifications
+    void handleFileTransferNotify(Message& msg, const String& notifyId);
+    // Handle file info responses
+    bool handleFileInfoRsp(const String& oper, NamedList& msg);
+    // Cancel a job, return true if found and removed
+    inline bool cancel(const String& jobId) {
+	    lock();
+	    FtJob* job = removeNotify(jobId);
+	    unlock();
+	    return cancelJob(job,false);
+	}
+    // Set contact/instance online 
+    virtual bool setOnline(bool online);
+    // Cancel all running jobs, clear data
+    virtual void cancel();
+
+protected:
+    virtual void destroyed();
+    // Find a job by notify id
+    inline ObjList* findNotify(const String& notifyId) const {
+	    for (ObjList* o = m_fileDownloads.skipNull(); o; o = o->skipNext())
+		if ((static_cast<FtJob*>(o->get()))->m_notifyId == notifyId)
+		    return o;
+	    return 0;
+	}
+    // Find and remove job by notify id
+    inline FtJob* removeNotify(const String& notifyId) const {
+	    ObjList* o = findNotify(notifyId);
+	    return o ? static_cast<FtJob*>(o->remove(false)) : 0;
+	}
+    // Find a dir content refresh holder
+    ObjList* findDirContent(const String& key, bool byLocalPath,
+	ObjList* start = 0) const;
+    // Start file download, consume the pointer
+    bool startFileDownload(FtDownloadFileJob* file, NamedList& uiParams);
+    // Cancel a job, return true on success
+    bool cancelJob(FtJob*& job, bool finished);
+    // Add a shared item
+    void addItemName(ClientFileItem& item, const String& path,
+	const String& itemPath);
+    // Add a shared file
+    void addFileUnsafe(const String& localPath, const String& downloadPath,
+	const NamedList& params);
+    // Add a shared directory
+    void addDirUnsafe(ClientDir& dir, const String& localPath,
+	const String& downloadPath);
+
+    ObjList m_retrieve;                  // Directories waiting for update
+    ObjList m_fileDownloads;             // File download jobs
+    unsigned int m_dirContentReqCount;
+    unsigned int m_dirContentReqMax;
+    u_int64_t m_timeout;
+    u_int64_t m_timeToDownload;          // Time to start another file download
+    unsigned int m_donwloadIntervalMs;   // Interval between downloads start
+};
+
+// File transfer manager
+class FtManager : public String, public DebugEnabler, public Mutex
+{
+public:
+    FtManager(ClientAccountList* accounts, const char* name = 0);
+    ~FtManager();
+    inline ClientAccountList* accounts()
+	{ return m_accounts; }
+    // Build a download id if possible
+    bool buildDownloadId(String& buf, const String& requestorId,
+	const String& requestId);
+    // Decrease the number of current downloads
+    inline void downloadTerminated() {
+	    Lock lck(this);
+	    if (m_downloadCount)
+		m_downloadCount--;
+	}
+    // Drop a job. Return true if found
+    bool cancelFileTransfer(const String& notifyId);
+    // Drop jobs for account/contact
+    void cancel(const String& account, const String& contact = String::empty());
+    // Cancel all jobs, stop timer tick thread
+    void cancel();
+    // Find a batch download
+    inline DownloadBatch* findDownloadBatch(const String& s) const {
+	    ObjList* o = m_downloadBatch.find(s);
+	    return o ? static_cast<DownloadBatch*>(o->get()) : 0;
+	}
+    // Find a batch download
+    bool findDownloadBatch(RefPointer<DownloadBatch>& d, const String& acc,
+	const String& contact, const String& inst);
+    // Find a batch download by notify id
+    bool findDownloadBatchNotify(RefPointer<DownloadBatch>& d,
+	const String& s);
+    // Add an item to batch downloads
+    void addShareDownload(const String& acc, const String& contact, const String& inst,
+	const String& item, const String& path,
+	const String& refreshWnd, const String& refreshName);
+    // Add an item to batch downloads
+    void addShareDownload(ClientContact& c, const String& inst, ClientFileItem& item,
+	const String& path, const String& itemPath,
+	const String& refreshWnd, const String& refreshName);
+    // Timer tick terminated notification
+    void timerTerminated(FTManagerTimer* timer);
+    // Timer tick handler. Return false to exit
+    bool timerTick(const Time& time = Time());
+    // Handle file transfer notifications
+    bool handleFileTransferNotify(Message& msg, const String& notifyId);
+    // Handle file info responses
+    bool handleFileInfoRsp(const String& account, const String& contact,
+	const String& inst, const String& oper, NamedList& msg);
+    // Handle resource.notify
+    void handleResourceNotify(bool online, const String& account,
+	const String& contact = String::empty(), const String& inst = String::empty());
+    // Check if a notification is a non job terminated one
+    static inline bool isRunningNotify(const NamedList& list)
+	{ return isRunningNotify(list[YSTRING("status")]); }
+    static inline bool isRunningNotify(const String& status)
+	{ return (status != YSTRING("terminated")) && (status != YSTRING("destroyed")); }
+    // Update file transfer items
+    static bool updateFileTransfers(NamedList& params, bool checkEmpty);
+    // Update a file transfer item
+    // addNew: true to add a new item if not found
+    static bool updateFileTransferItem(bool addNew, const String& id, NamedList& params,
+	bool setVisible = false, bool activate = false);
+    // Build file transfer item update data
+    static void buildFileTransferItem(NamedList& list, const String& notifyId, bool send,
+	const String& account, const String& contact, const String& inst, const String& cName,
+	const String& file, const String& chan);
+    // Add a file transfer item
+    static inline bool addFileTransferItem(NamedList& list, bool setVisible = true,
+	bool activate = true)
+	{ return updateFileTransferItem(true,list,list,setVisible,activate); }
+    // Add a file transfer item
+    static inline bool addFileTransferItem(const String& notifyId, bool send,
+	const String& account, const String& contact, const String& inst, const String& cName,
+	const String& file, const String& chan, bool setVisible = true, bool activate = true) {
+	    NamedList p("");
+	    buildFileTransferItem(p,notifyId,send,account,contact,inst,cName,file,chan);
+	    return updateFileTransferItem(true,p,p,setVisible,activate);
+	}
+    // Update item progress
+    static bool updateFtProgress(const String& notifyId, NamedList& params);
+    // Update finished item
+    static bool updateFtFinished(const String& notifyId, NamedList& params, bool dropChan,
+	const String* file = 0, const String* contact = 0, bool* terminated = 0);
+    // Retrieve a file transfer item
+    // Delete the item from list. Drop the channel
+    static bool getFileTransferItem(const String& id, NamedList& params, Window* w = 0);
+    // Drop a file transfer item
+    // Delete the item from list. Drop the channel
+    static bool dropFileTransferItem(const String& id, const String* chan = 0,
+	bool hideEmpty = true);
+    // Hide file transfer empty file transfer window
+    static void hideEmptyFtWindow(Window* w = 0);
+
+protected:
+    ClientAccountList* m_accounts;
+    unsigned int m_jobId;
+    FTManagerTimer* m_timer;
+    ObjList m_downloadBatch;
+    ListIterator m_downloadBatchIter;
+    bool m_downloadBatchChanged;
+    unsigned int m_downloadCount;
+    unsigned int m_downloadMax;
+    String m_downloadNotifyPrefix;
+
+private:
+    void cancelTimer();
+};
+
+class FTManagerTimer : public Thread
+{
+public:
+    FTManagerTimer(FtManager* owner);
+    ~FTManagerTimer();
+    virtual void run();
+private:
+    void notify();
+    FtManager* m_owner;
 };
 
 }; // namespace TelEngine
@@ -347,7 +751,13 @@ static const String s_chatShowOffline = "chatcontact_showoffline";
 static const String s_chatFlatList = "chatcontact_flatlist";
 static const String s_chatSend = "send_chat";
 static const String s_fileSend = "send_file";
-static const String s_fileSendPrefix = "send_file:";
+static const String s_fileShare = "share_file";
+static const String s_fileShared = "shared_file";
+static const String s_fileShareList = "share_file_list";
+static const String s_fileSharedDirsList = "shared_dir_list";
+static const String s_fileSharedDirsContent = "shared_dir_content";
+static const String s_fileShareChooseDirPrefix = "share_file_choosedir:";
+static const String s_fileLocalFs = "local_fs";
 static const String s_mucJoin = "room_join";
 static const String s_mucChgSubject = "room_changesubject";
 static const String s_mucChgNick = "room_changenick";
@@ -361,6 +771,9 @@ static const String s_mucMemberShowLog = "room_member_showlog";
 static const String s_storeContact = "storecontact";
 static const String s_mucInviteAdd = "invite_add";
 static const String s_menuSubscription = "menuSubscription";
+static const String s_fileShareNew = "file_share_new";
+static const String s_fileShareDel = "file_share_del";
+static const String s_fileShareRename = "file_share_rename";
 // Not selected string(s)
 static String s_notSelected = "-none-";
 // Maximum number of call log entries
@@ -370,6 +783,7 @@ ObjList AccountStatus::s_items;
 AccountStatus* AccountStatus::s_current = 0;
 // Pending requests
 ObjList PendingRequest::s_items;
+Mutex PendingRequest::s_mutex(false,"PendingReq");
 // Client wizard
 const String ClientWizard::s_pagesWidget = "pages";
 const String ClientWizard::s_actionNext = "next";
@@ -483,8 +897,120 @@ static const String s_googleDomain = "google.com";
 static const String s_fileOpenSendPrefix = "send_fileopen:";
 static const String s_fileOpenRecvPrefix = "recv_fileopen:";
 static String s_lastFileDir;             // Last directory used to send/recv file
+static String s_lastFileShareDir;        // Last directory used to share files
 static String s_lastFileFilter;          // Last filter used to pick a file to send
 static NamedList s_generic("");          // List for generic strings/data used across module
+static unsigned int s_fileInfoMax = 20;  // Max file info items to be returned in a single message
+static String s_dirUp = "..";
+
+static void copySubParams(NamedList& dest, const NamedList& src, const String& prefix,
+    const char* newPrefix, const String& skip = String::empty())
+{
+    NamedIterator iter(src);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (!ns->name().startsWith(prefix))
+	    continue;
+	if (!*ns)
+	    continue;
+	String s = ns->name().substr(prefix.length());
+	if (s && (!skip || skip != s))
+	    dest.addParam(newPrefix + s,*ns);
+    }
+}
+
+// Move a list into another one
+static void moveList(ObjList& dest, ObjList& src)
+{
+    for (ObjList* o = src.skipNull(); o; o = o->skipNext())
+	dest.append(o->remove(false));
+    src.clear();
+}
+
+// Retrieve the last item in a string list
+static void addLastItem(NamedList& dest, const char* param, const char* value,
+    const String& src, char sep = *Engine::pathSeparator())
+{
+    String v;
+    if (!value) {
+	Client::getLastNameInPath(v,src);
+	value = v.c_str();
+    }
+    dest.addParam(param,value);
+}
+
+// Decode file info items
+static void decodeFileInfo(NamedList& list, ObjList& items, bool& complete)
+{
+    static const String s_isFile = "isfile";
+
+    ObjList* last = &items;
+    for (int i = 1; true; i++) {
+	String prefix("item.");
+	prefix << i;
+	NamedString* ns = list.getParam(prefix);
+	if (!ns)
+	    break;
+	if (!*ns)
+	    continue;
+	prefix << ".";
+	ClientFileItem* item = 0;
+	if (list.getBoolValue(prefix + s_isFile)) {
+	    ClientFile* f = new ClientFile(*ns);
+	    copySubParams(f->params(),list,prefix,"file_",s_isFile);
+	    item = f;
+	}
+	else
+	    item = new ClientDir(*ns);
+	last = last->append(item);
+    }
+    complete = !list.getBoolValue(YSTRING("partial"));
+}
+
+// Utility: get contact from param or selected item
+static ClientContact* getContactFromParam(ClientAccountList* accounts, NamedList* params,
+    const String& list, Window* wnd)
+{
+    if (!accounts)
+	return 0;
+    String contact;
+    if (params)
+	contact = params->getValue(YSTRING("contact"));
+    if (!contact && Client::self())
+	Client::self()->getSelect(list,contact,wnd);
+    return contact ? accounts->findContact(contact) : 0;
+}
+
+// Utility: get contact from param or selected item or window context
+static ClientContact* getContactFromParamContext(ClientAccountList* accounts, NamedList* params,
+    const String& list, Window* wnd)
+{
+    if (!accounts)
+	return 0;
+    ClientContact* c = getContactFromParam(accounts,params,list,wnd);
+    if (!c && wnd && wnd->context())
+	c = accounts->findContact(wnd->context());
+    return c;
+}
+
+// Set the image parameter of a list
+static inline void setImageParam(NamedList& p, const char* param,
+    const char* image, bool suffix = true)
+{
+    static const String s_suffix = "_image";
+    static const String s_prefix = "image:";
+    if (suffix)
+	p.setParam(param + s_suffix,Client::s_skinPath + image);
+    else
+	p.setParam(s_prefix + param,Client::s_skinPath + image);
+}
+
+// Set a list parameter and it's image
+static inline void setImageParam(NamedList& p, const char* param,
+    const char* value, const char* image)
+{
+    p.setParam(param,value);
+    setImageParam(p,param,image);
+}
 
 // Dump a list of parameters to output if XDEBUG is defined
 static inline void dumpList(const NamedList& p, const char* text, Window* w = 0)
@@ -497,6 +1023,297 @@ static inline void dumpList(const NamedList& p, const char* text, Window* w = 0)
 	wnd << " window=" << w->id();
     Debug(ClientDriver::self(),DebugInfo,"%s%s\r\n-----\r\n%s\r\n-----",text,wnd.safe(),tmp.safe());
 #endif
+}
+
+// Send a message used to remove all account share
+static void removeAccountShareInfo(ClientAccount* a)
+{
+    if (!a)
+	return;
+    Message* m = Client::buildMessage("file.info",a->toString(),"remove");
+    Engine::enqueue(m);
+}
+
+// Notify contact of shared changed
+static void notifyContactShareInfoChanged(ClientContact* c)
+{
+    if (!(c && c->subscriptionFrom()))
+	return;
+    for (ObjList* o = c->resources().skipNull(); o; o = o->skipNext()) {
+	ClientResource* res = static_cast<ClientResource*>(o->get());
+	if (!res->caps().flag(ClientResource::CapFileInfo))
+	    continue;
+	Message* m = Client::buildMessage("file.info",c->accountName(),"notifychanged");
+	m->addParam("to",c->uri());
+	m->addParam("to_instance",res->toString());
+	Engine::enqueue(m);
+    }
+}
+
+// Utility used in updateContactShareInfo
+static bool addContactShareInfo(NamedList& dest, ClientContact& c, bool set,
+    const String& prefix, const NamedString* item)
+{
+    if (!item)
+	return false;
+    addLastItem(dest,prefix,*item,item->name());
+    if (set)
+	dest.addParam(prefix + ".path",item->name());
+    return true;
+}
+
+// Utility used in updateContactShareInfo
+static bool addContactShareInfo(NamedList& dest, ClientContact& c, bool set,
+    const String& prefix, const NamedList& items)
+{
+    bool ok = false;
+    unsigned int n = 1;
+    bool cShare = (&items == &(c.share()));
+    NamedIterator iter(items);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (cShare)
+	    ok = addContactShareInfo(dest,c,set,prefix + "." + String(n++),ns) || ok;
+	else {
+	    NamedString* item = c.share().getParam(ns->name());
+	    if (item)
+		ok = addContactShareInfo(dest,c,set,prefix + "." + String(n++),item) || ok;
+	}
+    }
+    return ok;
+}
+
+// Send a message used to add a contact share
+static void updateContactShareInfo(ClientContact* c, bool set, const String* item = 0,
+    const NamedList* items = 0)
+{
+    static const String s_prefix("item");
+
+    if (!(c && c->uri()))
+	return;
+    if (set && !(c->subscriptionFrom() && c->haveShare()))
+	return;
+    Message* m = Client::buildMessage("file.info",c->accountName(),set ? "set" : "remove");
+    m->addParam("contact",c->uri());
+    bool ok = false;
+    if (item || items) {
+	if (item)
+	    ok = addContactShareInfo(*m,*c,set,s_prefix,c->share().getParam(*item));
+	if (items)
+	    ok = addContactShareInfo(*m,*c,set,s_prefix,*items);
+    }
+    else if (set)
+	ok = addContactShareInfo(*m,*c,true,s_prefix,c->share());
+    if (ok || set)
+	Engine::enqueue(m);
+    else
+	TelEngine::destruct(m);
+}
+
+// Send a message used to change/set a contact share
+static bool changeContactShareInfo(ClientContact* c, const String& oldName,
+    const String& newName)
+{
+    static const String s_prefix("item");
+
+    if (!(c && c->subscriptionFrom() && c->uri() && oldName && newName))
+	return false;
+    NamedString* ns = Client::findParamByValue(c->share(),newName);
+    if (!ns)
+	return false;
+    Message* m = Client::buildMessage("file.info",c->accountName(),"set");
+    m->addParam("contact",c->uri());
+    addContactShareInfo(*m,*c,true,s_prefix,ns);
+    m->addParam(s_prefix + ".oldname",oldName);
+    Engine::enqueue(m);
+    return true;
+}
+
+// Fill share status for contact
+static void fillChatContactShareStatus(NamedList& p, ClientContact& c, bool global, bool chat)
+{
+    if (chat) {
+	if (c.haveShare()) {
+	    setImageParam(p,"chat_share_file","sharefile_20.png",false);
+	    p.addParam("property:share_file_btn:_yate_normal_icon","sharefile_20.png");
+	    p.addParam("property:share_file_btn:_yate_pressed_icon","sharefile_pressed_20.png");
+	    p.addParam("property:share_file_btn:_yate_hover_icon","sharefile_hover_20.png");
+	}
+	else {
+	    setImageParam(p,"chat_share_file","sharefile_none_20.png",false);
+	    p.addParam("property:share_file_btn:_yate_normal_icon","sharefile_none_20.png");
+	    p.addParam("property:share_file_btn:_yate_pressed_icon","sharefile_none_pressed_20.png");
+	    p.addParam("property:share_file_btn:_yate_hover_icon","sharefile_none_hover_20.png");
+	}
+    }
+}
+
+// Show contact actions
+void showChatContactActions(ClientContact& c, NamedList* list = 0)
+{
+    if (!(list || Client::valid()))
+	return;
+    NamedString* ns = new NamedString("_yate_showactions");
+    if (c.haveShare())
+	ns->append(s_fileShare,",");
+    if (c.haveShared())
+	ns->append(s_fileShared,",");
+    if (list) {
+	list->addParam(ns);
+	return;
+    }
+    NamedList p("");
+    NamedList* contact = new NamedList(c.toString());
+    contact->addParam(ns);
+    p.addParam(new NamedPointer(c.toString(),contact,String::boolText(false)));
+    Client::self()->updateTableRows(s_chatContactList,&p,false);
+}
+
+// Update contact share status in UI
+static void updateContactShareStatus(ClientContact& c)
+{
+    showChatContactActions(c);
+    if (c.hasChat()) {
+	NamedList p("");
+	fillChatContactShareStatus(p,c,false,true);
+	c.updateChatWindow(p);
+    }
+}
+
+// Build shared dir item id
+static void sharedBuildId(String& buf, ClientDir& baseDir, const String& path,
+    const String& item = String::empty())
+{
+    buf = baseDir.name();
+    buf.uriEscape();
+    buf.append(path,"/");
+    buf.append(item,"/");
+}
+
+// Build shared dir item id
+static void sharedSplitId(const String& buf, String& res, String& path)
+{
+    int pos = buf.find('/');
+    if (pos >= 0) {
+	res = buf.substr(0,pos);
+	path = buf.substr(pos + 1);
+    }
+    else
+	res = buf;
+}
+
+// Build and shared item list used to update UI (dirs list or dir content)
+static NamedList* sharedBuildUpdate(ClientContact* c, ClientDir& baseDir,
+    const String& path, const String& name, ClientFileItem* item = 0,
+    bool content = false)
+{
+    String s;
+    sharedBuildId(s,baseDir,path,name);
+    bool isDirUp = content && (name == s_dirUp);
+    NamedList* p = new NamedList(s);
+    p->addParam("item_type",(isDirUp || !item || item->directory()) ? "dir" : "file");
+    if (!isDirUp)
+	p->addParam("name",path ? name : name + "@" + baseDir.name());
+    else
+	p->addParam("name",s_dirUp);
+    p->addParam("account",c->accountName());
+    p->addParam("contact",c->uri());
+    p->addParam("instance",baseDir.name());
+    p->addParam("path",path ? (path + "/" + name) : name);
+    if (path && !content) {
+	String parent;
+	sharedBuildId(parent,baseDir,path);
+	p->addParam("parent",parent);
+    }
+    return p;
+}
+
+// Build and add shared item(s) used to be shown in shared dirs
+static void sharedDirsAddUpdate(NamedList& list, ClientContact* c, ClientDir* baseDir,
+    const String& path, ClientDir* dir, bool recursive)
+{
+    if (!baseDir)
+	return;
+    if (!dir)
+	dir = baseDir;
+    for (ObjList* o = dir->children().skipNull(); o; o = o->skipNext()) {
+	ClientDir* d = (static_cast<ClientFileItem*>(o->get()))->directory();
+	if (!d)
+	    continue;
+	NamedList* p = sharedBuildUpdate(c,*baseDir,path,d->name(),d);
+	list.addParam(new NamedPointer(*p,p,String::boolText(true)));
+	if (recursive) {
+	    String tmp = path;
+	    tmp.append(d->name(),"/");
+	    sharedDirsAddUpdate(list,c,baseDir,tmp,d,true);
+	}
+    }
+}
+
+// Build and add shared item(s) used to be shown in shared dirs
+// dir=0: Add the path
+static void sharedDirsAddUpdate(NamedList& list, ClientContact* c, ClientDir* baseDir,
+    const String& path, ClientDir* dir = 0)
+{
+    if (!baseDir)
+	return;
+    if (dir) {
+	NamedList* p = sharedBuildUpdate(c,*baseDir,path,dir->name(),dir);
+	list.addParam(new NamedPointer(*p,p,String::boolText(true)));
+	return;
+    }
+    // Add the path
+    if (!path)
+	return;
+    String tmpPath;
+    int oldPos = 0;
+    while (true) {
+	int pos = path.find('/',oldPos);
+	String name;
+	if (pos > oldPos) {
+	    name = path.substr(oldPos,pos - oldPos);
+	    oldPos = pos + 1;
+	}
+	else
+	    name = path.substr(oldPos);
+	if (!name)
+	    break;
+	NamedList* p = sharedBuildUpdate(c,*baseDir,tmpPath,name);
+	list.addParam(new NamedPointer(*p,p,String::boolText(true)));
+	tmpPath.append(name,"/");
+	if (pos < 0)
+	    break;
+    }
+}
+
+// Update shared content in UI
+// Request dirctory content if not updated
+static void sharedContentUpdate(ClientContact* c, ClientDir* baseDir, const String& path,
+    ClientDir* dir, Window* w)
+{
+    if (!(baseDir && dir))
+	return;
+    bool requesting = false;
+    if (!dir->updated() && c->subscriptionFrom())
+	requesting = SharedPendingRequest::start(c,c->findResource(baseDir->name()),path);
+    if (!(w && Client::valid()))
+	return;
+    // Show/hide busy
+    Client::self()->setBusy(s_fileSharedDirsContent,requesting,w);
+    if (requesting)
+	return;
+    // Display content
+    // Add 'up' directory
+    NamedList upd("");
+    if (path.find('/') >= 0) {
+	NamedList* p = sharedBuildUpdate(c,*baseDir,path,s_dirUp,0,true);
+	upd.addParam(new NamedPointer(*p,p,String::boolText(true)));
+    }
+    for (ObjList* o = dir->children().skipNull(); o ; o = o->skipNext()) {
+	ClientFileItem* item = static_cast<ClientFileItem*>(o->get());
+	NamedList* p = sharedBuildUpdate(c,*baseDir,path,item->name(),item,true);
+	upd.addParam(new NamedPointer(*p,p,String::boolText(true)));
+    }
+    Client::self()->updateTableRows(s_fileSharedDirsContent,&upd,false,w);
 }
 
 // Check reason and error for auth failure texts
@@ -885,26 +1702,6 @@ static inline int contactStatus(ClientContact& c)
     if (res)
 	return res->m_status;
     return c.online() ? ClientResource::Online : ClientResource::Offline;
-}
-
-// Set the image parameter of a list
-static inline void setImageParam(NamedList& p, const char* param,
-    const char* image, bool suffix = true)
-{
-    static const String s_suffix = "_image";
-    static const String s_prefix = "image:";
-    if (suffix)
-	p.setParam(param + s_suffix,Client::s_skinPath + image);
-    else
-	p.setParam(s_prefix + param,Client::s_skinPath + image);
-}
-
-// Set a list parameter and it's image
-static inline void setImageParam(NamedList& p, const char* param,
-    const char* value, const char* image)
-{
-    p.setParam(param,value);
-    setImageParam(p,param,image);
 }
 
 // Select a single item in a list containing exactly 1 item not
@@ -1546,6 +2343,164 @@ static Window* getContactInfoEditWnd(bool edit, bool room, ClientContact* c,
     return w;
 }
 
+// Retrieve a contact share(d) files window.
+// Create it if requested and not found.
+// Set failExists to true to return 0 if already exists
+static Window* getContactShareWnd(bool share, ClientContact* c, bool create = false,
+    bool failExists = false)
+{
+    if (!Client::valid())
+	return 0;
+    if (!c)
+	return 0;
+    const char* wnd = share ? "contactfs" : "contactfsd";
+    String wname(wnd);
+    wname << "_" << c->toString().c_str();
+    Window* w = Client::self()->getWindow(wname);
+    if (w)
+	return failExists ? 0 : w;
+    if (!create)
+	return 0;
+    Client::self()->createWindowSafe(wnd,wname);
+    return Client::self()->getWindow(wname);
+}
+
+// Build a share item to be added in UI
+static NamedList* buildShareItemUI(const NamedString* ns)
+{
+    if (!ns)
+	return 0;
+    NamedList* p = new NamedList(ns->name());
+    addLastItem(*p,"name",*ns,ns->name());
+    p->addParam("path",ns->name());
+    return p;
+}
+
+// Build a share item to be added in UI
+static NamedList* buildShareItemUI(ClientContact* c, const String& item)
+{
+    if (c && item)
+	return buildShareItemUI(c->share().getParam(item));
+    return 0;
+}
+
+// Retrieve a contact share files window.
+// Create it if requested and not found.
+// Set failExists to true to return 0 if already exists
+static void updateContactShareWnd(Window* w, ClientContact* c, bool cData = true, bool share = true)
+{
+    if (!(c && (cData || share) && Client::valid()))
+	return;
+    if (!w) {
+	w = getContactShareWnd(true,c);
+	if (!w)
+	    return;
+    }
+    if (cData) {
+	NamedList p("");
+	p.addParam("context",c->toString());
+	String tmp;
+	tmp << "Share files with " << c->m_name;
+	if (c->uri())
+	    tmp << " [" << c->uri() << "]";
+	p.addParam("title",tmp);
+	p.addParam("username",c->uri());
+	p.addParam("account",c->accountName());
+	Client::self()->setParams(&p,w);
+    }
+    if (share) {
+	Client::self()->clearTable(s_fileShareList,w);
+	if (c->haveShare()) {
+	    NamedList tmp("");
+	    NamedIterator iter(c->share());
+	    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+		NamedList* p = buildShareItemUI(ns);
+		if (p)
+		    tmp.addParam(new NamedPointer(ns->name(),p,String::boolText(true)));
+	    }
+	    Client::self()->updateTableRows(s_fileShareList,&tmp,false,w);
+	}
+    }
+}
+
+// Retrieve a contact shared files window.
+// Create it if requested and not found.
+// Set failExists to true to return 0 if already exists
+static void updateContactSharedWnd(Window* w, ClientContact* c, bool cData = true, bool shared = true)
+{
+    if (!(c && (cData || shared) && Client::valid()))
+	return;
+    if (!w) {
+	w = getContactShareWnd(false,c);
+	if (!w)
+	    return;
+    }
+    if (cData) {
+	NamedList p("");
+	p.addParam("context",c->toString());
+	String tmp;
+	tmp << "Files shared by " << c->m_name;
+	if (c->uri())
+	    tmp << " [" << c->uri() << "]";
+	p.addParam("title",tmp);
+	p.addParam("username",c->uri());
+	p.addParam("account",c->accountName());
+	Client::self()->setParams(&p,w);
+    }
+    if (shared) {
+	Client::self()->clearTable(s_fileSharedDirsList,w);
+	Client::self()->clearTable(s_fileSharedDirsContent,w);
+	NamedList tmp("");
+	for (ObjList* o = c->shared().skipNull(); o; o = o->skipNext()) {
+	    ClientDir* dir = static_cast<ClientDir*>(o->get());
+	    sharedDirsAddUpdate(tmp,c,dir,String::empty(),0,true);
+	}
+        Client::self()->updateTableRows(s_fileSharedDirsList,&tmp,false,w);
+    }
+}
+
+// Display the window showing the files we share to a contact
+static bool showContactShareWnd(ClientContact* c)
+{
+    Window* w = getContactShareWnd(true,c,true);
+    if (!w)
+	return false;
+    updateContactShareWnd(w,c);
+    return Client::self()->setVisible(w->toString(),true,true);
+}
+
+// Display the window showing the files we share to a contact
+static bool showContactSharedWnd(ClientContact* c)
+{
+    Window* w = getContactShareWnd(false,c,true);
+    if (!w)
+	return false;
+    updateContactSharedWnd(w,c);
+    return Client::self()->setVisible(w->toString(),true,true);
+}
+
+// Clear shared items from UI. Clear table if dir is 0
+static void removeSharedFromUI(ClientContact* c, ClientDir* dir)
+{
+    if (!(c && dir))
+	return;
+    Window* w = getContactShareWnd(false,c);
+    if (!w)
+	return;
+    if (!dir) {
+	Client::self()->clearTable(s_fileSharedDirsList,w);
+	return;
+    }
+    NamedList upd("");
+    for (ObjList* o = dir->children().skipNull(); o; o = o->skipNext()) {
+	ClientDir* d = static_cast<ClientDir*>(o->get());
+	String s;
+	sharedBuildId(s,*dir,String::empty(),d->name());
+	upd.addParam(s,"");
+    }
+    Client::self()->updateTableRows(s_fileSharedDirsList,&upd,false,w);
+}
+
 // Update account list in chat account add windows
 // Select single updated account
 static void updateChatAccountList(const String& account, bool upd)
@@ -1767,6 +2722,13 @@ static void contactDeleted(ClientContact& c)
     // Remove instances from contacts list
     String instid;
     removeContacts(c.buildInstanceId(instid));
+    // Close contact file share(d) window
+    Window* w = getContactShareWnd(true,&c,false,false);
+    if (w)
+	Client::self()->closeWindow(w->toString(),false);
+    w = getContactShareWnd(false,&c,false,false);
+    if (w)
+	Client::self()->closeWindow(w->toString(),false);
     // Close chat session
     logCloseSession(&c);
 }
@@ -2269,6 +3231,11 @@ static bool loginAccount(ClientLogic* logic, const NamedList& account, bool logi
 static void fillChatContact(NamedList& p, ClientContact& c, bool data, bool status,
     bool roomContact = false)
 {
+    if (!roomContact) {
+	p.addParam("active:chat_send_file",String::boolText(0 != c.findFileTransferResource()));
+	p.addParam("active:chat_share_file",String::boolText(true));
+	p.addParam("active:chat_shared_file",String::boolText(c.haveShared()));
+    }
     if (!(data || status))
 	return;
     // Fill status
@@ -2298,7 +3265,7 @@ static void fillChatContact(NamedList& p, ClientContact& c, bool data, bool stat
     p.addParam("account",c.accountName());
     p.addParam("name",c.m_name);
     p.addParam("contact",c.uri());
-    p.addParam("subscription",c.m_subscription);
+    p.addParam("subscription",c.subscriptionStr());
     if (!c.mucRoom()) {
 	NamedString* groups = new NamedString("groups");
 	Client::appendEscape(*groups,c.groups());
@@ -2309,9 +3276,17 @@ static void fillChatContact(NamedList& p, ClientContact& c, bool data, bool stat
 }
 
 // Enable/disable chat contacts actions
-static void enableChatActions(ClientContact* c, bool checkVisible = true)
+static void enableChatActions(ClientContact* c, bool checkVisible = true, bool global = true,
+    bool chat = false)
 {
     if (!Client::valid())
+	return;
+    if (chat && c && c->getChatWnd()) {
+	NamedList p("");
+	fillChatContact(p,*c,false,false);
+	c->updateChatWindow(p);
+    }
+    if (!global)
 	return;
     // Check if the chat tab is visible
     if (c && checkVisible) {
@@ -2327,6 +3302,8 @@ static void enableChatActions(ClientContact* c, bool checkVisible = true)
     p.addParam(s_chat,!mucRoom ? "Chat" : "Join");
     p.addParam("active:" + s_chatCall,String::boolText(!mucRoom && c && c->findAudioResource()));
     p.addParam("active:" + s_fileSend,String::boolText(!mucRoom && c && c->findFileTransferResource()));
+    p.addParam("active:" + s_fileShare,s);
+    p.addParam("active:" + s_fileShared,String::boolText(c && c->haveShared()));
     p.addParam("active:" + s_chatShowLog,s);
     p.addParam("active:" + s_chatEdit,s);
     p.addParam("active:" + s_chatDel,s);
@@ -2366,6 +3343,7 @@ static void changeDockedChat(ClientContact& c, bool on)
     c.createChatWindow();
     NamedList p("");
     fillChatContact(p,c,true,true);
+    fillChatContactShareStatus(p,c,false,true);
     ClientResource* res = c.status();
     c.updateChatWindow(p,"Chat [" + c.m_name + "]",
 	resStatusImage(res ? res->m_status : ClientResource::Offline));
@@ -2570,7 +3548,7 @@ static bool updateContactInfo(ClientContact* c, bool create = false, bool activa
     p.addParam("name",c->m_name);
     p.addParam("username",c->uri());
     p.addParam("account",c->accountName());
-    p.addParam("subscription",c->m_subscription);
+    p.addParam("subscription",c->subscriptionStr());
     Client::self()->setParams(&p,w);
     // Add groups
     Client::self()->clearTable(s_groups,w);
@@ -2585,7 +3563,7 @@ static bool updateContactInfo(ClientContact* c, bool create = false, bool activa
 	l->addParam("name",r->m_name);
 	l->addParam("name_image",resStatusImage(r->m_status),false);
 	l->addParam("status",r->m_text);
-	if (r->m_audio)
+	if (r->caps().flag(ClientResource::CapAudio))
 	    l->addParam("audio_image",Client::s_skinPath + "phone.png");
 	upd.addParam(new NamedPointer(r->toString(),l,String::boolText(true)));
     }
@@ -2873,62 +3851,141 @@ static bool chooseFileTransfer(bool send, const String& action, Window* w,
     return Client::self()->chooseFile(w,p);
 }
 
-// Update a file transfer item
-// addNew: true to add a new item if not found
-static bool updateFileTransferItem(bool addNew, const String& id, NamedList& params,
-    bool setVisible = false)
+// Open a choose directory dialog
+static bool chooseDir(const String& action, Window* w)
 {
     if (!Client::valid())
-	return false;
-    Window* w = Client::self()->getWindow(s_wndFileTransfer);
-    if (!w)
 	return false;
     NamedList p("");
-    NamedPointer* np = new NamedPointer(id,&params,String::boolText(addNew));
-    p.addParam(np);
-    bool ok = Client::self()->updateTableRows(s_fileProgressList,&p,false,w);
-    if (ok)
-	Client::self()->setSelect(s_fileProgressCont,s_pageList,w);
-    np->takeData();
-    if (setVisible)
-	Client::self()->setVisible(s_wndFileTransfer,true);
-    return ok;
+    p.addParam("choosefile",String::boolText(false));
+    p.addParam("action",action);
+    p.addParam("dir",s_lastFileShareDir,false);
+    p.addParam("caption","Choose directory");
+    return Client::self()->chooseFile(w,p);
 }
 
-// Retrieve a file transfer item
-// Delete the item from list. Drop the channel
-static bool getFileTransferItem(const String& id, NamedList& params, Window* w = 0)
+// Choose a directory to share with a given contact
+static bool chooseDirShareDir(ClientAccountList* accounts, Window* w,
+    const String& cId = String::empty())
 {
-    if (!Client::valid())
+    if (!(accounts && Client::valid()))
 	return false;
-    if (!w)
-	w = Client::self()->getWindow(s_wndFileTransfer);
-    return w && Client::self()->getTableRow(s_fileProgressList,id,&params,w);
+    ClientContact* c = 0;
+    if (cId)
+	c = accounts->findContact(cId);
+    else if (w)
+	c = accounts->findContact(w->context());
+    return c && chooseDir(s_fileShareChooseDirPrefix + c->toString(),w);
 }
 
-// Drop a file transfer item
-// Delete the item from list. Drop the channel
-static bool dropFileTransferItem(const String& id)
+// Handle set shared directory for a contact
+static bool handleShareSet(bool isDir, ClientAccountList* accounts, const String& cId, Window* w,
+     const NamedList* params, bool fromFileChoose = true)
 {
-    if (!Client::valid())
+    if (!isDir) {
+	DDebug(DebugFail,"handleShareSet not implemented for non dir");
 	return false;
-    Window* w = Client::self()->getWindow(s_wndFileTransfer);
-    if (!w)
-	return false;
-    NamedList p("");
-    getFileTransferItem(id,p,w);
-    const String& chan = p[YSTRING("channel")];
-    if (chan)
-	ClientDriver::dropChan(chan,p.getBoolValue(YSTRING("send")) ? "cancelled" : "closed");
-    bool ok = Client::self()->delTableRow(s_fileProgressList,id,w);
-    // Close window if empty
-    NamedList items("");
-    Client::self()->getOptions(s_fileProgressList,&items,w);
-    if (!items.getParam(0)) {
-	Client::self()->setSelect(s_fileProgressCont,s_pageEmpty,w);
-	Client::self()->setVisible(s_wndFileTransfer,false);
     }
-    return ok;
+    if (!(accounts && cId && params && Client::valid()))
+	return false;
+    if (fromFileChoose) {
+	const String& dir = (*params)[YSTRING("dir")];
+	if (dir != s_lastFileShareDir) {
+	    s_lastFileShareDir = dir;
+	    Client::s_settings.setValue("filetransfer","share_dir",s_lastFileShareDir);
+	}
+    }
+    ClientContact* c = accounts->findContact(cId);
+    if (!c)
+	return false;
+    bool changed = false;
+    bool hadShare = c->haveShare();
+    NamedIterator iter(*params);
+    NamedList upd("");
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (!*ns)
+	    continue;
+	if (fromFileChoose) {
+	    if (ns->name() != YSTRING("file"))
+		continue;
+	}
+	else {
+	    if (ns->name() != YSTRING("drop:directory"))
+		continue;
+	    if (!File::exists(*ns))
+		continue;
+	}
+	String path;
+	if (!Client::removeEndsWithPathSep(path,*ns))
+	    continue;
+	// NOTE: Check item type (dir/file) if we share files (now we share only directories),
+	//  remove from UI and update if item type changes
+	// Already in the list?
+	if (Client::self()->getTableRow(s_fileShareList,path,0,w))
+	    continue;
+	if (!c->setShareDir(String::empty(),path,false))
+	    continue;
+	changed = true;
+	NamedList* p = buildShareItemUI(c,path);
+	if (p)
+	    upd.addParam(new NamedPointer(path,p,String::boolText(true)));
+	updateContactShareInfo(c,true,&path);
+    }
+    if (changed) {
+	c->saveShare();
+	Client::self()->updateTableRows(s_fileShareList,&upd,false,w);
+	if (hadShare != c->haveShare())
+	    updateContactShareStatus(*c);
+	notifyContactShareInfoChanged(c);
+    }
+    return true;
+}
+
+// Handle set shared directory for a contact
+static bool handleShareDel(ClientAccountList* accounts, const String& cId, Window* w)
+{
+    if (!(w && accounts && cId && Client::valid()))
+	return false;
+    ClientContact* c = accounts->findContact(cId);
+    if (!c)
+	return false;
+    NamedList sel("");
+    if (!Client::self()->getSelect(s_fileShareList,sel,w))
+	return true;
+    if (0 == sel.getParam(0))
+	return true;
+    updateContactShareInfo(c,false,0,&sel);
+    bool changed = false;
+    bool hadShare = c->haveShare();
+    NamedIterator iter(sel);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	changed = c->removeShare(ns->name(),false) || changed;
+	// Clear param value to signal delete when updating
+	*((NamedString*)ns) = "";
+    }
+    if (sel.getParam(0))
+	Client::self()->updateTableRows(s_fileShareList,&sel,false,w);
+    if (changed) {
+	c->saveShare();
+	if (hadShare != c->haveShare())
+	    updateContactShareStatus(*c);
+	notifyContactShareInfoChanged(c);
+    }
+    return true;
+}
+
+// Begin edit selected item in a list
+static bool beginEditSelected(const String& name, Window* w, const char* what = 0)
+{
+    if (!(w && Client::valid()))
+	return false;
+    String sel;
+    Client::self()->getSelect(name,sel,w);
+    if (!sel)
+	return false;
+    NamedList p(name);
+    p.addParam("beginedit:" + sel,what);
+    return Client::self()->setParams(&p,w);
 }
 
 // Add a tray icon to the mainwindow stack
@@ -4158,9 +5215,10 @@ void AccountStatus::updateUi()
 // Remove all account's requests
 void PendingRequest::clear(const String& account)
 {
+    Lock lck(s_mutex);
     for (ObjList* o = s_items.skipNull(); o; ) {
 	PendingRequest* req = static_cast<PendingRequest*>(o->get());
-	if (req->m_account != account)
+	if (req->account() != account)
 	    o = o->skipNext();
 	else {
 	    o->remove();
@@ -4169,47 +5227,99 @@ void PendingRequest::clear(const String& account)
     }
 }
 
-// Request info/items from target
-PendingRequest* PendingRequest::request(bool info, ClientAccount* acc, const String& target,
-    bool mucserver)
+// Remove all contacts's requests
+void PendingRequest::cancel(ClientContact* c, const String& res)
 {
-    if (!acc)
-	return 0;
-    String id;
-    id << acc->toString() << "_" << target << "_" << info << "_" << mucserver;
-    PendingRequest* req = find(id);
-    if (req)
-	return req;
-    req = new PendingRequest(id,acc->toString(),target);
-    req->m_mucServer = mucserver;
-    s_items.append(req);
-    XDebug(ClientDriver::self(),DebugAll,"ClientLogic added pending request '%s'",
-	req->toString().c_str());
-    Message* m = Client::buildMessage("contact.info",acc->toString(),
-	info ? "queryinfo" : "queryitems");
-    m->addParam("contact",target,false);
-    m->addParam("notify",id);
-    Engine::enqueue(m);
-    return req;
+    if (!c)
+	return;
+    String s;
+    buildIdNoType(s,*c,res,String::empty(),false);
+    s << "_";
+    Lock lck(s_mutex);
+    for (ObjList* o = s_items.skipNull(); o; ) {
+	PendingRequest* req = static_cast<PendingRequest*>(o->get());
+	int pos = req->requestId().find("_");
+	if (pos <= 0 || s != req->requestId().substr(pos + 1,s.length()))
+	    o = o->skipNext();
+	else {
+	    o->remove();
+	    o = o->skipNull();
+	}
+    }
 }
 
-// Request MUC rooms from target
-bool PendingRequest::requestMucRooms(ClientAccount* acc, const String& target)
+// Build request id
+void PendingRequest::buildIdNoType(String& buf, const String& acc, const String& target,
+    const String& res, const String& extra, bool addTime)
 {
     if (!acc)
+	return;
+    buf << acc.hash();
+    if (target)
+	buf << "_" << target.hash();
+    if (res)
+	buf << "_" << res.hash();
+    if (extra)
+	buf << "_" << extra.hash();
+    if (addTime)
+	buf << "_" << (unsigned int)Time::msecNow();
+}
+
+// Start a request, consume the objects
+bool PendingRequest::start(PendingRequest* r, Message* m, u_int64_t delayUs)
+{
+    if (!(r && m)) {
+	TelEngine::destruct(r);
+	TelEngine::destruct(m);
 	return false;
-    String id;
-    id << acc->toString() << "_" << target << "_mucrooms";
-    if (find(id))
-	return true;
-    PendingRequest* req = new PendingRequest(id,acc->toString(),target);
-    req->m_mucRooms = true;
-    s_items.append(req);
-    Message* m = Client::buildMessage("contact.info",acc->toString(),"queryitems");
-    m->addParam("contact",target,false);
-    m->addParam("notify",id);
-    Engine::enqueue(m);
+    }
+    Lock lck(s_mutex);
+    if (!find(r->toString())) {
+	s_items.append(r);
+	if (delayUs && r->setPendingMsg(m,delayUs))
+	    return true;
+	lck.drop();
+	Engine::enqueue(m);
+    }
+    else {
+	lck.drop();
+	TelEngine::destruct(r);
+	TelEngine::destruct(m);
+    }
     return true;
+}
+
+
+/*
+ * SharedPendingRequest
+ */
+// Build message for request
+Message* SharedPendingRequest::buildMessage()
+{
+    Message* m = PendingRequest::buildMessageTo("file.info","query");
+    if (m_dir) {
+	m->addParam("dir",m_what);
+	m->addParam("rsm_index",String(m_index));
+	m->addParam("rsm_max",String(s_fileInfoMax));
+    }
+    else
+	m->addParam("file",m_what);
+    return m;
+}
+
+// Start a request
+bool SharedPendingRequest::start(const String& account, const String& contact,
+    const String& inst, const String& what, bool dir, unsigned int index,
+    u_int64_t delayUs)
+{
+    String s;
+    buildId(s,SharedQuery,account,contact,inst,what);
+    SharedPendingRequest* r = new SharedPendingRequest(s,account,contact,inst);
+    r->m_dir = dir;
+    r->m_what = what;
+    r->m_index = index;
+    Message* m = r->buildMessage();
+    return PendingRequest::start(r,m,delayUs);
 }
 
 
@@ -4328,6 +5438,1021 @@ bool ContactChatNotify::checkTimeouts(ClientAccountList& list, Time& time)
 	o = o->skipNext();
     }
     return 0 != s_items.skipNull();
+}
+
+
+//
+// FtJob
+//
+void FtJob::drop()
+{
+    if (!(m_notifyId || m_dropId))
+	return;
+    FtManager::dropFileTransferItem(m_notifyId,&m_dropId,false);
+    m_notifyId.clear();
+    m_dropId.clear();
+}
+
+void FtJob::destruct()
+{
+    drop();
+    String::destruct();
+}
+
+// Drop a list of jobs. Reset job's notify id and add it to upd if non 0
+unsigned int FtJob::dropJobs(ObjList& jobs, int newState, NamedList* upd)
+{
+    unsigned int n = 0;
+    for (ObjList* o = jobs.skipNull(); o; o = o->skipNext()) {
+	FtJob* job = static_cast<FtJob*>(o->get());
+	if (job->m_state == Running)
+	    n++;
+	if (upd && job->m_notifyId) {
+	    upd->addParam(job->m_notifyId,"");
+	    job->m_notifyId.clear();
+	}
+	job->drop();
+	job->m_state = newState;
+    }
+    return n;
+}
+
+//
+// FtDownloadDirContentJob
+//
+void FtDownloadDirContentJob::drop()
+{
+    FtJob::drop();
+    m_dir.updated(false);
+    m_dir.children().clear();
+}
+
+
+//
+// FtItem
+//
+FtItem::FtItem(FtManager* owner, const String& itemId, const String& acc,
+    const String& cUri, const String& inst)
+    : Mutex(false,"FtItem"),
+    m_id(itemId), m_owner(owner), m_online(false), m_account(acc), m_contactUri(cUri),
+    m_instance(inst)
+{
+    m_dbg << "account=" << acc << " contact=" << cUri << " instance=" << inst;
+    m_contactName = cUri;
+    if (m_contactName && inst)
+	m_contactName << "/" << inst;
+}
+
+// Set contact/instance online 
+bool FtItem::setOnline(bool online)
+{
+    if (m_online == online)
+	return false;
+    m_online = online;
+    return true;
+}
+
+void FtItem::destroyed()
+{
+    cancel();
+    if (m_refreshWnd && m_refreshName && Client::valid()) {
+	Window* w = Client::self()->getWindow(m_refreshWnd);
+	if (w)
+	    Client::self()->setProperty(m_refreshName,"_yate_refresh",String::empty(),w);
+    }
+    RefObject::destroyed();
+}
+
+
+//
+// DownloadBatch
+//
+DownloadBatch::DownloadBatch(FtManager* owner, const String& itemId, const String& acc,
+    const String& cUri, const String& inst)
+    : FtItem(owner,itemId,acc,cUri,inst),
+    m_dirContentReqCount(0), m_dirContentReqMax(5),
+    m_timeout(0),
+    m_timeToDownload(0), m_donwloadIntervalMs(3000)
+{
+    DDebug(m_owner,DebugAll,"DownloadBatch %s created [%p]",m_dbg.c_str(),this);
+}
+
+// Add a shared item
+void DownloadBatch::addItem(ClientFileItem& item, const String& path,
+    const String& itemPath, const String& refreshWnd, const String& refreshName)
+{
+    if (!item.name())
+	return;
+    ClientDir* dir = item.directory();
+    ClientFile* file = item.file();
+    if (!(dir || file))
+	return;
+    String p;
+    Client::addPathSep(p,path);
+    p << item.name();
+    Client::fixPathSep(p);
+    lock();
+    bool checkOnline = !m_online;
+    if (dir)
+	addDirUnsafe(*dir,p,itemPath);
+    else
+	addFileUnsafe(p,itemPath,file->params());
+    m_refreshWnd = refreshWnd;
+    m_refreshName = refreshName;
+    unlock();
+    if (!(checkOnline && m_owner->accounts()))
+	return;
+    bool ok = false;
+    bool online = false;
+    ClientAccount* acc = 0;
+    ClientContact* c = 0;
+    while (true) {
+	acc = m_owner->accounts()->findAccount(m_account,true);
+	if (!acc)
+	    break;
+	if (!acc->resource().online()) {
+	    ok = true;
+	    break;
+	}
+	if (!m_contactUri)
+	    break;
+	c = acc->findContactByUri(m_contactUri,true);
+	if (!c)
+	    break;
+	ok = true;
+	Lock lck(acc);
+	if (m_instance)
+	    online = (0 != c->findResource(m_instance));
+	else
+	    online = c->online();
+	break;
+    }
+    TelEngine::destruct(acc);
+    TelEngine::destruct(c);
+    if (ok)
+	setOnline(online);
+    else
+	cancel();
+}
+ 
+// Timer tick handler
+bool DownloadBatch::timerTick(const Time& time)
+{
+    Lock lck(this);
+    if (!m_online) {
+	if (!haveJobs())
+	    return false;
+	bool done = (m_timeout && m_timeout < time);
+	if (done) {
+	    Debug(m_owner,DebugNote,"%s donwloads timed out",m_dbg.c_str());
+	    Client::addToLogFormatted("%s: %s donwloads timed out",
+		m_owner->debugName(),m_dbg.c_str());
+	}
+	return !done;
+    }
+    NamedList newDown("");
+    ObjList* o = 0;
+    if (!m_timeToDownload || m_timeToDownload < time)
+	o = m_fileDownloads.skipNull();
+    // Check if we can start another job
+    while (o) {
+	FtJob* job = static_cast<FtJob*>(o->get());
+	if (job->m_state == FtJob::Running) {
+	    o = o->skipNext();
+	    continue;
+	}
+	FtDownloadFileJob* file = job->downloadFileJob();
+	if (!file) {
+	    DDebug(DebugStub,"DonwloadBatch: unknown pending job");
+	    o->remove();
+	    o = o->skipNull();
+	    continue;
+	}
+	if (!m_owner->buildDownloadId(job->m_notifyId,toString(),*file))
+	    break;
+	if (startFileDownload(file,newDown)) {
+	    if (m_donwloadIntervalMs)
+		m_timeToDownload = Time::now() + m_donwloadIntervalMs * 1000;
+	    break;
+	}
+	o->remove(false);
+	o = o->skipNull();
+    }
+    // Directory content request
+    if (m_dirContentReqCount < m_dirContentReqMax && m_owner->accounts()) {
+	for (o = m_retrieve.skipNull(); o;) {
+	    FtDownloadDirContentJob* job = static_cast<FtDownloadDirContentJob*>(o->get());
+	    if (job->m_state == FtJob::Running) {
+		o = o->skipNext();
+		continue;
+	    }
+	    bool ok = SharedPendingRequest::start(m_account,m_contactUri,m_instance,
+		job->m_downloadPath);
+	    if (!ok) {
+		Debug(m_owner,DebugNote,
+		    "%s failed to start shared directory '%s' content refresh",
+		    m_dbg.c_str(),job->m_downloadPath.c_str());
+		Client::addToLogFormatted(
+		    "%s: %s failed to start shared directory '%s' content refresh",
+		    m_owner->debugName(),m_dbg.c_str(),job->m_downloadPath.c_str());
+		o->remove();
+		o = o->skipNull();
+	    }
+	    job->m_state = FtJob::Running;
+	    m_dirContentReqCount++;
+	    if (m_dirContentReqCount == m_dirContentReqMax)
+		break;
+	}
+    }
+    bool ok = haveJobs();
+    lck.drop();
+    if (!ok)
+	return false;
+    if (newDown)
+	FtManager::addFileTransferItem(newDown,true,false);
+    return true;
+}
+
+// Handle file transfer notifications
+void DownloadBatch::handleFileTransferNotify(Message& msg, const String& notifyId)
+{
+    if (!notifyId)
+	return;
+    Lock lck(this);
+    ObjList* o = findNotify(notifyId);
+    if (!o)
+	return;
+    FtJob* job = static_cast<FtJob*>(o->get());
+    FtDownloadFileJob* file = job->downloadFileJob();
+    const String& status = msg[YSTRING("status")];
+    DDebug(m_owner,DebugAll,"%s: download job '%s' status is '%s' [%p]",
+	m_dbg.c_str(),job->c_str(),status.c_str(),this);
+    if (FtManager::isRunningNotify(status)) {
+	lck.drop();
+	FtManager::updateFtProgress(notifyId,msg);
+	return;
+    }
+    job->m_state = FtJob::Finished;
+    if (file) {
+	const String& error = msg[YSTRING("error")];
+	if (!error)
+	    Client::addToLogFormatted("%s: %s finished downloading file '%s' -> '%s'",
+		m_owner->debugName(),m_dbg.c_str(),file->m_file.c_str(),file->c_str());
+	else
+	    Client::addToLogFormatted("%s: %s failed to download file '%s' -> '%s': %s",
+		m_owner->debugName(),m_dbg.c_str(),file->m_file.c_str(),file->c_str(),
+		error.c_str());
+    }
+    else
+	DDebug(DebugStub,"DonwloadBatch: can't handle termination for unknown job type");
+    o->remove(false);
+    lck.drop();
+    cancelJob(job,true);
+}
+
+// Handle file info responses
+bool DownloadBatch::handleFileInfoRsp(const String& oper, NamedList& msg)
+{
+    String* path = msg.getParam(YSTRING("dir"));
+    if (TelEngine::null(path))
+	return false;
+    bool ok = (oper == YSTRING("result"));
+    if (!ok && oper != YSTRING("error"))
+	return false;
+    Lock lck(this);
+    ObjList* o = findDirContent(*path,false);
+    if (!o)
+	return false;
+    ObjList items;
+    bool complete = false;
+    const char* reason = 0;
+    if (ok)
+	decodeFileInfo(msg,items,complete);
+    else
+	reason = msg.getValue(YSTRING("reason"),msg.getValue(YSTRING("error")));
+    // Decode received files
+    while (o) {
+	FtDownloadDirContentJob* job = static_cast<FtDownloadDirContentJob*>(o->get());
+	ObjList* list = 0;
+	if (complete || !ok) {
+	    if (ok)
+		Debug(m_owner,DebugAll,"%s completed shared directory '%s' refresh",
+		    m_dbg.c_str(),job->c_str());
+	    else {
+		Debug(m_owner,DebugNote,"%s failed to refresh shared directory '%s': %s",
+		    m_dbg.c_str(),job->c_str(),reason);
+		Client::addToLogFormatted("%s: %s failed to refresh shared directory '%s': %s",
+		    m_owner->debugName(),m_dbg.c_str(),job->c_str(),reason);
+	    }
+	    if (m_dirContentReqCount)
+		m_dirContentReqCount--;
+	    o->remove(!ok);
+	    list = o->skipNull();
+	}
+	else
+	    list = o->skipNext();
+	o = list ? findDirContent(*path,false,list) : 0;
+	if (!ok)
+	    continue;
+	if (!o)
+	    job->m_dir.addChildren(items);
+	else
+	    job->m_dir.copyChildren(items);
+	if (!complete)
+	    continue;
+	job->m_dir.updated(true);
+	addDirUnsafe(job->m_dir,*job,job->m_downloadPath);
+	TelEngine::destruct(job);
+    }
+    return true;
+}
+
+// Set contact/instance online 
+bool DownloadBatch::setOnline(bool online)
+{
+    Lock lck(this);
+    if (!FtItem::setOnline(online))
+	return false;
+    if (m_online) {
+	m_timeout = 0;
+	return true;
+    }
+    // Allow a 10 minutes interval to become online
+    m_timeout = Time::now() + 10 * 60 * 1000000;
+    // Stop/reset jobs
+    NamedList upd("");
+    unsigned int n = FtJob::dropJobs(m_fileDownloads,FtJob::Pending,&upd);
+    FtJob::dropJobs(m_retrieve,FtJob::Pending,&upd);
+    lck.drop();
+    for (; n; n--)
+	m_owner->downloadTerminated();
+    if (upd.getParam(0))
+	FtManager::updateFileTransfers(upd,true);
+    return true;
+}
+
+// Cancel all running jobs, clear data
+void DownloadBatch::cancel()
+{
+    lock();
+    ObjList tmp;
+    moveList(tmp,m_fileDownloads);
+    moveList(tmp,m_retrieve);
+    m_fileDownloads.clear();
+    m_retrieve.clear();
+    unlock();
+    for (ObjList* o = tmp.skipNull(); o; o = o->skipNext()) {
+	FtJob* job = static_cast<FtJob*>(o->get());
+	o->set(0,false);
+	cancelJob(job,job->m_state != FtJob::Running);
+    }
+}
+
+void DownloadBatch::destroyed()
+{
+    DDebug(m_owner,DebugAll,"DownloadBatch %s destroyed [%p]",m_dbg.c_str(),this);
+    FtItem::destroyed();
+}
+
+// Find a dir content refresh holder
+ObjList* DownloadBatch::findDirContent(const String& key, bool byLocalPath,
+    ObjList* start) const
+{
+    ObjList* list = start ? start : m_retrieve.skipNull();
+    if (!list)
+	return 0;
+    if (byLocalPath)
+	return list->find(key);
+    for (ObjList* o = list; o; o = o->skipNext()) {
+	FtDownloadDirContentJob* job = static_cast<FtDownloadDirContentJob*>(o->get());
+	if (job->m_downloadPath == key)
+	    return o;
+    }
+    return 0;
+}
+
+// Start file download, consume the pointer
+bool DownloadBatch::startFileDownload(FtDownloadFileJob* file, NamedList& uiParams)
+{
+    if (!file)
+	return false;
+    Message m("call.execute");
+    m.addParam("callto","filetransfer/receive/" + *file);
+    if (!m_target) {
+	m_target << "jingle/" << m_contactUri;
+	m_target.append(m_instance,"/");
+    }
+    m.addParam("direct",m_target);
+    m.addParam("line",m_account);
+    m.addParam("notify_progress",String::boolText(true));
+    m.addParam("autoclose",String::boolText(true));
+    m.addParam("notify",file->m_notifyId);
+    m.addParam("remote_file",file->m_file);
+    m.addParam("create_path",String::boolText(true));
+    m.addParam("overwrite",String::boolText(true));
+    m.copyParams(file->m_file);
+    if (Engine::dispatch(m)) {
+	file->m_dropId = m[YSTRING("id")];
+	file->m_state = FtJob::Running;
+	Debug(m_owner,DebugAll,"%s start downloading file '%s' -> '%s'",
+	    m_dbg.c_str(),file->m_file.c_str(),file->c_str());
+	Client::addToLogFormatted("%s: %s start downloading file '%s' -> '%s'",
+	    m_owner->debugName(),m_dbg.c_str(),file->m_file.c_str(),file->c_str());
+	FtManager::buildFileTransferItem(uiParams,file->m_notifyId,false,m_account,
+	    m_contactUri,m_instance,m_contactName,*file,file->m_dropId);
+	return true;
+    }
+    m_owner->downloadTerminated();
+    Debug(m_owner,DebugNote,"%s failed to start file '%s' download: %s",
+	m_dbg.c_str(),file->m_file.c_str(),m.getValue("error"));
+    Client::addToLogFormatted("%s: %s failed to start file '%s' download: %s",
+	m_owner->debugName(),m_dbg.c_str(),file->m_file.c_str(),m.getValue("error"));
+    TelEngine::destruct(file);
+    return false;
+}
+
+// Cancel a job, return true on success
+bool DownloadBatch::cancelJob(FtJob*& job, bool finished)
+{
+    if (!job)
+	return false;
+    FtDownloadFileJob* file = job->downloadFileJob();
+    if (!finished && file) {
+	Debug(m_owner,DebugNote,"%s download file '%s' -> '%s' cancelled",
+	    m_dbg.c_str(),file->m_file.c_str(),file->c_str());
+	Client::addToLogFormatted("%s: %s download file '%s' -> '%s' cancelled",
+	    m_owner->debugName(),m_dbg.c_str(),file->m_file.c_str(),file->c_str());
+    }
+    TelEngine::destruct(job);
+    if (file)
+	m_owner->downloadTerminated();
+    return true;
+}
+
+// Add a shared item
+void DownloadBatch::addItemName(ClientFileItem& item, const String& path,
+    const String& itemPath)
+{
+    ClientDir* dir = item.directory();
+    ClientFile* file = item.file();
+    if (!(dir || file))
+	return;
+    String p = path + Engine::pathSeparator() + item.name();
+    String ip = itemPath + "/" + item.name();
+    if (dir)
+	addDirUnsafe(*dir,p,ip);
+    else
+	addFileUnsafe(p,ip,file->params());
+}
+ 
+// Add a shared file
+void DownloadBatch::addFileUnsafe(const String& localPath, const String& downloadPath,
+    const NamedList& params)
+{
+    Debug(m_owner,DebugAll,"%s adding download file '%s' -> '%s' [%p]",
+	m_dbg.c_str(),downloadPath.c_str(),localPath.c_str(),m_owner);
+    // File already pending or running ?
+    if (m_fileDownloads.find(localPath)) {
+	Client::addToLogFormatted(
+	    "%s: %s download file '%s' -> '%s' already in the list",
+	    m_owner->debugName(),m_dbg.c_str(),downloadPath.c_str(),localPath.c_str());
+	return;
+    }
+    FtDownloadFileJob* job = new FtDownloadFileJob(localPath,downloadPath,params);
+    job->m_state = FtJob::Pending;
+    m_fileDownloads.append(job);
+    Client::addToLogFormatted("%s: %s added pending download file '%s' -> '%s'",
+	m_owner->debugName(),m_dbg.c_str(),job->m_file.c_str(),job->c_str());
+}
+
+// Add a shared directory
+void DownloadBatch::addDirUnsafe(ClientDir& dir, const String& localPath,
+    const String& downloadPath)
+{
+    if (!localPath)
+	return;
+    if (dir.updated()) {
+	for (ObjList* o = dir.children().skipNull(); o; o = o->skipNext()) {
+	    ClientFileItem* item = static_cast<ClientFileItem*>(o->get());
+	    addItemName(*item,localPath,downloadPath);
+	}
+	return;
+    }
+    if (findDirContent(localPath,true))
+	return;
+    FtDownloadDirContentJob* job = new FtDownloadDirContentJob(localPath,
+	downloadPath,dir.name());
+    job->m_state = FtJob::Pending;
+    m_retrieve.append(job);
+    Debug(m_owner,DebugAll,
+	"%s added pending shared directory content refresh local_path=%s download_path=%s",
+	m_dbg.c_str(),localPath.c_str(),downloadPath.c_str());
+}
+
+
+//
+// FtManager
+//
+FtManager::FtManager(ClientAccountList* accounts, const char* name)
+    : String(name), Mutex(false,c_str()),
+    m_accounts(accounts),
+    m_jobId(0),
+    m_timer(0),
+    m_downloadBatchIter(m_downloadBatch),
+    m_downloadBatchChanged(false),
+    m_downloadCount(0),
+    m_downloadMax(10)
+{
+    debugName(c_str());
+    m_downloadNotifyPrefix << name << "/";
+}
+
+FtManager::~FtManager()
+{
+    cancel();
+}
+
+// Build a download id if possible
+bool FtManager::buildDownloadId(String& buf, const String& requestorId,
+    const String& requestId)
+{
+    Lock lck(this);
+    if (m_downloadCount >= m_downloadMax)
+	return false;
+    m_downloadCount++;
+    buf = m_downloadNotifyPrefix;
+    buf << requestorId.sqlEscape('/') << "/" << requestId << "/" << ++m_jobId;
+    return true;
+}
+
+// Drop a job. Return true if found
+bool FtManager::cancelFileTransfer(const String& notifyId)
+{
+    bool found = false;
+    if (notifyId.startsWith(m_downloadNotifyPrefix)) {
+	RefPointer<DownloadBatch> d;
+	if (findDownloadBatchNotify(d,notifyId)) {
+	    found = d->cancel(notifyId);
+	    d = 0;
+	}
+    }
+    return found;
+}
+
+// Drop jobs for account/contact
+void FtManager::cancel(const String& account, const String& contact)
+{
+    if (!account)
+	return;
+    lock();
+    ObjList tmpDwn;
+    ListIterator iter(m_downloadBatch);
+    for (ObjList* o = m_downloadBatch.skipNull(); o;) {
+	DownloadBatch* d = static_cast<DownloadBatch*>(o->get());
+	if (!d->match(account,contact))
+	    o = o->skipNext();
+	else {
+	    tmpDwn.append(o->remove(false));
+	    o = o->skipNull();
+	}
+    }
+    unlock();
+    tmpDwn.clear();
+}
+
+// Cancel all jobs, stop timer tick thread
+void FtManager::cancel()
+{
+    lock();
+    ObjList tmpDwn;
+    moveList(tmpDwn,m_downloadBatch);
+    m_downloadBatchChanged = true;
+    unlock();
+    tmpDwn.clear();
+    cancelTimer();
+}
+
+bool FtManager::findDownloadBatch(RefPointer<DownloadBatch>& d, const String& acc,
+    const String& contact, const String& inst)
+{
+    String cId;
+    String tmp;
+    ClientContact::buildContactId(cId,acc,contact);
+    ClientContact::buildContactInstanceId(tmp,cId,inst);
+    Lock lck(this);
+    d = findDownloadBatch(tmp);
+    return (d != 0);
+}
+
+// Find a batch download by notify id
+bool FtManager::findDownloadBatchNotify(RefPointer<DownloadBatch>& d,
+    const String& s)
+{
+    int pLen = m_downloadNotifyPrefix.length();
+    int pos = s.find('/',pLen + 1);
+    if (pos <= pLen)
+	return false;
+    String batchId = s.substr(pLen,pos - pLen);
+    Lock lck(this);
+    d = findDownloadBatch(batchId);
+    return (d != 0);
+}
+
+// Add an item to batch downloads
+void FtManager::addShareDownload(const String& acc, const String& contact,
+    const String& inst, const String& item, const String& path,
+    const String& refreshWnd, const String& refreshName)
+{
+    if (!(m_accounts && item && path))
+	return;
+    ClientContact* c = m_accounts->findContactByUri(acc,contact);
+    ClientDir* dir = c ? c->getShared(inst) : 0;
+    ClientFileItem* it = dir ? dir->findChild(item) : 0;
+    if (it) {
+	addShareDownload(*c,inst,*it,path,item,refreshWnd,refreshName);
+	return;
+    }
+    const char* reason = !c ? "contact not found" : "shared not found";
+    Client::addToLogFormatted(
+	"Failed to add download for '%s' account=%s contact=%s instance=%s: %s",
+	item.c_str(),acc.safe(),contact.safe(),inst.safe(),reason);
+}
+
+// Add an item to batch downloads
+void FtManager::addShareDownload(ClientContact& c, const String& inst,
+    ClientFileItem& item, const String& path, const String& itemPath,
+    const String& refreshWnd, const String& refreshName)
+{
+    if (!(inst && path))
+	return;
+    String tmp;
+    c.buildInstanceId(tmp,inst);
+    lock();
+    RefPointer<DownloadBatch> d = findDownloadBatch(tmp);
+    if (!d) {
+	d = new DownloadBatch(this,tmp,c.accountName(),c.uri(),inst);
+	m_downloadBatch.append(d);
+	m_downloadBatchChanged = true;
+    }
+    unlock();
+    d->addItem(item,path,itemPath,refreshWnd,refreshName);
+    Lock lck(this);
+    if (!m_downloadBatch.find(d)) {
+	m_downloadBatch.append(d);
+	m_downloadBatchChanged = true;
+    }
+    else
+	d = 0;
+    if (!m_timer) {
+	m_timer = new FTManagerTimer(this);
+	m_timer->startup();
+    }
+}
+
+// Timer tick terminated notification
+void FtManager::timerTerminated(FTManagerTimer* timer)
+{
+    Lock lck(this);
+    if (m_timer != timer)
+	return;
+    m_timer = 0;
+}
+
+// Timer tick handler
+bool FtManager::timerTick(const Time& time)
+{
+    lock();
+    if (m_downloadBatchChanged) {
+	m_downloadBatchIter.assign(m_downloadBatch);
+	m_downloadBatchChanged = false;
+    }
+    else
+	m_downloadBatchIter.reset();
+    DownloadBatch* delLater = 0;
+    for (GenObject* gen = 0; (0 != (gen = m_downloadBatchIter.get()));) {
+	DownloadBatch* d = static_cast<DownloadBatch*>(gen);
+	if (!d->ref())
+	    continue;
+	unlock();
+	TelEngine::destruct(delLater);
+	bool del = !d->timerTick(time);
+	if (del)
+	    delLater = d;
+	else
+	    d->deref();
+	lock();
+	if (del) {
+	    m_downloadBatch.remove(d);
+	    m_downloadBatchChanged = true;
+	}
+    }
+    bool haveDownloads = (0 != m_downloadBatch.skipNull());
+    bool retVal = haveDownloads;
+    if (!retVal)
+	m_timer = 0;
+    unlock();
+    TelEngine::destruct(delLater);
+    if (!haveDownloads)
+	hideEmptyFtWindow();
+    return retVal;
+}
+
+// Handle file transfer notifications
+bool FtManager::handleFileTransferNotify(Message& msg, const String& notifyId)
+{
+    if (notifyId.startsWith(m_downloadNotifyPrefix)) {
+	RefPointer<DownloadBatch> d;
+	if (findDownloadBatchNotify(d,notifyId)) {
+	    d->handleFileTransferNotify(msg,notifyId);
+	    d = 0;
+	}
+	return true;
+    }
+    return false;
+}
+
+// Handle file info responses
+bool FtManager::handleFileInfoRsp(const String& account, const String& contact,
+    const String& inst, const String& oper, NamedList& msg)
+{
+    RefPointer<DownloadBatch> d;
+    if (findDownloadBatch(d,account,contact,inst)) {
+	bool ok = d->handleFileInfoRsp(oper,msg);
+	d = 0;
+	return ok;
+    }
+    return false;
+}
+
+// Handle resource.notify
+void FtManager::handleResourceNotify(bool online, const String& account, const String& contact,
+    const String& inst)
+{
+    if (!account)
+	return;
+    if (inst) {
+	if (!contact)
+	    return;
+	RefPointer<DownloadBatch> d;
+	if (findDownloadBatch(d,account,contact,inst)) {
+	    d->setOnline(online);
+	    d = 0;
+	}
+	return;
+    }
+    // Online with no instance: nothing to be done
+    if (online)
+	return;
+    lock();
+    ListIterator iter(m_downloadBatch);
+    for (GenObject* gen = 0; 0 != (gen = iter.get());) {
+	RefPointer<DownloadBatch> d = static_cast<DownloadBatch*>(gen);
+	if (!d)
+	    continue;
+	if (!d->match(account,contact))
+	    continue;
+	unlock();
+	d->setOnline(false);
+	d = 0;
+	lock();
+    }
+    unlock();
+}
+
+// Update file transfer items
+bool FtManager::updateFileTransfers(NamedList& params, bool checkEmpty)
+{
+    if (!Client::valid())
+	return false;
+    Window* w = Client::self()->getWindow(s_wndFileTransfer);
+    if (!w)
+	return false;
+    bool ok = Client::self()->updateTableRows(s_fileProgressList,&params,false,w);
+    if (ok && checkEmpty) {
+	NamedList items("");
+	Client::self()->getOptions(s_fileProgressList,&items,w);
+	if (items.getParam(0))
+	    Client::self()->setSelect(s_fileProgressCont,s_pageList,w);
+	else {
+	    Client::self()->setSelect(s_fileProgressCont,s_pageEmpty,w);
+	    Client::self()->setVisible(s_wndFileTransfer,false);
+	}
+    }
+    return ok;
+}
+
+// addNew: true to add a new item if not found
+bool FtManager::updateFileTransferItem(bool addNew, const String& id, NamedList& params,
+    bool setVisible, bool activate)
+{
+    if (!Client::valid())
+	return false;
+    Window* w = Client::self()->getWindow(s_wndFileTransfer);
+    if (!w)
+	return false;
+    NamedList p("");
+    NamedPointer* np = new NamedPointer(id,&params,String::boolText(addNew));
+    p.addParam(np);
+    bool ok = Client::self()->updateTableRows(s_fileProgressList,&p,false,w);
+    if (ok)
+	Client::self()->setSelect(s_fileProgressCont,s_pageList,w);
+    np->takeData();
+    if (setVisible)
+	Client::self()->setVisible(s_wndFileTransfer,true,activate);
+    return ok;
+}
+
+// Build file transfer item update data
+void FtManager::buildFileTransferItem(NamedList& list, const String& notifyId, bool send,
+    const String& account, const String& contact, const String& inst, const String& cName,
+    const String& file, const String& chan)
+{
+    list.assign(notifyId);
+    String text;
+    text << (send ? "Sending '" : "Receiving '") << file << "'";
+    text.append(cName ? cName : contact," from ");
+    list.addParam("text",text);
+    list.addParam("send",String::boolText(send));
+    list.addParam("select:progress","0");
+    list.addParam("account",account,false);
+    list.addParam("contact",contact,false);
+    list.addParam("contact_name",cName,false);
+    list.addParam("file",file);
+    list.addParam("channel",chan,false);
+    list.addParam("instance",inst,false);
+}
+
+// Update item progress
+bool FtManager::updateFtProgress(const String& notifyId, NamedList& params)
+{
+    unsigned int trans = params.getIntValue(YSTRING("transferred"),0,0);
+    unsigned int total = params.getIntValue(YSTRING("total"),0,0);
+    String progress;
+    if (total && total > trans)
+	progress = (unsigned int)((u_int64_t)trans * 100 / total);
+    else
+	return false;
+    NamedList p(notifyId);
+    p.addParam("select:progress",progress);
+    return updateFileTransferItem(false,notifyId,p);
+}
+
+// Update finished item
+bool FtManager::updateFtFinished(const String& notifyId, NamedList& params,
+    bool dropChan, const String* file, const String* contact, bool* terminated)
+{
+    if (terminated && *terminated)
+	return false;
+    String tmp;
+    const String* chan = 0;
+    NamedList itemParams("");
+    if (dropChan || !(file && contact && terminated)) {
+	getFileTransferItem(notifyId,itemParams);
+	if (!terminated && itemParams.getBoolValue(YSTRING("finished")))
+	    return false;
+	if (!contact) {
+	    contact = itemParams.getParam(YSTRING("contact_name"));
+	    if (TelEngine::null(contact))
+		contact = itemParams.getParam(YSTRING("contact"));
+	    if (!contact)
+		contact = &tmp;
+	}
+	if (!file) {
+	    file = itemParams.getParam(YSTRING("file"));
+	    if (!file)
+		file = &tmp;
+	}
+	if (dropChan)
+	    chan = itemParams.getParam(YSTRING("channel"));
+    }
+    String text;
+    const String& error = params[YSTRING("error")];
+    if (!TelEngine::null(chan))
+	ClientDriver::dropChan(*chan,error);
+    bool send = params.getBoolValue(YSTRING("send"));
+    String progress;
+    if (!error) {
+	progress = "100";
+	text << "Succesfully " << (send ? "sent '" : "received '");
+	text << *file << "'";
+	text << (send ? " to " : " from ") << *contact;
+    }
+    else {
+	text << "Failed to " << (send ? "send '" : "receive '");
+	text << *file << "'";
+	text << (send ? " to " : " from ") << *contact;
+	text << "\r\nError: " << error;
+    }
+    NamedList p(notifyId);
+    p.addParam("text",text);
+    p.addParam("select:progress",progress,false);
+    p.addParam("cancel","Close");
+    p.addParam("finished",String::boolText(true));
+    return updateFileTransferItem(false,notifyId,p);
+}
+
+// Retrieve a file transfer item
+// Delete the item from list. Drop the channel
+bool FtManager::getFileTransferItem(const String& id, NamedList& params, Window* w)
+{
+    if (!Client::valid())
+	return false;
+    if (!w)
+	w = Client::self()->getWindow(s_wndFileTransfer);
+    return w && Client::self()->getTableRow(s_fileProgressList,id,&params,w);
+}
+
+// Drop a file transfer item
+// Delete the item from list. Drop the channel
+bool FtManager::dropFileTransferItem(const String& id, const String* chan, bool hideEmpty)
+{
+    const char* reason = 0;
+    bool ok = false;
+    NamedList p("");
+    if (Client::valid()) {
+	Window* w = Client::self()->getWindow(s_wndFileTransfer);
+	if (w) {
+	    if (!chan) {
+		getFileTransferItem(id,p,w);
+		chan = p.getParam(YSTRING("channel"));
+		reason = p.getBoolValue(YSTRING("send")) ? "cancelled" : "closed";
+	    }
+	    ok = Client::self()->delTableRow(s_fileProgressList,id,w);
+	    // Close window if empty
+	    if (hideEmpty)
+		hideEmptyFtWindow(w);
+	}
+    }
+    if (!TelEngine::null(chan))
+	ClientDriver::dropChan(*chan,reason);
+    return ok;
+}
+
+// Hide file transfer empty file transfer window
+void FtManager::hideEmptyFtWindow(Window* w)
+{
+    if (!w) {
+	if (Client::valid())
+	    w = Client::self()->getWindow(s_wndFileTransfer);
+	if (!w)
+	    return;
+    }
+    NamedList items("");
+    Client::self()->getOptions(s_fileProgressList,&items,w);
+    if (!items.getParam(0)) {
+	Client::self()->setSelect(s_fileProgressCont,s_pageEmpty,w);
+	Client::self()->setVisible(s_wndFileTransfer,false);
+    }
+}
+
+void FtManager::cancelTimer()
+{
+    if (!m_timer)
+	return;
+    lock();
+    if (m_timer)
+	m_timer->cancel(false);
+    unlock();
+    unsigned int n = 1000 / Thread::idleMsec();
+    for (unsigned int i = 0; m_timer && i < n; i++)
+	Thread::idle();
+    Lock lck(this);
+    if (m_timer)
+	m_timer->cancel(true);
+    m_timer = 0;
+}
+
+
+//
+// FTManagerTimer
+//
+FTManagerTimer::FTManagerTimer(FtManager* owner)
+    : Thread("FtManager"),
+    m_owner(owner)
+{
+}
+    
+FTManagerTimer::~FTManagerTimer()
+{
+    notify();
+}
+
+void FTManagerTimer::run()
+{
+    while (m_owner && m_owner->timerTick()) {
+	Thread::idle();
+	if (Thread::check(false))
+	    break;
+    }
+    notify();
+}
+
+void FTManagerTimer::notify()
+{
+    if (!m_owner)
+	return;
+    m_owner->timerTerminated(this);
+    m_owner = 0;
 }
 
 
@@ -4615,11 +6740,13 @@ bool ClientLogic::debug(const String& name, bool active, Window* wnd)
 // Constructor
 DefaultLogic::DefaultLogic(const char* name, int prio)
     : ClientLogic(name,prio),
-    m_accounts(0)
+    m_accounts(0),
+    m_ftManager(0)
 {
     m_accounts = new ClientAccountList(name,new ClientAccount(NamedList::empty()));
     s_accWizard = new AccountWizard(m_accounts);
     s_mucWizard = new JoinMucWizard(m_accounts);
+    m_ftManager = new FtManager(m_accounts,"FileTransferManager");
     // Init chat states
     s_chatStates.addParam("composing","${sender} is typing ...");
     s_chatStates.addParam("paused","${sender} stopped typing");
@@ -4635,6 +6762,7 @@ DefaultLogic::~DefaultLogic()
 {
     TelEngine::destruct(s_accWizard);
     TelEngine::destruct(s_mucWizard);
+    TelEngine::destruct(m_ftManager);
     TelEngine::destruct(m_accounts);
 }
 
@@ -4787,7 +6915,8 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	handleMucsAction(name,wnd,params) ||
 	handleChatContactEditOk(name,wnd) ||
 	handleChatRoomEditOk(name,wnd) ||
-	handleFileTransferAction(name,wnd,params))
+	handleFileTransferAction(name,wnd,params) ||
+	handleFileShareAction(wnd,name,params))
 	return true;
 
     // *** MUC
@@ -4882,53 +7011,23 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 
     // List item changed
     if (name == YSTRING("listitemchanged")) {
-	if (!(params && Client::valid()))
+	if (!params)
 	    return false;
-	const String& list =  (*params)[YSTRING("list")];
+	const String& list = (*params)[YSTRING("widget")];
 	if (!list)
 	    return false;
 	const String& item = (*params)[YSTRING("item")];
 	if (!item)
 	    return false;
-	NamedList tmp("");
-	if (!Client::self()->getTableRow(list,item,&tmp,wnd))
+	return handleListItemChanged(wnd,list,item,*params);
+    }
+    // Drag&Drop actions
+    bool dropAsk = name == YSTRING("_yate_event_drop_accept");
+    if (dropAsk || name == YSTRING("_yate_event_drop")) {
+	if (!params)
 	    return false;
-	String* enabled = tmp.getParam(YSTRING("check:enabled"));
-	if (enabled) {
-	    bool ok = enabled->toBoolean();
-	    if (list == s_accountList) {
-		ClientAccount* acc = m_accounts->findAccount(item);
-		if (acc && ok != acc->startup()) {
-		    acc->startup(ok);
-		    acc->save(true,acc->params().getBoolValue(YSTRING("savepassword")));
-		    // Update telephony account selector(s)
-		    updateTelAccList(ok,acc);
-		    setAdvancedMode();
-		    if (Client::s_engineStarted) {
-			if (ok)
-			    setAccountStatus(m_accounts,acc);
-			else
-			    loginAccount(acc->params(),false);
-		    }
-		}
-	    }
-	    else if (list == s_logList) {
-		bool activeDel = ok || hasEnabledCheckedItems(list,wnd);
-		Client::self()->setActive(YSTRING("log_del"),activeDel,wnd);
-	    }
-	    else if (list == s_contactList) {
-		if (isLocalContact(&item,m_accounts)) {
-		    bool activeDel = ok || hasEnabledCheckedItems(list,wnd);
-		    Client::self()->setActive(YSTRING("abk_del"),activeDel,wnd);
-		}
-		else {
-		    NamedList tmp("");
-		    tmp.addParam("check:enabled",String::boolText(false));
-		    Client::self()->setTableRow(list,item,&tmp,wnd);
-		}
-	    }
-	}
-	return false;
+	const String& ctrl = (*params)[YSTRING("widget")];
+	return ctrl && handleDrop(dropAsk,wnd,ctrl,*params);
     }
     // OK actions
     if (name == YSTRING("ok")) {
@@ -5359,6 +7458,10 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	return true;
     }
 
+    // Specific select handlers
+    if (handleFileShareSelect(wnd,name,item,text,0))
+	return true;
+
     // Page changed in telephony tab
     if (name == YSTRING("framePages")) {
     	if (isPageCallsActive(wnd,true)) {
@@ -5431,6 +7534,17 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
     if (name == YSTRING("callto"))
 	return true;
 
+    return false;
+}
+
+// Handle 'select' with multiple items actions from user interface
+bool DefaultLogic::select(Window* wnd, const String& name, const NamedList& items)
+{
+    DDebug(ClientDriver::self(),DebugAll,"Logic(%s) select items=%p in window (%p,%s)",
+	toString().c_str(),&items,wnd,wnd ? wnd->id().c_str() : "");
+    // Specific select handlers
+    if (handleFileShareSelect(wnd,name,String::empty(),String::empty(),&items))
+	return true;
     return false;
 }
 
@@ -5526,7 +7640,9 @@ bool DefaultLogic::callIncoming(Message& msg, const String& dest)
     CallEndpoint* peer = static_cast<CallEndpoint*>(msg.userData());
     if (!peer)
 	return false;
-    const String& file = msg[YSTRING("file_name")];
+    String file = msg[YSTRING("file_name")];
+    Client::getLastNameInPath(file,file,'/');
+    Client::getLastNameInPath(file,file,'\\');
     if (!file)
 	return false;
     const String& oper = msg[YSTRING("operation")];
@@ -5549,6 +7665,7 @@ bool DefaultLogic::callIncoming(Message& msg, const String& dest)
     NamedList rows("");
     NamedList* upd = buildNotifArea(rows,"incomingfile",account,contact,"Incoming file",extra);
     upd->copyParams(msg,extra);
+    upd->setParam(YSTRING("file_name"),file);
     String text;
     text << "Incoming file '" << file << "'";
     String buf;
@@ -5733,9 +7850,11 @@ bool DefaultLogic::delAccount(const String& account, Window* wnd)
     // Disconnect
     Engine::enqueue(userLogin(acc,false));
     // Delete from memory and UI. Save the accounts file
+    m_ftManager->cancel(acc->toString());
     removeAccNotifications(acc);
     closeAccPasswordWnd(account);
     closeAccCredentialsWnd(account);
+    removeAccountShareInfo(acc);
     clearAccountContacts(*acc);
     updateChatRoomsContactList(false,acc);
     Client::self()->delTableRow(s_account,account);
@@ -5943,6 +8062,10 @@ bool DefaultLogic::delContact(const String& contact, Window* wnd)
     ClientContact* c = m_accounts->findContactByInstance(contact);
     if (!(c && m_accounts->isLocalContact(c)))
 	return false;
+    // Update shared
+    c->clearShare();
+    updateContactShareInfo(c,false);
+    m_ftManager->cancel(c->accountName(),contact);
     // Delete the contact from config and all UI controls
     contactDeleted(*c);
     String sectName;
@@ -6227,8 +8350,16 @@ bool DefaultLogic::handleUiAction(Message& msg, bool& stopLogic)
     // block until client finishes initialization
     while (!Client::self()->initialized())
 	Thread::idle();
+
     // call the appropiate function for the given action
-    Window* wnd = Client::getWindow(msg.getValue(YSTRING("window")));
+    Window* wnd = 0;
+    const String& wndName = msg[YSTRING("window")];
+    if (wndName) {
+	// Window was requested by message, do nothing if not found
+	wnd = Client::getWindow(wndName);
+	if (!wnd)
+	    return false;
+    }
     if (*action == YSTRING("set_status"))
 	return Client::self()->setStatusLocked(msg.getValue(YSTRING("status")),wnd);
     else if (*action == YSTRING("add_log"))
@@ -6277,6 +8408,8 @@ bool DefaultLogic::handleUiAction(Message& msg, bool& stopLogic)
 	ok = Client::self()->setFocus(name,msg.getBoolValue(YSTRING("select")),wnd);
     else if (*action == YSTRING("set_visible"))
 	ok = Client::self()->setShow(name,msg.getBoolValue(YSTRING("visible")),wnd);
+    else if (*action == YSTRING("set_property"))
+	ok = Client::self()->setProperty(name,msg[YSTRING("property")],msg[YSTRING("value")],wnd);
     else if (*action == YSTRING("has_option"))
 	ok = Client::self()->hasOption(name,msg.getValue(YSTRING("item")),wnd);
     else if (*action == YSTRING("add_option"))
@@ -6347,6 +8480,7 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
     if (!account)
 	return false;
     bool reg = msg.getBoolValue(YSTRING("registered"));
+    m_ftManager->handleResourceNotify(reg,account);
     const String& reasonStr = msg[YSTRING("reason")];
     const char* reason = reasonStr;
     // Notify wizards
@@ -6458,6 +8592,7 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 	    // Reset resource name to configured
 	    acc->resource().m_id = acc->m_params.getValue(YSTRING("resource"));
 	}
+	removeAccountShareInfo(acc);
 	clearAccountContacts(*acc);
 	setOfflineMucs(acc);
 	// Remove from chat accounts
@@ -6549,6 +8684,9 @@ bool DefaultLogic::handleUserRoster(Message& msg, bool& stopLogic)
 		continue;
 	    if (!queryRsp)
 		showUserRosterNotification(a,oper,msg,uri);
+	    c->clearShare();
+	    updateContactShareInfo(c,false);
+	    m_ftManager->cancel(c->accountName(),c->uri());
 	    removed.append(a->removeContact(id,false));
 	    continue;
 	}
@@ -6565,7 +8703,26 @@ bool DefaultLogic::handleUserRoster(Message& msg, bool& stopLogic)
 		continue;
 	}
 	const String& sub = msg[pref + "subscription"];
-	changed = setChangedString(c->m_subscription,sub) || changed;
+	bool hadSub = c->subscriptionFrom();
+	if (c->setSubscription(sub)) {
+	    changed = true;
+	    if (c->subscriptionFrom()) {
+		if (!hadSub) {
+		    updateContactShareInfo(c,true);
+		    notifyContactShareInfoChanged(c);
+		    // Request shared
+		    for (ObjList* o = c->resources().skipNull(); o; o = o->skipNext()) {
+			ClientResource* res = static_cast<ClientResource*>(o->get());
+			if (res->caps().flag(ClientResource::CapFileInfo))
+			    SharedPendingRequest::start(c,res);
+		    }
+		}
+	    }
+	    else {
+		updateContactShareInfo(c,false);
+		m_ftManager->cancel(c->accountName(),c->uri());
+	    }
+	}
 	// Get groups
 	changed = c->setGroups(msg,pref + "group") || changed;
 	if (changed) {
@@ -6579,11 +8736,12 @@ bool DefaultLogic::handleUserRoster(Message& msg, bool& stopLogic)
 	    continue;
 	NamedList* p = new NamedList(c->toString());
 	fillChatContact(*p,*c,true,newContact);
+	showChatContactActions(*c,p);
 	chatlist.addParam(new NamedPointer(c->toString(),p,String::boolText(true)));
 	if (c->hasChat())
 	    c->updateChatWindow(*p,"Chat [" + c->m_name + "]");
     }
-    // Update UI
+    // Update UI and share
     for (ObjList* o = removed.skipNull(); o; o = o->skipNext())
 	contactDeleted(*static_cast<ClientContact*>(o->get()));
     Client::self()->updateTableRows(s_chatContactList,&chatlist,false);
@@ -6624,6 +8782,10 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
     bool online = false;
     bool statusChanged = false;
     bool oldOnline = c->online();
+    ClientResource* res = 0;
+    bool hadFileSharedCap = c->haveShared();
+    bool hadFileSharedCapRes = false;
+    bool hadFileTransfer = (0 != c->findFileTransferResource());
     // Use a while() to break to the end
     while (true) {
 	// Avoid account own instance
@@ -6633,12 +8795,15 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 	bool updateCaps = !online && oper == YSTRING("updatecaps");
 	if (online || updateCaps || oper == YSTRING("offline")) {
 	    if (online || updateCaps) {
+		if (online && c->subscriptionFrom())
+		    m_ftManager->handleResourceNotify(true,account,contact,inst);
 		if (updateCaps) {
-		    ClientResource* res = c->findResource(inst);
+		    res = c->findResource(inst);
 		    if (res) {
-			res->setFileTransfer(msg.getBoolValue(YSTRING("caps.filetransfer")));
-			res->setAudio(msg.getBoolValue(YSTRING("caps.audio")));
-			if (res->m_audio)
+			hadFileSharedCapRes = (0 != res->caps().flag(ClientResource::CapFileInfo));
+			int caps = Client::decodeFlags(ClientResource::s_resNotifyCaps,msg,YSTRING("caps."));
+			res->caps().change(caps);
+			if (res->caps().flag(ClientResource::CapAudio))
 			    instid = inst;
 		    }
 		    break;
@@ -6649,12 +8814,14 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 		    break;
 		}
 		statusChanged = true;
-		ClientResource* res = c->findResource(inst);
-		if (!res)
+		res = c->findResource(inst);
+		if (res)
+		    hadFileSharedCapRes = (0 != res->caps().flag(ClientResource::CapFileInfo));
+		else
 		    res = new ClientResource(inst);
 		// Update resource
-		res->setFileTransfer(msg.getBoolValue(YSTRING("caps.filetransfer")));
-		res->setAudio(msg.getBoolValue(YSTRING("caps.audio")));
+		int caps = Client::decodeFlags(ClientResource::s_resNotifyCaps,msg,YSTRING("caps."));
+		res->caps().change(caps);
 		res->setPriority(msg.getIntValue(YSTRING("priority")));
 		res->setStatusText(msg.getValue(YSTRING("status")));
 		int stat = msg.getIntValue(YSTRING("show"),ClientResource::s_statusName);
@@ -6664,29 +8831,55 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 		// (Re)insert the resource
 		c->insertResource(res);
 		// Update/set resource in contacts list (only for resources with audio caps)
-		if (res->m_audio)
+		if (res->caps().flag(ClientResource::CapAudio))
 		    instid = inst;
 	    }
 	    else {
+		PendingRequest::cancel(c,inst);
+		bool sharedChanged = false;
+		ClientDir* removed = 0;
 		if (inst) {
 		    statusChanged = c->removeResource(inst);
 		    if (!c->resources().skipNull()) {
 			statusChanged = statusChanged || oldOnline;
 			c->setOnline(false);
 		    }
+		    sharedChanged = c->removeShared(inst,&removed);
 		}
-		else if (c->online()) {
-		    statusChanged = true;
-		    c->resources().clear();
-		    c->setOnline(false);
+		else {
+		    if (c->online()) {
+			statusChanged = true;
+			c->resources().clear();
+			c->setOnline(false);
+		    }
+		    sharedChanged = c->removeShared();
 		}
+		m_ftManager->handleResourceNotify(false,account,contact,inst);
 		// Remove resource(s) from contacts list
 		c->buildInstanceId(instid,inst);
+		if (sharedChanged) {
+		    // Remove shared items from UI
+		    removeSharedFromUI(c,removed);
+		    TelEngine::destruct(removed);
+		}
 	    }
 	    break;
 	}
 	// TODO: handle other operations like received errors
 	break;
+    }
+    // Online resource
+    if (res) {
+	if (c->subscriptionFrom()) {
+	    bool haveSharedFileCap = (0 != res->caps().flag(ClientResource::CapFileInfo));
+	    if (!hadFileSharedCapRes && haveSharedFileCap)
+		SharedPendingRequest::start(c,res,String::empty(),true,0,1000000);
+	}
+    }
+    if (hadFileSharedCap != c->haveShared() ||
+	hadFileTransfer != (0 != c->findFileTransferResource())) {
+	enableChatActions(c,true,true,true);
+	showChatContactActions(*c);
     }
     if (instid) {
 	if (online)
@@ -7154,6 +9347,7 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 			c->createChatWindow();
 			NamedList p("");
 			fillChatContact(p,*c,true,true);
+			fillChatContactShareStatus(p,*c,false,true);
 			ClientResource* res = c->status();
 			c->updateChatWindow(p,"Chat [" + c->m_name + "]",
 			    resStatusImage(res ? res->m_status : ClientResource::Offline));
@@ -7290,6 +9484,8 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 	return handleFileTransferNotify(msg,stopLogic);
     if (id == Client::UserData)
 	return handleUserData(msg,stopLogic);
+    if (id == Client::FileInfo)
+	return handleFileInfo(msg,stopLogic);
     return false;
 }
 
@@ -7393,10 +9589,12 @@ bool DefaultLogic::initializedClient()
     Client::self()->installRelay("muc.room",Client::MucRoom,100);
     Client::self()->installRelay("transfer.notify",Client::TransferNotify,100);
     Client::self()->installRelay("user.data",Client::UserData,100);
+    Client::self()->installRelay("file.info",Client::FileInfo,100);
 
     // File transfer
     s_lastFileDir = Client::s_settings.getValue("filetransfer","dir");
     s_lastFileFilter = Client::s_settings.getValue("filetransfer","filter");
+    s_lastFileShareDir = Client::s_settings.getValue("filetransfer","share_dir");
 
     // Chat log
     int v = lookup(cSect->getValue("logchat"),s_chatLogDict);
@@ -7437,6 +9635,8 @@ bool DefaultLogic::initializedClient()
     pChatMenu->addParam("item:" + s_chat,"");
     pChatMenu->addParam("item:" + s_chatCall,"");
     pChatMenu->addParam("item:" + s_fileSend,"");
+    pChatMenu->addParam("item:" + s_fileShare,"");
+    pChatMenu->addParam("item:" + s_fileShared,"");
     pChatMenu->addParam("item:" + s_chatShowLog,"");
     pChatMenu->addParam("item:" + s_chatInfo,"");
     pChatMenu->addParam("item:" + s_chatEdit,"");
@@ -7583,6 +9783,11 @@ void DefaultLogic::idleTimerTick(Time& time)
     if (Client::valid() && Client::self()->getBoolOpt(Client::OptNotifyChatState) &&
 	ContactChatNotify::checkTimeouts(*m_accounts,time))
 	Client::setLogicsTick();
+    // Pending requests
+    PendingRequest::s_mutex.lock();
+    for (ObjList* o = PendingRequest::s_items.skipNull(); o; o = o->skipNext())
+	(static_cast<PendingRequest*>(o->get()))->sendPendingMsg(time);
+    PendingRequest::s_mutex.unlock();
 }
 
 // Enable call actions
@@ -8014,30 +10219,15 @@ bool DefaultLogic::handleFileTransferAction(const String& name, Window* wnd,
 	return false;
     ClientContact* c = 0;
     String file;
-    if (name == s_fileSend) {
-	String contact;
-	if (params)
-	    contact = params->getValue(YSTRING("contact"));
-	if (!contact)
-	    Client::self()->getSelect(s_chatContactList,contact,wnd);
-	c = contact ? m_accounts->findContact(contact) : 0;
+    // Close file transfer
+    if (name.startsWith("fileprogress_close:",false)) {
+	String id = name.substr(19);
+	if (id && !m_ftManager->cancelFileTransfer(id))
+	    FtManager::dropFileTransferItem(id);
+	return true;
     }
-    else if (name.startsWith(s_fileSendPrefix,false))
-	c = m_accounts->findContact(name.substr(s_fileSendPrefix.length()));
-    else if (name.startsWith(s_fileOpenSendPrefix,false)) {
-	// Choose file dialog action (params ? ok : cancel)
-	file = params ? params->getValue(YSTRING("file")) : "";
-	if (!file)
-	    return true;
-	// Update/save last dir and filter
-	s_lastFileDir = params->getValue(YSTRING("dir"));
-	s_lastFileFilter = params->getValue(YSTRING("filter"));
-	Client::s_settings.setValue("filetransfer","dir",s_lastFileDir);
-	Client::s_settings.setValue("filetransfer","filter",s_lastFileFilter);
-	// Retrieve the contact
-	c = m_accounts->findContact(name.substr(s_fileOpenSendPrefix.length()));
-    }
-    else if (name.startsWith(s_fileOpenRecvPrefix,false)) {
+    // Destination chosen for file receive
+    if (name.startsWith(s_fileOpenRecvPrefix,false)) {
 	file = params ? params->getValue(YSTRING("file")) : "";
 	if (!file)
 	    return true;
@@ -8048,7 +10238,6 @@ bool DefaultLogic::handleFileTransferAction(const String& name, Window* wnd,
 	if (chan) {
 	    // Add file transfer item
 	    NamedList p(chan);
-	    String text;
 	    String buf;
 	    const String& account = item[YSTRING("account")];
 	    const String& contact = item[YSTRING("contact")];
@@ -8058,17 +10247,8 @@ bool DefaultLogic::handleFileTransferAction(const String& name, Window* wnd,
 		buildContactName(buf,*c);
 	    else
 		buf = contact;
-	    text << "Receiving '" << file << "'";
-	    text.append(buf," from ");
-	    p.addParam("send",String::boolText(false));
-	    p.addParam("text",text);
-	    p.addParam("select:progress","0");
-	    p.addParam("account",account);
-	    p.addParam("contact",contact);
-	    p.addParam("contact_name",buf,false);
-	    p.addParam("file",file);
-	    p.addParam("channel",chan);
-	    updateFileTransferItem(true,p,p,true);
+	    FtManager::addFileTransferItem(chan,false,account,contact,String::empty(),
+		buf,file,chan);
 	    // Remove the file
 	    File::remove(file);
 	    // Attach the consumer
@@ -8094,12 +10274,23 @@ bool DefaultLogic::handleFileTransferAction(const String& name, Window* wnd,
 	Client::s_settings.setValue("filetransfer","dir",s_lastFileDir);
 	return true;
     }
-    else if (name.startsWith("fileprogress_close:",false)) {
-	// Close file transfer
-	String id = name.substr(19);
-	if (id)
-	    dropFileTransferItem(id);
-	return true;
+    // Send file
+    if (name == s_fileSend)
+	c = getContactFromParamContext(m_accounts,params,s_chatContactList,wnd);
+    else if (name.startsWith("send_file:",false))
+	c = m_accounts->findContact(name.substr(10));
+    else if (name.startsWith(s_fileOpenSendPrefix,false)) {
+	// Choose file dialog action (params ? ok : cancel)
+	file = params ? params->getValue(YSTRING("file")) : "";
+	if (!file)
+	    return true;
+	// Update/save last dir and filter
+	s_lastFileDir = params->getValue(YSTRING("dir"));
+	s_lastFileFilter = params->getValue(YSTRING("filter"));
+	Client::s_settings.setValue("filetransfer","dir",s_lastFileDir);
+	Client::s_settings.setValue("filetransfer","filter",s_lastFileFilter);
+	// Retrieve the contact
+	c = m_accounts->findContact(name.substr(s_fileOpenSendPrefix.length()));
     }
     else
 	return false;
@@ -8110,6 +10301,9 @@ bool DefaultLogic::handleFileTransferAction(const String& name, Window* wnd,
     ClientResource* res = c->findFileTransferResource();
     Message m("call.execute");
     m.addParam("callto","filetransfer/send/" + file);
+    String tmp;
+    Client::getLastNameInPath(tmp,file);
+    m.addParam("remote_file",tmp,false);
     String direct("jingle/" + c->uri());
     if (res)
 	direct << "/" << res->toString();
@@ -8132,19 +10326,10 @@ bool DefaultLogic::handleFileTransferAction(const String& name, Window* wnd,
 	return false;
     }
     NamedList p(notify);
-    String text;
     String buf;
     buildContactName(buf,*c);
-    text << "Sending '" << file << "' to " << buf;
-    p.addParam("send",String::boolText(true));
-    p.addParam("text",text);
-    p.addParam("select:progress","0");
-    p.addParam("account",c->accountName());
-    p.addParam("contact",c->uri());
-    p.addParam("contact_name",buf,false);
-    p.addParam("file",file);
-    p.addParam("channel",m[YSTRING("id")]);
-    updateFileTransferItem(true,notify,p,true);
+    FtManager::addFileTransferItem(notify,true,c->accountName(),c->uri(),String::empty(),
+	buf,file,m[YSTRING("id")]);
     return true;
 }
 
@@ -8158,42 +10343,12 @@ bool DefaultLogic::handleFileTransferNotify(Message& msg, bool& stopLogic)
 	stopLogic = true;
 	return true;
     }
-    const String& status = msg[YSTRING("status")];
-    String progress;
-    String text;
-    bool running = status != YSTRING("terminated");
-    if (running) {
-	int trans = msg.getIntValue(YSTRING("transferred"));
-	int total = msg.getIntValue(YSTRING("total"));
-	if (total && total > trans)
-	    progress = (int)((int64_t)trans * 100 / total);
-    }
-    else {
-	NamedList p("");
-	getFileTransferItem(id,p);
-	const String& error = msg[YSTRING("error")];
-	bool send = msg.getBoolValue(YSTRING("send"));
-	if (!error) {
-	    progress = "100";
-	    text << "Succesfully " << (send ? "sent '" : "received '");
-	    text << p["file"] << "'";
-	    text << (send ? " to " : " from ") << p["contact_name"];
-	}
-	else {
-	    text << "Failed to " << (send ? "send '" : "receive '");
-	    text << p["file"] << "'";
-	    text << (send ? " to " : " from ") << p["contact_name"];
-	    text << "\r\nError: " << error;
-	}
-    }
-    if (!(progress || text))
+    if (m_ftManager->handleFileTransferNotify(msg,id))
 	return true;
-    NamedList p(id);
-    p.addParam("text",text,false);
-    p.addParam("select:progress",progress,false);
-    if (!running)
-	p.addParam("cancel","Close");
-    updateFileTransferItem(false,id,p);
+    if (FtManager::isRunningNotify(msg))
+	FtManager::updateFtProgress(id,msg);
+    else
+	FtManager::updateFtFinished(id,msg,true);
     return true;
 }
 
@@ -8318,6 +10473,150 @@ bool DefaultLogic::handleUserData(Message& msg, bool& stopLogic)
 	    account.c_str(),requested.c_str(),data.c_str(),error.c_str());
     }
     return true;
+}
+
+// Handle file.info messages.
+bool DefaultLogic::handleFileInfo(Message& msg, bool& stopLogic)
+{
+    static const String s_isFile = "isfile";
+
+    if (Client::isClientMsg(msg))
+	return false;
+    const String& oper = msg[YSTRING("operation")];
+    bool changed = false;
+    int rsp = 0;
+    if (oper == YSTRING("result"))
+	rsp = 1;
+    else if (oper == YSTRING("error"))
+	rsp = -1;
+    else if (oper == YSTRING("changed"))
+	changed = true;
+    else
+	return false;
+    if (Client::self()->postpone(msg,Client::FileInfo)) {
+	stopLogic = true;
+	return false;
+    }
+    RefPointer<PendingRequest> r;
+    if (rsp) {
+	const String& requestId = msg[YSTRING("id")];
+	if (!(requestId && PendingRequest::find(requestId,r)))
+	    return false;
+    }
+    const String& account = msg[YSTRING("account")];
+    const String& cUri = msg[YSTRING("from")];
+    const String& inst = msg[YSTRING("from_instance")];
+    if (r && r->type() == PendingRequest::SharedQuery)
+	m_ftManager->handleFileInfoRsp(account,cUri,inst,oper,msg);
+    ClientAccount* a = account ? m_accounts->findAccount(account) : 0;
+    if (!(a && a->resource().online())) {
+	if (r) {
+	    PendingRequest::remove(r->toString());
+	    r = 0;
+	}
+	return false;
+    }
+    while (true) {
+	if (changed) {
+	    handleFileSharedChanged(a,cUri,inst);
+	    break;
+	}
+	if (!rsp)
+	    break;
+	if (r->type() == PendingRequest::SharedQuery) {
+	    ClientContact* c = cUri ? a->findContactByUri(cUri) : 0;
+	    ClientResource* res = c ? c->findResource(inst) : 0;
+	    if (!res) {
+		rsp = -1;
+		break;
+	    }
+	    Window* wShared = getContactShareWnd(false,c);
+	    NamedList updSharedDirs("");
+	    NamedList updSharedDirContent("");
+	    String* path = msg.getParam(YSTRING("dir"));
+	    bool oldShared = c->haveShared();
+	    if (path) {
+		ClientDir* resDir = c->getShared(res->toString(),true);
+		ClientDir* dir = 0;
+		if (*path)
+		    dir = resDir->addDirPath(*path);
+		else
+		    dir = resDir;
+		if (!dir) {
+		    rsp = -1;
+		    break;
+		}
+		// Make sure the path is shown in dirs list
+		if (wShared)
+		    sharedDirsAddUpdate(updSharedDirs,c,resDir,*path);
+		for (int i = 1; rsp > 0; i++) {
+		    String prefix("item.");
+		    prefix << i;
+		    NamedString* ns = msg.getParam(prefix);
+		    if (!ns)
+			break;
+		    if (!*ns)
+			continue;
+		    prefix << ".";
+		    ClientFileItem* item = 0;
+		    if (msg.getBoolValue(prefix + s_isFile)) {
+			NamedList p("");
+			copySubParams(p,msg,prefix,"file_",s_isFile);
+			item = new ClientFile(*ns,&p);
+		    }
+		    else
+			item = new ClientDir(*ns);
+		    dir->addChild(item);
+		    // Show item in dirs list
+		    if (wShared && item->directory())
+			sharedDirsAddUpdate(updSharedDirs,c,resDir,*path,item->directory());
+		}
+		if (dir && !msg.getBoolValue(YSTRING("partial"))) {
+		    dir->updated(true);
+		    // Check selection
+		    Window* w = getContactShareWnd(false,c);
+		    if (w) {
+			String sel;
+			Client::self()->getSelect(s_fileSharedDirsList,sel,w);
+			if (sel) {
+			    String tmp;
+			    sharedBuildId(tmp,*resDir,*path);
+			    if (tmp == sel)
+				sharedContentUpdate(c,resDir,*path,dir,w);
+			}
+		    }
+		}
+		if (oldShared != c->haveShared()) {
+		    enableChatActions(c,true,true,true);
+		    showChatContactActions(*c);
+		}
+	    }
+	    else {
+		rsp = -1;
+		String* file = msg.getParam(YSTRING("file"));
+		if (file)
+		    Debug(ClientDriver::self(),DebugStub,
+			"DefaultLogic::handleFileInfo() not implemented for file");
+	    }
+	    if (wShared) {
+		if (updSharedDirs.getParam(0))
+		    Client::self()->updateTableRows(s_fileSharedDirsList,&updSharedDirs,
+			false,wShared);
+		if (updSharedDirContent.getParam(0))
+		    Client::self()->updateTableRows(s_fileSharedDirsContent,&updSharedDirContent,
+			false,wShared);
+	    }
+	    break;
+	}
+	rsp = -1;
+	break;
+    }
+    if (r) {
+	if (rsp < 0 || !msg.getBoolValue(YSTRING("partial")))
+	    PendingRequest::remove(r->toString());
+	r = 0;
+    }
+    return false;
 }
 
 // Show a generic notification
@@ -8559,7 +10858,7 @@ bool DefaultLogic::updateAccount(const NamedList& account, bool save,
     setAdvancedMode();
     // (Dis)connect account
     if (acc->resource().offline()) {
-	if (acc->startup())
+	if (!loaded && acc->startup())
 	    setAccountStatus(m_accounts,acc);
     }
     else {
@@ -8801,6 +11100,7 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 		c->createChatWindow();
 		NamedList p("");
 		fillChatContact(p,*c,true,true);
+		fillChatContactShareStatus(p,*c,false,true);
 		ClientResource* res = c->status();
 		c->updateChatWindow(p,"Chat [" + c->m_name + "]",
 		    resStatusImage(res ? res->m_status : ClientResource::Offline));
@@ -9723,6 +12023,318 @@ bool DefaultLogic::handleChanItemConfTransfer(bool conf, const String& name, Win
 	    ClientDriver::setConference(chan,true,0,true);
     }
     return true;
+}
+
+// Handle file share(d) related action
+bool DefaultLogic::handleFileShareAction(Window* wnd, const String& name, NamedList* params)
+{
+    if (!Client::valid())
+	return false;
+    ClientContact* c = 0;
+    // Show dirs/files we share
+    if (name == s_fileShare) {
+	c = getContactFromParamContext(m_accounts,params,s_chatContactList,wnd);
+	return showContactShareWnd(c);
+    }
+    if (name.startsWith("share_file:",false))
+	return showContactShareWnd(m_accounts->findContact(name.substr(11)));
+    // Show dirs/files shared by contact
+    if (name == s_fileShared) {
+	c = getContactFromParamContext(m_accounts,params,s_chatContactList,wnd);
+	return showContactSharedWnd(c);
+    }
+    if (name.startsWith("shared_file:",false))
+	return showContactSharedWnd(m_accounts->findContact(name.substr(12)));
+    // Item pressed in dir content, request/display directory
+    if (name == s_fileSharedDirsContent) {
+	String sel;
+	if (wnd)
+	    Client::self()->getSelect(name,sel,wnd);
+	if (!sel)
+	    return false;
+	String upDir;
+	if (Client::removeLastNameInPath(upDir,sel,'/',s_dirUp)) {
+	    // Extract last dir up and last item
+	    Client::removeLastNameInPath(upDir,upDir,'/');
+	    if (upDir) {
+		// Select the directory, this will trigger content update
+		Client::self()->setSelect(s_fileSharedDirsList,upDir,wnd);
+		return true;
+	    }
+	    return false;
+	}
+	c = m_accounts->findContact(wnd->context());
+	if (!c)
+	    return false;
+	String res;
+	String path;
+	sharedSplitId(sel,res,path);
+	ClientDir* d = c->getShared(res);
+	if (!d)
+	    return true;
+	ClientFileItem* it = d->findChild(path);
+	if (!it)
+	    return true;
+	if (it->directory())
+	    // Select the directory, this will trigger content update
+	    Client::self()->setSelect(s_fileSharedDirsList,sel,wnd);
+	return true;
+    }
+    else if (wnd) {
+	// Specific window commands
+	if (name == s_fileShareNew)
+	    return chooseDirShareDir(m_accounts,wnd);
+	if (name == s_fileShareDel)
+	    return handleShareDel(m_accounts,wnd->context(),wnd);
+	if (name == s_fileShareRename)
+	    return beginEditSelected(s_fileShareList,wnd,"name");
+	if (name.startsWith(s_fileShareChooseDirPrefix,false)) {
+	    String cid = name.substr(s_fileShareChooseDirPrefix.length());
+	    return handleShareSet(true,m_accounts,cid,wnd,params);
+	}
+	return false;
+    }
+    return false;
+}
+
+// Handle file share(d) related select
+bool DefaultLogic::handleFileShareSelect(Window* wnd, const String& name, const String& item,
+    const String& text, const NamedList* items)
+{
+    if (name == s_fileSharedDirsList) {
+	// Multiple select not handled
+	if (items)
+	    return false;
+	ClientContact* c = wnd ? m_accounts->findContact(wnd->context()) : 0;
+	if (!c)
+	    return false;
+	Client::self()->clearTable(s_fileSharedDirsContent,wnd);
+	if (!item)
+	    return true;
+	String resName;
+	String path;
+	sharedSplitId(item,resName,path);
+	ClientDir* res = c->getShared(resName);
+	if (res) {
+	    ClientFileItem* ch = res->findChild(path);
+	    ClientDir* d = ch ? ch->directory() : 0;
+	    if (d) {
+		sharedContentUpdate(c,res,path,d,wnd);
+		return true;
+	    }
+	}
+	return false;
+    }
+    if (name == s_fileSharedDirsContent) {
+	// Nothing to be done
+	return true;
+    }
+    if (name == s_fileShareList) {
+	if (!wnd)
+	    return false;
+	bool canDel = false;
+	bool canEdit = false;
+	if (items) {
+	    canDel = (0 != items->getParam(0));
+	    canEdit = canDel && (0 == items->getParam(1));
+	}
+	else {
+	    canDel = !item.null();
+	    canEdit = canDel;
+	}
+	NamedList p("");
+	p.addParam("active:" + s_fileShareDel,String::boolText(canDel));
+	p.addParam("active:" + s_fileShareRename,String::boolText(canEdit));
+	Client::self()->setParams(&p,wnd);
+	return true;
+    }
+    return false;
+}
+
+// Handle file share(d) item changes from UI
+bool DefaultLogic::handleFileShareItemChanged(Window* wnd, const String& name, const String& item,
+    const NamedList& params)
+{
+    if (!Client::valid())
+	return false;
+    if (name == s_fileShareList) {
+	ClientContact* c = wnd ? m_accounts->findContact(wnd->context()) : 0;
+	if (!c)
+	    return true;
+	NamedString* ns = c->share().getParam(item);
+	if (!ns)
+	    return true;
+	if (!*ns)
+	    Client::getLastNameInPath(*ns,ns->name());
+	const String& text = params[YSTRING("text.name")];
+	if (text != *ns) {
+	    if (text && !Client::findParamByValue(c->share(),text,ns)) {
+		String old = *ns;
+		*ns = text;
+		c->saveShare();
+		if (changeContactShareInfo(c,old,*ns))
+		    notifyContactShareInfoChanged(c);
+	    }
+	    else {
+		// Don't change: empty or another share with same name already exists
+		NamedList p("");
+		p.addParam("name",*ns);
+		Client::self()->setTableRow(name,item,&p,wnd);
+	    }
+	}
+	return true;
+    }
+    return false;
+}
+
+// Handle file share(d) drop events
+bool DefaultLogic::handleFileShareDrop(bool askOnly, Window* wnd, const String& ctrl,
+    NamedList& params, bool& retVal)
+{
+    if (!Client::valid())
+	return false;
+    Debug(ClientDriver::self(),DebugAll,
+	"Logic(%s) handleFileShareDrop() askOnly=%u wnd=(%p,%s) name=%s",
+	name().c_str(),askOnly,wnd,wnd ? wnd->toString().c_str():"",ctrl.c_str());
+    // Drop on local file system
+    if (ctrl == s_fileLocalFs) {
+	retVal = false;
+	if (!wnd)
+	    return true;
+	if (askOnly) {
+	    retVal = true;
+	    return true;
+	}
+	const String& item = params[YSTRING("item")];
+	const String& itType = item ? params[YSTRING("item_type")] : String::empty();
+	String dir;
+	if (item) {
+	    retVal = (item != s_dirUp) &&
+		(itType == YSTRING("dir") || itType == YSTRING("drive"));
+	    if (retVal)
+		dir = item;
+	}
+	if (!retVal) {
+	    Client::self()->getProperty(ctrl,"_yate_filesystem_path",dir,wnd);
+	    retVal = !dir.null();
+	}
+	if (!retVal)
+	    return true;
+	NamedIterator iter(params);
+	for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	    if (!ns->name().startsWith("drop:"))
+		continue;
+	    NamedList* nl = YOBJECT(NamedList,ns);
+	    if (!nl)
+		continue;
+	    String oper = ns->name().substr(5);
+	    const String* what = *nl ? static_cast<String*>(nl) : (String*)(ns);
+	    if (oper == YSTRING("yatedownload"))
+		m_ftManager->addShareDownload((*nl)[YSTRING("account")],
+		    (*nl)[YSTRING("contact")],(*nl)[YSTRING("instance")],*what,dir,
+		    wnd->id(),s_fileLocalFs);
+	}
+	return true;
+    }
+    // Share drop
+    if (ctrl == s_fileShareList) {
+	retVal = (wnd != 0);
+	if (retVal) {
+	    if (!askOnly)
+		retVal = handleShareSet(true,m_accounts,wnd->context(),wnd,&params,false);
+	}
+	return true;
+    }
+    return false;
+}
+
+// Handle list item change action
+bool DefaultLogic::handleListItemChanged(Window* wnd, const String& list, const String& item,
+    const NamedList& params)
+{
+    // Specific handlers
+    if (handleFileShareItemChanged(wnd,list,item,params))
+	return false;
+    if (!Client::valid())
+	return false;
+    NamedList tmp("");
+    if (!Client::self()->getTableRow(list,item,&tmp,wnd))
+	return false;
+    String* enabled = tmp.getParam(YSTRING("check:enabled"));
+    if (enabled) {
+	bool ok = enabled->toBoolean();
+        if (list == s_accountList) {
+	    ClientAccount* acc = m_accounts->findAccount(item);
+	    if (acc && ok != acc->startup()) {
+		acc->startup(ok);
+		acc->save(true,acc->params().getBoolValue(YSTRING("savepassword")));
+		// Update telephony account selector(s)
+		updateTelAccList(ok,acc);
+		setAdvancedMode();
+		if (Client::s_engineStarted) {
+		    if (ok)
+			setAccountStatus(m_accounts,acc);
+		    else
+			loginAccount(acc->params(),false);
+		}
+	    }
+	}
+	else if (list == s_logList) {
+	    bool activeDel = ok || hasEnabledCheckedItems(list,wnd);
+	    Client::self()->setActive(YSTRING("log_del"),activeDel,wnd);
+	}
+	else if (list == s_contactList) {
+	    if (isLocalContact(&item,m_accounts)) {
+		bool activeDel = ok || hasEnabledCheckedItems(list,wnd);
+		Client::self()->setActive(YSTRING("abk_del"),activeDel,wnd);
+	    }
+	    else {
+		NamedList tmp("");
+		tmp.addParam("check:enabled",String::boolText(false));
+		Client::self()->setTableRow(list,item,&tmp,wnd);
+	    }
+	}
+    }
+    return false;
+}
+
+// Handle drop events
+bool DefaultLogic::handleDrop(bool askOnly, Window* wnd, const String& ctrl,
+    NamedList& params)
+{
+    XDebug(ClientDriver::self(),DebugAll,"Logic(%s) handleDrop() wnd=(%p,%s) name=%s",
+	name().c_str(),wnd,wnd ? wnd->toString().c_str():"",ctrl.c_str());
+    bool retVal = false;
+    if (handleFileShareDrop(askOnly,wnd,ctrl,params,retVal))
+	return retVal;
+    return false;
+}
+
+// Handle file share info changed notification
+void DefaultLogic::handleFileSharedChanged(ClientAccount* a, const String& contact,
+    const String& inst)
+{
+    if (!(a && contact && inst))
+	return;
+    // Already requesting ?
+    String s;
+    PendingRequest::buildId(s,PendingRequest::SharedQuery,a->toString(),contact,inst);
+    if (PendingRequest::hasRequest(s))
+	return;
+    ClientContact* c = a->findContactByUri(contact);
+    if (!c)
+	return;
+    ClientDir* dir = 0;
+    c->removeShared(inst,&dir);
+    if (dir) {
+	removeSharedFromUI(c,dir);
+	TelEngine::destruct(dir);
+    }
+    ClientResource* res = c->findResource(inst);
+    if (res && res->caps().flag(ClientResource::CapFileInfo))
+	SharedPendingRequest::start(c,res);
+    enableChatActions(c,true,true,true);
+    showChatContactActions(*c);
 }
 
 

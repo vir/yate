@@ -121,7 +121,7 @@
       <property name="title" >
        <string>&amp;Friends</string>
       </property>
-      <property name="_yate_menuNoCopy" stdset="0">
+      <property name="_yate_menuNoCopy" stdset="0" >
        <bool>true</bool>
       </property>
       <widget class="QMenu" name="menuSubscription" >
@@ -138,6 +138,8 @@
       <addaction name="chatcontact_chat" />
       <addaction name="chatcontact_call" />
       <addaction name="send_file" />
+      <addaction name="share_file" />
+      <addaction name="shared_file" />
       <addaction name="chatcontact_showlog" />
       <addaction name="chatcontact_info" />
       <addaction name="chatcontact_edit" />
@@ -263,7 +265,6 @@
            <string>property:_yate_horizontalheader=false</string>
            <string>property:itemsExpandable=true</string>
            <string>property:autoExpand=true</string>
-           <string>property:rootIsDecorated=false</string>
            <string>property:allColumnsShowFocus=false</string>
            <string>property:indentation=0</string>
            <string>property:_yate_nogroup_caption=Not set</string>
@@ -287,6 +288,18 @@
            <string>property:_yate_itemtooltip=chatroom:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-family:'Arial'; font-size:10pt; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:14pt; font-weight:600;">${name}&lt;/span>&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${status_text}&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${contact}&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Account: ${account}&lt;/p>&lt;/body>&lt;/html></string>
            <string>property:_yate_itemmargins=contact:20</string>
            <string>property:_yate_itemmargins=chatroom:20</string>
+           <string>property:_yate_itempaintbutton=contact:share_file</string>
+           <string>property:_yate_itempaintbuttonparam=contact:share_file:_yate_size:20</string>
+           <string>property:_yate_itempaintbuttonparam=contact:share_file:_yate_iconsize:20</string>
+           <string>property:_yate_itempaintbuttonparam=contact:share_file:_yate_normal_icon:sharefile_20.png</string>
+           <string>property:_yate_itempaintbuttonparam=contact:share_file:_yate_pressed_icon:sharefile_pressed_20.png</string>
+           <string>property:_yate_itempaintbuttonparam=contact:share_file:_yate_hover_icon:sharefile_hover_20.png</string>
+           <string>property:_yate_itempaintbutton=contact:shared_file</string>
+           <string>property:_yate_itempaintbuttonparam=contact:shared_file:_yate_size:20</string>
+           <string>property:_yate_itempaintbuttonparam=contact:shared_file:_yate_iconsize:20</string>
+           <string>property:_yate_itempaintbuttonparam=contact:shared_file:_yate_normal_icon:sharedfile_20.png</string>
+           <string>property:_yate_itempaintbuttonparam=contact:shared_file:_yate_pressed_icon:sharedfile_pressed_20.png</string>
+           <string>property:_yate_itempaintbuttonparam=contact:shared_file:_yate_hover_icon:sharedfile_hover_20.png</string>
           </stringlist>
          </property>
         </widget>
@@ -1112,7 +1125,7 @@ border-bottom: 1px solid #717fa0;
                           <property name="dynamicActionEnterFilter" stdset="0" >
                            <bool>true</bool>
                           </property>
-                          <property name="_yate_textchangednotify" stdset="0">
+                          <property name="_yate_textchangednotify" stdset="0" >
                            <bool>true</bool>
                           </property>
                          </widget>
@@ -3058,7 +3071,7 @@ QTextEdit {
    <property name="text" >
     <string>Show notifications</string>
    </property>
-   <property name="_yate_menuNoCopy" stdset="0">
+   <property name="_yate_menuNoCopy" stdset="0" >
     <bool>true</bool>
    </property>
   </action>
@@ -3147,6 +3160,22 @@ QTextEdit {
    </property>
    <property name="text" >
     <string>Add chat room</string>
+   </property>
+  </action>
+  <action name="share_file" >
+   <property name="icon" >
+    <iconset>sharefile_menu.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Share Files</string>
+   </property>
+  </action>
+  <action name="shared_file" >
+   <property name="icon" >
+    <iconset>sharedfile_menu.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Shared Files</string>
    </property>
   </action>
  </widget>

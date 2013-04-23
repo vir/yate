@@ -37,6 +37,8 @@ class YStreamSetProcess;                 // A list of stream process threads
 class YJBConnectThread;                  // Stream connect thread
 class YJBEntityCapsList;                 // Entity capbilities
 class YJBEngine;                         // Jabber engine
+class JBResource;                        // Stored resource
+class JBContact;                         // Stored contact
 class StreamData;                        // Data attached to a stream
 class JBMessageHandler;                  // Module message handlers
 class JBModule;                          // The module
@@ -148,9 +150,62 @@ protected:
 };
 
 /*
+ * Stored resource
+ */
+class JBResource : public String
+{
+public:
+    inline JBResource(const char* name, const char* capsid = 0)
+	: String(name), m_capsId(capsid)
+	{}
+
+    String m_capsId;
+
+private:
+    JBResource() {}
+};
+
+/*
+ * Stored contact
+ */
+class JBContact : public String
+{
+public:
+    inline JBContact(const char* jid)
+	: String(jid)
+	{}
+    bool setSubscription(const String& sub);
+    inline JBResource* findResource(const String& name) {
+	    ObjList* o = m_resources.find(name);
+	    return o ? static_cast<JBResource*>(o->get()) : 0;
+	}
+    // Append or update a resource
+    inline void setResource(const String& name, const String& capsid) {
+	    if (!name)
+		return;
+	    JBResource* res = findResource(name);
+	    if (res)
+		res->m_capsId = capsid;
+	    else
+		m_resources.append(new JBResource(name,capsid));
+	}
+    inline void removeResource(const String& name)
+	{ m_resources.remove(name); }
+    inline void removeResources()
+	{ m_resources.clear(); }
+
+    String m_subscription;
+    XMPPDirVal m_sub;
+    ObjList m_resources;
+
+private:
+    JBContact() {}
+};
+
+/*
  * Data attached to a stream
  */
-class StreamData : public NamedList
+class StreamData : public JBContact
 {
 public:
     enum ReqType {
@@ -161,59 +216,55 @@ public:
 	UserDataSet,
 	DiscoInfo,
 	DiscoItems,
+	FileInfoGet,
     };
-    inline StreamData(JBClientStream& m_owner, bool requestRoster)
-	: NamedList(m_owner.local().bare()),
-	m_requestRoster(requestRoster), m_presence(0),
-	m_requests(""), m_reqIndex((unsigned int)Time::msecNow())
-	{}
-    ~StreamData()
-	{ TelEngine::destruct(m_presence); }
+    StreamData(JBClientStream& m_owner, const NamedList& params);
+    ~StreamData();
     // Retrieve a contact
-    inline NamedList* contact(const String& name) {
+    inline JBContact* contact(const String& name) {
 	    if (name &= *this)
 		return this;
-	    ObjList* o = find(name);
-	    return o ? static_cast<NamedList*>(o->get()) : 0;
+	    ObjList* o = m_contacts.find(name);
+	    return o ? static_cast<JBContact*>(o->get()) : 0;
 	}
     // Append a contact (if not found)
-    // This method is thread safe
-    inline NamedList* addContact(const String& name) {
-	    NamedList* c = contact(name);
-	    if (!c) {
-		c = new NamedList(name);
-		m_contacts.append(c);
-	    }
+    inline JBContact* addContact(const String& name) {
+	    JBContact* c = contact(name);
+	    if (!c)
+		c = static_cast<JBContact*>((m_contacts.append(new JBContact(name)))->get());
 	    return c;
 	}
-    // Remove a a contact (if not found)
-    // This method is thread safe
-    inline void removeContact(const String& name) {
-	    ObjList* o = find(name);
-	    if (o)
-		o->remove();
-	}
+    // Remove a contact
+    inline void removeContact(const String& name)
+	{ m_contacts.remove(name); }
     // Append or update a resource
     inline void setResource(const String& cn, const String& name, const String& capsid) {
-	    NamedList* c = name ? contact(cn) : 0;
+	    JBContact* c = contact(cn);
 	    if (c)
-		c->setParam(name,capsid);
+		c->setResource(name,capsid);
 	}
     // Remove a resource
     // Remove all of them if resource name is empty
     inline void removeResource(const String& cn, const String& name) {
-	    NamedList* c = contact(cn);
+	    JBContact* c = contact(cn);
 	    if (!c)
 		return;
 	    if (name)
-		c->clearParam(name);
+		c->removeResource(name);
 	    else
-		c->clearParams();
+		c->removeResources();
 	}
     // Set presence params
     void setPresence(const char* prio, const char* show, const char* status);
-    // Retrieve a contact
-    ObjList* find(const String& name);
+    // Retrieve the subscription of a given contact
+    inline XMPPDirVal subscription(const String& cn) {
+	    JBContact* c = contact(cn);
+	    return c ? c->m_sub : XMPPDirVal();
+	}
+    inline const String& subscriptionStr(const String& cn) {
+	    JBContact* c = contact(cn);
+	    return c ? c->m_subscription : String::empty();
+	}
     // Add a pending request. Return its id
     void addRequest(ReqType t, const NamedList& params, String& id);
     // Remove a pending request
@@ -245,7 +296,6 @@ public:
 	    StreamData* data = s ? static_cast<StreamData*>(s->userData()) : 0;
 	    return data && data->processResponse(ev,ok);
 	}
-
     // Request roster when connected
     bool m_requestRoster;
     // Presence data
@@ -256,6 +306,17 @@ public:
     NamedList m_requests;
     // Request index
     unsigned int m_reqIndex;
+    // Features
+    XMPPFeatureList* m_features;
+
+protected:
+    // Process file info get responses. Add data to message
+    // Return true to remove the request
+    bool processRspFileInfoGet(bool ok, NamedList* req, const String& reqId, Message* m,
+	JBEvent* ev);
+    // Request more data on existing request using RSM
+    bool requestMoreRsm(int type, int received, NamedList* req, const String& reqId,
+	NamedList* result, JBStream* stream);
 };
 
 /*
@@ -267,7 +328,7 @@ public:
     YJBEngine();
     ~YJBEngine();
     // Retrieve features
-    const XMPPFeatureList& features() const
+    inline const XMPPFeatureList& features() const
 	{ return m_features; }
     // Retrieve stream data from a stream
     inline StreamData* streamData(JBClientStream* s)
@@ -275,6 +336,22 @@ public:
     // Retrieve stream data from an event's stream
     inline StreamData* streamData(JBEvent* ev)
 	{ return ev ? streamData(ev->clientStream()) : 0; }
+    // Retrieve event 'from' subscription. This method is thread safe
+    inline XMPPDirVal subscription(JBEvent* ev) {
+	    if (!ev)
+		return XMPPDirVal();
+	    Lock lck(ev->stream());
+	    StreamData* sdata = streamData(ev);
+	    return sdata ? sdata->subscription(ev->from().bare()) : XMPPDirVal();
+	}
+    // Retrieve event 'from' subscription. This method is thread safe
+    inline String subscriptionStr(JBEvent* ev) {
+	    if (!ev)
+		return String::empty();
+	    Lock lck(ev->stream());
+	    StreamData* sdata = streamData(ev);
+	    return sdata ? sdata->subscriptionStr(ev->from().bare()) : String::empty();
+	}
     // (Re)initialize the engine
     void initialize(const NamedList* params, bool first = false);
     // Process events
@@ -291,6 +368,8 @@ public:
     bool handleUserUpdate(Message& msg, const String& line);
     // Process 'user.data' messages
     bool handleUserData(Message& msg, const String& line);
+    // Process 'file.info' messages
+    bool handleFileInfo(Message& msg, const String& line);
     // Process 'contact.info' messages
     bool handleContactInfo(Message& msg, const String& line);
     // Process 'jabber.iq' messages
@@ -319,6 +398,9 @@ public:
     // Handle 'iq' stanzas
     // The given event is always valid and carry a valid stream and xml element
     void processIqStanza(JBEvent* ev);
+    // Process IQs with child in FileInfoShare namespace
+    bool processIqFileInfo(JBEvent& ev, XmlElement& service, int tag,
+	XMPPUtils::IqType iqType);
     // Process stream Running, Destroy, Terminated events
     // The given event is always valid and carry a valid stream
     void processStreamEvent(JBEvent* ev, bool ok);
@@ -367,6 +449,7 @@ public:
 	ContactInfo    = -7,           // YJBEngine::handleContactInfo()
 	MucRoom        = -8,           // YJBEngine::handleMucRoom()
 	UserData       = -9,           // YJBEngine::handleUserData()
+	FileInfo       = -10,          // YJBEngine::handleFileInfo()
 	JabberIq       = 150,          // YJBEngine::handleJabberIq()
     };
     JBMessageHandler(int handler);
@@ -447,6 +530,8 @@ static String s_rosterQueryId = "roster-query";
 static String s_capsNode = "http://yate.null.ro/yate/client/caps"; // Node for entity capabilities
 static String s_yateClientNs = "http://yate.null.ro/yate/client";  // Client namespace
 static const String s_reqTypeParam = "jabberclient_requesttype";
+static bool s_fileInfoShareFeature = true; // Advertise file info share feature
+static bool s_rsmFeature = true;         // Advertise result set management feature
 
 // Commands help
 static const char* s_cmdStatus = "  status jabberclient stream_name";
@@ -472,6 +557,7 @@ static const TokenDict s_msgHandler[] = {
     {"muc.room",            JBMessageHandler::MucRoom},
     {"user.data",           JBMessageHandler::UserData},
     {"jabber.iq",           JBMessageHandler::JabberIq},
+    {"file.info",           JBMessageHandler::FileInfo},
     {0,0}
 };
 
@@ -496,6 +582,17 @@ static const TokenDict s_mucUserStatus[] = {
     {0,0}
 };
 
+static inline void addParamPrefix(NamedList& list, const char* param, const String& prefix,
+    const String& extra, const char* value)
+{
+    if (param)
+	list.addParam(param,value);
+    else if (prefix)
+	list.addParam(prefix + extra,value);
+    else
+	list.addParam(extra,value);
+}
+
 // Find an xml element's child text
 static inline const String& getChildText(XmlElement& xml, const String& name,
     XmlElement* start = 0)
@@ -505,12 +602,22 @@ static inline const String& getChildText(XmlElement& xml, const String& name,
 }
  
 // Add a child element text to a list of parameters
-static inline void addChildText(NamedList& list, XmlElement& parent,
-    int tag, int ns, const char* param = 0, bool emptyOk = false)
+static inline void addChildText(NamedList& list, XmlElement& parent, int tag, int ns,
+    const char* param = 0, const String& prefix = String::empty(), bool emptyOk = false)
 {
-    XmlElement* r = XMPPUtils::findFirstChild(parent,tag,ns);
-    if (r)
-	list.addParam(param ? param : r->unprefixedTag().c_str(),r->getText(),emptyOk);
+    const String* text = XMPPUtils::childText(parent,tag,ns);
+    if (text && (emptyOk || !TelEngine::null(text)))
+	addParamPrefix(list,param,prefix,XMPPUtils::s_tag[tag],*text);
+}
+
+// Add a child element from a list of parameters
+static inline XmlElement* createElementText(NamedList& list, const String& param,
+    int tag, int ns = XMPPNamespace::Count, bool emptyOk = false)
+{
+    String* tmp = list.getParam(param ? param : XMPPUtils::s_tag[tag]);
+    if (tmp && (emptyOk || !TelEngine::null(tmp)))
+	return XMPPUtils::createElement(tag,ns,*tmp);
+    return 0;
 }
 
 // Get a space separated word from a buffer
@@ -683,6 +790,88 @@ static Message* buildMucRoom(JBEvent& ev, const char* oper, const JabberID& cont
     return m;
 }
 
+// Build a file info request
+static XmlElement* buildFileInfoRequest(const NamedList& params)
+{
+    NamedString* dir = params.getParam("dir");
+    NamedString* file = !dir ? params.getParam("file") : 0;
+    XmlElement* ch = 0;
+    if (dir || file) {
+	// Request directory or file info
+	ch = XMPPUtils::createElement(XmlTag::Request);
+	XmlElement* x = 0;
+	if (dir) {
+	    x = XMPPUtils::createElementAttr(XmlTag::Directory,
+		XMPPUtils::s_tag[XmlTag::Name],*dir);
+	}
+	else
+	    x = XMPPUtils::createFileNsTransfer(*file);
+	ch->addChildSafe(x);
+	// Add result set management data if present
+	if (dir)
+	    ch->addChildSafe(XMPPUtils::createRSM(params));
+    }
+    else {
+	DDebug(&__plugin,DebugStub,"buildFileInfoRequest not implemented for non dir/file");
+	return 0;
+    }
+    return XMPPUtils::createFileInfoShareMatch(ch);
+}
+
+// Utility: add file info to message
+static void addFileMsg(Message& m, XmlElement& x, int ns, const String& prefix = String::empty())
+{
+    if (ns != XMPPNamespace::JingleAppsFileTransfer)
+	return;
+    const String* date = XMPPUtils::childText(x,XmlTag::Date);
+    if (date) {
+	unsigned int time = XMPPUtils::decodeDateTimeSec(*date);
+	if (time != (unsigned int)-1)
+	    m.addParam(prefix + "time",String(time));
+    }
+    const String* size = XMPPUtils::childText(x,XmlTag::Size,ns);
+    if (!TelEngine::null(size))
+	m.addParam(prefix + "size",*size);
+    // Add hash(es)
+    String hashPrefix = prefix + "hash_";
+    XmlElement* h = 0;
+    while (0 != (h = XMPPUtils::findNextChild(x,h,XmlTag::Hash,XMPPNamespace::Hash))) {
+	const char* hashName = 0;
+	const char* value = 0;
+	XMPPUtils::decodeHash(*h,hashName,value);
+	if (!TelEngine::null(hashName))
+	    m.addParam(hashPrefix + hashName,value);
+    }
+    addChildText(m,x,XmlTag::Desc,ns,0,prefix);
+}
+
+// Fill a list of standard features
+static void fillFeatures(XMPPFeatureList& features)
+{
+    features.add(XMPPNamespace::DiscoInfo);
+    features.add(XMPPNamespace::DiscoItems);
+    features.add(XMPPNamespace::Jingle);
+    features.add(XMPPNamespace::JingleError);
+    features.add(XMPPNamespace::JingleAppsRtp);
+    features.add(XMPPNamespace::JingleAppsRtpAudio);
+    features.add(XMPPNamespace::JingleAppsRtpInfo);
+    features.add(XMPPNamespace::JingleAppsRtpError);
+    features.add(XMPPNamespace::JingleTransportIceUdp);
+    features.add(XMPPNamespace::JingleTransportRawUdp);
+    features.add(XMPPNamespace::JingleTransfer);
+    features.add(XMPPNamespace::JingleDtmf);
+    features.add(XMPPNamespace::JingleAppsFileTransfer);
+    features.add(XMPPNamespace::JingleSession);
+    features.add(XMPPNamespace::JingleAudio);
+    features.add(XMPPNamespace::JingleTransport);
+    features.add(XMPPNamespace::DtmfOld);
+    features.add(XMPPNamespace::Roster);
+    features.add(XMPPNamespace::IqPrivate);
+    features.add(XMPPNamespace::VCard);
+    features.add(XMPPNamespace::IqVersion);
+    features.add(XMPPNamespace::EntityCaps);
+}
+
 
 /*
  * YJBEntityCapsList
@@ -734,16 +923,16 @@ void YJBEntityCapsList::capsAdded(JBEntityCaps* caps)
 	    if (!data)
 		continue;
 	    for (ObjList* o = data->m_contacts.skipNull(); o; o = o->skipNext()) {
-		NamedList* c = static_cast<NamedList*>(o->get());
-		NamedIterator iter(*c);
-		for (const NamedString* res = 0; 0 != (res = iter.get());) {
-		    if (*res != caps->toString())
+		JBContact* c = static_cast<JBContact*>(o->get());
+		for (ObjList* ores = c->m_resources.skipNull(); ores; ores = ores->skipNext()) {
+		    JBResource* r = static_cast<JBResource*>(o->get());
+		    if (r->m_capsId != caps->toString())
 			continue;
 		    Message* m = __plugin.message("resource.notify",stream);
 		    m->addParam("operation","updatecaps");
 		    m->addParam("contact",*c);
-		    m->addParam("instance",res->name());
-		    addCaps(*m,*res);
+		    m->addParam("instance",*r);
+		    addCaps(*m,r->m_capsId);
 		    Engine::enqueue(m);
 		}
 	    }
@@ -771,28 +960,7 @@ YJBEngine::YJBEngine()
     m_receive = new YStreamSetReceive(this,0,"recv");
     m_process = new YStreamSetProcess(this,0,"process");
     // Features
-    m_features.add(XMPPNamespace::DiscoInfo);
-    m_features.add(XMPPNamespace::DiscoItems);
-    m_features.add(XMPPNamespace::Jingle);
-    m_features.add(XMPPNamespace::JingleError);
-    m_features.add(XMPPNamespace::JingleAppsRtp);
-    m_features.add(XMPPNamespace::JingleAppsRtpAudio);
-    m_features.add(XMPPNamespace::JingleAppsRtpInfo);
-    m_features.add(XMPPNamespace::JingleAppsRtpError);
-    m_features.add(XMPPNamespace::JingleTransportIceUdp);
-    m_features.add(XMPPNamespace::JingleTransportRawUdp);
-    m_features.add(XMPPNamespace::JingleTransfer);
-    m_features.add(XMPPNamespace::JingleDtmf);
-    m_features.add(XMPPNamespace::JingleAppsFileTransfer);
-    m_features.add(XMPPNamespace::JingleSession);
-    m_features.add(XMPPNamespace::JingleAudio);
-    m_features.add(XMPPNamespace::JingleTransport);
-    m_features.add(XMPPNamespace::DtmfOld);
-    m_features.add(XMPPNamespace::Roster);
-    m_features.add(XMPPNamespace::IqPrivate);
-    m_features.add(XMPPNamespace::VCard);
-    m_features.add(XMPPNamespace::IqVersion);
-    m_features.add(XMPPNamespace::EntityCaps);
+    fillFeatures(m_features);
     m_features.m_identities.append(new JIDIdentity("client","im"));
     m_features.updateEntityCaps();
 }
@@ -1111,6 +1279,106 @@ bool YJBEngine::handleUserData(Message& msg, const String& line)
     return ok;
 }
 
+// Process 'file.info' messages
+bool YJBEngine::handleFileInfo(Message& msg, const String& line)
+{
+    const String& oper = msg[YSTRING("operation")];
+    if (!oper)
+	return false;
+    XDebug(this,DebugAll,"handleFileInfo() line=%s oper=%s",line.c_str(),oper.c_str());
+    XMPPUtils::IqType iqType = XMPPUtils::IqCount;
+    if (oper == YSTRING("query"))
+	iqType = XMPPUtils::IqGet;
+    else if (oper == YSTRING("result"))
+	iqType = XMPPUtils::IqResult;
+    else if (oper == YSTRING("error"))
+	iqType = XMPPUtils::IqError;
+    else if (oper == YSTRING("notifychanged"))
+	iqType = XMPPUtils::IqSet;
+    else
+	return false;
+    JBClientStream* s = findAccount(line);
+    if (!s)
+	return false;
+    JabberID to;
+    XMPPUtils::getJIDTo(msg,to);
+    DDebug(this,DebugAll,"handleFileInfo() line=%s oper=%s to=%s",
+	line.c_str(),oper.c_str(),to.c_str());
+    String pendingId;
+    XmlElement* child = 0;
+    if (iqType == XMPPUtils::IqGet) {
+	child = buildFileInfoRequest(msg);
+	if (!child) {
+	    TelEngine::destruct(s);
+	    return false;
+	}
+	StreamData::addRequest(s,StreamData::FileInfoGet,msg,pendingId);
+    }
+    else if (iqType == XMPPUtils::IqResult) {
+	XmlElement* offer = XMPPUtils::createElement(XmlTag::Offer);
+	XmlElement* rsm = XMPPUtils::createRSM(msg);
+	// Add items(s)
+	unsigned int n = 1;
+	while (true) {
+	    String prefix("item.");
+	    prefix << n++;
+	    NamedString* ns = msg.getParam(prefix);
+	    if (!ns)
+		break;
+	    prefix << ".";
+	    XmlElement* c = 0;
+	    if (msg.getBoolValue(prefix + "isfile")) {
+		c = XMPPUtils::createFileNsTransfer(*ns);
+		int time = msg.getIntValue(prefix + "time");
+		if (time > 0) {
+		    String tmp;
+		    XMPPUtils::encodeDateTimeSec(tmp,time);
+		    if (tmp)
+			c->addChildSafe(XMPPUtils::createElement(XmlTag::Date,tmp));
+		}
+		c->addChildSafe(createElementText(msg,prefix + "size",XmlTag::Size));
+		// Hashes:
+		String hashPref = prefix + "hash_";
+		NamedIterator iter(msg);
+		for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+		    if (!(ns->name().startsWith(hashPref) && *ns))
+			continue;
+		    String n = ns->name().substr(hashPref.length());
+		    if (n)
+			c->addChildSafe(XMPPUtils::createHash(n,*ns));
+		}
+		c->addChildSafe(createElementText(msg,prefix + "description",XmlTag::Desc));
+	    }
+	    else
+		c = XMPPUtils::createElementAttr(XmlTag::Directory,
+		    XMPPUtils::s_tag[XmlTag::Name],*ns);
+	    if (rsm) {
+		XmlElement* item = XMPPUtils::createElement(XmlTag::Item);
+		item->addChildSafe(c);
+		offer->addChildSafe(item);
+	    }
+	    else
+		offer->addChildSafe(c);
+	}
+	if (rsm)
+	    offer->addChildSafe(rsm);
+	child = XMPPUtils::createFileInfoShareMatch(offer);
+    }
+    else if (iqType == XMPPUtils::IqError) {
+	// TODO: add error child
+	Debug(this,DebugStub,"handleFileInfo not implemented for operation=%s",oper.c_str());
+    }
+    else if (iqType == XMPPUtils::IqSet)
+	child = XMPPUtils::createFileInfoShareMatch(XMPPUtils::createElement(XmlTag::Changed));
+    XmlElement* xml = XMPPUtils::createIq(iqType,0,to,pendingId ? pendingId : msg[YSTRING("id")]);
+    xml->addChildSafe(child);
+    bool ok = s->sendStanza(xml);
+    if (!ok && pendingId)
+	StreamData::removeRequest(s,pendingId);
+    TelEngine::destruct(s);
+    return ok;
+}
+
 // Process 'contact.info' messages
 bool YJBEngine::handleContactInfo(Message& msg, const String& line)
 {
@@ -1219,26 +1487,25 @@ bool YJBEngine::handleJabberAccount(Message& msg, const String& line)
 	    break;
 	Lock lock(s);
 	StreamData* data = streamData(s);
-	NamedList* c = data ? data->contact(*contact) : 0;
-	if (!c)
+	JBContact* c = data ? data->contact(*contact) : 0;
+	if (!(c && c->m_resources.skipNull()))
 	    break;
 	String* inst = msg.getParam("instance");
 	if (!TelEngine::null(inst)) {
-	    String* res = c->getParam(*inst);
-	    if (res)
-		s_entityCaps.addCaps(msg,*res);
+	    JBResource* res = c->findResource(inst);
+	    if (res && res->m_capsId)
+		s_entityCaps.addCaps(msg,res->m_capsId);
 	    break;
 	}
 	// Find an audio resource for the contact
-	unsigned int n = c->length();
-	for (unsigned int i = 0; i < n; i++) {
-	    NamedString* res = c->getParam(i);
-	    if (TelEngine::null(res))
+	for (ObjList* o = c->m_resources.skipNull(); o; o = o->skipNext()) {
+	    JBResource* res = static_cast<JBResource*>(o->get());
+	    if (!res->m_capsId)
 		continue;
 	    Lock lock(s_entityCaps);
-	    JBEntityCaps* caps = s_entityCaps.findCaps(*res);
+	    JBEntityCaps* caps = s_entityCaps.findCaps(res->m_capsId);
 	    if (caps && caps->hasAudio()) {
-		msg.setParam("instance",res->name());
+		msg.setParam("instance",*res);
 		s_entityCaps.addCaps(msg,*caps);
 		break;
 	    }
@@ -1376,12 +1643,7 @@ bool YJBEngine::handleUserLogin(Message& msg, const String& line)
 	    if (stream) {
 		// Build user data and set it
 		Lock lock(stream);
-		StreamData* d = new StreamData(*stream,
-		    msg.getBoolValue("request_roster",true));
-		if (msg.getBoolValue("send_presence",true))
-		    d->setPresence(msg.getValue("priority",s_priority),
-			 msg.getValue("show"),msg.getValue("status"));
-		stream->userData(d);
+		stream->userData(new StreamData(*stream,msg));
 	    }
 	}
 	else
@@ -1740,33 +2002,36 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     }
     // Disco info requests
     if (n == XMPPNamespace::DiscoInfo && type == XMPPUtils::IqGet) {
-	bool rsp = fromServer;
-	if (!rsp) {
-	    // Respond to users subscribed to our presence
-	    Lock lock(ev->stream());
-	    StreamData* sdata = streamData(ev);
-	    if (sdata) {
-		NamedList* c = sdata->contact(ev->from().bare());
-		if (c) {
-		    const String& sub = (*c)["subscription"];
-		    rsp = (sub == "both" || sub == "from");
-		}
+	XMPPFeatureList* f = 0;
+	Lock lock(ev->stream());
+	StreamData* sdata = streamData(ev);
+	if (sdata) {
+	    if (!fromServer) {
+		// Respond to users subscribed to our presence
+		XMPPDirVal sub = sdata->subscription(ev->from().bare());
+		if (sub.from())
+		    f = sdata->m_features ? sdata->m_features : &m_features;
 	    }
+	    else
+		f = sdata->m_features ? sdata->m_features : &m_features;
 	}
-	if (rsp) {
+	else
+	    f = &m_features;
+	lock.drop();
+	if (f) {
 	    XmlElement* xml = 0;
 	    String* node = service->getAttribute("node");
 	    const char* from = !fromServer ? ev->from().c_str() : 0;
 	    if (TelEngine::null(node))
-		xml = m_features.buildDiscoInfo(0,from,ev->id());
+		xml = f->buildDiscoInfo(0,from,ev->id());
 	    else if (*node == s_capsNode)
-		xml = m_features.buildDiscoInfo(0,from,ev->id(),s_capsNode);
+		xml = f->buildDiscoInfo(0,from,ev->id(),s_capsNode);
 	    else {
 		// Disco info to our node#hash
 		int pos = node->find("#");
 		if (pos > 0 && node->substr(0,pos) == s_capsNode &&
-		    node->substr(pos + 1) == m_features.m_entityCapsHash)
-		    xml = m_features.buildDiscoInfo(0,from,ev->id(),*node);
+		    node->substr(pos + 1) == f->m_entityCapsHash)
+		    xml = f->buildDiscoInfo(0,from,ev->id(),*node);
 	    }
 	    if (xml) {
 		ev->stream()->sendStanza(xml);
@@ -1820,6 +2085,11 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 	Engine::enqueue(m);
 	return;
     }
+    // FileInfoShare namespace
+    if (n == XMPPNamespace::FileInfoShare) {
+	if (processIqFileInfo(*ev,*service,t,type))
+	    return;
+    }
     // Check pending requests
     if (rsp && StreamData::processResponse(ev->clientStream(),ev,ok))
 	return;
@@ -1854,12 +2124,79 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 		xmlRsp = ev->buildIqResult(true);
 	}
     }
-    else if (!rsp) {
+    else if (!rsp && (fromServer || s_jabber->subscription(ev).from())) {
 	xmlRsp = XMPPUtils::createIq(XMPPUtils::IqError,ev->to(),ev->from(),ev->id());
 	xmlRsp->addChild(XMPPUtils::createError(XMPPError::TypeCancel,XMPPError::ServiceUnavailable));
     }
     if (xmlRsp)
 	ev->stream()->sendStanza(xmlRsp);
+}
+
+// Process IQs with child in FileInfoShare namespace
+bool YJBEngine::processIqFileInfo(JBEvent& ev, XmlElement& service, int tag,
+    XMPPUtils::IqType iqType)
+{
+    int ns = XMPPNamespace::FileInfoShare;
+    if (iqType != XMPPUtils::IqGet) {
+	if (iqType == XMPPUtils::IqSet) {
+	    XmlElement* chg = XMPPUtils::findFirstChild(service,XmlTag::Changed,ns);
+	    if (chg) {
+		Message* m = __plugin.message("file.info",ev.clientStream());
+		m->addParam("from",ev.from().bare(),false);
+		m->addParam("from_instance",ev.from().resource(),false);
+		m->addParam("operation","changed");
+		m->addParam("id",ev.id(),false);
+		Engine::enqueue(m);
+		XMPPDirVal sub = subscription(&ev);
+		if (sub.from())
+		    ev.sendIqResult();
+		return true;
+	    }
+	}
+	return false;
+    }
+    if (tag != XmlTag::Match)
+	return false;
+    XmlElement* req = XMPPUtils::findFirstChild(service,XmlTag::Request,ns);
+    if (!req)
+	return false;
+    const char* param = 0;
+    bool dir = false;
+    const char* fn = 0;
+    XmlElement* tmp = XMPPUtils::findFirstChild(*req,XmlTag::File,
+	XMPPNamespace::JingleAppsFileTransfer);
+    if (tmp) {
+	const String* n = XMPPUtils::childText(*tmp,XmlTag::Name,
+	    XMPPNamespace::JingleAppsFileTransfer);
+	if (!TelEngine::null(n)) {
+	    fn = *n;
+	    param = "file";
+	}
+    }
+    else {
+	tmp = XMPPUtils::findFirstChild(*req,XmlTag::Directory,ns);
+	if (tmp) {
+	    fn = tmp->attribute(XMPPUtils::s_tag[XmlTag::Name]);
+	    param = "dir";
+	    dir = true;
+	}
+    }
+    if (!param)
+	return false;
+    Message* m = __plugin.message("file.info",ev.clientStream());
+    m->addParam("from",ev.from().bare(),false);
+    m->addParam("from_instance",ev.from().resource(),false);
+    m->addParam("subscription",subscriptionStr(&ev),false);
+    m->addParam("operation","query");
+    m->addParam("id",ev.id(),false);
+    m->addParam(param,fn);
+    if (dir) {
+	XmlElement* rsm = XMPPUtils::findFirstChild(*req,XmlTag::Set,
+	     XMPPNamespace::ResultSetMngt);
+	XMPPUtils::addRSM(rsm,*m);
+    }
+    Engine::enqueue(m);
+    return true;
 }
 
 // Process stream Running, Destroy, Terminated events
@@ -1998,15 +2335,15 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 	if (TelEngine::null(jid))
 	    return;
 	Message* m = __plugin.message("user.roster",ev->clientStream());
-	String* sub = x->getAttribute("subscription");
-	bool upd = !sub || *sub != "remove";
+	const String* sub = x->getAttribute("subscription");
+	bool upd = !sub || *sub != YSTRING("remove");
 	ev->stream()->lock();
 	StreamData* sdata = streamData(ev);
 	if (sdata) {
 	    if (*jid != ev->stream()->local().bare()) {
 		if (upd) {
-		    NamedList* c = sdata->addContact(*jid);
-		    c->setParam("subscription",TelEngine::c_safe(sub));
+		    JBContact* c = sdata->addContact(*jid);
+		    c->setSubscription(sub ? *sub : String::empty());
 		}
 		else
 		    sdata->removeContact(*jid);
@@ -2042,8 +2379,8 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 	    String* jid = x->getAttribute("jid");
 	    if (!TelEngine::null(jid)) {
 		if (sdata && *jid != ev->stream()->local().bare()) {
-		    NamedList* c = sdata->addContact(*jid);
-		    c->setParam("subscription",x->attribute("subscription"));
+		    JBContact* c = sdata->addContact(*jid);
+		    c->setSubscription(x->attribute("subscription"));
 		    Debug(this,DebugAll,"Account(%s) updated roster item '%s'",
 			m->getValue("account"),jid->c_str());
 		}
@@ -2277,8 +2614,67 @@ void YJBEngine::completeStreamName(String& str, const String& partWord)
 
 
 /*
+ * JBContact
+ */
+bool JBContact::setSubscription(const String& sub)
+{
+    if (m_subscription == sub)
+	return false;
+    m_subscription = sub;
+    if (m_subscription == YSTRING("both"))
+	m_sub.replace(XMPPDirVal::Both);
+    else if (m_subscription == YSTRING("from"))
+	m_sub.replace(XMPPDirVal::From);
+    else if (m_subscription == YSTRING("both"))
+	m_sub.replace(XMPPDirVal::To);
+    else
+	m_sub.replace(0);
+    return true;
+}
+
+
+/*
  * StreamData
  */
+StreamData::StreamData(JBClientStream& m_owner, const NamedList& params)
+    : JBContact(m_owner.local().bare()),
+    m_requestRoster(false), m_presence(0),
+    m_requests(""), m_reqIndex((unsigned int)Time::msecNow()),
+    m_features(0)
+{
+    m_requestRoster = params.getBoolValue(YSTRING("request_roster"),true);
+    if (params.getBoolValue(YSTRING("send_presence"),true))
+	setPresence(params.getValue(YSTRING("priority"),s_priority),
+	    params.getValue(YSTRING("show")),params.getValue(YSTRING("status")));
+    // Extra features
+    bool fileInfoShare = params.getBoolValue(YSTRING("feature_fileinfo"),
+	s_fileInfoShareFeature);
+    bool rsm = params.getBoolValue(YSTRING("feature_rsm"),s_rsmFeature);
+    NamedString* ident = params.getParam(YSTRING("identity"));
+    if (fileInfoShare || rsm || ident) {
+        m_features = new XMPPFeatureList;
+	fillFeatures(*m_features);
+	if (fileInfoShare)
+	    m_features->add(XMPPNamespace::FileInfoShare);
+	if (rsm)
+	    m_features->add(XMPPNamespace::ResultSetMngt);
+	if (ident) {
+	    m_features->m_identities.append(new JIDIdentity(*ident ? ident->c_str() : "client",
+		params.getValue("identity.type","im"),params.getValue("identity.name")));
+	    // TODO: allow adding more identities
+	}
+	else
+	    m_features->m_identities.append(new JIDIdentity("client","im"));
+	m_features->updateEntityCaps();
+    }
+}
+
+StreamData::~StreamData()
+{
+    TelEngine::destruct(m_presence);
+    TelEngine::destruct(m_features);
+}
+
 // Set presence params
 void StreamData::setPresence(const char* prio, const char* show, const char* status)
 {
@@ -2295,22 +2691,12 @@ void StreamData::setPresence(const char* prio, const char* show, const char* sta
     m_presence->setParam("status",status);
 }
 
-// Retrieve a contact
-ObjList* StreamData::find(const String& name)
-{
-    for (ObjList* o = m_contacts.skipNull(); o; o = o->skipNext()) {
-	NamedList* c = static_cast<NamedList*>(o->get());
-	if (*c &= name)
-	    return o;
-    }
-    return 0;
-}
-
 // Add a pending request
 void StreamData::addRequest(ReqType t, const NamedList& params, String& id)
 {
     String type(t);
     NamedList* req = new NamedList(params);
+    req->clearParam(YSTRING("handlers"));
     id.clear();
     id = type;
     switch (t) {
@@ -2324,6 +2710,12 @@ void StreamData::addRequest(ReqType t, const NamedList& params, String& id)
 	case UserDataSet:
 	    id << "_" << params["data"].hash();
 	    break;
+	case FileInfoGet:
+	    {
+		JabberID to;
+		XMPPUtils::getJIDTo(params,to);
+		id << "_" << to.hash();
+	    }
 	default: ;
     }
     id << "_";
@@ -2383,6 +2775,9 @@ bool StreamData::processResponse(JBEvent* ev, bool ok)
 	    case DiscoItems:
 		msg = "contact.info";
 		break;
+	    case FileInfoGet:
+		msg = "file.info";
+		break;
 	    default:
 		Debug(&__plugin,DebugStub,
 		    "StreamData(%s) unhandled request type %s id=%s",
@@ -2392,6 +2787,7 @@ bool StreamData::processResponse(JBEvent* ev, bool ok)
     else
 	Debug(&__plugin,DebugStub,"StreamData(%s) no parameters in request %s",
 	    c_str(),ns->name().c_str());
+    bool remove = true;
     if (msg) {
 	Message* m = message(msg,*req,ok,ev->element());
 	if (ok && (t == DiscoInfo || t == DiscoItems)) {
@@ -2444,9 +2840,12 @@ bool StreamData::processResponse(JBEvent* ev, bool ok)
 	    }
 	    m->setParam("data.count",String(n));
 	}
+	else if (t == FileInfoGet)
+	    remove = processRspFileInfoGet(ok,req,ns->name(),m,ev);
 	Engine::enqueue(m);
     }
-    removeRequest(ev->id());
+    if (remove)
+	removeRequest(ev->id());
     return true;
 }
 
@@ -2454,6 +2853,7 @@ bool StreamData::processResponse(JBEvent* ev, bool ok)
 XmlElement* StreamData::buildPresence(StreamData* d, const char* to)
 {
     XmlElement* xml = XMPPUtils::createPresence(0,to);
+    const XMPPFeatureList* f = &s_jabber->features();
     if (d) {
 	if (!d->m_presence) {
 	    TelEngine::destruct(xml);
@@ -2465,16 +2865,16 @@ XmlElement* StreamData::buildPresence(StreamData* d, const char* to)
 	    if (p && p->name())
 		xml->addChild(XMPPUtils::createElement(p->name(),*p));
 	}
-	// TODO: Build data or module default caps
+	if (d->m_features)
+	    f = d->m_features;
     }
     else {
 	if (s_priority)
 	    XMPPUtils::setPriority(*xml,s_priority);
-	// TODO: Build module default caps
     }
     xml->addChild(XMPPUtils::createEntityCapsGTalkV1(s_capsNode,true));
-    xml->addChild(XMPPUtils::createEntityCaps(s_jabber->features().m_entityCapsHash,
-	s_capsNode));
+    if (f)
+	xml->addChild(XMPPUtils::createEntityCaps(f->m_entityCapsHash,s_capsNode));
     return xml;
 }
 
@@ -2490,6 +2890,125 @@ Message* StreamData::message(const char* msg, NamedList& req, bool ok, XmlElemen
 	getXmlError(*m,xml);
     m->clearParam(s_reqTypeParam);
     return m;
+}
+
+// Process file info get responses. Add data to message
+bool StreamData::processRspFileInfoGet(bool ok, NamedList* req, const String& reqId,
+    Message* m, JBEvent* ev)
+{
+    if (!(m && ev))
+	return true;
+    m->clearParam(YSTRING("to"));
+    m->clearParam(YSTRING("to_instance"));
+    m->setParam(YSTRING("from"),ev->from().bare());
+    m->setParam(YSTRING("from_instance"),ev->from().resource());
+    if (!ok)
+	return true;
+    bool dirReq = (0 != m->getParam(YSTRING("dir")));
+    bool fileReq = !dirReq && m->getParam(YSTRING("file"));
+    if (!(dirReq || fileReq))
+	return true;
+    XmlElement* match = XMPPUtils::findFirstChild(*ev->element(),
+	XmlTag::Match,XMPPNamespace::FileInfoShare);
+    XmlElement* offer = 0;
+    if (match)
+	offer = XMPPUtils::findFirstChild(*match,XmlTag::Offer,XMPPNamespace::FileInfoShare);
+    if (!offer)
+	return true;
+    if (fileReq) {
+	// File response (the file parameter is present in message)
+	int ns = XMPPNamespace::JingleAppsFileTransfer;
+	XmlElement* x = XMPPUtils::findFirstChild(*offer,XmlTag::File,ns);
+	if (x)
+	    addFileMsg(*m,*x,ns);
+	return true;
+    }
+    // Directory info result
+    int n = 0;
+    for (XmlElement* x = 0; 0 != (x = offer->findNextChild(x));) {
+	bool isFile = true;
+	XmlElement* process = 0;
+	if (x->unprefixedTag() == XMPPUtils::s_tag[XmlTag::Item]) {
+	    process = XMPPUtils::findFirstChild(*x,XmlTag::File);
+	    if (!process) {
+		process = XMPPUtils::findFirstChild(*x,XmlTag::Directory);
+		isFile = false;
+	    }
+	}
+	else if (x->unprefixedTag() == XMPPUtils::s_tag[XmlTag::File])
+	    process = x;
+	else if (x->unprefixedTag() == XMPPUtils::s_tag[XmlTag::Directory]) {
+	    process = x;
+	    isFile = false;
+	}
+	if (!process)
+	    continue;
+	String name;
+	int ns = XMPPUtils::xmlns(*process);
+	if (isFile) {
+	    if (ns == XMPPNamespace::JingleAppsFileTransfer)
+		name = XMPPUtils::childText(*process,XmlTag::Name,ns);
+	}
+	else {
+	    if (ns == XMPPNamespace::FileInfoShare)
+		name = process->attribute(XMPPUtils::s_tag[XmlTag::Name]);
+	}
+	if (!name)
+	    continue;
+	String prefix;
+	prefix << "item." << ++n;
+	m->addParam(prefix,name);
+	prefix << ".";
+	m->addParam(prefix + "isfile",String::boolText(isFile));
+	if (isFile)
+	    addFileMsg(*m,*process,ns,prefix);
+    }
+    XmlElement* rsm = XMPPUtils::findFirstChild(*offer,XmlTag::Set,XMPPNamespace::ResultSetMngt);
+    if (rsm)
+	XMPPUtils::addRSM(rsm,*m);
+    // Request more data ?
+    return !requestMoreRsm(FileInfoGet,n,req,reqId,m,ev->stream());
+}
+
+// Request more data on existing request using RSM
+bool StreamData::requestMoreRsm(int type, int received, NamedList* req, const String& reqId,
+    NamedList* result, JBStream* stream)
+{
+    static const String s_rri("requested_rsm_index");
+
+    if (received <= 0 || !req || !result || !stream)
+	return false;
+    int n = req->getIntValue(YSTRING("rsm_max"));
+    if (n <= 0 || n > received)
+	return false;
+    NamedString* index = req->getParam(YSTRING("rsm_index"));
+    int idx = index ? index->toInteger() : 0;
+    if (idx < 0)
+	return false;
+    int reqIndex = idx + received;
+    int count = result->getIntValue(YSTRING("rsm_count"));
+    if (count <= reqIndex)
+	return false;
+    *index = String(reqIndex);
+    XmlElement* child = 0;
+    XMPPUtils::IqType iqType = XMPPUtils::IqGet;
+    JabberID to;
+    if (type == FileInfoGet) {
+	child = buildFileInfoRequest(*req);
+        XMPPUtils::getJIDTo(*req,to);
+    }
+    else
+	Debug(&__plugin,DebugStub,"StreamData::requestMoreRsm() unhandled type %d",type);
+    if (!child)
+	return false;
+    XmlElement* xml = XMPPUtils::createIq(iqType,0,to,reqId);
+    xml->addChildSafe(child);
+    if (!stream->sendStanza(xml))
+	return false;
+    if (!req->getParam(s_rri))
+	req->addParam(s_rri,String(idx));
+    result->addParam("partial",String::boolText(true));
+    return true;
 }
 
 
@@ -2531,6 +3050,8 @@ bool JBMessageHandler::received(Message& msg)
 	    return s_jabber->handleMucRoom(msg,*line);
 	case UserData:
 	    return s_jabber->handleUserData(msg,*line);
+	case FileInfo:
+	    return s_jabber->handleFileInfo(msg,*line);
 	default:
 	    Debug(&__plugin,DebugStub,"JBMessageHandler(%s) not handled!",msg.c_str());
     }
@@ -2583,8 +3104,15 @@ void JBModule::initialize()
 	else
 	    Debug(this,DebugAll,"Entity capability is disabled");
     }
+    NamedList* gen = cfg.getSection("general");
     // Init the engine
-    s_jabber->initialize(cfg.getSection("general"),!m_init);
+    s_jabber->initialize(gen,!m_init);
+    // Init globals
+    NamedList dummy("");
+    if (!gen)
+	gen = &dummy;
+    s_fileInfoShareFeature = gen->getBoolValue(YSTRING("feature_fileinfo"),true);
+    s_rsmFeature = gen->getBoolValue(YSTRING("feature_rsm"),true);
 }
 
 // Message handler

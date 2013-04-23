@@ -149,6 +149,7 @@ Source: "Release\yjinglechan.yate"; DestDir: "{app}\modules"; Flags: replacesame
 Source: "Release\ystunchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jabber\jingle
 Source: "Release\ysockschan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jabber\jingle
 Source: "Release\filetransfer.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jabber\jingle
+Source: "Release\fileinfo.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jabber\jingle
 Source: "Release\gvoice.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jabber\jingle
 Source: "Release\client\jabberclient.yate"; DestDir: "{app}\modules\client"; Flags: replacesameversion; Components: driver\jabber\client
 Source: "Release\jabber\jbfeatures.yate"; DestDir: "{app}\modules\jabber"; Flags: replacesameversion; Components: driver\jabber\server

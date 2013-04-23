@@ -1800,6 +1800,56 @@ public:
      */
     static int decodeFlags(const TokenDict* dict, const String& flags, int defVal = 0);
 
+    /**
+     * Add path separator at string end. Set destination string.
+     * Source and dstination may be the same string
+     * @param dest Destination string
+     * @param path Source string
+     * @param sep Path separator, use Engine::pathSeparator() if 0
+     */
+    static void addPathSep(String& dest, const String& path, char sep = 0);
+
+    /**
+     * Fix path separator. Set it to platform default
+     * @param path The path
+     */
+    static void fixPathSep(String& path);
+
+    /**
+     * Remove path separator from string end. Set destination string.
+     * Source and dstination may be the same string
+     * @param dest Destination string
+     * @param path Source string
+     * @param sep Path separator, use Engine::pathSeparator() if 0
+     * @return True if destination string is not empty
+     */
+    static bool removeEndsWithPathSep(String& dest, const String& path, char sep = 0);
+
+    /**
+     * Set destination from last item in path.
+     * Source and dstination may be the same string
+     * @param dest Destination string
+     * @param path Source string
+     * @param sep Path separator, use Engine::pathSeparator() if 0
+     * @return True if destination string is not empty
+     */
+    static bool getLastNameInPath(String& dest, const String& path, char sep = 0);
+
+    /**
+     * Remove last name in path, set destination from remaining.
+     * If the path ends with 'sep', only 'sep' is removed
+     * If the path don't contain 'sep' dest is set to empty.
+     * Source and dstination may be the same string
+     * @param dest Destination string
+     * @param path Source string
+     * @param sep Path separator, use Engine::pathSeparator() if 0
+     * @param equalOnly Optional string to match last item.
+     *  Don't remove (set destination to empty) if not equal
+     * @return True if removed
+     */
+    static bool removeLastNameInPath(String& dest, const String& path, char sep = 0,
+	const String& equalOnly = String::empty());
+
     static Configuration s_settings;     // Client settings
     static Configuration s_actions;      // Logic preferrences
     static Configuration s_accounts;     // Accounts

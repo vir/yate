@@ -3119,6 +3119,64 @@ int Client::decodeFlags(const TokenDict* dict, const String& flags, int defVal)
     return found ? value : defVal;
 }
 
+// Add path separator at string end. Set destination string.
+void Client::addPathSep(String& dest, const String& path, char sep)
+{
+    if (!path)
+	return;
+    if (!sep)
+	sep = *Engine::pathSeparator();
+    dest = path;
+    unsigned int len = path.length();
+    if (path[len - 1] != sep)
+	dest += sep;
+}
+
+// Fix path separator. Set it to platform default
+void Client::fixPathSep(String& path)
+{
+    char repl = (*Engine::pathSeparator() == '/') ? '\\' : '/';
+    char* s = (char*)path.c_str();
+    for (unsigned int i = 0; i < path.length(); i++, s++)
+	if (*s == repl)
+	    *s = *Engine::pathSeparator();
+}
+
+// Remove chars from string end. Set destination string
+bool Client::removeEndsWithPathSep(String& dest, const String& src, char sep)
+{
+    if (!sep)
+	sep = *Engine::pathSeparator();
+    int pos = (int)(src.length()) - 1;
+    if (pos >= 0 && src[pos] == sep)
+	dest = src.substr(0,pos);
+    else
+	dest = src;
+    return !dest.null();
+}
+
+// Set destination from last item in path
+bool Client::getLastNameInPath(String& dest, const String& path, char sep)
+{
+    int pos = path.rfind(sep ? sep : *Engine::pathSeparator());
+    if (pos >= 0)
+	dest = path.substr(pos + 1);
+    if (!dest)
+	dest = path;
+    return !dest.null();
+}
+
+// Remove last name in path, set destination from remaining
+bool Client::removeLastNameInPath(String& dest, const String& path, char sep,
+    const String& equalOnly)
+{
+    int pos = path.rfind(sep ? sep : *Engine::pathSeparator());
+    bool ok = pos >= 0 && (!equalOnly || equalOnly == path.substr(pos + 1));
+    if (ok)
+	dest = path.substr(0,pos);
+    return ok;
+}
+
 // Build an 'ui.event' message
 Message* Client::eventMessage(const String& event, Window* wnd, const char* name,
 	NamedList* params)

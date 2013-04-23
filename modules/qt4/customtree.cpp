@@ -3541,9 +3541,9 @@ void QtPaintButton::updateOptState()
     if (m_enabled) {
 	if (m_hover) {
 	    if (!m_pressed)
-		m_image = &m_pressedImage;
-	    else
 	    	m_image = &m_hoverImage;
+	    else
+		m_image = &m_pressedImage;
 	}
 	else if (m_pressed)
 	    m_image = &m_pressedImage;

@@ -3065,6 +3065,60 @@ void Client::plain2html(String& buf, bool spaceEol)
     }
 }
 
+static bool lookupFlag(const char* what, const TokenDict* dict, int& flags)
+{
+    bool on = true;
+    if (what[0] == '!') {
+	what++;
+	on = false;
+    }
+    int n = lookup(what,dict);
+    if (!n)
+	return false;
+    if (on)
+	flags |= n;
+    else
+	flags &= ~n;
+    return true;
+}
+
+// Decode flags from dictionary values found in a list of parameters
+int Client::decodeFlags(const TokenDict* dict, const NamedList& params, const String& prefix)
+{
+    int flgs = 0;
+    if (!dict)
+	return 0;
+    NamedIterator iter(params);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (!*ns)
+	    continue;
+	const char* what = ns->name();
+	if (prefix) {
+	    if (!ns->name().startsWith(prefix))
+		continue;
+	    what += prefix.length();
+	}
+	lookupFlag(what,dict,flgs);
+    }
+    return flgs;
+}
+
+// Decode flags from dictionary values and comma separated list
+int Client::decodeFlags(const TokenDict* dict, const String& flags, int defVal)
+{
+    if (!(dict && flags))
+	return defVal;
+    int value = 0;
+    bool found = false;
+    ObjList* list = flags.split(',',false);
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	const String& s = o->get()->toString();
+	found = lookupFlag(s,dict,value) || found;
+    }
+    TelEngine::destruct(list);
+    return found ? value : defVal;
+}
+
 // Build an 'ui.event' message
 Message* Client::eventMessage(const String& event, Window* wnd, const char* name,
 	NamedList* params)
@@ -5706,6 +5760,41 @@ void ClientSound::doStop()
     }
     m_channel = "";
     m_started = false;
+}
+
+
+//
+// NamedInt
+//
+// Add an item to a list. Replace existing item with the same name
+void NamedInt::addToListUniqueName(ObjList& list, NamedInt* obj) 
+{
+    if (!obj)
+	return;
+    ObjList* last = &list;
+    for (ObjList* o = list.skipNull(); o; o = o->skipNext()) {
+	NamedInt* ni = static_cast<NamedInt*>(o->get());
+	if (*ni == *obj) {
+	    o->set(obj);
+	    return;
+	}
+	last = o;
+    }
+    last->append(obj);
+}
+
+// Clear all items with a given value
+void NamedInt::clearValue(ObjList& list, int val) 
+{
+    for (ObjList* o = list.skipNull(); o;) {
+	NamedInt* ni = static_cast<NamedInt*>(o->get());
+	if (ni->value() != val)
+	    o = o->skipNext();
+	else {
+	    o->remove();
+	    o = o->skipNull();
+	}
+    }
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

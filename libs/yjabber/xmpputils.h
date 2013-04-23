@@ -191,6 +191,9 @@ public:
 	ChatStates,                      // http://jabber.org/protocol/chatstates
 	YateCluster,                     // http://yate.null.ro/yate/cluster
 	JingleTransportGoogleRawUdp,     // http://www.google.com/transport/raw-udp
+	Hash,                            // urn:xmpp:hashes:1
+	ResultSetMngt,                   // http://jabber.org/protocol/rsm
+	FileInfoShare,                   // urn:xmpp:mam
 	// This value MUST be the last one: it's used as array bound
 	Count,
     };
@@ -388,6 +391,23 @@ public:
 	Compressed,                      // compressed
 	Compression,                     // compression
 	X,                               // x
+	Hash,                            // hash
+	Algo,                            // algo
+	Size,                            // size
+	Date,                            // date
+	Desc,                            // desc
+	Set,                             // set
+	After,                           // after
+	Before,                          // before
+	CountTag,                        // count
+	First,                           // first
+	Index,                           // index
+	Last,                            // last
+	Max,                             // max
+	Match,                           // match
+	Directory,                       // directory
+	Name,                            // name
+	Changed,                         // changed
 	// This value MUST be the last one: it's used as array bound
 	Count
     };
@@ -620,6 +640,7 @@ public:
 
 private:
     void parse();                        // Parse the string. Set the data 
+    void normalize();                    // Lowercase node and domain. Set bare jid and jid
 
     String m_node;                       // The node part
     String m_domain;                     // The domain part
@@ -1109,6 +1130,14 @@ public:
     };
 
     /**
+     * Find an xml tag in an array terminated with XmlTag::Count
+     * @param tag Tag to find
+     * @param tags Tags list
+     * @return XmlTag value, XmlTag::Count if not found
+     */
+    static int findTag(const String& tag, int* tags);
+
+    /**
      * Check if an xml element has type 'result' or 'error'
      * @param xml The element to check
      * @return True if the element is a response one
@@ -1116,6 +1145,28 @@ public:
     static inline bool isResponse(const XmlElement& xml) {
 	    String* tmp = xml.getAttribute("type");
 	    return tmp && (*tmp == "result" || *tmp == "error");
+	}
+
+    /**
+     * Retrieve a JID from 'to' and 'to_instance' parameters
+     * @param params Parameter list
+     * @param jid Destination to be set
+     */
+    static inline void getJIDTo(const NamedList& params, JabberID& jid) {
+	    jid = params[YSTRING("to")];
+	    if (jid && !jid.resource())
+		jid.resource(params[YSTRING("to_instance")]);
+	}
+
+    /**
+     * Retrieve a JID from 'from' and 'from_instance' parameters
+     * @param params Parameter list
+     * @param jid Destination to be set
+     */
+    static inline void getJIDFrom(const NamedList& params, JabberID& jid) {
+	    jid = params[YSTRING("from")];
+	    if (jid && !jid.resource())
+		jid.resource(params[YSTRING("from_instance")]);
 	}
 
     /**
@@ -1177,6 +1228,21 @@ public:
      *  Ignored if response is false
      */
     static XmlElement* createElement(const XmlElement& src, bool response, bool result);
+
+    /**
+     * Create an element with an attribute
+     * @param tag Element tag
+     * @param attrName Attribute name
+     * @param attrValue Attribute value
+     * @param ns Optional 'xmlns' attribute as enumeration
+     * @return A valid XmlElement pointer
+     */
+    static inline XmlElement* createElementAttr(int tag, const String& attrName,
+	const char* attrValue, int ns = XMPPNamespace::Count) {
+	    XmlElement* x = createElement(tag,ns);
+	    x->setAttributeValid(attrName,attrValue);
+	    return x;
+	}
 
     /**
      * Create an 'iq' element
@@ -1411,6 +1477,57 @@ public:
 	unsigned int fractions = 0, const char* text = 0);
 
     /**
+     * Create a 'file' element in file transfer namespace, add the name child if not empty
+     * @param name Optional file name
+     * @return XmlElement pointer
+     */
+    static XmlElement* createFileNsTransfer(const char* name = 0);
+
+    /**
+     * Create a 'hash' element as defined in XEP-0300
+     * @param name Hash name
+     * @param value Hash value
+     * @return XmlElement pointer
+     */
+    static XmlElement* createHash(const char* name, const char* value);
+
+    /**
+     * Decode a 'hash' element as defined in XEP-0300
+     * @param xml XML element to handle
+     * @param name Hash name
+     * @param value Hash value
+     */
+    static void decodeHash(XmlElement& xml, const char*& name, const char*& value);
+
+    /**
+     * Create a 'match' element in FileInfoShare namespace
+     * @param child Optional child
+     * @return XmlElement pointer
+     */
+    static inline XmlElement* createFileInfoShareMatch(XmlElement* child = 0) {
+	    XmlElement* m = createElement(XmlTag::Match,XMPPNamespace::FileInfoShare);
+	    if (child)
+		m->addChildSafe(child);
+	    return m;
+	}
+
+    /**
+     * Build a Result Set Management (XEP-0059) set element from a parameter list
+     * @param params List of parameters containing the RSM
+     * @param prefix Prefix for RSM parameters
+     * @return XmlElement pointer or 0
+     */
+    static XmlElement* createRSM(const NamedList& params, const String& prefix = "rsm_");
+
+    /**
+     * Add Result Set Management (XEP-0059) set element child data to a parameter list
+     * @param rsn The element in RSM namespace
+     * @param params List of parameters to add the RSM data
+     * @param prefix Prefix for RSM parameters
+     */
+    static void addRSM(XmlElement* rsm, NamedList& params, const String& prefix = "rsm_");
+
+    /**
      * Check if an element has a child with 'remove' tag
      * @param xml The element to check
      * @return True if the element has a child with 'remove' tag
@@ -1524,6 +1641,38 @@ public:
      */
     static XmlElement* findNextChild(const XmlElement& xml, XmlElement* start,
 	int t = XmlTag::Count, int ns = XMPPNamespace::Count);
+
+    /**
+     * Retrieve a child's text
+     * @param xml The xml
+     * @param tag Child tag
+     * @param ns Optional child namespace
+     * @return Pointer to child's text, 0 if the child was not found
+     */
+    static inline const String* childText(XmlElement& xml, int tag, int ns = XMPPNamespace::Count) {
+	    XmlElement* c = findFirstChild(xml,tag,ns);
+	    return c ? &(c->getText()) : 0;
+	}
+
+    /**
+     * Retrieve a child's text converted to integer
+     * @param xml The xml
+     * @param tag Child tag
+     * @param ns Optional child namespace
+     * @param defVal Default to return if not found or the string is not a number
+     * @param base Numeration base, 0 to autodetect
+     * @param minvalue Minimum value allowed
+     * @param maxvalue Maximum value allowed
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
+     * @return Integer value
+     */
+    static inline int childTextInt(XmlElement& xml, int tag, int ns = XMPPNamespace::Count,
+	int defVal = 0, int base = 0, int minvalue = INT_MIN, int maxvalue = INT_MAX,
+	bool clamp = true) {
+	    const String* tmp = childText(xml,tag,ns);
+	    return tmp ? tmp->toInteger(defVal,base,minvalue,maxvalue,clamp) : defVal;
+	}
 
     /**
      * Find an error child of a given element and decode it
@@ -1856,11 +2005,12 @@ public:
 
     /**
      * Retrieve an xml element from a NamedPointer.
-     * Release NamedPointer ownership if found
+     * Release NamedPointer ownership if found and requested
      * @param gen The object to be processed
+     * @param takeOwnerShip Take ownership (defaults to true)
      * @return XmlElement pointer or 0
      */
-    static XmlElement* getXml(GenObject* gen);
+    static XmlElement* getXml(GenObject* gen, bool takeOwnerShip = true);
 
     /**
      * Parse a string to an XmlElement
@@ -2051,6 +2201,14 @@ public:
     inline XMPPDirVal(const String& flags)
 	: m_value(0)
 	{ replace(flags); }
+
+    /**
+     * Copy constructor
+     * @param other Source to copy
+     */
+    inline XMPPDirVal(const XMPPDirVal& other)
+	: m_value(other.m_value)
+	{}
 
     /**
      * Replace all flags

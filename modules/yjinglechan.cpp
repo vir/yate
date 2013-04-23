@@ -1628,11 +1628,37 @@ bool YJGConnection::handleEvent(JGEvent* event)
 
 	bool rspOk = (event->type() == JGEvent::ResultOk);
 
-	// Notify ringing if initiate was confirmed and the remote party doesn't support it
-	if (rspOk && m_ftStatus == FTNone && event->action() == JGSession::ActInitiate &&
-	    !m_session->hasFeature(XMPPNamespace::JingleAppsRtpInfo))
-	    Engine::enqueue(message("call.ringing",false,true));
-	
+	if (event->action() == JGSession::ActInitiate) {
+	    if (m_ftStatus == FTNone) {
+		// Non file transfer session
+		// Notify ringing if initiate was confirmed and the remote party doesn't support it
+		if (rspOk && !m_session->hasFeature(XMPPNamespace::JingleAppsRtpInfo))
+		    Engine::enqueue(message("call.ringing",false,true));
+	    }
+	    else {
+		// File transfer session
+		// Send stream host
+		if (rspOk) {
+		    bool ok = false;
+		    if (m_session) {
+			m_session->buildSocksDstAddr(m_dstAddrDomain);
+			ok = setupSocksFileTransfer(false);
+			if (!ok) {
+			    ok = (m_ftStatus != FTTerminated);
+			    if (ok) {
+				// Send empty host
+				m_streamHosts.clear();
+				m_session->sendStreamHosts(m_streamHosts,&m_ftStanzaId);
+			    }
+			}
+		    }
+		    if (!ok)
+			hangup("noconn");
+		    return ok;
+		}
+	    }
+	}
+
 	if (m_ftStanzaId && m_ftStanzaId == event->id()) {
 	    m_ftStanzaId = "";
 	    String usedHost;
@@ -1955,18 +1981,6 @@ bool YJGConnection::presenceChanged(bool available, NamedList* params)
 	return true;
     }
     m_session->userData(this);
-    if (m_ftStatus != FTNone) {
-	m_session->buildSocksDstAddr(m_dstAddrDomain);
-	if (!setupSocksFileTransfer(false)) {
-	    if (m_ftStatus == FTTerminated) {
-		hangup("noconn");
-		return true;
-	    }
-	    // Send empty host
-	    m_streamHosts.clear();
-	    m_session->sendStreamHosts(m_streamHosts,&m_ftStanzaId);
-	}
-    }
     return false;
 }
 

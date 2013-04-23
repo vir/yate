@@ -407,6 +407,8 @@ bool FileSource::init(bool buildMd5, String& error)
 // Wait for a consumer to be attached. Send the file
 void FileSource::run()
 {
+    DDebug(&__plugin,DebugAll,"FileSource(%s) start running [%p]",
+	m_fileName.c_str(),this);
     m_transferred = 0;
     FileDriver::notifyStatus(true,m_notify,"pending",m_fileName,0,m_fileSize,0,&m_params);
 
@@ -415,18 +417,16 @@ void FileSource::run()
     // Use a while() to break to the end to cleanup properly
     while (true) {
 	// Wait until at least one consumer is attached
-    	while (true) {
+	while (true) {
 	    if (Thread::check(false)) {
 		error = "cancelled";
 		break;
 	    }
-	    if (!lock(5000000)) {
-		Thread::msleep(1);
+	    if (!lock(100000))
 		continue;
-	    }
-	    int cons = (0 != m_consumers.skipNull());
+	    bool cons = (0 != m_consumers.skipNull());
 	    unlock();
-	    Thread::yield();
+	    Thread::idle();
 	    if (cons)
 		break;
 	}
@@ -439,8 +439,11 @@ void FileSource::run()
 
 	FileDriver::notifyStatus(true,m_notify,"start",m_fileName,0,m_fileSize,0,
 	    &m_params,m_dropChan);
+
 	unsigned long tStamp = 0;
 	start = Time::msecNow();
+	if (!m_fileSize)
+	    break;
 	// Set file pos at start
 	if (-1 == m_file.Stream::seek(0)) {
 	    Thread::errorString(error,m_file.error());

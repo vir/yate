@@ -126,7 +126,7 @@ public:
     /**
      * Set or reset flags, check if changed
      * @param mask Flag(s)
-     * @param on True to set, false to reset
+     * @param ok True to set, false to reset
      * @return True if any flag contained in mask changed
      */
     inline bool changeFlagCheck(u_int32_t mask, bool ok) {
@@ -200,9 +200,10 @@ public:
 
     /**
      * Add an item to a list. Replace existing item with the same name
+     * @param list The list
      * @param obj The object
      */
-    static void addToListUniqueName(ObjList& list, NamedInt* obj); 
+    static void addToListUniqueName(ObjList& list, NamedInt* obj);
 
     /**
      * Clear all items with a given value
@@ -5862,7 +5863,7 @@ public:
     /**
      * Build and add a sub-directory if not have one already
      * Replace an existing file with the same name
-     * @param path Directory name
+     * @param name Directory name
      * @return ClientDir pointer or 0 on failure
      */
     ClientDir* addDir(const String& name);

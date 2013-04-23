@@ -107,6 +107,9 @@ const String XMPPNamespace::s_array[Count] = {
     "http://jabber.org/protocol/chatstates",               // ChatStates
     "http://yate.null.ro/yate/cluster",                    // YateCluster
     "http://www.google.com/transport/raw-udp",             // JingleTransportGoogleRawUdp
+    "urn:xmpp:hashes:1",                                   // Hash
+    "http://jabber.org/protocol/rsm",                      // ResultSetMngt
+    "urn:xmpp.mam",                                        // FileInfoShare
 };
 
 const String XMPPError::s_array[Count] = {
@@ -249,6 +252,23 @@ const String XmlTag::s_array[Count] = {
     "compressed",                        // Compressed
     "compression",                       // Compression
     "x",                                 // X
+    "hash",                              // Hash
+    "algo",                              // Algo
+    "size",                              // Size
+    "date",                              // Date
+    "desc",                              // Desc
+    "set",                               // Set
+    "after",                             // After
+    "before",                            // Before
+    "count",                             // CountTag
+    "first",                             // First
+    "index",                             // Index
+    "last",                              // Last
+    "max",                               // Max
+    "match",                             // Match
+    "directory",                         // Directory
+    "name",                              // Name
+    "changed",                           // Changed
 };
 
 XMPPNamespace XMPPUtils::s_ns;
@@ -342,13 +362,7 @@ void JabberID::set(const char* node, const char* domain, const char* resource)
     m_node = node;
     m_domain = domain;
     m_resource = resource;
-    String::clear();
-    if (m_node)
-	*this << m_node << "@";
-    *this << m_domain;
-    m_bare = *this;
-    if (m_node && m_resource)
-	*this << "/" << m_resource;
+    normalize();
 }
 
 bool JabberID::valid(const String& value)
@@ -383,11 +397,20 @@ void JabberID::parse()
 	m_domain = tmp.substr(0,i);
 	m_resource = tmp.substr(i+1,tmp.length()-i-1);
     }
-    // Set bare JID
-    m_bare = "";
+    normalize();
+}
+
+void JabberID::normalize()
+{
+    m_node.toLower();
+    m_domain.toLower();
+    m_bare.clear();
     if (m_node)
 	m_bare << m_node << "@";
     m_bare << m_domain;
+    assign(m_bare);
+    if (m_resource)
+	*this << "/" << m_resource;
 }
 
 // Get an empty JabberID
@@ -730,6 +753,17 @@ void XMPPFeatureList::updateEntityCaps()
 /*
  * XMPPUtils
  */
+// Find an xml tag in an array terminated with XmlTag::Count
+int XMPPUtils::findTag(const String& tag, int* tags)
+{
+    if (!(tag && tags))
+	return XmlTag::Count;
+    for (; *tags != XmlTag::Count; tags++)
+	if (tag == s_tag[*tags])
+	    return *tags;
+    return XmlTag::Count;
+}
+
 // Partially build an XML element from another one.
 XmlElement* XMPPUtils::createElement(const XmlElement& src, bool response, bool result)
 {
@@ -1035,6 +1069,76 @@ XmlElement* XMPPUtils::createDelay(unsigned int timeSec, const char* from,
     encodeDateTimeSec(time,timeSec,fractions);
     x->setAttributeValid("stamp",time);
     return x;
+}
+
+// Create a 'file' element in file transfer namespace, add the name child if not empty
+XmlElement* XMPPUtils::createFileNsTransfer(const char* name)
+{
+    XmlElement* x = createElement(XmlTag::File,XMPPNamespace::JingleAppsFileTransfer);
+    if (!TelEngine::null(name))
+	x->addChildSafe(createElement(XmlTag::Name,name));
+    return x;
+}
+
+// Create a 'hash' element as defined in XEP-0300
+XmlElement* XMPPUtils::createHash(const char* name, const char* value)
+{
+    XmlElement* x = createElement(XmlTag::Hash,XMPPNamespace::Hash,value);
+    x->setAttribute(s_tag[XmlTag::Algo],name);
+    return x;
+}
+
+// Decode a 'hash' element as defined in XEP-0300
+void XMPPUtils::decodeHash(XmlElement& xml, const char*& name, const char*& value)
+{
+    name = xml.attribute(s_tag[XmlTag::Algo]);
+    value = xml.getText();
+}
+
+// Build a Result Set Management (XEP-0059) set element from a parameter list
+XmlElement* XMPPUtils::createRSM(const NamedList& params, const String& prefix)
+{
+    static int s_rsmTags[] = {XmlTag::After,XmlTag::Before,XmlTag::CountTag,XmlTag::First,
+	XmlTag::Index,XmlTag::Last,XmlTag::Max,XmlTag::Count};
+    XmlElement* rsm = 0;
+    NamedIterator iter(params);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (!ns->name().startsWith(prefix))
+	    continue;
+	String tmp = ns->name().substr(prefix.length());
+	int tag = findTag(tmp,s_rsmTags);
+	if (tag == XmlTag::Count)
+	    continue;
+	XmlElement* x = createElement(tmp,*ns);
+	if (tag == XmlTag::First) {
+	    String* index = params.getParam(ns->name() + ".index");
+	    if (!TelEngine::null(index))
+		x->setAttribute(s_tag[XmlTag::Index],*index);
+	}
+	if (!rsm)
+	    rsm = createElement(XmlTag::Set,XMPPNamespace::ResultSetMngt);
+	rsm->addChildSafe(x);
+    }
+    return rsm;
+}
+
+// Add Result Set Management (XEP-0059) set element child data to a parameter list
+void XMPPUtils::addRSM(XmlElement* rsm, NamedList& params, const String& prefix)
+{
+    if (!rsm)
+	return;
+    for (XmlElement* c = 0; 0 != (c = rsm->findNextChild(c));) {
+	int tag = XmlTag::Count;
+	int ns = XMPPNamespace::Count;
+	getTag(*c,tag,ns);
+	String p = prefix + c->unprefixedTag();
+	params.addParam(p,c->getText());
+	if (tag == XmlTag::First && ns == XMPPNamespace::ResultSetMngt) {
+	    const char* index = c->attribute(s_ns[XmlTag::Index]);
+	    if (index)
+		params.addParam(p + ".index",index);
+	}
+    }
 }
 
 // Check if an element has a child with 'priority' tag
@@ -1524,13 +1628,13 @@ const String& XMPPUtils::body(XmlElement& xml, int ns)
 }
 
 // Retrieve an xml element from a NamedPointer. Release its ownership
-XmlElement* XMPPUtils::getXml(GenObject* gen)
+XmlElement* XMPPUtils::getXml(GenObject* gen, bool takeOwnerShip)
 {
     if (!gen)
 	return 0;
     NamedPointer* np = static_cast<NamedPointer*>(gen->getObject(YATOM("NamedPointer")));
     XmlElement* xml = np ? static_cast<XmlElement*>(np->userObject(YATOM("XmlElement"))) : 0;
-    if (xml)
+    if (xml && takeOwnerShip)
 	np->takeData();
     return xml;
 }

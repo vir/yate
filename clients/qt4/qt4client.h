@@ -63,7 +63,9 @@
 
 namespace TelEngine {
 
+class QtRefObjectHolder;                 // A QObject holding a RefPointer
 class QtEventProxy;                      // Proxy to global QT events
+class QtUrlBuilder;                      // QUrl builder
 class QtClient;                          // The QT based client
 class QtDriver;                          // The QT based telephony driver
 class QtWindow;                          // A QT window
@@ -74,11 +76,63 @@ class QtCustomObject;                    // A custom QT object
 class QtCustomWidget;                    // A custom QT widget
 class QtTable;                           // A custom QT table widget
 class QtSound;                           // A QT client sound
+class QtDragAndDrop;                     // Base class for Drag&Drop operations
+class QtDrop;                            // Drop data holder
+class QtListDrop;                        // Drop data holder for widget list items
+class QtBusyWidget;                      // Busy widget to show over controls
 
 // Macro used to get a QT object's name
 // Can't use an inline function: the QByteArray object returned by toUtf8()
 //  would be destroyed on exit
 #define YQT_OBJECT_NAME(qobject) ((qobject) ? (qobject)->objectName().toUtf8().constData() : "")
+
+
+/**
+ * A QObject holding a RefPointer. Suitable to be set in QVariant
+ * @short A QObject holding a RefPointer
+ */
+class YQT4_API QtRefObjectHolder : public QObject
+{
+    Q_CLASSINFO("QtRefObjectHolder","Yate")
+    Q_OBJECT
+public:
+    /**
+     * Constructor
+     */
+    inline QtRefObjectHolder()
+	{}
+
+    /**
+     * Constructor
+     * @param obj Object to set
+     */
+    inline QtRefObjectHolder(RefObject* obj)
+	: m_refObj(obj)
+	{}
+
+    /**
+     * Copy constructor
+     * @param other Source object
+     */
+    inline QtRefObjectHolder(const QtRefObjectHolder& other)
+	: m_refObj((RefObject*)other.m_refObj)
+	{}
+
+    /**
+     * Build a variant from RefObject
+     * @param obj Object to build from
+     * @param force True to build empty variant, false (default) to fail if obj is 0
+     * @return QVariant
+     */
+    static inline QVariant setVariant(RefObject* obj, bool force = false) {
+	    QtRefObjectHolder data(obj);
+	    if (data.m_refObj)
+		return qVariantFromValue(data);
+	    return QVariant();
+	}
+
+    RefPointer<RefObject> m_refObj;
+};
 
 /**
  * Proxy to global QT events
@@ -118,6 +172,41 @@ private:
     String m_name;                       // Object name
 };
 
+/**
+ * This class holds data used to build an url
+ * @short QUrl builder
+ */
+class YQT4_API QtUrlBuilder : public QObject, public GenObject
+{
+    YCLASS(QtUrlBuilder,GenObject)
+    Q_CLASSINFO("QtUrlBuilder","Yate")
+    Q_OBJECT
+public:
+    /**
+     * Constructor
+     * @param parent Object parent
+     * @param format Format to use when building base URL
+     * @param queryParams Query params to add to URL
+     */
+    QtUrlBuilder(QObject* parent, const String& format, const String& queryParams);
+
+    /**
+     * Destructor
+     */
+    ~QtUrlBuilder();
+    
+    /**
+     * Build URL
+     * @param params URL params
+     * @return QUrl object
+     */
+    virtual QUrl build(const NamedList& params) const;
+
+protected:
+    String m_format;
+    ObjList* m_queryParams;
+};
+
 class YQT4_API QtClient : public Client
 {
     friend class QtWindow;
@@ -136,6 +225,15 @@ public:
 	CornerTopRight = PosTop | PosRight,
 	CornerBottomLeft = PosBottom | PosLeft,
 	CornerBottomRight = PosBottom | PosRight,
+    };
+
+    /**
+     * Sorting
+     */
+    enum Sort {
+	SortNone = 0,
+	SortAsc,
+	SortDesc,
     };
 
     QtClient();
@@ -227,6 +325,20 @@ public:
 		dest.addParam(param,src.toUtf8().constData());
 	    else
 		dest.addParam(src.toUtf8().constData(),param);
+	}
+
+    /**
+     * Get an UTF8 representation of a QT string and add it to a list of parameters if not empty
+     * @param dest Destination list
+     * @param param Parameter name/value
+     * @param src Source QT string
+     * @param setValue True to set the QT string as parameter value, false to set it
+     *  as parameter name
+     */
+    static inline void safeGetUtf8(NamedList& dest, const char* param,
+	const QString& src, bool setValue = true) {
+	    if (src.length() > 0)
+		getUtf8(dest,param,src,setValue);
 	}
 
     /**
@@ -472,6 +584,35 @@ public:
     static void moveWindow(QtWindow* w, int pos);
 
     /**
+     * Append a non empty string to a list if not already there
+     * @param list Destination list
+     * @param str The string to append
+     */
+    static inline void addStrUnique(QStringList& list, QString str) {
+	    if (str.length() > 0 && !list.contains(str))
+		list.append(str);
+	}
+
+    /**
+     * Append non empty strings to a list if not already there
+     * @param list Destination list
+     * @param strs Source list
+     */
+    static void addStrListUnique(QStringList& list, QStringList src) {
+	    for (int i = 0; i < src.size(); i++)
+		addStrUnique(list,src[i]);
+	}
+
+    /**
+     * Build a QStringList from a list of strings
+     * @param str The string
+     * @param sep The separator
+     * @param emptyOk True to process empty string items
+     * @return QStringList
+     */
+    static QStringList str2list(const String& str, char sep = ',', bool emptyOk = true);
+
+    /**
      * Split an integer string list
      * @param str The string
      * @param defVal Default value for failed items
@@ -488,6 +629,14 @@ public:
     static void intList2str(String& str, QList<int> list);
 
     /**
+     * Get sorting from string
+     * @param str Sorting name
+     * @param defVal Default value to return if invalid
+     * @return Sorting as QtClientSort enumeration
+     */
+    static int str2sort(const String& str, int defVal = SortNone);
+
+    /**
      * Apply a comma separated list of window flags to a widget
      * @param wid The widget
      * @param str The list of flags
@@ -501,6 +650,24 @@ public:
      * @return QT Alignment mask
      */
     static int str2align(const String& flags, int initVal = 0);
+
+    /**
+     * Retrieve QT selection mode from a string value
+     * @param value String value
+     * @param defVal Default value to return if invalid
+     * @return QAbstractItemView selection mode
+     */
+    static QAbstractItemView::SelectionMode str2selmode(const String& value,
+	QAbstractItemView::SelectionMode defVal = QAbstractItemView::SingleSelection);
+
+    /**
+     * Retrieve QT edit triggers from a string value
+     * @param value String value
+     * @param defVal Default value to set if invalid
+     * @return QAbstractItemView edit triggers mask
+     */
+    static QAbstractItemView::EditTriggers str2editTriggers(const String& value,
+	QAbstractItemView::EditTrigger defVal = QAbstractItemView::NoEditTriggers);
 
     /**
      * Send an event to an object's child. The event must be already accepted
@@ -523,6 +690,19 @@ public:
     static bool getPixmapFromCache(QPixmap& pixmap, const QString& file);
 
     /**
+     * Retrieve a pixmap from global application cache. Add skin path to file name
+     * Load and add it to the cache if not found
+     * @param pixmap Destination pixmap to set
+     * @param file File name to retrieve or load
+     * @return True on success, false if failed to load
+     */
+    static inline bool getSkinPathPixmapFromCache(QPixmap& pixmap, const String& file) {
+	    if (!file)
+		return false;
+	    return getPixmapFromCache(pixmap,setUtf8(s_skinPath + file));
+	}
+
+    /**
      * Update application style sheet from config
      */
     static void updateAppStyleSheet();
@@ -542,6 +722,43 @@ public:
      *  height from _yate_height_delta property. Set widget height otherwise
      */
     static void setWidgetHeight(QWidget* w, const String& height);
+
+    /**
+     * Build a busy widget child for a given widget
+     * @param parent Busy widget parent
+     * @param target Busy widget target
+     * @param ui UI file
+     * @param params Busy widget parameters
+     * @return Busy widget pointer or 0 on failure
+     */
+    static QWidget* buildBusy(QWidget* parent, QWidget* target, const String& ui,
+	const NamedList& params);
+
+    /**
+     * Load a movie
+     * @param file Movie file
+     * @param parent Movie parent
+     * @param path File path, 0 to use client skin path
+     * @return QMovie pointer or 0
+     */
+    static QMovie* loadMovie(const char* file, QObject* parent, const char* path = 0);
+
+    /**
+     * Fill a list from URL parameters
+     * @param url URL to fill
+     * @param list Destination list
+     * @param path Optional URL path, user provided URL's path if 0
+     * @param pathToList True to set path in list name, false to set as parameter
+     */
+    static void fillUrlParams(const QUrl& url, NamedList& list, QString* path = 0,
+	bool pathToList = true);
+
+    /**
+     * Dump MIME data for debug purposes
+     * @param buf Destination buffer
+     * @param m MIME data to dump
+     */
+    static void dumpMime(String& buf, const QMimeData* m);
 
 protected:
     virtual void loadWindows(const char* file = 0);
@@ -659,6 +876,14 @@ public:
 	bool atStart = false);
 
     /**
+     * Show or hide control busy state
+     * @param name Name of the element
+     * @param on True to show, false to hide
+     * @return True if all the operations were successfull
+     */
+    bool setBusy(const String& name, bool on);
+
+    /**
      * Get an element's text
      * @param name Name of the element
      * @param text The destination string
@@ -669,6 +894,14 @@ public:
 
     virtual bool getCheck(const String& name, bool& checked);
     virtual bool getSelect(const String& name, String& item);
+
+    /**
+     * Retrieve an element's multiple selection
+     * @param name Name of the element
+     * @param items List to be to filled with selection's contents
+     * @return True if the operation was successfull
+     */
+    virtual bool getSelect(const String& name, NamedList& items);
 
     /**
      * Build a menu from a list of parameters.
@@ -970,12 +1203,13 @@ public:
      * @param type Item type
      */
     explicit inline QtUIWidgetItemProps(const String& type)
-	: String(type)
+	: String(type), m_acceptDrop(0)
 	{}
 
     String m_ui;                         // Item UI file
     String m_styleSheet;                 // Item style sheet when not selected
     String m_selStyleSheet;              // Item selected style
+    int m_acceptDrop;                    // Accept drop
 };
 
 /**
@@ -1118,6 +1352,13 @@ public:
     virtual bool getParams(QObject* parent, NamedList& params);
 
     /**
+     * Show or hide control busy state
+     * @param on True to show, false to hide
+     * @return True if all the operations were successfull
+     */
+    virtual bool setBusy(bool on);
+
+    /**
      * Retrieve object slots
      * @param actionSlot Action (triggerred) slot
      * @param toggleSlot Toggled slot
@@ -1150,6 +1391,30 @@ public:
      */
     virtual int itemCount()
 	{ return -1; }
+
+    /**
+     * Apply properties for QAbstractItemView descendents
+     * @param params List of parameters
+     * @param defVal Default value to set if not found or invalid
+     */
+    virtual void applyItemViewProps(const NamedList& params);
+
+    /**
+     * Begin item edit. The default behaviour start edit for QAbstractItemView descendants
+     * @param item Item to edit
+     * @param what Optional sub-item
+     * @return True on success
+     */
+    virtual bool beginEdit(const String& item, const String* what = 0);
+
+    /**
+     * Retrieve model index for a given item
+     * @param item Item to edit
+     * @param what Optional sub-item
+     * @return Model index for the item, can be invalid
+     */
+     virtual QModelIndex modelIndex(const String& item, const String* what = 0)
+	{ return QModelIndex(); }
 
     /**
      * Build a child's widget menu. Connect actions to container slots
@@ -1267,8 +1532,20 @@ protected:
      * @param item The item id
      * @param action The action name to trigger
      * @param sender Optional sender (set it to 0 to use getQObject())
+     * @param params Optional extra action parameters
+     * @return True if handled
      */
-    void triggerAction(const String& item, const String& action, QObject* sender = 0);
+    bool triggerAction(const String& item, const String& action, QObject* sender = 0,
+	NamedList* params = 0);
+
+    /**
+     * Trigger a custom action from already built list params
+     * @param action The action name to trigger
+     * @param params Extra action parameters
+     * @param sender Optional sender (set it to 0 to use getQObject())
+     * @return True if handled
+     */
+    bool triggerAction(const String& action, NamedList& params, QObject* sender = 0);
 
     /**
      * Handle a child's action. Retrieve the object identity (using getIdentity()) and
@@ -1295,12 +1572,21 @@ protected:
     virtual void onSelect(QObject* sender, const String* item = 0);
 
     /**
+     * Handle a child's multiple selection change. Retrieve the object identity and
+     *  notify the select 'sender_identity:sender_item_name' event to the client.
+     * @param sender The sender
+     * @param items Optional selected items. Set it to 0 to detect it
+     */
+    virtual void onSelectMultiple(QObject* sender, const NamedList* items = 0);
+
+    /**
      * Filter wathed events for children.
      * Handle child image changing on mouse events
-     * @param obj The object
+     * @param watched The object
      * @param event Event to process
+     * @return True if event filter was removed
      */
-    virtual void onChildEvent(QObject* watched, QEvent* event);
+    virtual bool onChildEvent(QObject* watched, QEvent* event);
 
     /**
      * Load an item's widget. Rename children.
@@ -1426,12 +1712,12 @@ protected:
     /**
      * Filter events. Call parent onEventFilter(). Return QWidget's event filter
      * Handle child image changing on mouse events
-     * @param obj The object
+     * @param watched The object
      * @param event Event to process
      */
     virtual bool eventFilter(QObject* watched, QEvent* event) {
-	    onChildEvent(watched,event);
-	    return QWidget::eventFilter(watched,event);
+	    bool ok = onChildEvent(watched,event);
+	    return QWidget::eventFilter(watched,event) || ok;
 	}
 
 private:
@@ -1468,12 +1754,12 @@ protected:
     /**
      * Filter events. Call parent onEventFilter(). Return QWidget's event filter
      * Handle child image changing on mouse events
-     * @param obj The object
+     * @param watched The object
      * @param event Event to process
      */
     virtual bool eventFilter(QObject* watched, QEvent* event) {
-	    onChildEvent(watched,event);
-	    return QWidget::eventFilter(watched,event);
+	    bool ok = onChildEvent(watched,event);
+	    return QTableWidget::eventFilter(watched,event) || ok;
 	}
 
 private:
@@ -1510,12 +1796,12 @@ protected:
     /**
      * Filter events. Call parent onEventFilter(). Return QWidget's event filter
      * Handle child image changing on mouse events
-     * @param obj The object
+     * @param watched The object
      * @param event Event to process
      */
     virtual bool eventFilter(QObject* watched, QEvent* event) {
-	    onChildEvent(watched,event);
-	    return QWidget::eventFilter(watched,event);
+	    bool ok = onChildEvent(watched,event);
+	    return QTreeWidget::eventFilter(watched,event) || ok;
 	}
 
 private:
@@ -1548,7 +1834,283 @@ private:
     QSound* m_sound;
 };
 
+/**
+ * @short Base class for Drag&Drop operations
+ */
+class YQT4_API QtDragAndDrop : public QObject, public GenObject
+{
+    YCLASS(QtDragAndDrop,GenObject)
+    Q_CLASSINFO("QtDragAndDrop","Yate")
+    Q_OBJECT
+public:
+    /**
+     * Accept drop enumeration
+     */
+    enum AcceptDrop {
+	None = 0,
+	Always,
+	Ask,
+    };
+
+    /**
+     * Constructor
+     * @param parent Object parent
+     */
+    inline QtDragAndDrop(QObject* parent)
+	: QObject(parent),
+	m_started(false)
+	{}
+
+    /**
+     * Check if started
+     * @return True if started
+     */
+    inline bool started() const
+	{ return m_started; }
+
+    /**
+     * Reset data
+     */
+    virtual void reset();
+
+    /**
+     * Check a string value for 'drag', 'drop', 'both'
+     * @param s The string
+     * @param drag Boolean value to set if drag is enabled
+     * @param drop Boolean value to set if drop is enabled
+     */
+    static void checkEnable(const String& s, bool& drag, bool& drop);
+
+protected:
+    bool m_started;                      // Started flag
+};
+
+/**
+ * This class holds data used for Drop operation
+ * @short Drop data holder
+ */
+class YQT4_API QtDrop : public QtDragAndDrop
+{
+    YCLASS(QtDrop,QtDragAndDrop)
+    Q_CLASSINFO("QtDrop","Yate")
+    Q_OBJECT
+public:
+    /**
+     * Constructor
+     * @param parent Object parent
+     * @param params Optional pointer to object parameters
+     */
+    QtDrop(QObject* parent, const NamedList* params = 0);
+
+    /**
+     * Retrieve drop parameters
+     * @return Drop parameters
+     */
+    inline NamedList& params()
+	{ return m_dropParams; }
+
+    /**
+     * Update parameters from drag enter event
+     * @param e The event
+     * @return True if accepted
+     */
+    bool start(QDragEnterEvent& e);
+
+    /**
+     * Reset data
+     */
+    virtual void reset();
+
+    /**
+     * Get accept type
+     * @param type Type to check
+     * @param defVal Default value to return if not found
+     * @return Accept value
+     */
+    static inline int acceptDropType(const char* type, int defVal)
+	{ return lookup(type,s_acceptDropName,defVal); }
+
+    static const String s_askClientAcceptDrop;
+    static const String s_notifyClientDrop;
+    static const QString s_fileScheme;
+
+    static const TokenDict s_acceptDropName[];
+
+protected:
+    NamedList m_dropParams;              // Drop parameters
+    QStringList m_schemes;               // Known URL Schemes. Accept only these if not empty
+    bool m_acceptFiles;                  // Accept files on drop
+    bool m_acceptDirs;                   // Accept directories on drop
+};
+
+/**
+ * This class holds data used for Drop operation on widgets displaying a list of items
+ * @short Drop data holder for widget list items
+ */
+class YQT4_API QtListDrop : public QtDrop
+{
+    YCLASS(QtListDrop,QtDrop)
+    Q_CLASSINFO("QtListDrop","Yate")
+    Q_OBJECT
+public:
+    /**
+     * Constructor
+     * @param parent Object parent
+     * @param params Optional pointer to object parameters
+     */
+    QtListDrop(QObject* parent, const NamedList* params = 0);
+
+    /**
+     * Check if drop should be accepted on empty space
+     * @return True if drop should be accepted on empty space
+     */
+    inline int acceptOnEmpty() const
+	{ return m_acceptOnEmpty; }
+
+    /**
+     * Set accept drop on empty space
+     * @param val New value for accept drop on empty space
+     */
+    inline void setAcceptOnEmpty(int val)
+	{ m_acceptOnEmpty = val; }
+
+    /**
+     * Update accept
+     * @param list Comma separated list of item types
+     * @param type Accept drop type
+     */
+    void updateAcceptType(const String list, int type);
+
+    /**
+     * Update accept from parameters list
+     * @param params Parameters list
+     */
+    void updateAccept(const NamedList& params);
+
+    /**
+     * Check if an item type can be automatically accepted
+     * @param type Item type to check
+     * @param defVal Value to return if not found
+     * @return Accept value as AcceptDrop enumeration
+     */
+    inline int getAcceptType(const String& type, int defVal = None)
+	{ return NamedInt::lookup(m_acceptItemTypes,type,defVal);}
+
+    /**
+     * Reset data
+     */
+    virtual void reset();
+
+protected:
+    int m_acceptOnEmpty;                 // Accept drop on widget surface not occupied by any item 
+    ObjList m_acceptItemTypes;           // Item type to handle drop
+};
+
+/**
+ * Busy widget to show over controls
+ * @short Busy widget to show over controls
+ */
+class YQT4_API QtBusyWidget : public QtCustomWidget
+{
+    YCLASS(QtBusyWidget,QtCustomWidget)
+    Q_CLASSINFO("QtBusyWidget","Yate")
+    Q_OBJECT
+public:
+    /**
+     * Constructor
+     * @param parent Optional parent widget
+     */
+    QtBusyWidget(QWidget* parent = 0);
+
+    /**
+     * Initialize
+     * @param ui UI to load
+     * @param params Busy parameters
+     * @param target Target widget
+     */
+    virtual void init(const String& ui, const NamedList& params, QWidget* target);
+
+    /**
+     * Show or hide the widget
+     * @param on True to show, false to hide
+     */
+    inline void showBusy(bool on) {
+	    if (on)
+		showBusy();
+	    else
+		hideBusy();
+	}
+
+    /**
+     * Show the widget
+     */
+    void showBusy();
+
+    /**
+     * Hide the widget
+     */
+    void hideBusy();
+
+    /**
+     * Show or hide busy widget.
+     * The busy widget must be a target's child whose name is composed from
+     *  target->objectName() + s_busySuffix
+     * @param target The widget to show busy
+     * @param on True to show, false to hide
+     */
+    static inline bool showBusyChild(QWidget* target, bool on) {
+	    QtBusyWidget* w = target ? qFindChild<QtBusyWidget*>(
+		target,target->objectName() + s_busySuffix) : 0;
+	    if (!w)
+		return false;
+	    w->showBusy(on);
+	    return true;
+	}
+
+    /**
+     * Busy child name suffix
+     */
+    static const QString s_busySuffix;
+
+protected:
+    /**
+     * Filter wathed events
+     * @param watched The object
+     * @param event Event to process
+     * @return True if event filter was removed
+     */
+    virtual bool onChildEvent(QObject* watched, QEvent* event);
+
+    /**
+     * Re-implemented from QWidget
+     */
+    virtual void timerEvent(QTimerEvent* ev);
+
+    /**
+     * Show/hide busy content
+     * @param on True to show, false to hide
+     */
+    virtual void setContent(bool on);
+
+    QWidget* m_target;                   // Widget to show over
+    bool m_shown;                        // Shown flag
+    unsigned int m_delayMs;              // Delay show
+    int m_delayTimer;                    // Delay timer
+    QLabel* m_movieLabel;                // Label showing animation
+
+private:
+    inline void stopDelayTimer() {
+	    if (!m_delayTimer)
+		return;
+	    killTimer(m_delayTimer);
+	    m_delayTimer = 0;
+	}
+    void internalShow();
+};
+
 }; // namespace TelEngine
+
+Q_DECLARE_METATYPE(TelEngine::QtRefObjectHolder)
 
 #endif // __QT4CLIENT_H
 

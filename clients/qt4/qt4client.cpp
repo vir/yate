@@ -472,6 +472,25 @@ static const TokenDict s_qAlign[] = {
     {0,0}
 };
 
+// Qt alignment flags translation
+static const TokenDict s_qEditTriggers[] = {
+    {"currentchanged", QAbstractItemView::CurrentChanged},
+    {"doubleclick",    QAbstractItemView::DoubleClicked},
+    {"selclick",       QAbstractItemView::SelectedClicked},
+    {"editkeypress",   QAbstractItemView::EditKeyPressed},
+    {"anykeypress",    QAbstractItemView::AnyKeyPressed},
+    {"all",            QAbstractItemView::AllEditTriggers},
+    {0,0}
+};
+
+// QtClientSort name
+static const TokenDict s_sorting[] = {
+    {"ascending",      QtClient::SortAsc},
+    {"descending",     QtClient::SortDesc},
+    {"none",           QtClient::SortNone},
+    {0,0}
+};
+
 // Handler for QT library messages
 static void qtMsgHandler(QtMsgType type, const char* text)
 {
@@ -1924,6 +1943,24 @@ bool QtWindow::clearTable(const String& name)
     return ok;
 }
 
+// Show or hide control busy state
+bool QtWindow::setBusy(const String& name, bool on)
+{
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) setBusy(%s,%u) [%p]",
+	m_id.c_str(),name.c_str(),on,this);
+    if (name == m_id)
+	return QtBusyWidget::showBusyChild(this,on);
+    QtWidget w(this,name);
+    if (w.invalid())
+	return false;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->setBusy(on);
+    if (w.widget())
+	return QtBusyWidget::showBusyChild(w.widget(),on);
+    return false;
+}
+
 bool QtWindow::getText(const String& name, String& text, bool richText)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) getText(%s) [%p]",
@@ -2033,6 +2070,30 @@ bool QtWindow::getSelect(const String& name, String& item)
 		    QtClient::getUtf8(item,wid->objectName());
 	    }
 	    return true;
+    }
+    return false;
+}
+
+// Retrieve an element's multiple selection
+bool QtWindow::getSelect(const String& name, NamedList& items)
+{
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::getSelect(%p) [%p]",&items,this);
+    QtWidget w(this,name);
+    if (w.invalid())
+	return false;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->getSelect(items);
+    switch (w.type()) {
+	case QtWidget::ComboBox:
+	case QtWidget::Table:
+	case QtWidget::ListBox:
+	case QtWidget::Slider:
+	case QtWidget::ProgressBar:
+	case QtWidget::Tab:
+	case QtWidget::StackWidget:
+	    DDebug(QtDriver::self(),DebugStub,"QtWindow::getSelect(%p) not implemented for '%s; [%p]",
+		&items,w.widget()->metaObject()->className(),this);
     }
     return false;
 }
@@ -4136,6 +4197,19 @@ void QtClient::moveWindow(QtWindow* w, int pos)
     w->move(x,y);
 }
 
+// Build a QStringList from a list of strings
+QStringList QtClient::str2list(const String& str, char sep, bool emptyOk)
+{
+    QStringList l;
+    if (!str)
+	return l;
+    ObjList* list = str.split(sep,emptyOk);
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext())
+	l.append(setUtf8(static_cast<String*>(o->get())->c_str()));
+    TelEngine::destruct(list);
+    return l;
+}
+
 // Split a string. Returns a list of int values
 QList<int> QtClient::str2IntList(const String& str, int defVal, bool emptyOk)
 {
@@ -4152,6 +4226,12 @@ void QtClient::intList2str(String& str, QList<int> list)
 {
     for (int i = 0; i < list.size(); i++)
 	str.append(String(list[i]),",");
+}
+
+// Get sorting from string
+int QtClient::str2sort(const String& str, int defVal)
+{
+    return lookup(str,s_sorting,defVal);
 }
 
 // Apply a comma separated list of window flags to a widget
@@ -4188,6 +4268,32 @@ int QtClient::str2align(const String& flags, int initVal)
     }
     TelEngine::destruct(list);
     return initVal;
+}
+
+// Retrieve QT selection mode from a string value
+QAbstractItemView::SelectionMode QtClient::str2selmode(const String& value,
+    QAbstractItemView::SelectionMode defVal)
+{
+    if (!value)
+	return defVal;
+    if (value == YSTRING("none"))
+	return QAbstractItemView::NoSelection;
+    if (value == YSTRING("single"))
+	return QAbstractItemView::SingleSelection;
+    if (value == YSTRING("multi"))
+	return QAbstractItemView::MultiSelection;
+    if (value == YSTRING("extended"))
+	return QAbstractItemView::ExtendedSelection;
+    if (value == YSTRING("contiguous"))
+	return QAbstractItemView::ContiguousSelection;
+    return defVal;
+}
+
+// Retrieve QT edit triggers from a string value
+QAbstractItemView::EditTriggers QtClient::str2editTriggers(const String& value,
+    QAbstractItemView::EditTrigger defVal)
+{
+    return (QAbstractItemView::EditTriggers)Client::decodeFlags(s_qEditTriggers,value,defVal);
 }
 
 // Send an event to an object's child
@@ -4308,6 +4414,95 @@ void QtClient::setWidgetHeight(QWidget* w, const String& height)
     w->setMaximumHeight(h);
 }
 
+// Build a busy widget child for a given widget
+QWidget* QtClient::buildBusy(QWidget* parent, QWidget* target, const String& ui,
+    const NamedList& params)
+{
+    QtBusyWidget* w = new QtBusyWidget(parent);
+    w->init(ui,params,target);
+    return w;
+}
+
+// Load a movie
+QMovie* QtClient::loadMovie(const char* file, QObject* parent, const char* path)
+{
+    static NamedList s_failed("");
+
+    if (TelEngine::null(file))
+	return 0;
+    String tmp = path;
+    if (!path)
+	tmp = Client::s_skinPath;
+    else if (tmp && !tmp.endsWith(Engine::pathSeparator()))
+	tmp << Engine::pathSeparator();
+    tmp << file;
+    QMovie* m = new QMovie(setUtf8(tmp),QByteArray(),parent);
+    NamedString* ns = s_failed.getParam(tmp);
+    if (m->isValid()) {
+	if (ns)
+	    s_failed.clearParam(ns);
+	return m;
+    }
+    if (!ns) {
+	s_failed.addParam(tmp,"");
+	String error;
+	error << "Failed to load movie '" << tmp << "'";
+	Debug(QtDriver::self(),DebugNote,"%s",error.c_str());
+	if (self())
+	    self()->addToLog(error);
+    }
+    delete m;
+    return 0;
+}
+
+// Fill a list from URL parameters
+void QtClient::fillUrlParams(const QUrl& url, NamedList& list, QString* path,
+    bool pathToList)
+{
+    safeGetUtf8(list,"protocol",url.scheme());
+    safeGetUtf8(list,"host",url.host());
+    if (url.port() >= 0)
+	list.addParam("port",String(url.port()));
+    safeGetUtf8(list,"username",url.userName());
+    safeGetUtf8(list,"password",url.password());
+    QString tmp;
+    if (!path) {
+	tmp = url.path();
+	path = &tmp;
+    }
+    if (pathToList)
+	list.assign(path->toUtf8().constData());
+    else
+	safeGetUtf8(list,"path",*path);
+    QList<QPair<QString, QString> > items = url.queryItems();
+    for (int i = 0; i < items.size(); i++)
+	list.addParam(items[i].first.toUtf8().constData(),items[i].second.toUtf8().constData());
+}
+
+// Dump MIME data for debug purposes
+void QtClient::dumpMime(String& buf, const QMimeData* m)
+{
+    static const char* indent = "\r\n    ";
+    if (!m)
+	return;
+    QStringList fmts = m->formats();
+    if (fmts.size() > 0) {
+	buf.append("FORMATS:","\r\n") << indent;
+	QString s = fmts.join(indent);
+	buf << s.toUtf8().constData();
+    }
+    if (m->html().length() > 0)
+	buf.append("HTML: ","\r\n") << m->html().toUtf8().constData();
+    if (m->text().length() > 0)
+	buf.append("TEXT: ","\r\n") << m->text().toUtf8().constData();
+    QList<QUrl> urls = m->urls();
+    if (urls.size() > 0) {
+	buf.append("URLS:","\r\n");
+	for (int i = 0; i < urls.size(); i++)
+	    buf << indent << urls[i].toString().toUtf8().constData();
+    }
+}
+
 
 /**
  * QtDriver
@@ -4379,6 +4574,47 @@ void QtEventProxy::allHidden()
 	Client::self()->allHidden();
 }
 
+
+//
+// QtUrlBuilder
+//
+QtUrlBuilder::QtUrlBuilder(QObject* parent, const String& format,
+    const String& queryParams)
+    : QObject(parent),
+    m_format(format),
+    m_queryParams(0)
+{
+    if (queryParams) {
+	m_queryParams = queryParams.split(',',false);
+	if (!m_queryParams->skipNull())
+	    TelEngine::destruct(m_queryParams);
+    }
+}
+
+QtUrlBuilder::~QtUrlBuilder()
+{
+    TelEngine::destruct(m_queryParams);
+}
+    
+// Build URL
+QUrl QtUrlBuilder::build(const NamedList& params) const
+{
+    String tmp;
+    if (m_format) {
+	tmp = m_format;
+	params.replaceParams(tmp);
+    }
+    QUrl url(QtClient::setUtf8(tmp));
+    if (m_queryParams) {
+	NamedIterator iter(params);
+	for (const NamedString* ns = 0; 0 != (ns = iter.get());)
+	    if (m_queryParams->find(ns->name()))
+		url.addQueryItem(QtClient::setUtf8(ns->name()),QtClient::setUtf8(*ns));
+    }
+    return url;
+}
+
+
 /*
  * QtUIWidget
  */
@@ -4408,13 +4644,17 @@ QtUIWidgetItemProps* QtUIWidget::getItemProps(QString& in, String& value)
 bool QtUIWidget::setParams(const NamedList& params)
 {
     bool ok = false;
-    NamedString* ns = params.getParam(YSTRING("applyall"));
-    if (ns) {
-	NamedList* list = YOBJECT(NamedList,ns);
-	if (list) {
-	    ok = true;
-	    applyAllParams(*list);
+    NamedIterator iter(params);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (ns->name() == YSTRING("applyall")) {
+	    const NamedList* list = YOBJECT(NamedList,ns);
+	    if (list) {
+		ok = true;
+		applyAllParams(*list);
+	    }
 	}
+	else if (ns->name().startsWith("beginedit:"))
+	    beginEdit(ns->name().substr(10),ns);
     }
     return ok;
 }
@@ -4647,6 +4887,48 @@ bool QtUIWidget::getParams(QObject* parent, NamedList& params)
     // Get item parameters
     QtClient::getProperty(parent,"_yate_itemparams",params);
     return ok;
+}
+
+// Show or hide control busy state
+bool QtUIWidget::setBusy(bool on)
+{
+    QObject* o = getQObject();
+    QWidget* w = (o && o->isWidgetType()) ? static_cast<QWidget*>(o) : 0;
+    return w && QtBusyWidget::showBusyChild(w,on);
+}
+
+// Apply properties for QAbstractItemView descendents
+void QtUIWidget::applyItemViewProps(const NamedList& params)
+{
+    static const String s_selMode = "_yate_selection_mode";
+    static const String s_editTriggers = "_yate_edit_triggers";
+
+    QObject* obj = getQObject();
+    QAbstractItemView* av = qobject_cast<QAbstractItemView*>(obj);
+    if (!av)
+	return;
+    NamedIterator iter(params);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (ns->name() == s_selMode)
+	    av->setSelectionMode(QtClient::str2selmode(*ns));
+	else if (ns->name() == s_editTriggers)
+	    av->setEditTriggers(QtClient::str2editTriggers(*ns));
+    }
+}
+
+// Begin item edit. The default behaviour start edit for QAbstractItemView descendants
+bool QtUIWidget::beginEdit(const String& item, const String* what)
+{
+    QObject* obj = getQObject();
+    QAbstractItemView* av = qobject_cast<QAbstractItemView*>(obj);
+    if (!av)
+	return false;
+    QModelIndex idx = modelIndex(item,what);
+    if (!idx.isValid())
+	return false;
+    av->setCurrentIndex(idx);
+    av->edit(idx);
+    return true;
 }
 
 // Build item widget menu
@@ -4923,20 +5205,38 @@ void QtUIWidget::updateNavigation()
 }
 
 // Trigger a custom action from an item
-void QtUIWidget::triggerAction(const String& item, const String& action, QObject* sender)
+bool QtUIWidget::triggerAction(const String& item, const String& action, QObject* sender,
+    NamedList* params)
 {
     if (!(Client::self() && action))
-	return;
+	return false;
     if (!sender)
 	sender = getQObject();
     String s;
     getIdentity(sender,s);
     if (!s)
-	return;
-    NamedList params("");
-    params.addParam("item",item);
-    params.addParam("list",s);
-    QtClient::self()->action(QtClient::parentWindow(sender),action,&params);
+	return false;
+    NamedList p("");
+    if (!params)
+	params = &p;
+    params->addParam("item",item,false);
+    params->addParam("widget",s);
+    return QtClient::self()->action(QtClient::parentWindow(sender),action,params);
+}
+
+// Trigger a custom action from already built list params
+bool QtUIWidget::triggerAction(const String& action, NamedList& params, QObject* sender)
+{
+    if (!(Client::self() && action))
+	return false;
+    if (!sender)
+	sender = getQObject();
+    String s;
+    getIdentity(sender,s);
+    if (!s)
+	return false;
+    params.setParam("widget",s);
+    return QtClient::self()->action(QtClient::parentWindow(sender),action,&params);
 }
 
 // Handle a child's action
@@ -5000,9 +5300,31 @@ void QtUIWidget::onSelect(QObject* sender, const String* item)
     Client::self()->select(wnd,s,*item);
 }
 
+// Handle a child's multiple selection change
+void QtUIWidget::onSelectMultiple(QObject* sender, const NamedList* items)
+{
+    if (!Client::self())
+	return;
+    String s;
+    getIdentity(sender,s);
+    if (!s)
+	return;
+    QtWindow* wnd = QtClient::parentWindow(sender);
+    DDebug(ClientDriver::self(),DebugAll,"QtUIWidget(%s) raising select multiple",
+	name().c_str());
+    if (items) {
+	Client::self()->select(wnd,s,*items);
+	return;
+    }
+    NamedList tmp("");
+    if (wnd)
+	wnd->getSelect(YQT_OBJECT_NAME(sender),tmp);
+    Client::self()->select(wnd,s,tmp);
+}
+
 // Filter wathed events for children.
 // Handle child image changing on mouse events
-void QtUIWidget::onChildEvent(QObject* watched, QEvent* event)
+bool QtUIWidget::onChildEvent(QObject* watched, QEvent* event)
 {
     if (event->type() == QEvent::Enter)
 	QtClient::updateImageFromMouse(watched,true,true);
@@ -5012,6 +5334,7 @@ void QtUIWidget::onChildEvent(QObject* watched, QEvent* event)
 	QtClient::updateImageFromMouse(watched,false,true);
     else if (event->type() == QEvent::MouseButtonRelease)
 	QtClient::updateImageFromMouse(watched,false,false);
+    return false;
 }
 
 // Load an item's widget. Rename children. Connect actions
@@ -5200,6 +5523,286 @@ void QtSound::doStop()
     delete m_sound;
     DDebug(ClientDriver::self(),DebugAll,"Sound(%s) stopped",c_str());
     m_sound = 0;
+}
+
+
+//
+// QtDragAndDrop
+//
+// Reset data
+void QtDragAndDrop::reset()
+{
+    m_started = false;
+}
+
+// Check a string value for 'drag', 'drop', 'both'
+void QtDragAndDrop::checkEnable(const String& s, bool& drag, bool& drop)
+{
+    drag = (s == YSTRING("drag"));
+    drop = !drag && (s == YSTRING("drop"));
+    if (!(drag || drop))
+	drag = drop = (s == YSTRING("both"));
+}
+
+//
+// QtDrop
+//
+const String QtDrop::s_askClientAcceptDrop = "_yate_event_drop_accept";
+const String QtDrop::s_notifyClientDrop = "_yate_event_drop";
+const QString QtDrop::s_fileScheme = "file";
+
+const TokenDict QtDrop::s_acceptDropName[] = {
+    {"always", Always},
+    {"ask", Ask},
+    {"none", 0},
+    {0,0}
+};
+
+QtDrop::QtDrop(QObject* parent, const NamedList* params)
+    : QtDragAndDrop(parent),
+    m_dropParams(""),
+    m_acceptFiles(false),
+    m_acceptDirs(false)
+{
+    if (!params)
+	return;
+    NamedIterator iter(*params);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (ns->name() == YSTRING("_yate_accept_drop_schemes"))
+	    QtClient::addStrListUnique(m_schemes,QtClient::str2list(*ns));
+	else if (ns->name() == YSTRING("_yate_accept_drop_file"))
+	    m_acceptFiles = ns->toBoolean();
+	else if (ns->name() == YSTRING("_yate_accept_drop_dir"))
+	    m_acceptDirs = ns->toBoolean();
+    }
+}
+
+// Update parameters from drag enter event
+bool QtDrop::start(QDragEnterEvent& e)
+{
+    static const String s_prefix = "drop:";
+
+    reset();
+    const QMimeData* m = e.mimeData();
+    if (!(m && m->hasUrls()))
+	return false;
+    int nUrls = m->urls().size();
+    unsigned int nItems = 0;
+    for (int i = 0; i < nUrls; i++) {
+	QString scheme = m->urls()[i].scheme();
+	if (m_schemes.size() > 0 && !m_schemes.contains(scheme)) {
+	    reset();
+	    return false;
+	}
+	QString path = m->urls()[i].path();
+	String what = scheme.toUtf8().constData();
+	if (scheme == s_fileScheme) {
+#ifdef _WINDOWS
+	    path = path.mid(1);
+#endif
+	    path = QDir::toNativeSeparators(path);
+	    QFileInfo fi(path);
+	    if (fi.isDir()) {
+		if (!m_acceptDirs) {
+		    reset();
+		    return false;
+		}
+		what = "directory";
+	    }
+	    else if (fi.isFile() && !m_acceptFiles) {
+		reset();
+		return false;
+	    }
+	}
+	nItems++;
+	NamedList* nl = new NamedList("");
+	QtClient::fillUrlParams(m->urls()[i],*nl,&path);
+	m_dropParams.addParam(new NamedPointer(s_prefix + what,nl,*nl));
+    }
+    if (!nItems) {
+	reset();
+	return false;
+    }
+    if (e.source()) {
+	QtWindow* wnd = QtClient::parentWindow(e.source());
+	if (wnd) {
+	    m_dropParams.addParam("source_window",wnd->toString());
+	    QtClient::getUtf8(m_dropParams,"source",e.source()->objectName());
+	}
+    }
+    m_started = true;
+    return true;
+}
+
+// Reset data
+void QtDrop::reset()
+{
+    m_dropParams.clearParams();
+    QtDragAndDrop::reset();
+}
+
+
+//
+// QtListDrop
+//
+QtListDrop::QtListDrop(QObject* parent, const NamedList* params)
+    : QtDrop(parent,params),
+    m_acceptOnEmpty(None)
+{
+}
+
+// Update accept
+void QtListDrop::updateAcceptType(const String list, int type)
+{
+    if (!list)
+	return;
+    ObjList* l = list.split(',',false);
+    for (ObjList* o = l->skipNull(); o; o = o->skipNext()) {
+	NamedInt* ni = new NamedInt(*static_cast<String*>(o->get()),type);
+	NamedInt::addToListUniqueName(m_acceptItemTypes,ni);
+    }
+    TelEngine::destruct(l);
+}
+
+// Update accept from parameters list
+void QtListDrop::updateAccept(const NamedList& params)
+{
+    NamedIterator iter(params);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (ns->name() == YSTRING("_yate_accept_drop_onempty"))
+	    m_acceptOnEmpty = this->acceptDropType(*ns,None);
+	else if (ns->name() == YSTRING("_yate_accept_drop_item_type_always"))
+	    updateAcceptType(*ns,Always);
+	else if (ns->name() == YSTRING("_yate_accept_drop_item_type_none"))
+	    updateAcceptType(*ns,None);
+	else if (ns->name() == YSTRING("_yate_accept_drop_item_type_ask"))
+	    updateAcceptType(*ns,Ask);
+    }
+}
+
+// Reset data
+void QtListDrop::reset()
+{
+    m_acceptItemTypes.clear();
+    QtDrop::reset();
+}
+
+
+//
+// QtBusyWidget
+//
+const QString QtBusyWidget::s_busySuffix("_yate_busy_widget_generated");
+
+// Constructor
+QtBusyWidget::QtBusyWidget(QWidget* parent)
+    : QtCustomWidget(0,parent),
+    m_target(0), m_shown(false), m_delayMs(0), m_delayTimer(0),
+    m_movieLabel(0)
+{
+    if (parent)
+	setObjectName(parent->objectName() + s_busySuffix);
+    QWidget::hide();
+}
+
+// Initialize
+void QtBusyWidget::init(const String& ui, const NamedList& params, QWidget* target)
+{
+    hideBusy();
+    m_target = target;
+    m_movieLabel = 0;
+    unsigned int delay = 0;
+    QWidget* w = ui ? loadWidget(this,"",ui) : 0;
+    if (w) {
+	QtClient::setWidget(this,w);
+	int tmp = QtClient::getIntProperty(w,"_yate_busywidget_delay");
+	if (tmp > 0)
+	    delay = tmp;
+	QList<QWidget*> c = qFindChildren<QWidget*>(w);
+	for (int i = 0; i < c.size(); i++) {
+	    QLabel* l = qobject_cast<QLabel*>(c[i]);
+	    if (l) {
+		if (!m_movieLabel) {
+		    String file;
+		    QtClient::getProperty(l,"_yate_movie_file",file);
+		    if (file) {
+			l->setMovie(QtClient::loadMovie(file,l));
+			if (l->movie())
+			    m_movieLabel = l;
+		    }
+		}
+	    }
+	}
+    }
+    m_delayMs = params.getIntValue(YSTRING("_yate_busywidget_delay"),delay,0);
+}
+
+// Show the widget
+void QtBusyWidget::showBusy()
+{
+    if (m_shown)
+	return;
+    m_shown = true;
+    if (m_delayMs)
+	m_delayTimer = startTimer(m_delayMs);
+    if (!m_delayTimer)
+	internalShow();
+}
+
+// Hide the widget
+void QtBusyWidget::hideBusy()
+{
+    if (!m_shown)
+	return;
+    m_shown = false;
+    stopDelayTimer();
+    if (m_target)
+	m_target->removeEventFilter(this);
+    setContent(false);
+    lower();
+    hide();
+}
+
+// Filter wathed events
+bool QtBusyWidget::onChildEvent(QObject* watched, QEvent* event)
+{
+    if (m_target && m_target == watched) {
+	if (event->type() == QEvent::Resize)
+	    resize(m_target->size());
+    }
+    return false;
+}
+
+void QtBusyWidget::timerEvent(QTimerEvent* ev)
+{
+    if (m_delayTimer && ev->timerId() == m_delayTimer) {
+	stopDelayTimer();
+	internalShow();
+	return;
+    }
+    QtCustomWidget::timerEvent(ev);
+}
+
+// Show/hide busy content
+void QtBusyWidget::setContent(bool on)
+{
+    QMovie* movie = m_movieLabel ? m_movieLabel->movie() : 0;
+    if (!movie)
+	return;
+    if (on)
+	movie->start();
+    else
+	movie->stop();
+}
+
+void QtBusyWidget::internalShow()
+{
+    if (m_target) {
+	resize(m_target->size());
+	m_target->installEventFilter(this);
+    }
+    setContent(true);
+    raise();
+    show();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

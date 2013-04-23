@@ -36,6 +36,7 @@
  */
 namespace TelEngine {
 
+class NamedInt;                          // A named integer value
 class Window;                            // A generic window
 class UIWidget;                          // A custom widget
 class UIFactory;                         // Base factory used to build custom widgets
@@ -54,6 +55,93 @@ class MucRoom;                           // An account's MUC room contact
 class DurationUpdate;                    // Class used to update UI durations
 class ClientSound;                       // A sound file
 
+
+/**
+ * This class holds a name integer value
+ * @short A named integer value
+ */
+class YATE_API NamedInt: public String
+{
+public:
+    /**
+     * Constructor
+     * @param name Name
+     * @param val The value
+     */
+    inline NamedInt(const char* name, int val = 0)
+	: String(name), m_value(val)
+	{}
+
+    /**
+     * Copy constructor
+     * @param other Source object
+     */
+    inline NamedInt(const NamedInt& other)
+	: String(other), m_value(other.value())
+	{}
+
+    /**
+     * Retrieve the value
+     * @return The integer value
+     */
+    inline int value() const
+	{ return m_value; }
+
+    /**
+     * Set the value
+     * @param val The new integer value
+     */
+    inline void setValue(int val)
+	{ m_value = val; }
+
+    /**
+     * Add an item to a list. Replace existing item with the same name
+     * @param obj The object
+     */
+    static void addToListUniqueName(ObjList& list, NamedInt* obj); 
+
+    /**
+     * Clear all items with a given value
+     * @param list The list
+     * @param val Value to remove
+     */
+    static void clearValue(ObjList& list, int val); 
+
+    /**
+     * Get an item's value from name
+     * @param list The list containing the item
+     * @param name Item name
+     * @param defVal Value to return if not found
+     * @return Item value
+     */
+    static inline int lookup(const ObjList& list, const String& name, int defVal = 0) {
+	    ObjList* o = list.find(name);
+	    return o ? (static_cast<NamedInt*>(o->get()))->value() : defVal;
+	}
+
+    /**
+     * Get an item's name from value
+     * @param list The list containing the item
+     * @param val Item value
+     * @param defVal Name to return if not found
+     * @return Item name
+     */
+    static inline const String& lookupName(const ObjList& list, int val,
+	const String& defVal = String::empty()) {
+	    for (ObjList* o = list.skipNull(); o; o = o->skipNext()) {
+		NamedInt* ni = static_cast<NamedInt*>(o->get());
+		if (ni->value() == val)
+		    return *ni;
+	    }
+	    return defVal;
+	}
+
+protected:
+    int m_value;
+
+private:
+    NamedInt() {}
+};
 
 /**
  * A window is the basic user interface element.
@@ -703,6 +791,14 @@ public:
      * @return True on success
      */
     virtual bool getText(String& text, bool richText = false)
+	{ return false; }
+
+    /**
+     * Show or hide control busy state
+     * @param on True to show, false to hide
+     * @return True if all the operations were successfull
+     */
+    virtual bool setBusy(bool on)
 	{ return false; }
 };
 
@@ -1682,6 +1778,27 @@ public:
      * @param spaceEol True to replace end of line with space instead of html markup
      */
     static void plain2html(String& buf, bool spaceEol = false);
+
+    /**
+     * Decode flags from dictionary values found in a list of parameters
+     * Flags are allowed to begin with '!' to reset
+     * @param dict The dictionary containing the flags
+     * @param params The list of parameters used to update the flags
+     * @param prefix Optional parameter prefix
+     * @return Decoded flags
+     */
+    static int decodeFlags(const TokenDict* dict, const NamedList& params,
+	const String& prefix = String::empty());
+
+    /**
+     * Decode flags from dictionary values and comma separated list.
+     * Flags are allowed to begin with '!' to reset
+     * @param dict The dictionary containing the flags
+     * @param flags The list of flags
+     * @param defVal Default value to return if empty or no non 0 value is found in dictionary
+     * @return Decoded flags
+     */
+    static int decodeFlags(const TokenDict* dict, const String& flags, int defVal = 0);
 
     static Configuration s_settings;     // Client settings
     static Configuration s_actions;      // Logic preferrences

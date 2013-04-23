@@ -330,8 +330,8 @@ QScrollBar::sub-line {
 }
 QScrollBar::add-page { border: 0px; }
 QScrollBar::sub-page { border: 0px; }
-QScrollBar::handle:vertical { border-left: 0px; border-right: 0px; }
-QScrollBar::handle:horizontal { border-top: 0px; border-bottom: 0px; }
+QScrollBar::handle:vertical { border-left: 0px; border-right: 0px; min-height: 14px; }
+QScrollBar::handle:horizontal { border-top: 0px; border-bottom: 0px; min-width: 14px; }
 QScrollBar::add-line:vertical { subcontrol-position: bottom; image: url(scroll_down.png); height: 14px; }
 QScrollBar::sub-line:vertical { subcontrol-position: top; image: url(scroll_up.png); height: 14px; }
 QScrollBar::add-line:horizontal { subcontrol-position: right; image: url(scroll_right.png); width: 14px; }

@@ -79,6 +79,9 @@ QToolButton:hover {
 QToolButton:pressed {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #eeeeee);
 }
+QToolButton:disabled {
+  background: #eeeeee;
+}
 </string>
        </property>
        <property name="iconSize" >
@@ -107,6 +110,195 @@ QToolButton:pressed {
        </property>
        <property name="_yate_hover_icon" stdset="0" >
         <string>muc_hover.png</string>
+       </property>
+       <property name="_yate_filterevents" stdset="0" >
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QToolButton" name="send_file_btn" >
+       <property name="minimumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="styleSheet" >
+        <string>QToolButton {
+  border: 1px solid #00b4ff;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #eeeeee);
+}
+QToolButton:hover {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #eeeeee, stop: 1 #ffffff);
+}
+QToolButton:pressed {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #eeeeee);
+}
+QToolButton:disabled {
+  background: #eeeeee;
+}
+</string>
+       </property>
+       <property name="iconSize" >
+        <size>
+         <width>20</width>
+         <height>20</height>
+        </size>
+       </property>
+       <property name="autoRaise" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_identity" stdset="0" >
+        <string>send_file</string>
+       </property>
+       <property name="_yate_setaction" stdset="0" >
+        <string>chat_send_file</string>
+       </property>
+       <property name="_yate_noautoconnect" stdset="0" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>sendfile_20.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>sendfile_pressed_20.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>sendfile_hover_20.png</string>
+       </property>
+       <property name="_yate_filterevents" stdset="0" >
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QToolButton" name="share_file_btn" >
+       <property name="enabled" >
+        <bool>true</bool>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="styleSheet" >
+        <string>QToolButton {
+  border: 1px solid #00b4ff;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #eeeeee);
+}
+QToolButton:hover {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #eeeeee, stop: 1 #ffffff);
+}
+QToolButton:pressed {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #eeeeee);
+}
+QToolButton:disabled {
+  background: #eeeeee;
+}
+</string>
+       </property>
+       <property name="iconSize" >
+        <size>
+         <width>20</width>
+         <height>20</height>
+        </size>
+       </property>
+       <property name="autoRaise" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_identity" stdset="0" >
+        <string>share_file</string>
+       </property>
+       <property name="_yate_setaction" stdset="0" >
+        <string>chat_share_file</string>
+       </property>
+       <property name="_yate_noautoconnect" stdset="0" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>sharefile_none_20.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>sharefile_none_pressed_20.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>sharefile_none_hover_20.png</string>
+       </property>
+       <property name="_yate_filterevents" stdset="0" >
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QToolButton" name="shared_file_btn" >
+       <property name="minimumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="styleSheet" >
+        <string>QToolButton {
+  border: 1px solid #00b4ff;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #eeeeee);
+}
+QToolButton:hover {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #eeeeee, stop: 1 #ffffff);
+}
+QToolButton:pressed {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #eeeeee);
+}
+QToolButton:disabled {
+  background: #eeeeee;
+}
+</string>
+       </property>
+       <property name="iconSize" >
+        <size>
+         <width>20</width>
+         <height>20</height>
+        </size>
+       </property>
+       <property name="autoRaise" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_identity" stdset="0" >
+        <string>shared_file</string>
+       </property>
+       <property name="_yate_setaction" stdset="0" >
+        <string>chat_shared_file</string>
+       </property>
+       <property name="_yate_noautoconnect" stdset="0" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>sharedfile_20.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>sharedfile_pressed_20.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>sharedfile_hover_20.png</string>
        </property>
        <property name="_yate_filterevents" stdset="0" >
         <bool>true</bool>
@@ -548,6 +740,39 @@ QToolButton:pressed {
    </property>
    <property name="_yate_identity" stdset="0" >
     <string>room_invite_contacts</string>
+   </property>
+  </action>
+  <action name="chat_send_file" >
+   <property name="icon" >
+    <iconset>sendfile_20.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Send file</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>send_file</string>
+   </property>
+  </action>
+  <action name="chat_share_file" >
+   <property name="icon" >
+    <iconset>sharefile_none_20.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Share Files</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>share_file</string>
+   </property>
+  </action>
+  <action name="chat_shared_file" >
+   <property name="icon" >
+    <iconset>sharedfile_20.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Shared files</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>shared_file</string>
    </property>
   </action>
  </widget>

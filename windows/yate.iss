@@ -78,6 +78,7 @@ Source: "Release\yate-qt4.exe"; DestDir: "{app}"; Flags: replacesameversion; Com
 Source: "Runtimes\qtcore4.dll"; DestDir: "{app}"; Components: client\qt\run
 Source: "Runtimes\qtgui4.dll"; DestDir: "{app}"; Components: client\qt\run
 Source: "Runtimes\qtxml4.dll"; DestDir: "{app}"; Components: client\qt\run
+Source: "Runtimes\imageformats\qgif4.dll"; DestDir: "{app}\imageformats"; Components: client\qt\run
 Source: "Release\yate-service.exe"; DestDir: "{app}"; Flags: replacesameversion; Components: server
 Source: "Release\yate-console.exe"; DestDir: "{app}"; Flags: replacesameversion; Components: debug
 
@@ -191,6 +192,7 @@ Source: "..\conf.d\providers.conf.default"; DestName: "providers.conf"; DestDir:
 Source: "..\share\skins\default\qt4client.rc"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\*.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\*.png"; DestDir: "{app}\share\skins\default"; Components: client
+Source: "..\share\skins\default\*.gif"; DestDir: "{app}\share\skins\default"; Components: client
 Source: "..\share\skins\default\*.css"; DestDir: "{app}\share\skins\default"; Components: client
 
 Source: "..\conf.d\yate-qt4.conf.default"; DestName: "yate-qt4.conf"; DestDir: "{app}\conf.d"; Components: client\qt; Flags: skipifsourcedoesntexist

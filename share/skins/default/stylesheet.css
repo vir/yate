@@ -262,7 +262,6 @@ QTreeWidget {
   selection-background-color: lightblue;
   selection-color: black;
 }
-QTreeView::branch { background:#ffffff; }
 
 /* QTableWidget */
 

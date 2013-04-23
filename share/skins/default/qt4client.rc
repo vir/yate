@@ -121,6 +121,16 @@ enabled=no
 save=false
 description=contactinfo.ui
 
+[contactfs]
+enabled=no
+save=false
+description=contactfs.ui
+
+[contactfsd]
+enabled=no
+save=false
+description=contactfsd.ui
+
 [messages_header]
 enabled=no
 description=messages_header.ui
@@ -149,3 +159,7 @@ description=fileprogress_item.ui
 enabled=yes
 visible=false
 description=archive.ui
+
+[busy]
+enabled=no
+description=busy.ui

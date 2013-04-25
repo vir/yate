@@ -5965,6 +5965,30 @@ public:
 	{ return connect(addr.address(), addr.length()); }
 
     /**
+     * Asynchronously connects the socket to a remote address.
+     * The socket must be selectable and in non-blocking operation mode
+     * @param addr Address to connect to
+     * @param addrlen Length of the address structure
+     * @param toutUs Timeout interval in microseconds
+     * @param timeout Optional boolean flag to signal timeout
+     * @return True on success
+     */
+    virtual bool connectAsync(struct sockaddr* addr, socklen_t addrlen, unsigned int toutUs,
+	bool* timeout = 0);
+
+    /**
+     * Asynchronously connects the socket to a remote address.
+     * The socket must be selectable and in non-blocking operation mode
+     * @param addr Socket address to connect to
+     * @param toutUs Timeout interval in microseconds
+     * @param timeout Optional boolean flag to signal timeout
+     * @return True on success
+     */
+    inline bool connectAsync(const SocketAddr& addr, unsigned int toutUs,
+	bool* timeout = 0)
+	{ return connectAsync(addr.address(),addr.length(),toutUs,timeout); }
+
+    /**
      * Shut down one or both directions of a full-duplex socket.
      * @param stopReads Request to shut down the read side of the socket
      * @param stopWrites Request to shut down the write side of the socket

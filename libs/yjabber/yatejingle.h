@@ -1380,10 +1380,11 @@ protected:
      * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @param confirmation True if the stanza needs confirmation (add 'id' attribute)
      * @param ping True if the stanza is a ping one
+     * @param toutMs Optional stanza timeout interval in milliseconds
      * @return True on success
      */
     bool sendStanza(XmlElement* stanza, String* stanzaId = 0, bool confirmation = true,
-	bool ping = false);
+	bool ping = false, unsigned int toutMs = 0);
 
     /**
      * Send a ping (empty session info) stanza to the remote peer if it's time to do it
@@ -1981,6 +1982,13 @@ public:
 	{ return m_stanzaTimeout; }
 
     /**
+     * Get the timeout interval of a sent stream host stanza
+     * @return The timeout interval of a sent stream host stanza
+     */
+    inline u_int64_t streamHostTimeout() const
+	{ return m_streamHostTimeout; }
+
+    /**
      * Get the ping interval used by jingle sessions
      * @return The interval to ping the remote party of a jingle session
      */
@@ -2089,6 +2097,7 @@ private:
     ObjList m_sessions;                  // List of sessions
     u_int32_t m_sessionId;               // Session id counter
     u_int64_t m_stanzaTimeout;           // The timeout of a sent stanza
+    u_int64_t m_streamHostTimeout;       // The timeout of a sent stream host stanza
     u_int64_t m_pingInterval;            // Interval to send ping (empty session-info)
     int m_sessionFlags;                  // Default session flags
 };
@@ -2113,6 +2122,13 @@ public:
 	JGSession::Action action = JGSession::ActCount)
 	: String(id), m_time(time), m_notify(notif), m_ping(ping), m_action(action)
 	{}
+
+    /**
+     * Retrieve stanza timeout
+     * @return Stanza timeout
+     */
+    inline u_int64_t timeout() const
+	{ return m_time; }
 
     /**
      * Check if this element timed out

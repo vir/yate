@@ -1363,7 +1363,7 @@ void JGSession::destroyed()
 
 // Send a stanza to the remote peer
 bool JGSession::sendStanza(XmlElement* stanza, String* stanzaId, bool confirmation,
-    bool ping)
+    bool ping, unsigned int toutMs)
 {
     if (!stanza)
 	return false;
@@ -1398,12 +1398,24 @@ bool JGSession::sendStanza(XmlElement* stanza, String* stanzaId, bool confirmati
 	}
 	String id = m_localSid;
 	id << "_" << (unsigned int)m_stanzaId++;
-	JGSentStanza* sent = new JGSentStanza(id,
-	    m_engine->stanzaTimeout() + Time::msecNow(),stanzaId != 0,ping,act);
+	u_int64_t tout = Time::msecNow() + (toutMs ? toutMs : m_engine->stanzaTimeout());
+	JGSentStanza* sent = new JGSentStanza(id,tout,stanzaId != 0,ping,act);
 	stanza->setAttribute("id",*sent);
 	if (stanzaId)
 	    *stanzaId = *sent;
-	m_sentStanza.append(sent);
+	// Insert stanza in timeout ascending order
+	ObjList* last = &m_sentStanza;
+	for (ObjList* o = last->skipNull(); o; o = o->skipNext()) {
+	    JGSentStanza* tmp = static_cast<JGSentStanza*>(o->get());
+	    if (tout < tmp->timeout()) {
+		o->insert(sent);
+		sent = 0;
+		break;
+	    }
+	    last = o;
+	}
+	if (sent)
+	    last->append(sent);
     }
     return m_engine->sendStanza(this,stanza);
 }
@@ -2137,7 +2149,7 @@ bool JGSession1::sendStreamHosts(const ObjList& hosts, String* stanzaId)
 	return false;
     XmlElement* xml = XMPPUtils::createIq(XMPPUtils::IqSet,m_local,m_remote,0);
     xml->addChild(JGStreamHost::buildHosts(hosts,m_sid));
-    return sendStanza(xml,stanzaId);
+    return sendStanza(xml,stanzaId,true,false,m_engine->streamHostTimeout());
 }
 
 // Send a stanza with a stream host used

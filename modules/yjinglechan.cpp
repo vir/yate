@@ -180,7 +180,8 @@ public:
     // Process Jingle and Terminated events
     // Return false to terminate
     bool handleEvent(JGEvent* event);
-    void hangup(const char* reason = 0, const char* text = 0);
+    void hangup(const char* reason = 0, const char* text = 0,
+	JGSession::Reason send = JGSession::ReasonUnknown);
     // Process remote user's presence changes.
     // Make the call if outgoing and in Pending (waiting for presence information) state
     // Hangup if the remote user is unavailbale
@@ -286,6 +287,8 @@ protected:
     bool setupSocksFileTransfer(bool start);
     // Change host sender. Return false on failure
     bool changeFTHostDir();
+    // Drop file transfer data. Remove the first host in list
+    void dropFT(bool removeFirst);
     // Get the RTP direction param from a content
     // FIXME: ignore content senders for early media ?
     inline const char* rtpDir(const JGSessionContent& c) {
@@ -1146,6 +1149,7 @@ void YJGConnection::callAccept(Message& msg)
     m_secure = msg.getBoolValue("secure",m_secure);
     m_secureRequired = msg.getBoolValue("secure_required",m_secureRequired);
     m_dtmfMeth = msg.getIntValue("dtmfmethod",s_dictDtmfMeth,m_dtmfMeth);
+    m_connSocksServer = msg.getBoolValue("isocksserver",true);
     overrideJingleFlags(msg,"jingle_flags");
     Channel::callAccept(msg);
     Lock lock(m_mutex);
@@ -1484,7 +1488,7 @@ bool YJGConnection::msgTransfer(Message& msg)
 }
 
 // Hangup the call. Send session terminate if not already done
-void YJGConnection::hangup(const char* reason, const char* text)
+void YJGConnection::hangup(const char* reason, const char* text, JGSession::Reason send)
 {
     Lock lock(m_mutex);
     if (m_hangup)
@@ -1503,7 +1507,9 @@ void YJGConnection::hangup(const char* reason, const char* text)
     Engine::enqueue(m);
     JGSession* sess = 0;
     if (m_session) {
-	int res = lookup(m_reason,s_errMap,JGSession::ReasonUnknown);
+	int res = send;
+	if (res == JGSession::ReasonUnknown)
+	    res = lookup(m_reason,s_errMap,JGSession::ReasonUnknown);
 	XmlElement* xml = 0;
 	switch (res) {
 	    case JGSession::CryptoRequired:
@@ -1672,11 +1678,14 @@ bool YJGConnection::handleEvent(JGEvent* event)
 		}
 	    }
 	    if (!ok) {
+		dropFT(true);
 		// Result error: continue if we still can receive hosts
-		ok = (event->type() == JGEvent::ResultError && isOutgoing());
-		if (ok && m_ftStatus == FTWaitEstablish) 
-		    m_ftStatus = FTIdle;
-		clearEndpoint("data");
+		if (event->type() == JGEvent::ResultError && isOutgoing()) {
+		    if (changeFTHostDir()) {
+			ok = true;
+			m_ftStatus = FTIdle;
+		    }
+		}
 	    }
 	    Debug(this,rspOk ? DebugAll : DebugInfo,
 		"Received result=%s to streamhost used=%s [%p]",
@@ -3053,6 +3062,7 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
     while (true) {
 	ObjList* o = m_streamHosts.skipNull();
 	if (!o) {
+	    dropFT(true);
 	    // We can send hosts: try to get a local socks server
 	    if (m_ftHostDirection == FTHostLocal) {
 		Message m("chan.socks");
@@ -3063,7 +3073,6 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
 		if (m_localip && !s_serverMode && m_connSocksServer)
 		    m.addParam("localip",m_localip);
 		DDebug(this,DebugAll,"Trying to setup local SOCKS server [%p]",this);
-		clearEndpoint("data");
 		if (Engine::dispatch(m)) {
 		    const char* addr = m.getValue("address");
 		    int port = m.getIntValue("port");
@@ -3085,6 +3094,7 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
 
 	// Remove the first stream host if status is idle: it failed
 	if (m_ftStatus != FTIdle) {
+	    dropFT(false);
 	    JGStreamHost* sh = static_cast<JGStreamHost*>(o->get());
 	    Debug(this,DebugNote,"Removing failed streamhost '%s:%d' [%p]",
 		sh->m_address.c_str(),sh->m_port,this);
@@ -3093,6 +3103,7 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
 	}
 
 	while (o) {
+	    dropFT(false);
 	    Message m("chan.socks");
 	    m.userData(this);
 	    m.addParam("dst_addr_domain",m_dstAddrDomain);
@@ -3101,7 +3112,6 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
 	    JGStreamHost* sh = static_cast<JGStreamHost*>(o->get());
 	    m.addParam("remoteip",sh->m_address);
 	    m.addParam("remoteport",String(sh->m_port));
-	    clearEndpoint("data");
 	    if (Engine::dispatch(m)) {
 		m_ftNotifier = m.getValue("notifier");
 		break;
@@ -3130,11 +3140,28 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
 	return false;
     }
 
-    setReason("notransport");
     m_ftStatus = FTTerminated;
     Debug(this,DebugNote,"Failed to initialize SOCKS file transfer '%s' [%p]",
 	error,this);
+    hangup("notransport",0,JGSession::ReasonFailTransport);
     return false;
+}
+
+// Drop file transfer data. Remove the first host in list
+void YJGConnection::dropFT(bool removeFirst)
+{
+    if (removeFirst) {
+	// Remove first entry in hosts
+	ObjList* o = m_streamHosts.skipNull();
+	if (o) {
+	    JGStreamHost* sh = static_cast<JGStreamHost*>(o->get());
+	    Debug(this,DebugAll,"Removing streamhost '%s:%d' [%p]",
+		sh->m_address.c_str(),sh->m_port,this);
+	    o->remove();
+	}
+    }
+    m_ftNotifier.clear();
+    clearEndpoint("data");
 }
 
 // Change host sender. Return false on failure

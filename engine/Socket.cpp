@@ -1405,6 +1405,39 @@ bool Socket::connect(struct sockaddr* addr, socklen_t addrlen)
     return checkError(::connect(m_handle,addr,addrlen));
 }
 
+// Asynchronously connects the socket to a remote address
+bool Socket::connectAsync(struct sockaddr* addr, socklen_t addrlen, unsigned int toutUs, bool* timeout)
+{
+    if (!canSelect())
+	return false;
+    if (connect(addr,addrlen))
+	return true;
+    if (!inProgress())
+	return false;
+    unsigned int intervals = toutUs / Thread::idleUsec();
+    // Make sure we wait for at least 1 timeout interval
+    if (!intervals)
+	intervals = 1;
+    clearError();
+    while (intervals) {
+	bool done = false;
+	bool event = false;
+	if (!select(0,&done,&event,Thread::idleUsec())) {
+	    if (!error() && (done || event))
+		updateError();
+	    if (!error())
+		return true;
+	    return false;
+	}
+	if (Thread::check(false))
+	    return false;
+	intervals--;
+    }
+    if (timeout)
+	*timeout = true;
+    return false;
+}
+
 bool Socket::shutdown(bool stopReads, bool stopWrites)
 {
     int how;

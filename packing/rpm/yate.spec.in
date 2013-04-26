@@ -237,6 +237,7 @@ ldconfig
 Summary:	ALSA sound driver for Yate
 Group:		Applications/Communication
 ExclusiveOS:	linux
+Requires:	%{name} = %{version}-%{release}
 Provides:	%{name}-audiodevice
 
 %description alsa
@@ -250,6 +251,7 @@ audio interface for using the client under Linux.
 %package gsm
 Summary:	GSM audio codec for Yate
 Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
 
 %description gsm
 European GSM 06.10 audio codec for Yate. This is a low CPU usage codec that
@@ -262,6 +264,7 @@ provides moderate compression and good voice quality.
 %package speex
 Summary:	Speex audio codec for Yate
 Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
 
 %description speex
 Speex audio codec for Yate. Speex is based on CELP  and is designed to
@@ -276,6 +279,7 @@ compress voice at bitrates ranging from 2 to 44 kbps.
 %package h323
 Summary:	H.323 protocol driver for Yate
 Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
 
 %description h323
 Yate driver for the ITU-T H.323 VoIP protocol based on the OpenH323 library.
@@ -298,6 +302,7 @@ Yate driver for the ITU-T H.323 VoIP protocol based on the OpenH323 library.
 Summary:	ISDN PRI card and protocol drivers for Yate
 Group:		Applications/Communication
 ExclusiveOS:	linux
+Requires:	%{name} = %{version}-%{release}
 
 %description isdn
 Yate drivers for ISDN PRI cards supported by the Zaptel or Wanpipe kernel
@@ -333,6 +338,7 @@ interfaces.
 %package lksctp
 Summary:	Linux Kernel based SCTP support for Yate
 Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
 Provides:	%{name}-sctp
 
 %description lksctp
@@ -352,6 +358,7 @@ implementation. These are needed for standard SIGTRAN interfaces.
 %package openssl
 Summary:	OpenSSL based encryption support for Yate
 Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
 Provides:	%{name}-ssl
 Provides:	%{name}-crypto
 
@@ -367,6 +374,7 @@ well as cryptographic routines used for other purposes.
 %package zlib
 Summary:	Zlib compression support for Yate
 Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
 Provides:	%{name}-compression
 
 %description zlib
@@ -380,6 +388,7 @@ This package provides Zlib data compression for Yate.
 %package pgsql
 Summary:	PostgreSQL database driver for Yate
 Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
 Provides:	%{name}-database
 
 %description pgsql
@@ -394,6 +403,7 @@ modules that support database access will be able to use PostgreSQL.
 %package mysql
 Summary:	MySQL database driver for Yate
 Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
 Provides:	%{name}-database
 
 %description mysql
@@ -431,6 +441,7 @@ This package includes the common files needed to use Yate as a VoIP client.
 Summary:	Qt-4 client package for Yate
 Group:		Applications/Communication
 Provides:	%{name}-client
+Requires:	%{name} = %{version}-%{release}
 Requires:	%{name}-client-common = %{version}-%{release}
 
 %description qt4

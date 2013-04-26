@@ -227,6 +227,9 @@ protected:
     void processActionTransportInfo(JGEvent* event);
     // Handle answer (session accept) events for non file transfer
     void processActionAccept(JGEvent* ev);
+    // Handle stream hosts events
+    // Return false if the session was terminated
+    bool processStreamHosts(JGEvent* ev);
     // Update a received candidate. Return true if changed
     bool updateCandidate(unsigned int component, JGSessionContent& local,
 	JGSessionContent& recv);
@@ -286,9 +289,13 @@ protected:
     // If host dir succeeds, still return false, but don't terminate transfer
     bool setupSocksFileTransfer(bool start);
     // Change host sender. Return false on failure
-    bool changeFTHostDir();
+    bool changeFTHostDir(bool resetState = true);
     // Drop file transfer data. Remove the first host in list
     void dropFT(bool removeFirst);
+    // Drop file transfer hosts
+    void dropFTHosts(bool local, const char* reason = 0);
+    // Drop file transfer host
+    void dropFTHost(JGStreamHost* sh, ObjList* remove, const char* reason = 0);
     // Get the RTP direction param from a content
     // FIXME: ignore content senders for early media ?
     inline const char* rtpDir(const JGSessionContent& c) {
@@ -1880,38 +1887,7 @@ bool YJGConnection::handleEvent(JGEvent* event)
 		event->confirmElement(XMPPError::Request);
 	    break;
 	case JGSession::ActStreamHost:
-	    if (m_ftStatus != FTNone) {
-		// Check if allowed
-		if (m_ftHostDirection != FTHostRemote) {
-		    event->confirmElement(XMPPError::Request);
-		    break;
-		}
-		// Check if we already received it
-		if (m_ftStatus != FTIdle) {
-		    event->confirmElement(XMPPError::Request);
-		    break;
-		}
-		event->setConfirmed();
-		// Remember stanza id
-		m_ftStanzaId = event->id();
-		// Copy hosts from event
-		ListIterator iter(event->m_streamHosts);
-		for (GenObject* o = 0; 0 != (o = iter.get());) {
-		    event->m_streamHosts.remove(o,false);
-		    m_streamHosts.append(o);
-		}
-		if (!setupSocksFileTransfer(false)) {
-		    if (m_ftStanzaId) {
-			m_session->sendStreamHostUsed("",m_ftStanzaId);
-			m_ftStanzaId = "";
-		    }
-		    if (!setupSocksFileTransfer(false))
-			return false;
-		}
-	    }
-	    else
-		event->confirmElement(XMPPError::Request);
-	    break;
+	    return processStreamHosts(event);
 	default:
 	    Debug(this,DebugNote,
 		"Received unexpected Jingle event (%p) with action=%s [%p]",
@@ -2233,6 +2209,53 @@ void YJGConnection::processActionAccept(JGEvent* event)
     if (!m_audioContent)
 	resetCurrentAudioContent(true,false,true);
     Engine::enqueue(message("call.answered",false,true));
+}
+
+// Handle stream hosts events
+// Return false if the session was terminated
+bool YJGConnection::processStreamHosts(JGEvent* ev)
+{
+    if (!ev)
+	return true;
+    if (m_ftStatus == FTNone) {
+	ev->confirmElement(XMPPError::Request);
+	return true;
+    }
+    // Check if allowed
+    if (m_ftHostDirection != FTHostRemote) {
+	// Check if we can change direction
+	if (!changeFTHostDir(false)) {
+	    ev->confirmElement(XMPPError::Request);
+	    return true;
+	}
+	// Drop current FT host
+	dropFT(true);
+	// Remove local hosts
+	dropFTHosts(true,"received remote host(s)");
+	m_ftStatus = FTIdle;
+    }
+    // Check if we already received it
+    if (m_ftStatus != FTIdle) {
+	ev->confirmElement(XMPPError::Request);
+	return true;
+    }
+    ev->setConfirmed();
+    // Remember stanza id
+    m_ftStanzaId = ev->id();
+    // Copy hosts from event
+    ObjList* o = ev->m_streamHosts.skipNull();
+    while (o) {
+	m_streamHosts.append(o->get());
+	o->remove(false);
+	o = o->skipNull();
+    }
+    if (setupSocksFileTransfer(false))
+	return true;
+    if (m_ftStanzaId) {
+	m_session->sendStreamHostUsed("",m_ftStanzaId);
+	m_ftStanzaId = "";
+    }
+    return setupSocksFileTransfer(false);
 }
 
 // Update a received candidate. Return true if changed
@@ -3076,14 +3099,15 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
 		if (Engine::dispatch(m)) {
 		    const char* addr = m.getValue("address");
 		    int port = m.getIntValue("port");
+		    m_ftNotifier = m.getValue("notifier");
 		    if (!null(addr) && port > 0) {
-			m_ftNotifier = m.getValue("notifier");
-			m_streamHosts.append(new JGStreamHost(m_local,addr,port));
+			m_streamHosts.append(new JGStreamHost(true,m_local,addr,port));
 			m_ftStatus = FTWaitEstablish;
 			// Send our stream host
 			m_session->sendStreamHosts(m_streamHosts,&m_ftStanzaId);
 			break;
 		    }
+		    dropFT(true);
 		}
 		error = "chan.socks failed";
 	    }
@@ -3095,10 +3119,7 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
 	// Remove the first stream host if status is idle: it failed
 	if (m_ftStatus != FTIdle) {
 	    dropFT(false);
-	    JGStreamHost* sh = static_cast<JGStreamHost*>(o->get());
-	    Debug(this,DebugNote,"Removing failed streamhost '%s:%d' [%p]",
-		sh->m_address.c_str(),sh->m_port,this);
-	    o->remove();
+	    dropFTHost(0,o,"failed");
 	    o = m_streamHosts.skipNull();
 	}
 
@@ -3116,9 +3137,7 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
 		m_ftNotifier = m.getValue("notifier");
 		break;
 	    }
-	    Debug(this,DebugNote,"Removing failed streamhost '%s:%d' [%p]",
-		sh->m_address.c_str(),sh->m_port,this);
-	    o->remove();
+	    dropFTHost(sh,o,"failed");
 	    o = m_streamHosts.skipNull();
 	}
 	if (o)
@@ -3153,19 +3172,45 @@ void YJGConnection::dropFT(bool removeFirst)
     if (removeFirst) {
 	// Remove first entry in hosts
 	ObjList* o = m_streamHosts.skipNull();
-	if (o) {
-	    JGStreamHost* sh = static_cast<JGStreamHost*>(o->get());
-	    Debug(this,DebugAll,"Removing streamhost '%s:%d' [%p]",
-		sh->m_address.c_str(),sh->m_port,this);
-	    o->remove();
-	}
+	if (o)
+	    dropFTHost(0,o);
     }
     m_ftNotifier.clear();
     clearEndpoint("data");
 }
 
+// Drop file transfer hosts
+void YJGConnection::dropFTHosts(bool local, const char* reason)
+{
+    for (ObjList* o = m_streamHosts.skipNull(); o;) {
+	JGStreamHost* sh = static_cast<JGStreamHost*>(o->get());
+	if (sh->m_local != local)
+	    o = o->skipNext();
+	else {
+	    dropFTHost(sh,o,reason);
+	    o = o->skipNull();
+	}
+    }
+}
+
+// Drop file transfer host
+void YJGConnection::dropFTHost(JGStreamHost* sh, ObjList* remove, const char* reason)
+{
+    if (!sh && remove)
+	sh = static_cast<JGStreamHost*>(remove->get());
+    if (!sh)
+	return;
+    Debug(this,DebugAll,"Removing %s streamhost '%s:%d' reason='%s' [%p]",
+	sh->m_local ? "local" : "remote",sh->m_address.c_str(),sh->m_port,
+	TelEngine::c_safe(reason),this);
+    if (remove)
+	remove->remove();
+    else
+	TelEngine::destruct(sh);
+}
+
 // Change host sender. Return false on failure
-bool YJGConnection::changeFTHostDir()
+bool YJGConnection::changeFTHostDir(bool resetState)
 {
     // Outgoing: we've sent hosts, allow remote to sent hosts
     // Incoming: remote sent hosts, allow us to send hosts
@@ -3176,6 +3221,8 @@ bool YJGConnection::changeFTHostDir()
 	    fromLocal ? "local" : "remote",this);
 	return true;
     }
+    if (!resetState)
+	return false;
     if (m_ftHostDirection != FTHostNone)
 	Debug(this,DebugNote,"No more hosts available [%p]",this); 
     m_ftHostDirection = FTHostNone;
@@ -3956,7 +4003,7 @@ void YJGDriver::initialize()
 	const char* ftAddr = sect->getValue("socks_proxy_ip");
 	int ftPort = sect->getIntValue("socks_proxy_port",-1);
 	if (!(null(ftAddr) || ftPort < 1))
-	    m_ftProxy = new JGStreamHost(ftJid,ftAddr,ftPort);
+	    m_ftProxy = new JGStreamHost(true,ftJid,ftAddr,ftPort);
 	else
 	    Debug(this,DebugNote,
 		"Invalid addr/port (%s:%s) for default file transfer proxy",

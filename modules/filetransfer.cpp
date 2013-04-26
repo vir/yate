@@ -668,13 +668,10 @@ unsigned long FileConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	}
     }
 
-    if (data.null())
-	return 0;
-
     XDebug(&__plugin,DebugAll,"FileConsumer(%s) consuming %u bytes [%p]",
 	m_fileName.c_str(),data.length(),this);
 
-    if (m_file.valid()) {
+    if (data.length() && m_file.valid()) {
 	if (m_file.writeData(data.data(),data.length())) {
 	    if (m_md5HexDigest)
 		m_md5 << data;
@@ -699,7 +696,7 @@ unsigned long FileConsumer::Consume(const DataBlock& data, unsigned long tStamp,
     }
 
     m_transferred += data.length();
-    if (m_transferred && (m_transferred >= m_fileSize))
+    if (m_transferred >= m_fileSize)
 	terminate();
     return data.length();
 }

@@ -250,6 +250,10 @@ public:
 	    Lock lck(this);
 	    buf = m_sendTarget;
 	}
+    inline void copyRouteParams(NamedList& dest) {
+	    Lock lck(this);
+	    dest.copyParams(m_routeParams);
+	}
     virtual void initialize();
     bool findAccount(const String& name, RefPointer<FIAccount>& acc, bool add = false);
     bool removeAccount(FIAccount* acc, bool delObj = true);
@@ -261,6 +265,7 @@ protected:
 
     ObjList m_accounts;
     String m_sendTarget;                 // File send target to set when routing
+    NamedList m_routeParams;             // Parameters to be set when routing
 };
 
 INIT_PLUGIN(FileInfo);
@@ -811,6 +816,7 @@ bool FIAccount::route(Message& msg, const String& contact)
 	name().c_str(),contact.c_str(),file.c_str(),s.c_str(),this);
     if (!s)
 	return false;
+    __plugin.copyRouteParams(msg);
     __plugin.getSendTarget(msg.retValue());
     msg.retValue() << s;
     return true;
@@ -865,7 +871,8 @@ void FIAccount::destroyed()
 // FileInfo
 //
 FileInfo::FileInfo()
-    : Module("fileinfo","misc")
+    : Module("fileinfo","misc"),
+    m_routeParams("")
 {
     Output("Loaded module FileInfo");
 }
@@ -875,22 +882,28 @@ FileInfo::~FileInfo()
     Output("Unloading module FileInfo");
 }
 
+// Utility used in FileInfo::initialize()
+static inline const NamedList* getSafeSect(Configuration& cfg, const String& name)
+{
+    NamedList* tmp = cfg.getSection(name);
+    if (tmp)
+	return tmp;
+    return &NamedList::empty();
+}
+
 void FileInfo::initialize()
 {
     static bool first = true;
     Output("Initializing module FileInfo");
     Configuration cfg(Engine::configFile(cfgFile));
-    NamedList dummy("");
-    NamedList* general = cfg.getSection(YSTRING("general"));
-    if (!general)
-	general = &dummy;
+    const NamedList* callRoute = getSafeSect(cfg,YSTRING("call.route"));
     if (first) {
 	first = false;
 	setup();
 	for (const TokenDict* d = s_msgHandler; d->token; d++) {
 	    int prio = d->value;
 	    if (d->value == FileInfoMsgHandler::CallRoute)
-		prio = general->getIntValue("call.route",prio);
+		prio = callRoute->getIntValue("priority",prio);
 	    if (prio < 0)
 		prio = 100;
 	    FileInfoMsgHandler* h = new FileInfoMsgHandler(d->value,prio);
@@ -898,7 +911,13 @@ void FileInfo::initialize()
 	}
     }
     lock();
-    m_sendTarget = general->getValue(YSTRING("file_send_target"),"filetransfer/send/");
+    m_sendTarget = callRoute->getValue(YSTRING("file_send_target"),"filetransfer/send/");
+    m_routeParams.clearParams();
+    if (callRoute->getBoolValue(YSTRING("set_default_params"),true)) {
+	m_routeParams.addParam("autoclose",String::boolText(true));
+	m_routeParams.addParam("wait_on_drop","10000");
+    }
+    m_routeParams.copySubParams(*callRoute,YSTRING("param_"),true);
     unlock();
 }
 

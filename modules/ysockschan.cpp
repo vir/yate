@@ -3351,8 +3351,10 @@ bool YSocksWrapper::recvData()
     // The source will not be destroyed until we reset the busy flag
     unsigned int len = m_recvBuffer.length();
     m_conn->recv(m_recvBuffer.data(),len);
-    if (!len)
+    if (!len) {
+	source->busy(false);
 	return false;
+    }
     DataBlock block;
     block.assign(m_recvBuffer.data(),len,false);
     XDebug(this,DebugAll,"Forwarding %u bytes [%p]",len,this);

@@ -1422,12 +1422,11 @@ bool Socket::connectAsync(struct sockaddr* addr, socklen_t addrlen, unsigned int
     while (intervals) {
 	bool done = false;
 	bool event = false;
-	if (!select(0,&done,&event,Thread::idleUsec())) {
-	    if (!error() && (done || event))
-		updateError();
-	    if (!error())
-		return true;
+	if (!select(0,&done,&event,Thread::idleUsec()))
 	    return false;
+	if (done || event) {
+	    updateError();
+	    return error() == 0;
 	}
 	if (Thread::check(false))
 	    return false;

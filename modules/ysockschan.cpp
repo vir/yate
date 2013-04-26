@@ -1264,12 +1264,22 @@ public:
     YSocksSource(YSocksWrapper* w);
     inline void busy(bool isBusy)
 	{ m_busy = isBusy; }
+    inline bool shouldSendEmpty() {
+	    if (m_sentEmpty)
+		return false;
+	    Lock lck(this);
+	    m_sentEmpty = (0 != m_consumers.skipNull());
+	    return m_sentEmpty;
+	}
+    inline void resetSendEmpty()
+	{ m_sentEmpty = true; }
 protected:
     // Remove from wrapper. Release memory
     virtual void destroyed();
 private:
     YSocksWrapper* m_wrapper;
     volatile bool m_busy;
+    bool m_sentEmpty;
 };
 
 // Socks data consumer
@@ -3352,9 +3362,15 @@ bool YSocksWrapper::recvData()
     unsigned int len = m_recvBuffer.length();
     m_conn->recv(m_recvBuffer.data(),len);
     if (!len) {
+	if (source->shouldSendEmpty()) {
+	    DataBlock block;
+	    XDebug(this,DebugAll,"Forwarding empty block [%p]",this);
+	    source->Forward(DataBlock::empty());
+	}
 	source->busy(false);
 	return false;
     }
+    source->resetSendEmpty();
     DataBlock block;
     block.assign(m_recvBuffer.data(),len,false);
     XDebug(this,DebugAll,"Forwarding %u bytes [%p]",len,this);
@@ -3593,7 +3609,7 @@ void YSocksWrapperWorker::run()
  * YSocksSource
  */
 YSocksSource::YSocksSource(YSocksWrapper* w)
-    : m_wrapper(0), m_busy(false)
+    : m_wrapper(0), m_busy(false), m_sentEmpty(false)
 {
     m_format = "";
     if (w && w->ref()) {

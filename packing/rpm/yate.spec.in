@@ -115,6 +115,7 @@ for small to large scale projects.
 %{_libdir}/yate/dumbchan.yate
 %{_libdir}/yate/callfork.yate
 %{_libdir}/yate/extmodule.yate
+%{_libdir}/yate/fileinfo.yate
 %{_libdir}/yate/filetransfer.yate
 %{_libdir}/yate/ysipchan.yate
 %{_libdir}/yate/yrtpchan.yate
@@ -175,6 +176,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/sipfeatures.conf
 %config(noreplace) %{_sysconfdir}/yate/callfork.conf
 %config(noreplace) %{_sysconfdir}/yate/extmodule.conf
+%config(noreplace) %{_sysconfdir}/yate/fileinfo.conf
 %config(noreplace) %{_sysconfdir}/yate/filetransfer.conf
 %config(noreplace) %{_sysconfdir}/yate/moh.conf
 %config(noreplace) %{_sysconfdir}/yate/mux.conf
@@ -579,6 +581,7 @@ make %{stripped}
 
 %install
 make install DESTDIR=%{buildroot}
+rm %{buildroot}%{_sysconfdir}/yate/amrnbcodec.conf
 mkdir -p %{buildroot}%{_initrddir}
 cp -p %{_builddir}/%{name}/packing/rpm/yate.init %{buildroot}%{_initrddir}/yate
 mkdir -p %{buildroot}%{_sysconfdir}/logrotate.d

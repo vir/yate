@@ -971,7 +971,7 @@ JGStreamHost* JGStreamHost::fromXml(XmlElement* xml)
     const char* jid = xml->attribute("jid");
     if (TelEngine::null(jid))
 	return 0;
-    return new JGStreamHost(jid,xml->attribute("host"),
+    return new JGStreamHost(false,jid,xml->attribute("host"),
 	String(xml->attribute("port")).toInteger(-1),xml->attribute("zeroconf"));
 }
 

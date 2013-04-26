@@ -784,14 +784,15 @@ class JGStreamHost : public String
 public:
     /**
      * Constructor
+     * @param local Local stream host
      * @param jid Stream host jid (id)
      * @param addr Stream host address
      * @param port Stream host port
      * @param zeroConf Optional zero conf definition (override address/port)
      */
-    JGStreamHost(const char* jid, const char* addr, int port, const char* zeroConf = 0)
+    JGStreamHost(bool local, const char* jid, const char* addr, int port, const char* zeroConf = 0)
 	: String(jid),
-	m_address(addr), m_port(port), m_zeroConf(zeroConf)
+	m_local(local), m_address(addr), m_port(port), m_zeroConf(zeroConf)
 	{}
 
     /**
@@ -800,7 +801,7 @@ public:
      */
     inline JGStreamHost(const JGStreamHost& src)
 	: String(src),
-	m_address(src.m_address), m_port(src.m_port),
+	m_local(src.m_local), m_address(src.m_address), m_port(src.m_port),
 	m_zeroConf(src.m_zeroConf)
 	{}
 
@@ -834,6 +835,7 @@ public:
      */
     static XmlElement* buildRsp(const char* jid);
 
+    bool m_local;
     String m_address;
     int m_port;
     String m_zeroConf;

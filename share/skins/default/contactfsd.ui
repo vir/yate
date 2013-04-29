@@ -151,7 +151,10 @@
               <string>property:_yate_notifyonenterpressed=true</string>
               <string>property:_yate_notifyitemchanged=true</string>
               <string>columns=Name</string>
-              <string>filelist_default_itemheight=false</string>
+              <string>filelist_default_itemheight=20</string>
+              <string>property:_yate_itemstatewidget=dir:name</string>
+              <string>property:_yate_itemexpandedimage=dir:folder_open_16.png</string>
+              <string>property:_yate_itemcollapsedimage=dir:folder_16.png</string>
              </stringlist>
             </property>
            </widget>
@@ -202,13 +205,16 @@
               <string>property:_yate_horizontalheader=false</string>
               <string>property:_yate_notifyonenterpressed=true</string>
               <string>property:_yate_notifyitemchanged=true</string>
+              <string>property:_yate_itemstatewidget=dir:name</string>
+              <string>property:_yate_itemexpandedimage=dir:folder_open_16.png</string>
+              <string>property:_yate_itemcollapsedimage=dir:folder_16.png</string>
               <string>_griddraw_right_color=#e3e6e9</string>
               <string>_griddraw_bottom_color=#a9c2c2</string>
               <string>columns=Name</string>
               <string>itemdelegate.1=QtHtmlItemDelegate</string>
               <string>itemdelegate.1.drawfocus=false</string>
               <string>filelist_default_itemstyle=true</string>
-              <string>filelist_default_itemheight=true</string>
+              <string>filelist_default_itemheight=20</string>
              </stringlist>
             </property>
            </widget>
@@ -290,6 +296,9 @@
              <string>property:_yate_itemacceptdrop=drive:always</string>
              <string>property:_yate_itemacceptdrop=dir:always</string>
              <string>property:_yate_itemacceptdrop=file:always</string>
+             <string>property:_yate_itemstatewidget=dir:name</string>
+             <string>property:_yate_itemexpandedimage=dir:folder_open_16.png</string>
+             <string>property:_yate_itemcollapsedimage=dir:folder_16.png</string>
              <string>_griddraw_right_color=#e3e6e9</string>
              <string>_griddraw_bottom_color=#a9c2c2</string>
              <string>columns=Name</string>
@@ -297,7 +306,7 @@
              <string>itemdelegate.1.drawfocus=false</string>
              <string>itemdelegate.1.noimagerole=true</string>
              <string>filelist_default_itemstyle=true</string>
-             <string>filelist_default_itemheight=true</string>
+             <string>filelist_default_itemheight=false</string>
              <string>filelist_filesystemlist=true</string>
              <string>filelist_filesystemlist_name_column=name</string>
              <string>filelist_filesystemlist_autochangedir=true</string>

@@ -4626,8 +4626,10 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
     }
     else if (t->getMethod() == YSTRING("REGISTER"))
 	regReq(e,t);
-    else if (t->getMethod() == YSTRING("OPTIONS"))
-	options(e,t);
+    else if (t->getMethod() == YSTRING("OPTIONS")) {
+	if (!generic(e,t))
+	    options(e,t);
+    }
     else if (t->getMethod() == YSTRING("REFER")) {
 	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
 	if (conn) {
@@ -4839,7 +4841,14 @@ void YateSIPEndPoint::options(SIPEvent* e, SIPTransaction* t)
 	    return;
 	}
     }
-    t->setResponse(200);
+    switch (Engine::accept()) {
+	case Engine::Congestion:
+	case Engine::Reject:
+	    t->setResponse(503);
+	    break;
+	default:
+	    t->setResponse(Engine::exiting() ? 503 : 200);
+    }
 }
 
 bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t, int defErr, bool async)

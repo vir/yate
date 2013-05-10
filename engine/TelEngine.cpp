@@ -436,13 +436,15 @@ bool controlReturn(NamedList* params, bool ret, const char* retVal)
 {
     if (retVal && params)
 	params->setParam("retVal",retVal);
-    if (ret || !params || !params->getObject(YATOM("Message")))
+    if (!params || !params->getObject(YATOM("Message")))
 	return ret;
-    const char* module = params->getValue("module");
-    if (!module || YSTRING("rmanager") != module)
+    const String* module = params->getParam("module");
+    if (TelEngine::null(module) || YSTRING("rmanager") != *module)
 	return ret;
-    params->setParam("operation-status",String(ret));
-    return true;
+    const String s_opStat("operation-status");
+    if (!params->getParam(s_opStat))
+	params->addParam(s_opStat,String::boolText(ret));
+    return ret;
 }
 
 Debugger::~Debugger()

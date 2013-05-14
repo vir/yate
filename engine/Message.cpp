@@ -286,10 +286,7 @@ bool MessageRelay::receivedInternal(Message& msg)
 
 MessageDispatcher::MessageDispatcher(const char* trackParam)
     : Mutex(false,"MessageDispatcher"),
-      m_hookMutex(false,"PostHooks"),
-      m_msgAppend(&m_messages), m_hookAppend(&m_hooks),
-      m_trackParam(trackParam), m_changes(0), m_warnTime(0),
-      m_hookCount(0), m_hookHole(false)
+      m_trackParam(trackParam), m_changes(0), m_warnTime(0)
 {
     XDebug(DebugInfo,"MessageDispatcher::MessageDispatcher('%s') [%p]",trackParam,this);
 }
@@ -370,9 +367,9 @@ bool MessageDispatcher::dispatch(Message& msg)
 #ifdef XDEBUG
     Debugger debug("MessageDispatcher::dispatch","(%p) (\"%s\")",&msg,msg.c_str());
 #endif
-
-    u_int64_t t = m_warnTime ? Time::now() : 0;
-
+#ifndef NDEBUG
+    u_int64_t t = Time::now();
+#endif
     bool retv = false;
     ObjList *l = &m_handlers;
     Lock mylock(this);
@@ -393,22 +390,16 @@ bool MessageDispatcher::dispatch(Message& msg)
 	    // mark handler as unsafe to destroy / uninstall
 	    h->m_unsafe++;
 	    mylock.drop();
-
-	    u_int64_t tm = m_warnTime ? Time::now() : 0;
-
+#ifdef DEBUG
+	    u_int64_t tm = Time::now();
+#endif
 	    retv = h->receivedInternal(msg) || retv;
-
-	    if (tm) {
-		tm = Time::now() - tm;
-		if (tm > m_warnTime) {
-		    mylock.acquire(this);
-		    const char* name = (c == m_changes) ? h->trackName().c_str() : 0;
-		    Debug(DebugInfo,"Message '%s' [%p] passed through %p%s%s%s in " FMT64U " usec",
-			msg.c_str(),&msg,h,
-			(name ? " '" : ""),(name ? name : ""),(name ? "'" : ""),tm);
-		}
-	    }
-
+#ifdef DEBUG
+	    tm = Time::now() - tm;
+	    if (m_warnTime && (tm > m_warnTime))
+		Debug(DebugInfo,"Message '%s' [%p] passed through %p in " FMT64U " usec",
+		    msg.c_str(),&msg,h,tm);
+#endif
 	    if (retv && !msg.broadcast())
 		break;
 	    mylock.acquire(this);
@@ -442,50 +433,26 @@ bool MessageDispatcher::dispatch(Message& msg)
     }
     mylock.drop();
     msg.dispatched(retv);
-
-    if (t) {
-	t = Time::now() - t;
-	if (t > m_warnTime) {
-	    unsigned n = msg.length();
-	    String p;
-	    p << "\r\n  retval='" << msg.retValue().safe("(null)") << "'";
-	    for (unsigned i = 0; i < n; i++) {
-		NamedString *s = msg.getParam(i);
-		if (s)
-		    p << "\r\n  param['" << s->name() << "'] = '" << *s << "'";
-	    }
-	    Debug("Performance",DebugMild,"Message %p '%s' returned %s in " FMT64U " usec%s",
-		&msg,msg.c_str(),retv ? "true" : "false",t,p.safe());
+#ifndef NDEBUG
+    t = Time::now() - t;
+    if (m_warnTime && (t > m_warnTime)) {
+	unsigned n = msg.length();
+	String p;
+	for (unsigned i = 0; i < n; i++) {
+	    NamedString *s = msg.getParam(i);
+	    if (s)
+		p << "\n  ['" << s->name() << "']='" << *s << "'";
 	}
+	Debug("Performance",DebugMild,"Message %p '%s' retval '%s' returned %s in " FMT64U " usec%s",
+	    &msg,msg.c_str(),msg.retValue().c_str(),retv ? "true" : "false",t,p.safe());
     }
-
-    m_hookMutex.lock();
-    if (m_hookHole && !m_hookCount) {
-	// compact the list, remove the holes
-	for (l = &m_hooks; l; l = l->next()) {
-	    while (!l->get()) {
-		if (!l->next())
-		    break;
-		if (l->next() == m_hookAppend)
-		    m_hookAppend = &m_hooks;
-		l->remove();
-	    }
-	}
-	m_hookHole = false;
+#endif
+    l = &m_hooks;
+    for (; l; l=l->next()) {
+	MessagePostHook *h = static_cast<MessagePostHook*>(l->get());
+	if (h)
+	    h->dispatched(msg,retv);
     }
-    m_hookCount++;
-    for (l = m_hooks.skipNull(); l; l = l->skipNext()) {
-	RefPointer<MessagePostHook> ph = static_cast<MessagePostHook*>(l->get());
-	if (ph) {
-	    m_hookMutex.unlock();
-	    ph->dispatched(msg,retv);
-	    ph = 0;
-	    m_hookMutex.lock();
-	}
-    }
-    m_hookCount--;
-    m_hookMutex.unlock();
-
     return retv;
 }
 
@@ -494,15 +461,13 @@ bool MessageDispatcher::enqueue(Message* msg)
     Lock lock(this);
     if (!msg || m_messages.find(msg))
 	return false;
-    m_msgAppend = m_msgAppend->append(msg);
+    m_messages.append(msg);
     return true;
 }
 
 bool MessageDispatcher::dequeueOne()
 {
     lock();
-    if (m_messages.next() == m_msgAppend)
-	m_msgAppend = &m_messages;
     Message* msg = static_cast<Message *>(m_messages.remove(false));
     unlock();
     if (!msg)
@@ -530,26 +495,14 @@ unsigned int MessageDispatcher::handlerCount()
     return m_handlers.count();
 }
 
-unsigned int MessageDispatcher::postHookCount()
-{
-    Lock lock(m_hookMutex);
-    return m_hooks.count();
-}
-
 void MessageDispatcher::setHook(MessagePostHook* hook, bool remove)
 {
-    m_hookMutex.lock();
-    if (remove) {
-	// zero the hook, we'll compact it later when safe
-	ObjList* l = m_hooks.find(hook);
-	if (l) {
-	    l->set(0,false);
-	    m_hookHole = true;
-	}
-    }
+    lock();
+    if (remove)
+	m_hooks.remove(hook,false);
     else
-	m_hookAppend = m_hookAppend->append(hook);
-    m_hookMutex.unlock();
+	m_hooks.append(hook);
+    unlock();
 }
 
 

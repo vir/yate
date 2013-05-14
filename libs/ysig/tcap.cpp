@@ -615,7 +615,7 @@ void SS7TCAP::removeTransaction(SS7TCAPTransaction* tr)
     m_transactions.remove(tr);
 }
 
-void SS7TCAP::process()
+void SS7TCAP::timerTick(const Time& when)
 {
     // first check pending received messages
     SS7TCAPMessage* msg = dequeue();
@@ -623,23 +623,42 @@ void SS7TCAP::process()
     while (msg) {
 	processSCCPData(msg);
 	TelEngine::destruct(msg);
+	//break;
 	msg = dequeue();
     }
 
-    Time when;
     // update/handle rest of transactions
     Lock lock(m_transactionsMtx);
-    ObjList trans;
-    for (ObjList* o = m_transactions.skipNull();o;o = o->skipNext()) {
-	RefObject* obj = static_cast<RefObject*>(o->get());
-	if (obj && obj->ref())
-	    trans.append(obj);
-    }
-    lock.drop();
-    for (ObjList* o = trans.skipNull();o;o=o->skipNext()) {
-	SS7TCAPTransaction* tr = static_cast<SS7TCAPTransaction*>(o->get());
-	if (tr->checkTimeouts(when))
+    ListIterator iter(m_transactions);
+    for (;;) {
+	SS7TCAPTransaction* tr = static_cast<SS7TCAPTransaction*>(iter.get());
+	// End of iteration?
+	if (!tr)
+	    break;
+	if (!tr->ref())
+	    continue;
+	lock.drop();
+	NamedList params("");
+	DataBlock data;
+	if (tr->transactionState() != SS7TCAPTransaction::Idle)
+	    tr->checkComponents();
+	if (tr->endNow())
+	    tr->setState(SS7TCAPTransaction::Idle);
+	if (tr->timedOut()) {
+	    DDebug(this,DebugInfo,"SS7TCAP::timerTick() - transaction with id=%s(%p) timed out [%p]",tr->toString().c_str(),tr,this);
+	    tr->updateToEnd();
+	    buildSCCPData(params,tr);
+	    if (!tr->basicEnd())
+		tr->transactionData(params);
+	    sendToUser(params);
+	    tr->setState(SS7TCAPTransaction::Idle);
+	}
+
+	if (tr->transactionState() == SS7TCAPTransaction::Idle)
 	    removeTransaction(tr);
+	TelEngine::destruct(tr);
+	if (!lock.acquire(m_transactionsMtx))
+	    break;
     }
 }
 
@@ -1443,7 +1462,7 @@ void SS7TCAPTransaction::transactionData(NamedList& params)
 #endif
 }
 
-void SS7TCAPTransaction::checkComponents(const Time& when)
+void SS7TCAPTransaction::checkComponents()
 {
     NamedList params("");
     int index = 0;
@@ -1453,7 +1472,7 @@ void SS7TCAPTransaction::checkComponents(const Time& when)
 	SS7TCAPComponent* comp = static_cast<SS7TCAPComponent*>(iter.get());
 	if (!comp)
 	    break;
-	if (comp->timedOut(when)) {
+	if (comp->timedOut()) {
 	    XDebug(tcap(),DebugInfo,"SS7TCAPTransaction::checkComponents() - component with local ID = %s timed out in"
 		    " transaction with local ID = %s [%p]",comp->toString().c_str(),toString().c_str(),this);
 	    SS7TCAP::TCAPUserCompActions type = comp->type();
@@ -1494,7 +1513,7 @@ void SS7TCAPTransaction::checkComponents(const Time& when)
     }
     if (m_components.count() == 0) {// we don't have any more components
 	if (!m_timeout.started()) {
-	    m_timeout.start(when.msec());
+	    m_timeout.start();
 	    XDebug(tcap(),DebugInfo,"SS7TCAPTransaction::checkComponents() - timer for transaction with localID=%s has been started [%p]",
 		toString().c_str(),this);
 	}
@@ -1571,30 +1590,6 @@ void SS7TCAPTransaction::updateToEnd()
 void SS7TCAPTransaction::abnormalDialogInfo(NamedList& params)
 {
     Debug(tcap(),DebugAll,"SS7TCAPTransaction::abnormalDialogInfo() [%p]",this);
-}
-
-bool SS7TCAPTransaction::checkTimeouts(const Time& when)
-{
-    Lock myLock(this);
-    if (endNow())
-	setState(SS7TCAPTransaction::Idle);
-    else
-	checkComponents(when);
-    if (transactionState() == SS7TCAPTransaction::Idle)
-	return true;
-    if (!timedOut(when))
-	return false;
-
-    DDebug(tcap(),DebugInfo,"Transaction with id %s timed out [%p]",toString().c_str(),this);
-    NamedList params("");
-    updateToEnd();
-    tcap()->buildSCCPData(params,this);
-    if (!basicEnd())
-	transactionData(params);
-    setState(SS7TCAPTransaction::Idle);
-    myLock.drop();
-    tcap()->sendToUser(params);
-    return true;
 }
 
 /**

@@ -11010,8 +11010,9 @@ public:
 
     /**
      * Method called periodically to do processing and timeout checks
+     * @param when Time to use as computing base for events and timeouts
      */
-    void process();
+    virtual void timerTick(const Time& when);
 
     /**
      * Send to TCAP users a decode message
@@ -11403,9 +11404,8 @@ public:
 
     /**
      * Check components for timeouts
-     * @param when Time to use as computing base for events and timeouts
      */
-    virtual void checkComponents(const Time& when);
+    virtual void checkComponents();
 
     /**
      * Set the current type of transaction primitive
@@ -11512,11 +11512,10 @@ public:
 
     /**
      * Check if the transaction has timed out
-     * @param when Time to use as computing base for events and timeouts
      * @return True if the transaction timed out, false otherwise
      */
-    inline bool timedOut(const Time& when)
-	{ return m_timeout.timeout(when.msec()); }
+    inline bool timedOut()
+	{ return m_timeout.timeout(); }
 
     /**
      * Find a component with given id
@@ -11568,12 +11567,6 @@ public:
      */
     virtual void encodeComponents(NamedList& params, DataBlock& data) = 0;
 
-    /**
-     * Check transaction timers
-     * @param when Time to use as computing base for events and timeouts
-     * @return True if this transaction timed out
-     */
-    bool checkTimeouts(const Time& when);
 protected:
     SS7TCAP* m_tcap;
     SS7TCAP::TCAPType m_tcapType;
@@ -11696,11 +11689,10 @@ public:
 
     /**
      * Check if the component has timed out
-     * @param when Time to use as computing base for events and timeouts
      * @return True if the component timed out, false otherwise
      */
-    inline bool timedOut(const Time& when)
-	{ return m_opTimer.timeout(when.msec()); }
+    inline bool timedOut()
+	{ return m_opTimer.timeout(); }
 
     /**
      * Set component state

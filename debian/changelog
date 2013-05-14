@@ -1,4 +1,4 @@
-yate (4.3.1~svn5437) UNRELEASED; urgency=low
+yate (4.3.1~svn5505) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -407,8 +407,71 @@ yate (4.3.1~svn5437) UNRELEASED; urgency=low
   * Updated to SVN revision 5437: + Create a Thread for each SS7TCAP.  +
     Added reportSM-DeliveryStatus, sendParameters and checkIMEI to their
     respective capabilities.
+  * Updated to SVN revision 5505: + Engine status now reports the number
+    of post-dispatch hooks installed.  + Fixed several race conditions
+    in message post-dispatch hooks and extmodule watchers.  + Get the
+    SVN revision from the correct path when building out of source
+    directory.  + Pick the SVN revision from the "svn info" if possible.
+    + Strip trailing spaces from unquoted URI description.  + A list
+    iterator built from HashList stores object hashes and use them when
+    needed.  + Added HashList method used to find an object by pointer
+    and hash.  + Added method used to compact (remove empty objects) an
+    ObjList.  + Fixed bug: use driver mutex to reset session user data
+    pointer.  + This patch fixes issues with incorrect parsing of
+    imbricated if... else/if {} else {} or any of the combinations
+    including a if else construct.  + Changed the Javascript parser to
+    use this object.  + Added class ParsePoint for keeping a context
+    while parsing code.  + Implemented reentrant operation mode for JS
+    Message.dispatch()  + Added method to set the debug name of
+    Javascript instances.  + Apply only strictly positive driver default
+    timeouts.  + Added support for inserting separators in log
+    timestamps.  + Added possibility to return day of week from
+    Time::toDateTime()  + Added method for retrieving the current
+    timezone offset from UTC.  + Fixed the constructors and get...
+    methods of Javascript Date object.  + Fixed a conversion on 32 bit
+    platforms.  + Removed not exisintg debug enabler variable from debug
+    message.  + Fixed time zone retrieval on Windows.  + Fixed command
+    name completion in jabberclient module.  + Wait less when trying to
+    lock the source. Avoid notifying error when requesting to send a 0
+    bytes length file.  + Added file share namespaces and tags to known
+    list. Add utility methods used to build file share and result set
+    management elements.  + Added file info module.  + Added file info
+    module to Windows build.  + Added file share message support in
+    jabber client module.  + Added utility methods and classes to
+    support drag@drop and showing busy indicator on widget.  + Added
+    file path related utility methods.  + Added custom tree support for:
+    drag&drop, multiple selection, drawing extra buttons using item
+    delegates. Added custom file list with capability to load and list
+    directory content.  + Wait for session initiate result to send
+    stream host for file transfer session.  + Added file sharing
+    support.  + Avoid scrollbar handle to become too thin.  + Fixed
+    state image draw condition.  + Fixed parameters documentation.  +
+    Fixed minor typo in documentation comment.  + Fixes bug #0000341.  +
+    Fixed regfile user count output on status overview.  + Added methos
+    used to connect a socket asynchronously.  + Asynchronously connect a
+    SOCKS client if possible.  + Set a greater timeout for stream host
+    stanzas.  + Change file transfer host direction when failed to
+    connect to remote provided host. Signal it to remote party.  + Fixed
+    async connect error check.  + Fixed bug: unset source busy flag when
+    nothing is received on socket to avoid looping when source is
+    destroyed.  + Allow a source's wait to drop interval to be set from
+    message.  + Added configurable parameters to be set when routing.
+    Added missing config file sample.  + Change host direction if
+    possible and re-negotiate the transport when receiving stream hosts
+    from remote.  + Remove AMR config as we never package the module.  +
+    Added missing fileinfo to RPM.  + Forward an empty block when first
+    consumer is attached and we read 0 bytes from socket.  + Terminate
+    the file transfer consumer when 0 bytes received and expected file
+    size is 0.  + Require exactly the same version as main Yate for
+    binary module packages.  + Allow the OPTIONS method to be handled
+    generically.  + Reply to SIP OPTIONS with 503 is engine is exiting,
+    congested or rejecting calls.  + Added folder images in shared items
+    lists.  + Simplified rmanager control return value interpretation.
+    + Prevent controlReturn() from overwriting a previous return
+    parameter.  + Copy all call.drop parameters into the channel
+    disconnected list.  + New files packaging
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 04 Apr 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 15 May 2013 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

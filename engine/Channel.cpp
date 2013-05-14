@@ -681,7 +681,7 @@ bool Channel::msgDrop(Message& msg, const char* reason)
 {
     m_timeout = m_maxcall = 0;
     status(null(reason) ? "dropped" : reason);
-    disconnect(reason);
+    disconnect(reason,msg);
     return true;
 }
 

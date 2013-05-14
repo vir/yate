@@ -117,11 +117,114 @@ public:
 };
 
 /**
+ * A class used to keep a parsing context
+ * @short The parsing context
+ */
+class YSCRIPT_API ParsePoint
+{
+public:
+    /**
+     * Constructor
+     * @param expr Expression to be parsed
+     * @param eval ExpEvaluator associated with this parsing context
+     * @param lineNo The line number that is currently parsed
+     * @param fileName File name associated with this context
+     * @param seps Searched separator during parsing
+     */
+    explicit inline ParsePoint(const char*& expr, ExpEvaluator* eval = 0, unsigned int lineNo = 0,
+			const char* fileName = 0, const char* seps = 0)
+	: m_expr(expr), m_searchedSeps(seps), m_count(0), m_foundSep(0), m_lineNo(lineNo), m_eval(eval), m_fileName(fileName)
+	{ }
+
+    /**
+     * Assignment operator
+     * @param parsePoint Parsing context which is to be assigned to this parsing context
+     */
+    ParsePoint& operator=(ParsePoint& parsePoint);
+
+    /**
+     * Cast operator to const char*&
+     */
+    inline operator const char*&()
+	{ return m_expr; }
+
+    /**
+     * Assignement from const char*
+     */
+    inline ParsePoint& operator=(const char* newExpr)
+    {
+	m_expr = newExpr;
+	return *this;
+    }
+
+    /**
+     * Prefix incrementation operator. Incrementes the internal expression
+     */
+    inline ParsePoint& operator++() // prefix
+    {
+	++m_expr;
+	return *this;
+    }
+
+    /**
+     * Postfix incrementation operator. Incrementes the internal expression
+     */
+    inline ParsePoint& operator++(int unused) // postfix
+    {
+	++m_expr;
+	return *this;
+    }
+
+    /**
+     * Get first char in the parsed expression
+     * @return First char in the expression to be parsed
+     */
+    inline char firstChar()
+	{ return *m_expr; }
+
+    /**
+     * Expression to be parsed
+     */
+    const char* m_expr;
+
+    /**
+     * Searched instruction separators
+     */
+    const char* m_searchedSeps;
+
+    /**
+     * Number of how many times the parser must encouter a separator
+     */
+    unsigned int m_count;
+
+    /**
+     * Separator that the parser encountered
+     */
+    char m_foundSep;
+
+    /**
+     * Line numbet at which parsing is taking place
+     */
+    unsigned int m_lineNo;
+
+    /**
+     * ExpEvaluator associated with this parsing context
+     */
+    ExpEvaluator* m_eval;
+
+    /**
+    * File name associated for this context
+    */
+    String m_fileName;
+};
+
+/**
  * A class used to build stack based (posifix) expression parsers and evaluators
  * @short An expression parser and evaluator
  */
 class YSCRIPT_API ExpEvaluator : public DebugEnabler
 {
+    friend class ParsePoint;
 public:
     /**
      * Parsing styles
@@ -229,11 +332,11 @@ public:
 
     /**
      * Parse and compile an expression
-     * @param expr Pointer to expression to compile
+     * @param expr Parsing context to compile
      * @param context Pointer to arbitrary object to be passed to called methods
      * @return Number of expressions compiled, zero on error
      */
-    int compile(const char* expr, GenObject* context = 0);
+    int compile(ParsePoint& expr, GenObject* context = 0);
 
     /**
      * Evaluate the expression, optionally return results
@@ -413,10 +516,10 @@ public:
 protected:
     /**
      * Method to skip over whitespaces, count parsed lines too
-     * @param expr Pointer to expression cursor, gets advanced
+     * @param expr Current parsing context, advances on expression to be compiled
      * @return First character after whitespaces where expr points
      */
-    virtual char skipWhites(const char*& expr);
+    virtual char skipWhites(ParsePoint& expr);
 
     /**
      * Helper method to conditionally convert to lower case
@@ -495,59 +598,59 @@ protected:
 
     /**
      * Runs the parser and compiler for one (sub)expression
-     * @param expr Pointer to text to parse, gets advanced
+     * @param expr Current parsing context, advances on expression to be compiled
      * @param stop Optional character expected after the expression
      * @param nested User defined object to pass for nested parsing
      * @return True if one expression was compiled and a separator follows
      */
-    bool runCompile(const char*& expr, char stop, GenObject* nested = 0);
+    bool runCompile(ParsePoint& expr, char stop, GenObject* nested = 0);
 
     /**
      * Runs the parser and compiler for one (sub)expression
-     * @param expr Pointer to text to parse, gets advanced
+     * @param expr Current parsing context, advances on expression to be compiled
      * @param stop Optional list of possible characters expected after the expression
      * @param nested User defined object to pass for nested parsing
      * @return True if one expression was compiled and a separator follows
      */
-    virtual bool runCompile(const char*& expr, const char* stop = 0, GenObject* nested = 0);
+    virtual bool runCompile(ParsePoint& expr, const char* stop = 0, GenObject* nested = 0);
 
     /**
      * Skip over comments and whitespaces
-     * @param expr Pointer to expression cursor, gets advanced
+     * @param expr Current parsing context, advances on expression to be compiled
      * @param context Pointer to arbitrary object to be passed to called methods
      * @return First character after comments or whitespaces where expr points
      */
-    virtual char skipComments(const char*& expr, GenObject* context = 0);
+    virtual char skipComments(ParsePoint& expr, GenObject* context = 0);
 
     /**
      * Process top-level preprocessor directives
-     * @param expr Pointer to expression cursor, gets advanced
+     * @param expr Current parsing context, advances on expression to be compiled
      * @param context Pointer to arbitrary object to be passed to called methods
      * @return Number of expressions compiled, negative if no more directives
      */
-    virtual int preProcess(const char*& expr, GenObject* context = 0);
+    virtual int preProcess(ParsePoint& expr, GenObject* context = 0);
 
     /**
      * Returns next operator in the parsed text
-     * @param expr Pointer to text to parse, gets advanced if succeeds
+     * @param expr Current parsing context, advances on expression to be compiled if it succeeds
      * @return Operator code, OpcNone on failure
      */
-    virtual Opcode getOperator(const char*& expr);
+    virtual Opcode getOperator(ParsePoint& expr);
 
     /**
      * Returns next unary operator in the parsed text
-     * @param expr Pointer to text to parse, gets advanced if succeeds
+     * @param expr Current parsing context, advances on expression to be compiled if it succeeds
      * @return Operator code, OpcNone on failure
      */
-    virtual Opcode getUnaryOperator(const char*& expr);
+    virtual Opcode getUnaryOperator(ParsePoint& expr);
 
     /**
      * Returns next unary postfix operator in the parsed text
-     * @param expr Pointer to text to parse, gets advanced if succeeds
+     * @param expr Current parsing context, advances on expression to be compiled if it succeeds
      * @param precedence The precedence of the previous operator
      * @return Operator code, OpcNone on failure
      */
-    virtual Opcode getPostfixOperator(const char*& expr, int precedence = 0);
+    virtual Opcode getPostfixOperator(ParsePoint& expr, int precedence = 0);
 
     /**
      * Helper method to get the canonical name of an operator
@@ -572,58 +675,58 @@ protected:
 
     /**
      * Check if we are at an expression separator and optionally skip past it
-     * @param expr Pointer to text to check, gets advanced if asked to remove separator
+     * @param expr Current parsing context to check, advances on expression to be compiled if asked to remove separator
      * @param remove True to skip past the found separator
      * @return True if a separator was found
      */
-    virtual bool getSeparator(const char*& expr, bool remove);
+    virtual bool getSeparator(ParsePoint& expr, bool remove);
 
     /**
      * Get an instruction or block, advance parsing pointer past it
-     * @param expr Pointer to text to parse, gets advanced on success
+     * @param expr Current parsing context, advances on expression to be compiled if it succeeds
      * @param stop Optional character expected after the instruction
      * @param nested User defined object passed from nested parsing
      * @return True if succeeded, must add the operands internally
      */
-    virtual bool getInstruction(const char*& expr, char stop = 0, GenObject* nested = 0);
+    virtual bool getInstruction(ParsePoint& expr, char stop = 0, GenObject* nested = 0);
 
     /**
      * Get an operand, advance parsing pointer past it
-     * @param expr Pointer to text to parse, gets advanced on success
+     * @param expr Current parsing context, advances on expression to be compiled if it succeeds
      * @param endOk Consider reaching the end of string a success
      * @param precedence The precedence of the previous operator
      * @return True if succeeded, must add the operand internally
      */
-    virtual bool getOperand(const char*& expr, bool endOk = true, int precedence = 0);
+    virtual bool getOperand(ParsePoint& expr, bool endOk = true, int precedence = 0);
 
     /**
      * Get an inline simple type, usually string or number
-     * @param expr Pointer to text to parse, gets advanced on success
+     * @param expr Current parsing context, advances on expression to be compiled if it succeeds
      * @param constOnly Return only inline constants
      * @return True if succeeded, must add the operand internally
      */
-    virtual bool getSimple(const char*& expr, bool constOnly = false);
+    virtual bool getSimple(ParsePoint& expr, bool constOnly = false);
 
     /**
      * Get a numerical operand, advance parsing pointer past it
-     * @param expr Pointer to text to parse, gets advanced on success
+     * @param expr Current parsing context, advances on expression to be compiled if it succeeds
      * @return True if succeeded, must add the operand internally
      */
-    virtual bool getNumber(const char*& expr);
+    virtual bool getNumber(ParsePoint& expr);
 
     /**
      * Get a string operand, advance parsing pointer past it
-     * @param expr Pointer to text to parse, gets advanced on success
+     * @param expr Current parsing context, advances on expression to be compiled if it succeeds
      * @return True if succeeded, must add the operand internally
      */
-    virtual bool getString(const char*& expr);
+    virtual bool getString(ParsePoint& expr);
 
     /**
      * Get a function call, advance parsing pointer past it
-     * @param expr Pointer to text to parse, gets advanced on success
+     * @param expr Current parsing context, advances on expression to be compiled if it succeeds
      * @return True if succeeded, must add the operand internally
      */
-    virtual bool getFunction(const char*& expr);
+    virtual bool getFunction(ParsePoint& expr);
 
     /**
      * Helper method - get a string, advance parsing pointer past it
@@ -644,10 +747,10 @@ protected:
 
     /**
      * Get a field keyword, advance parsing pointer past it
-     * @param expr Pointer to text to parse, gets advanced on success
+     * @param expr Current parsing context, advances on expression to be compiled if it succeeds
      * @return True if succeeded, must add the operand internally
      */
-    virtual bool getField(const char*& expr);
+    virtual bool getField(ParsePoint& expr);
 
     /**
      * Add an aready built operation to the expression and set its line number
@@ -804,7 +907,7 @@ protected:
     unsigned int m_lineNo;
 
 private:
-    bool getOperandInternal(const char*& expr, bool endOk, int precedence);
+    bool getOperandInternal(ParsePoint& expr, bool endOk, int precedence);
     ExpExtender* m_extender;
 };
 
@@ -977,6 +1080,12 @@ public:
     virtual bool valBoolean() const;
 
     /**
+     * Retrieve the name of the type of the value of this operation
+     * @return Name of the type of the value
+     */
+    virtual const char* typeOf() const;
+
+    /**
      * Clone and rename method
      * @param name Name of the cloned operation
      * @return New operation instance
@@ -1084,6 +1193,12 @@ public:
      * @return True if the wrapped object is to be interpreted as true value
      */
     virtual bool valBoolean() const;
+
+    /**
+     * Retrieve the name of the type of the value of this operation
+     * @return Name of the type of the value
+     */
+    virtual const char* typeOf() const;
 
     /**
      * Clone and rename method
@@ -1347,9 +1462,10 @@ public:
     /**
      * Create a runner adequate for this block of parsed code
      * @param context Script context, must not be NULL
+     * @param title An optional name for the runner
      * @return A new script runner, NULL if context is NULL or feature is not supported
      */
-    virtual ScriptRun* createRunner(ScriptContext* context)
+    virtual ScriptRun* createRunner(ScriptContext* context, const char* title = 0)
 	{ return 0; }
 };
 
@@ -1606,9 +1722,10 @@ public:
      * Parse a string as script source code
      * @param text Source code text
      * @param fragment True if the code is just an included fragment
+     * @param file Name of the file that is being parsed
      * @return True if the text was successfully parsed
      */
-    virtual bool parse(const char* text, bool fragment = false) = 0;
+    virtual bool parse(const char* text, bool fragment = false, const char* file = 0) = 0;
 
     /**
      * Parse a file as script source code
@@ -1641,17 +1758,19 @@ public:
      * Create a runner adequate for a block of parsed code
      * @param code Parsed code block
      * @param context Script context, an empty one will be allocated if NULL
+     * @param title An optional name for the runner
      * @return A new script runner, NULL if code is NULL
      */
-    virtual ScriptRun* createRunner(ScriptCode* code, ScriptContext* context = 0) const;
+    virtual ScriptRun* createRunner(ScriptCode* code, ScriptContext* context = 0, const char* title = 0) const;
 
     /**
      * Create a runner adequate for the parsed code
      * @param context Script context, an empty one will be allocated if NULL
+     * @param title An optional name for the runner
      * @return A new script runner, NULL if code is not yet parsed
      */
-    inline ScriptRun* createRunner(ScriptContext* context = 0) const
-	{ return createRunner(code(),context); }
+    inline ScriptRun* createRunner(ScriptContext* context = 0, const char* title = 0) const
+	{ return createRunner(code(),context,title); }
 
     /**
      * Check if a script has a certain function or method
@@ -1977,6 +2096,20 @@ public:
 	{ return &m_func; }
 
     /**
+     * Retrieve the first name assigned to this function
+     * @return The name of the property towhich this function was first assigned
+     */
+    inline const String& firstName() const
+	{ return m_name; }
+
+    /**
+     * Set the name of this function if still empty
+     * @param name Name to set as first assigned name
+     */
+    inline void firstName(const char* name)
+	{ if (m_name.null()) m_name = name; }
+
+    /**
      * Retrieve the name of the N-th formal argument
      * @param index Index of the formal argument
      * @return Pointer to formal argument name, NULL if index too large
@@ -2015,6 +2148,7 @@ private:
     long int m_label;
     ScriptCode* m_code;
     ExpFunction m_func;
+    String m_name;
 };
 
 /**
@@ -2175,18 +2309,20 @@ public:
     /**
      * Constructor
      * @param allowLink True to allow linking of the code, false otherwise.
+     * @param allowTrace True to allow the script to enable performance tracing
      */
-    inline JsParser(bool allowLink = true)
-	: m_allowLink(allowLink)
+    inline JsParser(bool allowLink = true, bool allowTrace = false)
+	: m_allowLink(allowLink), m_allowTrace(allowTrace)
 	{ }
 
     /**
      * Parse a string as Javascript source code
      * @param text Source code text
      * @param fragment True if the code is just an included fragment
+     * @param file Name of the file that is being parsed
      * @return True if the text was successfully parsed
      */
-    virtual bool parse(const char* text, bool fragment = false);
+    virtual bool parse(const char* text, bool fragment = false, const char* file = 0);
 
     /**
      * Create a context adequate for Javascript code
@@ -2198,17 +2334,19 @@ public:
      * Create a runner adequate for a block of parsed Javascript code
      * @param code Parsed code block
      * @param context Javascript context, an empty one will be allocated if NULL
+     * @param title An optional name for the runner
      * @return A new Javascript runner, NULL if code is NULL
      */
-    virtual ScriptRun* createRunner(ScriptCode* code, ScriptContext* context = 0) const;
+    virtual ScriptRun* createRunner(ScriptCode* code, ScriptContext* context = 0, const char* title = 0) const;
 
     /**
      * Create a runner adequate for the parsed Javascript code
      * @param context Javascript context, an empty one will be allocated if NULL
+     * @param title An optional name for the runner
      * @return A new Javascript runner, NULL if code is not yet parsed
      */
-    inline ScriptRun* createRunner(ScriptContext* context = 0) const
-	{ return createRunner(code(),context); }
+    inline ScriptRun* createRunner(ScriptContext* context = 0, const char* title = 0) const
+	{ return createRunner(code(),context,title); }
 
     /**
      * Check if a script has a certain function or method
@@ -2243,6 +2381,13 @@ public:
      */
     inline void link(bool allowed = true)
 	{ m_allowLink = allowed; }
+
+    /**
+     * Set whether the Javascript code can be traced or not
+     * @param allowed True to allow tracing, false otherwise
+     */
+    inline void trace(bool allowed = true)
+	{ m_allowTrace = allowed; }
 
     /**
      * Parse and run a piece of Javascript code
@@ -2282,6 +2427,7 @@ public:
 private:
     String m_basePath;
     bool m_allowLink;
+    bool m_allowTrace;
 };
 
 }; // namespace TelEngine

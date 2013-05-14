@@ -181,7 +181,7 @@ bool CustomTable::setParams(const NamedList& params)
 		QtClient::deleteLater(m_contextMenu);
 		m_contextMenu = 0;
 	    }
-	    NamedList* menu = static_cast<NamedList*>(param->getObject("NamedList"));
+	    NamedList* menu = static_cast<NamedList*>(param->getObject(YATOM("NamedList")));
 	    if (menu) {
 		// Get parent window receiving menu events
 		QtWindow* wnd = static_cast<QtWindow*>(window());

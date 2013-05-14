@@ -344,7 +344,7 @@ public:
     virtual ~CipherHolder()
 	{ TelEngine::destruct(m_cipher); }
     virtual void* getObject(const String& name) const
-	{ return (name == YSTRING("Cipher*")) ? (void*)&m_cipher : RefObject::getObject(name); }
+	{ return (name == YATOM("Cipher*")) ? (void*)&m_cipher : RefObject::getObject(name); }
     inline Cipher* cipher()
 	{ Cipher* tmp = m_cipher; m_cipher = 0; return tmp; }
 private:
@@ -474,13 +474,13 @@ YRTPWrapper::~YRTPWrapper()
 
 void* YRTPWrapper::getObject(const String& name) const
 {
-    if (name == YSTRING("Socket"))
+    if (name == YATOM("Socket"))
 	return m_rtp ? m_rtp->rtpSock() : 0;
-    if (name == YSTRING("DataSource"))
+    if (name == YATOM("DataSource"))
 	return m_source;
-    if (name == YSTRING("DataConsumer"))
+    if (name == YATOM("DataConsumer"))
 	return m_consumer;
-    if (name == YSTRING("RTPSession"))
+    if (name == YATOM("RTPSession"))
 	return m_rtp;
     return RefObject::getObject(name);
 }

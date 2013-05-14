@@ -48,7 +48,6 @@ class IsupDecodeHandler;                 // Handler for "isup.decode" message
 class IsupEncodeHandler;                 // Handler for "isup.encode" message
 class SigNotifier;                       // Class for handling received notifications
 class SigSS7Tcap;                        // SS7 TCAP - Transaction Capabilities Application Part
-class SigTCAPThread;                     // Process TCAP messages and timeouts
 class SigTCAPUser;                       // Default TCAP user
 
 // The signalling channel
@@ -550,10 +549,9 @@ private:
 
 class SigSS7Tcap : public SigTopmost
 {
-    friend class SigTCAPThread;
 public:
     inline SigSS7Tcap(const char* name)
-    : SigTopmost(name), m_tcap(0), m_thread(0)
+    : SigTopmost(name), m_tcap(0)
     { }
     // Initialize (create or reload) the TCAP component
     // Return false on failure
@@ -562,14 +560,8 @@ public:
     virtual void status(String& retVal);
 protected:
     virtual void destroyed();
-    inline SS7TCAP* tcap()
-	{ return m_tcap; }
-    inline void resetThread()
-	{ m_thread = 0; }
 private:
     SS7TCAP* m_tcap;
-    SigTCAPThread* m_thread;
-    String m_threadName;
 };
 
 class MsgTCAPUser : public TCAPUser
@@ -588,6 +580,7 @@ protected:
     SS7TCAP* tcapAttach();
     String m_tcapName;
 };
+
 
 class SigTCAPUser : public SigTopmost
 {
@@ -784,18 +777,6 @@ private:
     int m_floodEvents;
 };
 
-class SigTCAPThread : public Thread
-{
-public:
-    inline SigTCAPThread(SigSS7Tcap* tcap, const char* threadName, unsigned long usleep)
-	: Thread(threadName), m_tcap(tcap), m_sleepUsec(usleep)
-	{}
-    virtual ~SigTCAPThread();
-    virtual void run();
-private:
-    SigSS7Tcap* m_tcap;
-    unsigned long m_sleepUsec;
-};
 
 // isup.decode handler (decode an isup message)
 class IsupDecodeHandler : public MessageHandler
@@ -4156,11 +4137,6 @@ void SigSS7Tcap::destroyed()
     DDebug(&plugin,DebugAll,"SigSS7TCAP::destroyed() [%p]",this);
     TelEngine::destruct(m_tcap);
     SigTopmost::destroyed();
-    if (!m_thread)
-	return;
-    m_thread->cancel();
-    while (m_thread)
-	Thread::idle();
 }
 
 bool SigSS7Tcap::initialize(NamedList& params)
@@ -4171,15 +4147,7 @@ bool SigSS7Tcap::initialize(NamedList& params)
 	if (m_tcap)
 	    plugin.engine()->insert(m_tcap);
     }
-    if (!(m_tcap && m_tcap->initialize(&params)))
-	return false;
-    if (m_thread)
-	return true;
-    m_threadName = m_tcap->debugName();
-    unsigned long sleepUsec = params.getIntValue(YSTRING("usleep-interval"),Thread::idleUsec());
-    m_thread = new SigTCAPThread(this,m_threadName,sleepUsec);
-    m_thread->startup();
-    return true;
+    return m_tcap && m_tcap->initialize(&params);
 }
 
 void SigSS7Tcap::status(String& retVal)
@@ -4781,30 +4749,6 @@ void SigTrunkThread::run()
     }
 }
 
-/**
- * class SigTCAPThread
- */
-
-SigTCAPThread::~SigTCAPThread()
-{
-    if (m_tcap)
-	m_tcap->resetThread();
-    DDebug(&plugin,DebugAll,"Worker destroyed for TCAP '%s' [%p]",
-	(m_tcap && m_tcap->tcap()) ? m_tcap->tcap()->debugName() : "",this);
-}
-
-void SigTCAPThread::run()
-{
-    if (!(m_tcap && m_tcap->tcap()))
-	return;
-    DDebug(&plugin,DebugAll,"Starting worker [%p] for TCAP %s",this,
-	   m_tcap->tcap()->debugName());
-
-    while (true) {
-	Thread::usleep(m_sleepUsec,true);
-	m_tcap->tcap()->process();
-    }
-}
 
 /**
  * IsupDecodeHandler

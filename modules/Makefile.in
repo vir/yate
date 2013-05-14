@@ -57,7 +57,7 @@ PROGS := cdrbuild.yate cdrcombine.yate cdrfile.yate regexroute.yate \
 	ysipchan.yate \
 	yiaxchan.yate \
 	yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate \
-	ysockschan.yate filetransfer.yate \
+	ysockschan.yate filetransfer.yate fileinfo.yate \
 	gvoice.yate \
 	javascript.yate \
 	server/pbxassist.yate server/dbpbx.yate server/lateroute.yate \

@@ -436,13 +436,15 @@ bool controlReturn(NamedList* params, bool ret, const char* retVal)
 {
     if (retVal && params)
 	params->setParam("retVal",retVal);
-    if (ret || !params || !params->getObject("Message"))
+    if (!params || !params->getObject(YATOM("Message")))
 	return ret;
-    const char* module = params->getValue("module");
-    if (!module || YSTRING("rmanager") != module)
+    const String* module = params->getParam("module");
+    if (TelEngine::null(module) || YSTRING("rmanager") != *module)
 	return ret;
-    params->setParam("operation-status",String(ret));
-    return true;
+    const String s_opStat("operation-status");
+    if (!params->getParam(s_opStat))
+	params->addParam(s_opStat,String::boolText(ret));
+    return ret;
 }
 
 Debugger::~Debugger()
@@ -499,27 +501,39 @@ unsigned int Debugger::formatTime(char* buf, Formatting format)
 	    t -= s_timestamp;
 	unsigned int s = (unsigned int)(t / 1000000);
 	unsigned int u = (unsigned int)(t % 1000000);
-	if (Textual == format || TextLocal == format) {
-	    time_t sec = (time_t)s;
-	    struct tm tmp;
-	    if (TextLocal == format)
+	switch (format) {
+	    case Textual:
+	    case TextLocal:
+	    case TextSep:
+	    case TextLSep:
+		{
+		    time_t sec = (time_t)s;
+		    struct tm tmp;
+		    if (TextLocal == format || TextLSep == format)
 #ifdef _WINDOWS
-		_localtime_s(&tmp,&sec);
+			_localtime_s(&tmp,&sec);
 #else
-		localtime_r(&sec,&tmp);
+			localtime_r(&sec,&tmp);
 #endif
-	    else
+		    else
 #ifdef _WINDOWS
-		_gmtime_s(&tmp,&sec);
+			_gmtime_s(&tmp,&sec);
 #else
-		gmtime_r(&sec,&tmp);
+			gmtime_r(&sec,&tmp);
 #endif
-	    ::sprintf(buf,"%04d%02d%02d%02d%02d%02d.%06u ",
-		tmp.tm_year+1900,tmp.tm_mon+1,tmp.tm_mday,
-		tmp.tm_hour,tmp.tm_min,tmp.tm_sec,u);
+		    if (Textual == format || TextLocal == format)
+			::sprintf(buf,"%04d%02d%02d%02d%02d%02d.%06u ",
+			    tmp.tm_year+1900,tmp.tm_mon+1,tmp.tm_mday,
+			    tmp.tm_hour,tmp.tm_min,tmp.tm_sec,u);
+		    else
+			::sprintf(buf,"%04d-%02d-%02d_%02d:%02d:%02d.%06u ",
+			    tmp.tm_year+1900,tmp.tm_mon+1,tmp.tm_mday,
+			    tmp.tm_hour,tmp.tm_min,tmp.tm_sec,u);
+		}
+		break;
+	    default:
+		::sprintf(buf,"%07u.%06u ",s,u);
 	}
-	else
-	    ::sprintf(buf,"%07u.%06u ",s,u);
 	return ::strlen(buf);
     }
     buf[0] = '\0';
@@ -620,7 +634,8 @@ unsigned int Time::toEpoch(int year, unsigned int month, unsigned int day,
 
 // Split a given EPOCH time into its date/time components
 bool Time::toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
-    unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec)
+    unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec,
+    unsigned int* wDay)
 {
 #ifdef _WINDOWS
     FILETIME ft;
@@ -639,6 +654,8 @@ bool Time::toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
     hour = st.wHour;
     minute = st.wMinute;
     sec = st.wSecond;
+    if (wDay)
+	*wDay = st.wDayOfWeek;
 #else
     struct tm t;
     time_t time = (time_t)epochTimeSec;
@@ -650,11 +667,34 @@ bool Time::toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
     hour = t.tm_hour;
     minute = t.tm_min;
     sec = t.tm_sec;
+    if (wDay)
+	*wDay = t.tm_wday;
 #endif
     DDebug(DebugAll,"Time::toDateTime(%u,%d,%u,%u,%u,%u,%u)",
 	epochTimeSec,year,month,day,hour,minute,sec);
     return true;
 }
+
+int Time::timeZone()
+{
+#ifdef _WINDOWS
+    struct tm t;
+    time_t time = (time_t)secNow();
+    _localtime_s(&t,&time);
+    if (t.tm_isdst)
+	return -(_timezone + _dstbias);
+    return -_timezone;
+#else
+#ifdef HAVE_GMTOFF
+    struct tm t;
+    time_t time = (time_t)secNow();
+    if (localtime_r(&time,&t))
+	return t.tm_gmtoff;
+#endif
+    return -timezone;
+#endif
+}
+
 
 static Random s_random;
 static Mutex s_randomMutex(false,"Random");
@@ -711,7 +751,7 @@ RefObject::~RefObject()
 
 void* RefObject::getObject(const String& name) const
 {
-    if (name == YSTRING("RefObject"))
+    if (name == YATOM("RefObject"))
 	return (void*)this;
     return GenObject::getObject(name);
 }

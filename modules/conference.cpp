@@ -1210,7 +1210,7 @@ bool ConfHandler::received(Message& msg)
 	    Debug(&__plugin,DebugNote,"Conference request with no channel!");
 	return ok;
     }
-    if (chan->getObject("ConfChan")) {
+    if (chan->getObject(YATOM("ConfChan"))) {
 	Debug(&__plugin,DebugWarn,"Conference request from a conference leg!");
 	return false;
     }

@@ -2792,13 +2792,21 @@ public:
 	{}
 
     /**
+     * Check if a given feature is found in the list
+     * @param ns The feature to check
+     * @return True if the feature was found in the list
+     */
+    inline bool hasFeature(int ns)
+	{ return 0 != m_features.get(ns); }
+
+    /**
      * Check if an audio capability is present
      * @return True if an audio capability is present
      */
     inline bool hasAudio() {
-	    return m_features.get(XMPPNamespace::JingleAppsRtpAudio) ||
-		m_features.get(XMPPNamespace::JingleAudio) ||
-		m_features.get(XMPPNamespace::JingleVoiceV1);
+	    return hasFeature(XMPPNamespace::JingleAppsRtpAudio) ||
+		hasFeature(XMPPNamespace::JingleAudio) ||
+		hasFeature(XMPPNamespace::JingleVoiceV1);
 	}
 
     /**

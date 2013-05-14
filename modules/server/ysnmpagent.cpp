@@ -512,7 +512,7 @@ public:
     virtual ~CipherHolder()
 	{ TelEngine::destruct(m_cipher); }
     virtual void* getObject(const String& name) const
-	{ return (name == "Cipher*") ? (void*)&m_cipher : RefObject::getObject(name); }
+	{ return (name == YATOM("Cipher*")) ? (void*)&m_cipher : RefObject::getObject(name); }
     inline Cipher* cipher()
 	{ Cipher* tmp = m_cipher; m_cipher = 0; return tmp; }
 private:

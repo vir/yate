@@ -16,6 +16,13 @@
 ; Defaults to 30000
 ;reply-timeout=30000
 
+; connect_timeout: integer: The time (in milliseconds) to wait to connect
+; Set it to 0 to wait for system default, minimum allowed value is 1000,
+;  maximum allowed value is 120000
+; This parameter can be overridden in chan.socks messages
+; Defaults to 10000
+;connect_timeout=10000
+
 ; buflen: integer: The number of bytes in receive buffer
 ; Can't be less then 1024
 ; Defaults to 4096 (4KB)

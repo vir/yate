@@ -654,9 +654,9 @@ bool AttachHandler::received(Message &msg)
 	return false;
     }
 
-    DataEndpoint *dd = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    DataEndpoint *dd = static_cast<DataEndpoint*>(msg.userObject(YATOM("DataEndpoint")));
     if (!dd) {
-	CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+	CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
 	if (ch)
 	    dd = ch->setEndpoint();
     }
@@ -664,7 +664,7 @@ bool AttachHandler::received(Message &msg)
 	Debug(DebugWarn,"Alsa attach request with no control or data channel!");
 	return false;
     }
-    
+
     AlsaDevice* dev = new AlsaDevice(src ? src : cons,msg.getIntValue("rate",8000));
     if (dev->closed()) {
 	dev->deref();

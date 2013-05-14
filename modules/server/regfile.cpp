@@ -376,7 +376,6 @@ bool ExpireHandler::received(Message &msg)
 
 bool StatusHandler::received(Message &msg)
 {
-    bool first = true;
     String dest(msg.getValue("module"));
     if (dest && (dest != "regfile") && (dest != "misc"))
 	return false;
@@ -389,27 +388,27 @@ bool StatusHandler::received(Message &msg)
 
     unsigned int usrCount = 0;
     String tmp;
-    if (msg.getBoolValue("details",true)) {
-	tmp << ";";
-	unsigned int count = s_accounts.sections();
-	for (unsigned int i = 0; i < count; i ++) {
-	    NamedList* ac = s_accounts.getSection(i);
-	    if (!ac)
-		continue;
-	    String data = ac->getValue("data");
-	    if (data.null())
-		continue;
-	    if (first)
-		first = false;
-	    else
-		tmp << ",";
-	    for (char* s = const_cast<char*>(data.c_str()); *s; s++) {
-		if (*s < ' ' || *s == ',')
-		    *s = '?';
-	    }
-	    tmp << *ac << "=" << data;
-	    usrCount++;
+    bool details = msg.getBoolValue("details",true);
+    unsigned int count = s_accounts.sections();
+    for (unsigned int i = 0; i < count; i ++) {
+	NamedList* ac = s_accounts.getSection(i);
+	if (!ac)
+	    continue;
+	String data = ac->getValue("data");
+	if (data.null())
+	    continue;
+	usrCount++;
+	if (!details)
+	    continue;
+	if (tmp.null())
+	    tmp << ";";
+	else
+	    tmp << ",";
+	for (char* s = const_cast<char*>(data.c_str()); *s; s++) {
+	    if (*s < ' ' || *s == ',')
+		*s = '?';
 	}
+	tmp << *ac << "=" << data;
     }
     msg.retValue() << ",users=" << usrCount;
     msg.retValue() << tmp << "\r\n";

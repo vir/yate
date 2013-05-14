@@ -40,6 +40,7 @@ static const char* s_debugs[] =
     "yes",
     "no",
     "filter",
+    "timer",
     0
 };
 
@@ -67,6 +68,7 @@ public:
 };
 
 static bool s_active = true;
+static bool s_timer = false;
 static Regexp s_filter;
 static Mutex s_mutex(false,"FilterSniff");
 
@@ -95,7 +97,7 @@ static void dumpParams(const Message &msg, String& par)
 
 bool SniffHandler::received(Message &msg)
 {
-    if (msg == YSTRING("engine.timer"))
+    if (!s_timer && (msg == YSTRING("engine.timer")))
 	return false;
     if (msg == YSTRING("engine.command")) {
 	static const String name("sniffer");
@@ -103,14 +105,18 @@ bool SniffHandler::received(Message &msg)
 	if (line.startSkip(name)) {
 	    line >> s_active;
 	    line.trimSpaces();
+	    if (line.startSkip("timer"))
+		(line >> s_timer).trimSpaces();
 	    if (line.startSkip("filter")) {
 		s_mutex.lock();
 		s_filter = line;
 		s_mutex.unlock();
 	    }
-	    msg.retValue() << "Message sniffer is " << (s_active ? "on" : "off");
+	    msg.retValue() << "Message sniffer: " << (s_active ? "on" : "off");
+	    if (s_active)
+		msg.retValue() << ", timer: " << (s_timer ? "on" : "off");
 	    if (s_active && s_filter)
-		msg.retValue() << " filter " << s_filter;
+		msg.retValue() << ", filter: " << s_filter;
 	    msg.retValue() << "\r\n";
 	    return true;
 	}
@@ -150,7 +156,7 @@ bool SniffHandler::received(Message &msg)
 
 void HookHandler::dispatched(const Message& msg, bool handled)
 {
-    if ((!s_active) || (msg == YSTRING("engine.timer")))
+    if (!s_active || (!s_timer && (msg == YSTRING("engine.timer"))))
 	return;
     Lock lock(s_mutex);
     if (s_filter && !s_filter.matches(msg))

@@ -110,7 +110,7 @@ DataBlock::~DataBlock()
 
 void* DataBlock::getObject(const String& name) const
 {
-    if (name == YSTRING("DataBlock"))
+    if (name == YATOM("DataBlock"))
 	return const_cast<DataBlock*>(this);
     return GenObject::getObject(name);
 }

@@ -156,7 +156,7 @@ public:
 	{ }
     void* getObject(const String& name) const
     {
-	if (name == "Socket*")
+	if (name == YATOM("Socket*"))
 	    return m_sock;
 	return RefObject::getObject(name);
     }
@@ -917,7 +917,7 @@ bool Connection::processChar(unsigned char c)
 	m_cursorPos++;
 	if (m_echoing) {
 	    writeStr(tmp);
-	    writeBufferTail(m_cursorPos);
+	    writeBufferTail();
 	}
     }
     return false;
@@ -1373,12 +1373,8 @@ bool Connection::processLine(const char *line, bool saveLine)
 	}
 	if (Engine::dispatch(m)) {
 	    NamedString* opStatus = m.getParam(YSTRING("operation-status"));
-	    String retVal;
 	    String* stringRet = m.getParam(YSTRING("retVal"));
-	    if (stringRet)
-		retVal = *stringRet;
-	    else
-		retVal = m.retValue();
+	    const String& retVal = stringRet ? *stringRet : m.retValue();
 	    if (!opStatus || opStatus->toBoolean()) {
 		if (m_machine)
 		    str = "%%=control:success:" + id + ":" + retVal + "\r\n";

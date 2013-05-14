@@ -739,7 +739,7 @@ bool AnalyzerDriver::startCall(NamedList& params, const String& dest)
 
 bool AnalyzerDriver::msgExecute(Message& msg, String& dest)
 {
-    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
     if (ch) {
 	AnalyzerChan *ac = new AnalyzerChan(dest,true,msg.getValue("window"));
 	ac->initChan();
@@ -767,7 +767,7 @@ bool AttachHandler::received(Message& msg)
     if (cons.null())
 	return false;
 
-    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
 
     if (!ch) {
 	Debug(DebugWarn,"Analyzer attach request with no control channel!");

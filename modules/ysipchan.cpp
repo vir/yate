@@ -61,7 +61,7 @@ class SIPDriver;
 // 1 minute
 #define BIND_RETRY_MAX 60000
 
-static TokenDict dict_errors[] = {
+static const TokenDict dict_errors[] = {
     { "incomplete", 484 },
     { "noroute", 404 },
     { "noroute", 604 },
@@ -99,7 +99,7 @@ static TokenDict dict_errors[] = {
 
 static const char s_dtmfs[] = "0123456789*#ABCDF";
 
-static TokenDict info_signals[] = {
+static const TokenDict info_signals[] = {
     { "*", 10 },
     { "#", 11 },
     { "A", 12 },
@@ -709,7 +709,8 @@ public:
     void regReq(SIPEvent* e, SIPTransaction* t);
     void regRun(const SIPMessage* message, SIPTransaction* t);
     void options(SIPEvent* e, SIPTransaction* t);
-    bool generic(SIPEvent* e, SIPTransaction* t);
+    bool generic(SIPEvent* e, SIPTransaction* t, int defErr = 405, bool async = false);
+    bool generic(const SIPMessage* message, SIPTransaction* t, const String& meth, bool autoAuth);
     bool buildParty(SIPMessage* message, const char* host = 0, int port = 0, const YateSIPLine* line = 0);
     inline void addTcpTransport(YateSIPTCPTransport* trans) {
 	    if (!trans)
@@ -830,6 +831,26 @@ private:
     YateSIPEndPoint* m_ep;
     RefPointer<SIPMessage> m_msg;
     RefPointer<SIPTransaction> m_tr;
+};
+
+class YateSIPGeneric : public Thread
+{
+public:
+    inline YateSIPGeneric(YateSIPEndPoint* ep, SIPMessage* message, SIPTransaction* t,
+	const char* method, int defErr, bool autoAuth)
+	: Thread("YSIP Generic"),
+	  m_ep(ep), m_msg(message), m_tr(t),
+	  m_method(method), m_error(defErr), m_auth(autoAuth)
+	{ }
+    virtual void run()
+	{ if (!m_ep->generic(m_msg,m_tr,m_method,m_auth)) m_tr->setResponse(m_error); }
+private:
+    YateSIPEndPoint* m_ep;
+    RefPointer<SIPMessage> m_msg;
+    RefPointer<SIPTransaction> m_tr;
+    String m_method;
+    int m_error;
+    bool m_auth;
 };
 
 class YateSIPConnection : public Channel, public SDPSession, public YateSIPPartyHolder
@@ -1010,9 +1031,9 @@ public:
 	: m_data(0), m_socket(sock)
 	{}
     virtual void* getObject(const String& name) const {
-	    if (name == YSTRING("DataBlock"))
+	    if (name == YATOM("DataBlock"))
 		return m_data;
-	    if (name == YSTRING("Socket*"))
+	    if (name == YATOM("Socket*"))
 		return (void*)m_socket;
 	    return RefObject::getObject(name);
 	}
@@ -1081,10 +1102,17 @@ public:
 class SipHandler : public MessageHandler
 {
 public:
+    enum {
+	BodyRaw = 0,
+	BodyBase64 = 1,
+	BodyHex = 2,
+	BodyHexS = 3,
+    };
     SipHandler()
 	: MessageHandler("xsip.generate",110,plugin.name())
 	{ }
     virtual bool received(Message &msg);
+    static const TokenDict s_bodyEnc[];
 };
 
 static ObjList s_lines;
@@ -1107,6 +1135,7 @@ static bool s_1xx_formats = true;
 static bool s_rtp_preserve = false;
 static bool s_auth_register = true;
 static bool s_reg_async = true;
+static bool s_gen_async = true;
 static bool s_multi_ringing = false;
 static bool s_refresh_nosdp = true;
 static bool s_update_target = false;
@@ -1128,6 +1157,7 @@ static String s_sslKeyFile;              // File containing the key of the SSL c
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
 static int s_expires_max = EXPIRES_MAX;
+static int s_defEncoding = SipHandler::BodyBase64;
 
 static String s_statusCmd = "status";
 
@@ -1180,6 +1210,14 @@ const TokenDict YateSIPTransport::s_statusName[] = {
     { 0, 0 },
 };
 
+// Body encodings
+const TokenDict SipHandler::s_bodyEnc[] = {
+    { "raw",    BodyRaw},
+    { "base64", BodyBase64},
+    { "hex",    BodyHex},
+    { "hexs",   BodyHexS},
+    { 0, 0 },
+};
 
 // Generate a transport id index when needed
 static inline unsigned int getTransIndex()
@@ -1786,11 +1824,11 @@ static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdp
 	DataBlock* data = 0;
 	msg = "isup.encode";
 	if (Engine::dispatch(msg)) {
-	    NamedString* ns = msg.getParam(YSTRING("rawdata"));
+	    NamedString* ns = msg.getParam(YATOM("rawdata"));
 	    if (ns) {
-		NamedPointer* np = static_cast<NamedPointer*>(ns->getObject(YSTRING("NamedPointer")));
+		NamedPointer* np = static_cast<NamedPointer*>(ns->getObject(YATOM("NamedPointer")));
 		if (np)
-		    data = static_cast<DataBlock*>(np->userObject(YSTRING("DataBlock")));
+		    data = static_cast<DataBlock*>(np->userObject(YATOM("DataBlock")));
 	    }
 	}
 	if (data && data->length()) {
@@ -3684,9 +3722,9 @@ void* YateUDPParty::getTransport()
 // Get an object from this one
 void* YateUDPParty::getObject(const String& name) const
 {
-    if (name == YSTRING("YateUDPParty"))
+    if (name == YATOM("YateUDPParty"))
 	return (void*)this;
-    if (name == YSTRING("YateSIPUDPTransport") || name == YSTRING("YateSIPTransport"))
+    if (name == YATOM("YateSIPUDPTransport") || name == YATOM("YateSIPTransport"))
 	return m_transport;
     return SIPParty::getObject(name);
 }
@@ -3754,9 +3792,9 @@ void* YateTCPParty::getTransport()
 // Get an object from this one
 void* YateTCPParty::getObject(const String& name) const
 {
-    if (name == YSTRING("YateTCPParty"))
+    if (name == YATOM("YateTCPParty"))
 	return (void*)this;
-    if (name == YSTRING("YateSIPTCPTransport") || name == YSTRING("YateSIPTransport"))
+    if (name == YATOM("YateSIPTCPTransport") || name == YATOM("YateSIPTransport"))
 	return m_transport;
     return SIPParty::getObject(name);
 }
@@ -3997,6 +4035,7 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
 	m.copyParam(*params,"caller");
 	m.copyParam(*params,"called");
 	m.copyParam(*params,"billid");
+	m.copyParam(*params,"expires");
     }
     if (authLine && m_foreignAuth) {
 	m.addParam("auth",*authLine);
@@ -4574,21 +4613,23 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	    done = conn->doInfo(t);
 	    conn->deref();
 	    if (!done)
-		done = generic(e,t);
+		done = generic(e,t,415);
 	}
 	else if (t->getDialogTag()) {
 	    done = true;
 	    t->setResponse(481);
 	}
 	else
-	    done = generic(e,t);
+	    done = generic(e,t,415);
 	if (!done)
 	    t->setResponse(415);
     }
     else if (t->getMethod() == YSTRING("REGISTER"))
 	regReq(e,t);
-    else if (t->getMethod() == YSTRING("OPTIONS"))
-	options(e,t);
+    else if (t->getMethod() == YSTRING("OPTIONS")) {
+	if (!generic(e,t))
+	    options(e,t);
+    }
     else if (t->getMethod() == YSTRING("REFER")) {
 	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
 	if (conn) {
@@ -4661,6 +4702,16 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     msg.addParam("number",addr.getUser());
     msg.addParam("sip_uri",t->getURI());
     msg.addParam("sip_callid",t->getCallID());
+    String tmp(message->getHeader("Expires"));
+    if (tmp.null())
+	tmp = hl->getParam("expires");
+    int expires = tmp.toInteger(-1);
+    if (expires < 0)
+	expires = s_expires_def;
+    if (expires > s_expires_max)
+	expires = s_expires_max;
+    tmp = expires;
+    msg.setParam("expires",tmp);
     String user;
     int age = t->authUser(user,false,&msg);
     DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
@@ -4712,15 +4763,6 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     msg.setParam("ip_port",String(rport));
     msg.setParam("ip_transport",message->getParty()->getProtoName());
 
-    bool dereg = false;
-    String tmp(message->getHeader("Expires"));
-    if (tmp.null())
-	tmp = hl->getParam("expires");
-    int expires = tmp.toInteger(-1);
-    if (expires < 0)
-	expires = s_expires_def;
-    if (expires > s_expires_max)
-	expires = s_expires_max;
     if (expires && (expires < s_expires_min)) {
 	tmp = s_expires_min;
 	SIPMessage* r = new SIPMessage(t->initialMessage(),423);
@@ -4729,8 +4771,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	r->deref();
 	return;
     }
-    tmp = expires;
-    msg.setParam("expires",tmp);
+    bool dereg = false;
     if (!expires) {
 	msg = "user.unregister";
 	dereg = true;
@@ -4800,14 +4841,20 @@ void YateSIPEndPoint::options(SIPEvent* e, SIPTransaction* t)
 	    return;
 	}
     }
-    t->setResponse(200);
+    switch (Engine::accept()) {
+	case Engine::Congestion:
+	case Engine::Reject:
+	    t->setResponse(503);
+	    break;
+	default:
+	    t->setResponse(Engine::exiting() ? 503 : 200);
+    }
 }
 
-bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
+bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t, int defErr, bool async)
 {
     String meth(t->getMethod());
     meth.toLower();
-    String user;
     Lock mylock(s_globalMutex);
     const String* auth = s_cfg.getKey("methods",meth);
     if (!auth)
@@ -4815,12 +4862,24 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     bool autoAuth = auth->toBoolean(true);
     mylock.drop();
 
+    if (async || s_gen_async) {
+	YateSIPGeneric* gen = new YateSIPGeneric(this,e->getMessage(),t,meth,defErr,autoAuth);
+	if (gen->startup())
+	    return true;
+	Debug(&plugin,DebugWarn,"Failed to start generic thread");
+	delete gen;
+    }
+    return generic(e->getMessage(),t,meth,autoAuth);
+}
+
+bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, const String& meth, bool autoAuth)
+{
     Message m("sip." + meth);
-    const SIPMessage* message = e->getMessage();
     String host;
     int portNum = 0;
     message->getParty()->getAddr(host,portNum,false);
     URI uri(message->uri);
+    String user;
     YateSIPLine* line = plugin.findLine(host,portNum,uri.getUser());
     if (line) {
 	// message comes from line we have registered to
@@ -4893,11 +4952,27 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	else if (message->body) {
 	    const DataBlock& binBody = message->body->getBody();
 	    String bodyText;
-	    Base64 b64(binBody.data(),binBody.length(),false);
-	    b64.encode(bodyText);
-	    b64.clear(false);
+	    int enc = s_defEncoding;
+	    switch (enc) {
+		case SipHandler::BodyRaw:
+		    bodyText.assign((const char*)binBody.data(),binBody.length());
+		    break;
+		case SipHandler::BodyHex:
+		    bodyText.hexify(binBody.data(),binBody.length());
+		    break;
+		case SipHandler::BodyHexS:
+		    bodyText.hexify(binBody.data(),binBody.length(),' ');
+		    break;
+		default:
+		    enc = SipHandler::BodyBase64;
+		    {
+			Base64 b64(binBody.data(),binBody.length(),false);
+			b64.encode(bodyText);
+			b64.clear(false);
+		    }
+	    }
 	    m.addParam("xsip_type",message->body->getType());
-	    m.addParam("xsip_body_encoding","base64");
+	    m.addParam("xsip_body_encoding",lookup(enc,SipHandler::s_bodyEnc));
 	    m.addParam("xsip_body",bodyText);
 	}
     }
@@ -7766,15 +7841,25 @@ bool SipHandler::received(Message &msg)
 	else {
 	    DataBlock binBody;
 	    bool ok = false;
-	    if (bodyEnc == YSTRING("base64")) {
-		Base64 b64;
-		b64 << body;
-		ok = b64.decode(binBody);
+	    switch (bodyEnc.toInteger(s_bodyEnc)) {
+		case BodyRaw:
+		    binBody.append(body);
+		    ok = true;
+		    break;
+		case BodyHex:
+		    ok = binBody.unHexify(body,body.length());
+		    break;
+		case BodyHexS:
+		    ok = binBody.unHexify(body,body.length(),' ');
+		    break;
+		case BodyBase64:
+		    {
+			Base64 b64;
+			b64 << body;
+			ok = b64.decode(binBody);
+		    }
+		    break;
 	    }
-	    else if (bodyEnc == YSTRING("hex"))
-		ok = binBody.unHexify(body,body.length());
-	    else if (bodyEnc == YSTRING("hexs"))
-		ok = binBody.unHexify(body,body.length(),' ');
 
 	    if (ok)
 		sip->setBody(new MimeBinaryBody(type,(const char*)binBody.data(),binBody.length()));
@@ -8053,6 +8138,8 @@ void SIPDriver::initialize()
     s_printMsg = s_cfg.getBoolValue("general","printmsg",true);
     s_tcpMaxpkt = getMaxpkt(s_cfg.getIntValue("general","tcp_maxpkt",4096),4096);
     s_lineKeepTcpOffline = s_cfg.getBoolValue("general","line_keeptcpoffline",!Engine::clientMode());
+    s_defEncoding = s_cfg.getIntValue("general","body_encoding",SipHandler::s_bodyEnc,SipHandler::BodyBase64);
+    s_gen_async = s_cfg.getBoolValue("general","async_generic",true);
     s_sipt_isup = s_cfg.getBoolValue("sip-t","isup",false);
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);

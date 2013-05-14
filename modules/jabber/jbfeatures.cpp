@@ -460,7 +460,7 @@ bool JBFeaturesModule::handleFeaturePrivateData(JabberID& from, Message& msg)
 	    XMPPNamespace::IqPrivate);
 	XmlElement* pdata = 0;
 	if (m) {
-	    Array* a = static_cast<Array*>(m->userObject("Array"));
+	    Array* a = static_cast<Array*>(m->userObject(YATOM("Array")));
 	    String* data = a ? YOBJECT(String,a->get(0,1)) : 0;
 	    pdata = data ? XMPPUtils::getXml(*data) : 0;
 	    if (pdata) {
@@ -550,7 +550,7 @@ bool JBFeaturesModule::handleFeatureVCard(JabberID& from, Message& msg)
 	return buildError(msg,xml);
     XmlElement* vcard = 0;
     if (t == XMPPUtils::IqGet && m) {
-	Array* a = static_cast<Array*>(m->userObject("Array"));
+	Array* a = static_cast<Array*>(m->userObject(YATOM("Array")));
 	if (a) {
 	    String* vc = YOBJECT(String,a->get(0,1));
 	    XDebug(this,DebugInfo,"Got vcard for '%s': '%s'",p.getValue("username"),
@@ -607,7 +607,7 @@ bool JBFeaturesModule::handleFeatureMsgOffline(JabberID& from, Message& msg)
 	    p.addParam("maxcount",String(m_maxChatCount));
 	    Message* m = queryDb(p,m_chatAccount,m_chatQueryAdd);
 	    if (m) {
-		Array* a = static_cast<Array*>(m->userObject("Array"));
+		Array* a = static_cast<Array*>(m->userObject(YATOM("Array")));
 		String* res = a ? YOBJECT(String,a->get(0,1)) : 0;
 		if (res) {
 		    DDebug(this,DebugAll,"Got result %s to add chat",res->c_str());
@@ -633,7 +633,7 @@ bool JBFeaturesModule::handleFeatureMsgOffline(JabberID& from, Message& msg)
 	Message* m = queryDb(p,m_chatAccount,m_chatQueryGet);
 	if (!m)
 	    return false;
-	Array* a = static_cast<Array*>(m->userObject("Array"));
+	Array* a = static_cast<Array*>(m->userObject(YATOM("Array")));
 	int rows = a ? a->getRows() : 0;
 	int cols = a ? a->getColumns() : 0;
 	DDebug(this,DebugAll,"Got %d offline messages for user =%s",

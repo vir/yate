@@ -1,0 +1,332 @@
+<ui version="4.0" >
+ <class>conctactfs</class>
+ <widget class="QWidget" name="conctactfs" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>387</width>
+    <height>373</height>
+   </rect>
+  </property>
+  <property name="windowIcon" >
+   <iconset>sharefile_title.png</iconset>
+  </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
+  </property>
+  <property name="_yate_destroyonclose" stdset="0" >
+   <bool>true</bool>
+  </property>
+  <property name="_yate_destroyonhide" stdset="0" >
+   <bool>true</bool>
+  </property>
+  <layout class="QVBoxLayout" >
+   <property name="spacing" >
+    <number>0</number>
+   </property>
+   <property name="leftMargin" >
+    <number>0</number>
+   </property>
+   <property name="topMargin" >
+    <number>0</number>
+   </property>
+   <property name="rightMargin" >
+    <number>0</number>
+   </property>
+   <property name="bottomMargin" >
+    <number>0</number>
+   </property>
+   <item>
+    <layout class="QVBoxLayout" >
+     <property name="spacing" >
+      <number>6</number>
+     </property>
+     <property name="leftMargin" >
+      <number>6</number>
+     </property>
+     <property name="topMargin" >
+      <number>6</number>
+     </property>
+     <property name="rightMargin" >
+      <number>6</number>
+     </property>
+     <property name="bottomMargin" >
+      <number>6</number>
+     </property>
+     <item>
+      <widget class="QFrame" name="frame_list" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="styleSheet" >
+        <string>QFrame#frame_list {
+  border: 1px solid #717fa0;
+}
+</string>
+       </property>
+       <property name="_yate_uiwidget" stdset="0" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_uiwidget_name" stdset="0" >
+        <string>share_file_list</string>
+       </property>
+       <property name="_yate_uiwidget_class" stdset="0" >
+        <string>QtCustomTree</string>
+       </property>
+       <property name="_yate_uiwidget_params" stdset="0" >
+        <stringlist>
+         <string>property:_yate_save_props=_yate_col_widths</string>
+         <string>_yate_selection_mode=extended</string>
+         <string>_yate_edit_triggers=all,!currentchanged,!anykeypress</string>
+         <string>_yate_set_currentcolumn=name</string>
+         <string>property:tabKeyNavigation=false</string>
+         <string>property:sortingEnabled=false</string>
+         <string>property:allColumnsShowFocus=true</string>
+         <string>property:_yate_horizontalheader=true</string>
+         <string>property:_yate_notifyonenterpressed=true</string>
+         <string>property:_yate_notifyitemchanged=true</string>
+         <string>property:_yate_itemheight=24</string>
+         <string>property:_yate_itemeditable=true</string>
+         <string>property:_yate_itemacceptdrop=:always</string>
+         <string>property:_yate_itemacceptdroponempty=always</string>
+         <string>griddraw_right_color=#e3e6e9</string>
+         <string>griddraw_bottom_color=#a9c2c2</string>
+         <string>columns=Name,Path</string>
+         <string>columns.width=140</string>
+         <string>itemdelegate.1=</string>
+         <string>itemdelegate.1.editable_cols=name</string>
+         <string>itemdelegate.1.noroles=true</string>
+         <string>itemdelegate.1.drawfocus=false</string>
+         <string>_yate_set_draganddrop=drop</string>
+         <string>_yate_accept_drop_schemes=file</string>
+         <string>_yate_accept_drop_dir=true</string>
+         <string>_yate_accept_drop_file=false</string>
+        </stringlist>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" >
+       <property name="spacing" >
+        <number>2</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="account_image" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>16</width>
+           <height>16</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16</width>
+           <height>16</height>
+          </size>
+         </property>
+         <property name="toolTip" >
+          <string>Account</string>
+         </property>
+         <property name="pixmap" >
+          <pixmap>user.png</pixmap>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="account" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>0</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16777215</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="toolTip" >
+          <string>Account</string>
+         </property>
+         <property name="indent" >
+          <number>5</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer>
+         <property name="orientation" >
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeType" >
+          <enum>QSizePolicy::Fixed</enum>
+         </property>
+         <property name="sizeHint" >
+          <size>
+           <width>10</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QToolButton" name="file_share_new" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>0</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16777215</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="toolTip" >
+          <string>Add a share directory</string>
+         </property>
+         <property name="text" >
+          <string>New</string>
+         </property>
+         <property name="icon" >
+          <iconset>add.png</iconset>
+         </property>
+         <property name="toolButtonStyle" >
+          <enum>Qt::ToolButtonTextBesideIcon</enum>
+         </property>
+         <property name="_yate_normal_icon" stdset="0" >
+          <string>add.png</string>
+         </property>
+         <property name="_yate_pressed_icon" stdset="0" >
+          <string>add_pressed.png</string>
+         </property>
+         <property name="_yate_hover_icon" stdset="0" >
+          <string>add_hover.png</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="file_share_del" >
+         <property name="enabled" >
+          <bool>false</bool>
+         </property>
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>0</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16777215</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="toolTip" >
+          <string>Delete selected shared item(s)</string>
+         </property>
+         <property name="text" >
+          <string>Delete</string>
+         </property>
+         <property name="icon" >
+          <iconset>delete.png</iconset>
+         </property>
+         <property name="toolButtonStyle" >
+          <enum>Qt::ToolButtonTextBesideIcon</enum>
+         </property>
+         <property name="_yate_normal_icon" stdset="0" >
+          <string>delete.png</string>
+         </property>
+         <property name="_yate_pressed_icon" stdset="0" >
+          <string>delete_pressed.png</string>
+         </property>
+         <property name="_yate_hover_icon" stdset="0" >
+          <string>delete_hover.png</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="file_share_rename" >
+         <property name="enabled" >
+          <bool>false</bool>
+         </property>
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>0</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16777215</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="toolTip" >
+          <string>Edit the selected shared item</string>
+         </property>
+         <property name="text" >
+          <string>Rename</string>
+         </property>
+         <property name="icon" >
+          <iconset>edit.png</iconset>
+         </property>
+         <property name="toolButtonStyle" >
+          <enum>Qt::ToolButtonTextBesideIcon</enum>
+         </property>
+         <property name="_yate_normal_icon" stdset="0" >
+          <string>edit.png</string>
+         </property>
+         <property name="_yate_pressed_icon" stdset="0" >
+          <string>edit_pressed.png</string>
+         </property>
+         <property name="_yate_hover_icon" stdset="0" >
+          <string>edit_hover.png</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

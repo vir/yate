@@ -43,7 +43,8 @@ const TokenDict JGEvent::s_typeName[] = {
 // Constructor
 JGEngine::JGEngine(const char* name)
     : Mutex(true,"JGEngine"),
-    m_sessionId(1), m_stanzaTimeout(20000), m_pingInterval(300000)
+    m_sessionId(1), m_stanzaTimeout(20000), m_streamHostTimeout(180000),
+    m_pingInterval(300000)
 {
     debugName(name);
 }
@@ -61,8 +62,8 @@ void JGEngine::initialize(const NamedList& params)
 
     m_sessionFlags = 0;
     m_sessionFlags = decodeFlags(params["jingle_flags"],JGSession::s_flagName);
-    int timeout = params.getIntValue("stanza_timeout",(int)m_stanzaTimeout);
-    m_stanzaTimeout = timeout > 10000 ? timeout : 10000;
+    m_stanzaTimeout = params.getIntValue("stanza_timeout",20000,10000);
+    m_streamHostTimeout = params.getIntValue("stanza_timeout",180000,60000);
     int ping = params.getIntValue("ping_interval",(int)m_pingInterval);
     if (ping == 0)
 	m_pingInterval = 0;

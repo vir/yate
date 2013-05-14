@@ -31,11 +31,22 @@ using namespace TelEngine;
 namespace { // anonymous
 
 class QtCellGridDraw;                    // Draw cell grid
+class QtTreeItemProps;                   // Tree widget container item properties
+class QtTreeDrag;                        // Drag data builder
 class QtTreeItem;                        // A tree widget item
 class QtCustomTree;                      // A custom tree widget
 class ContactList;                       // A contact list tree
 class ContactItem;                       // A contact list contact
 class ContactItemList;                   // Groups and contact items belonging to them
+class FileListTree;                      // Specialized tree showing directories and files
+class QtPaintItemDesc;                   // Generic item description (base class)
+class QtPaintButtonDesc;                 // Button description
+class QtPaintItem;                       // Custom painted item
+class QtPaintButton;                     // Custom painted button
+class QtPaintItems;                      // Holds items to paint
+class QtPaintImages;                     // Holds images to paint
+class QtItemDelegate;                    // Custom item delegate
+class QtHtmlItemDelegate;                // Custom HTML item delegate
 
 typedef QList<QTreeWidgetItem*> QtTreeItemList;
 typedef QPair<QTreeWidgetItem*,QString> QtTreeItemKey;
@@ -120,6 +131,7 @@ protected:
     QPen m_bottom;
 };
 
+
 /**
  * This class holds data about a tree widget container item
  * @short Tree widget container item properties
@@ -134,8 +146,26 @@ public:
      */
     explicit inline QtTreeItemProps(const String& type)
 	: QtUIWidgetItemProps(type),
-	m_height(-1)
+	m_height(-1), m_editable(false)
 	{}
+
+    /**
+     * Set a button's action, create if it not found
+     * @param name Button name
+     * @param action Button action
+     * @return True on success, false if 'name' was found but is not a button
+     */
+    bool setPaintButtonAction(const String& name, const String& action);
+
+    /**
+     * Set a button's parameter, create it if not found
+     * @param name Button name
+     * @param param Parameter to set
+     * @param value Parameter value
+     * @return True on success, false if 'name' was found but is not a button
+     */
+    bool setPaintButtonParam(const String& name, const String& param,
+	const String& value = String::empty());
 
     int m_height;                        // Item height
     String m_stateWidget;                // Item widget or column showing the state
@@ -146,6 +176,45 @@ public:
     String m_statsTemplate;              // Statistics template (may include ${count} for children count)
     QBrush m_bg;                         // Item background
     QRect m_margins;                     // Item internal margins
+    bool m_editable;                     // Item is editable
+    ObjList m_paintItemsDesc;            // Paint items description
+};
+
+
+/**
+ * This class holds data used to build tree drag data
+ * @short Drag data builder
+ */
+class QtTreeDrag : public QObject, public GenObject
+{
+    YCLASS(QtTreeDrag,GenObject)
+    Q_CLASSINFO("QtTreeDrag","Yate")
+    Q_OBJECT
+public:
+    /**
+     * Constructor
+     * @param parent Object parent
+     * @param params Optional parameters
+     */
+    QtTreeDrag(QObject* parent, const NamedList* params = 0);
+
+    /**
+     * Set the URL builder, set to NULL if fmt is empty
+     * @param format Format to use when building base URL
+     * @param queryParams Query params to add to URL
+     */
+    void setUrlBuilder(const String& fmt = String::empty(),
+	const String& queryParams = String::empty());
+    
+    /**
+     * Build MIME data for a list of items
+     * @param item The list
+     * @return QMimeData pointer, 0 on failure
+     */
+    QMimeData* mimeData(const QList<QTreeWidgetItem*> items) const;
+
+protected:
+    QtUrlBuilder* m_urlBuilder;
 };
 
 
@@ -191,7 +260,7 @@ public:
      * @param role Set image file path in this role if greater then Qt::UserRole
      */
     void setImage(int col, const String& cname, const NamedList& list,
-	    int role = Qt::UserRole);
+	int role = Qt::UserRole);
 
     /**
      * Set a column's check state from boolean value
@@ -235,6 +304,26 @@ public:
     bool setFilter(const NamedList* filter);
 
     /**
+     * Retrieve extra data to paint on right side of the item
+     * @return QtPaintItems pointer held by this item (may be 0)
+     */
+    inline QtPaintItems* extraPaintRight() const
+	{ return m_extraPaintRight; }
+
+    /**
+     * Set extra data to paint on right side of the item
+     * @param obj Object to set
+     */
+    void setExtraPaintRight(QtPaintItems* obj = 0);
+
+    /**
+     * Set extra paint buttons on right side of the item
+     * @param list Buttons list
+     * @param props Item props containing the description
+     */
+    void setExtraPaintRightButtons(const String& list, QtTreeItemProps* props);
+
+    /**
      * Save/restore item expanded status
      */
     bool m_storeExp;
@@ -246,7 +335,9 @@ public:
 
 protected:
     bool m_filtered;                     // Item filtered flag
+    QtPaintItems* m_extraPaintRight;     // Extra items to paint on right side
 };
+
 
 /**
  * This class holds a custom tree widget
@@ -265,6 +356,8 @@ class QtCustomTree : public QtTree
     Q_PROPERTY(QString _yate_itemui READ itemUi WRITE setItemUi(QString))
     Q_PROPERTY(QString _yate_itemstyle READ itemStyle WRITE setItemStyle(QString))
     Q_PROPERTY(QString _yate_itemselectedstyle READ itemSelectedStyle WRITE setItemSelectedStyle(QString))
+    Q_PROPERTY(QString _yate_itemacceptdrop READ itemAcceptDrop WRITE setItemAcceptDrop(QString))
+    Q_PROPERTY(QString _yate_itemacceptdroponempty READ itemAcceptDropOnEmpty WRITE setItemAcceptDropOnEmpty(QString))
     Q_PROPERTY(QString _yate_itemstatewidget READ itemStateWidget WRITE setItemStateWidget(QString))
     Q_PROPERTY(QString _yate_itemexpandedimage READ itemExpandedImage WRITE setExpandedImage(QString))
     Q_PROPERTY(QString _yate_itemcollapsedimage READ itemCollapsedImage WRITE setItemCollapsedImage(QString))
@@ -274,6 +367,9 @@ class QtCustomTree : public QtTree
     Q_PROPERTY(QString _yate_itemheight READ itemHeight WRITE setItemHeight(QString))
     Q_PROPERTY(QString _yate_itembackground READ itemBg WRITE setItemBg(QString))
     Q_PROPERTY(QString _yate_itemmargins READ itemMargins WRITE setItemMargins(QString))
+    Q_PROPERTY(QString _yate_itemeditable READ itemEditable WRITE setItemEditable(QString))
+    Q_PROPERTY(QString _yate_itempaintbutton READ itemPaintButton WRITE setItemPaintButton(QString))
+    Q_PROPERTY(QString _yate_itempaintbuttonparam READ itemPaintButtonParam WRITE setItemPaintButtonParam(QString))
     Q_PROPERTY(QString _yate_col_widths READ colWidths WRITE setColWidths(QString))
     Q_PROPERTY(QString _yate_sorting READ sorting WRITE setSorting(QString))
     Q_PROPERTY(QString _yate_itemsexpstatus READ itemsExpStatus WRITE setItemsExpStatus(QString))
@@ -296,6 +392,7 @@ public:
 	RoleImage,                       // Role containing item image file name
 	RoleBackground,                  // Role containing item background color
 	RoleMargins,                     // Role containing item internal margins
+	RoleQtDrawItems,                 // Role containing extra display data (QObject descendent)
 	RoleCount
     };
 
@@ -398,6 +495,13 @@ public:
     virtual bool getSelect(String& item);
 
     /**
+     * Retrieve multiple selection
+     * @param items List to be to filled with selection's contents
+     * @return True if the operation was successfull
+     */
+    virtual bool getSelect(NamedList& items);
+
+    /**
      * Remove all items from tree
      * @return True
      */
@@ -415,6 +519,22 @@ public:
      * @return The list of container item widgets
      */
     virtual QList<QObject*> getContainerItems();
+
+    /**
+     * Retrieve model index for a given item
+     * @param item Item to edit
+     * @param what Optional sub-item
+     * @return Model index for the item, can be invalid
+     */
+     virtual QModelIndex modelIndex(const String& item, const String* what = 0);
+
+    /**
+     * Update a tree item
+     * @param item Item to update
+     * @param params Item parameters
+     * @return True on success
+     */
+    virtual bool updateItem(QtTreeItem& item, const NamedList& params);
 
     /**
      * Find a tree item
@@ -462,6 +582,13 @@ public:
      */
      QList<QtTreeItem*> findItems(int type, QtTreeItem* start = 0,
 	bool includeStart = true, bool recursive = true);
+
+    /**
+     * Find all tree items from model
+     * @param list Model index list
+     * @return The list of items
+     */
+     QList<QtTreeItem*> findItems(QModelIndexList list);
 
     /**
      * Find all tree items
@@ -535,6 +662,22 @@ public:
 	}
 
     /**
+     * Retrieve item properties associated with a given item
+     * @param item Item address
+     * @return QtTreeItemProps poinetr or 0 if not found
+     */
+    inline QtTreeItemProps* treeItemProps(QtTreeItem& item) const
+	{ return treeItemProps(item.type()); }
+
+    /**
+     * Retrieve item properties associated with a given item
+     * @param item Item pointer
+     * @return QtTreeItemProps poinetr or 0 if not found
+     */
+    inline QtTreeItemProps* treeItemProps(QtTreeItem* item) const
+	{ return item ? treeItemProps(item->type()) : 0; }
+
+    /**
      * Retrieve string data associated with a column
      * @param buf Destination string
      * @param item The tree item whose data to retreive
@@ -559,11 +702,35 @@ public:
 	}
 
     /**
+     * Retrieve a list with column IDs
+     * @return QStringList containing column IDs
+     */
+    QStringList columnIDs();
+
+    /**
+     * Retrieve a column id by column number
+     * @param buf Destination buffer
+     * @param col column number
+     * @return True if found
+     */
+    bool getColumnName(String& buf, int col);
+
+    /**
      * Retrieve a column by it's id
      * @param id The column id to find
      * @return Column number, -1 if not found
      */
     int getColumn(const String& id);
+
+    /**
+     * Convert a value to int, retrieve a column index
+     * @param str Column number or name
+     * @return Column number, -1 if not found
+     */
+    inline int getColumnNo(const String& str) {
+	    int val = str.toInteger(-1);
+	    return val >= 0 ? val : getColumn(str);
+	}
 
     /**
      * Show or hide an item
@@ -588,8 +755,9 @@ public:
     /**
      * Set the expanded/collapsed image of an item
      * @param item The item to set
+     * @param props Optional pointer to item props, detect it if 0
      */
-    void setStateImage(QtTreeItem& item);
+    void setStateImage(QtTreeItem& item, QtTreeItemProps* props = 0);
 
     /**
      * Retrieve the auto expand property
@@ -690,6 +858,36 @@ public:
      * @param value Item props selected style sheet. Format [type:]stylesheet
      */
     void setItemSelectedStyle(QString value);
+
+    /**
+     * Read _yate_itemacceptdrop property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString itemAcceptDrop()
+	{ return QString(); }
+
+    /**
+     * Set an item props accept drop
+     * @param value Item props accept drop. Format [type:]acceptdrop
+     */
+    void setItemAcceptDrop(QString value);
+
+    /**
+     * Read _yate_itemacceptdroponempty property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString itemAcceptDropOnEmpty()
+	{ return QString(); }
+
+    /**
+     * Set accept drop on empty space
+     * @param value Accept drop on empty space
+     */
+    void setItemAcceptDropOnEmpty(QString value) {
+	    String tmp;
+	    QtClient::getUtf8(tmp,value);
+	    m_acceptDropOnEmpty = QtDrop::acceptDropType(tmp,QtDrop::None);
+	}
 
     /**
      * Read _yate_itemstatewidget property accessor: does nothing
@@ -810,6 +1008,45 @@ public:
     void setItemMargins(QString value);
 
     /**
+     * Read _yate_itemeditable property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString itemEditable()
+	{ return QString(); }
+
+    /**
+     * Set an item props editable
+     * @param value Item props margins. Format [type:]editable
+     */
+    void setItemEditable(QString value);
+
+    /**
+     * Read _yate_itempaintbutton property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString itemPaintButton()
+	{ return QString(); }
+
+    /**
+     * Set an item's paint button and action
+     * @param value Item paint button action. Format [type:][button_name:]action_name
+     */
+    void setItemPaintButton(QString value);
+
+    /**
+     * Read _yate_itempaintbuttonparam property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString itemPaintButtonParam()
+	{ return QString(); }
+
+    /**
+     * Set an item's paint button parameter
+     * @param value Item paint button parameter. Format [type:]button_name:param_name[:param_value]
+     */
+    void setItemPaintButtonParam(QString value);
+
+    /**
      * Retrieve a comma separated list with column widths
      * @return Comma separated list containing column widths
      */
@@ -846,6 +1083,13 @@ public:
      */
     void setItemsExpStatus(QString s);
 
+    /**
+     * Add items as list parameter
+     * @param Parameter list
+     * *param items Items list
+     */
+    static void addItems(NamedList& dest, QList<QTreeWidgetItem*> items);
+
 protected slots:
     /**
      * Handle item children actions
@@ -864,14 +1108,6 @@ protected slots:
      */
     void itemChildSelect()
 	{ onSelect(sender()); }
-
-    /**
-     * Catch item selection changes
-     * @param sel Selected item
-     * @param prev Previous selected item
-     */
-    void selectionChangedSlot(QTreeWidgetItem* sel, QTreeWidgetItem* prev)
-	{ onSelChanged(static_cast<QtTreeItem*>(sel),static_cast<QtTreeItem*>(prev)); }
 
     /**
      * Catch item double click
@@ -901,21 +1137,102 @@ protected slots:
     void itemChangedSlot(QTreeWidgetItem* item, int column)
 	{ onItemChanged(static_cast<QtTreeItem*>(item),column); }
 
+    /**
+     * Catch item selection changed signal
+     */
+    void itemSelChangedSlot();
+
 protected:
+    /**
+     * Re-implemented from QTreeWidget
+     */
+    virtual void timerEvent(QTimerEvent* e);
+
+    /**
+     * Re-implemented from QTreeWidget
+     */
+    virtual void drawBranches(QPainter* painter, const QRect& rect,
+	const QModelIndex& index) const;
+
+    /**
+     * Re-implemented from QTreeWidget
+     */
+    virtual QMimeData* mimeData(const QList<QTreeWidgetItem*> items) const;
+
+    /**
+     * Re-implemented from QAbstractItemView
+     */
+    virtual void selectionChanged(const QItemSelection& selected,
+	const QItemSelection& deselected);
+
+    /**
+     * Re-implemented from QAbstractItemView
+     */
+    virtual void currentChanged(const QModelIndex& current, const QModelIndex& previous);
+
+    /**
+     * Re-implemented from QWidget
+     */
+    virtual void dragEnterEvent(QDragEnterEvent* e);
+
+    /**
+     * Re-implemented from QWidget
+     */
+    virtual void dropEvent(QDropEvent* e);
+
+    /**
+     * Re-implemented from QWidget
+     */
+    virtual void dragMoveEvent(QDragMoveEvent* e);
+
+    /**
+     * Re-implemented from QWidget
+     */
+    virtual void dragLeaveEvent(QDragLeaveEvent* e);
+
+    /**
+     * Re-implemented from QWidget
+     */
+    virtual void mouseMoveEvent(QMouseEvent* e);
+
+    /**
+     * Re-implemented from QWidget
+     */
+    virtual void mousePressEvent(QMouseEvent* e);
+
+    /**
+     * Re-implemented from QWidget
+     */
+    virtual void mouseReleaseEvent(QMouseEvent* e);
+
+    /**
+     * Re-implemented from QTreeView
+     */
+    virtual void rowsAboutToBeRemoved(const QModelIndex& parent, int start, int end);
+
     /**
      * Retrieve the item props name associated with tree item type
      * @param type Item type
      * @return Item props name or empty if not found
      */
     inline const String& itemPropsName(int type) const
-	{ return m_itemPropsType[String(type)]; }
+	{ return NamedInt::lookupName(m_itemPropsType,type); }
 
     /**
      * Retrieve the item type integer value from associated string (name)
      * @param name Item type name
      * @return Associated item type integer value. QTreeWidgetItem::Type if not found
      */
-    int itemType(const String& name) const;
+    inline int itemType(const String& name) const
+	{ return NamedInt::lookup(m_itemPropsType,name,QTreeWidgetItem::Type); }
+
+    /**
+     * Add item prop to name translation
+     * @param type Item type
+     * @param name Type name
+     */
+    inline void addItemType(int type, const char* name)
+	{ NamedInt::addToListUniqueName(m_itemPropsType,new NamedInt(name,type)); }
 
     /**
      * Retrieve tree sorting
@@ -944,21 +1261,6 @@ protected:
      * @param selected True to apply selected item style
      */
     void applyStyleSheet(QtTreeItem* item, bool selected);
-
-    /**
-     * Update a tree item
-     * @param item Item to update
-     * @param params Item parameters
-     * @return True on success
-     */
-    virtual bool updateItem(QtTreeItem& item, const NamedList& params);
-
-    /**
-     * Process item selection changes
-     * @param sel Selected item
-     * @param prev Previous selected item
-     */
-    virtual void onSelChanged(QtTreeItem* sel, QtTreeItem* prev);
 
     /**
      * Process item double click
@@ -999,14 +1301,6 @@ protected:
     virtual void itemAdded(QtTreeItem& item, QtTreeItem* parent);
 
     /**
-     * Item removed notification.
-     * The item will be deleted after returning from this notification
-     * @param item Removed item
-     * @param parent The tree item from which the item was removed. 0 if removed from root
-     */
-    virtual void itemRemoved(QtTreeItem& item, QtTreeItem* parent);
-
-    /**
      * Handle item visiblity changes
      * @param item Changed item
      */
@@ -1032,10 +1326,25 @@ protected:
     virtual void uncheckItem(QtTreeItem& item);
 
     /**
+     * Remove an item
+     * @param item Item to remove
+     * @param setSelTimer Optional boolean to be set if select trigger timer should be started,
+     *  set it to 0 to let this method handle the timer
+     */
+    virtual void removeItem(QtTreeItem* item, bool* setSelTimer = 0);
+
+    /**
+     * Remove a list of items
+     * @param items Items to remove
+     */
+    virtual void removeItems(QList<QTreeWidgetItem*> items);
+
+    /**
      * Update a tree item's tooltip
      * @param item Item to update
+     * @param props Optional pointer to item props, detect it if 0
      */
-    virtual void applyItemTooltip(QtTreeItem& item);
+    virtual void applyItemTooltip(QtTreeItem& item, QtTreeItemProps* props = 0);
 
     /**
      * Fill a list with item statistics.
@@ -1048,15 +1357,18 @@ protected:
     /**
      * Update a tree item's statistics
      * @param item Item to update
+     * @param props Optional pointer to item props, detect it if 0
      */
-    void applyItemStatistics(QtTreeItem& item);
+    void applyItemStatistics(QtTreeItem& item, QtTreeItemProps* props = 0);
 
     /**
      * Update a tree item's margins
      * @param item Item to update
      * @param set True to set from item props, false to set an empty rect
+     * @param props Optional pointer to item props, detect it if 0
      */
-    virtual void applyItemMargins(QtTreeItem& item, bool set = true);
+    virtual void applyItemMargins(QtTreeItem& item, bool set = true,
+	QtTreeItemProps* props = 0);
 
     /**
      * Store (update) to or remove from item expanded status storage an item
@@ -1073,18 +1385,68 @@ protected:
      */
     int getStoreExpStatus(const String& id);
 
+    /**
+     * Handle drop events
+     * @param e The event
+     * @return True if accepted
+     */
+    bool handleDropEvent(QDropEvent* e);
+
+    /**
+     * Check if an item has any selected child
+     * @param item The item to check
+     * @return True if it has at least 1 selected child
+     */
+    bool hasSelectedChild(QtTreeItem& item);
+
+    /**
+     * Check if select trigger timer should be started
+     * @param item The item to check
+     * @return True if select trigger timer should be started
+     */
+    inline bool shouldSetSelTimer(QtTreeItem& item)
+	{ return !item.isSelected() && hasSelectedChild(item); }
+
+    /**
+     * Stop select trigger timer
+     */
+    inline void stopSelectTriggerTimer() {
+	    if (!m_timerTriggerSelect)
+		return;
+	    killTimer(m_timerTriggerSelect);
+	    m_timerTriggerSelect = 0;
+	}
+
+    /**
+     * Start select trigger timer
+     */
+    inline void startSelectTriggerTimer() {
+	    stopSelectTriggerTimer();
+	    m_timerTriggerSelect = startTimer(500);
+	}
+
     bool m_notifyItemChanged;            // Notify 'listitemchanged' action
     bool m_hasCheckableCols;             // True if we have checkable columns
     QMenu* m_menu;                       // Tree context menu
     bool m_autoExpand;                   // Items are expanded when added
     int m_rowHeight;                     // Tree row height
-    NamedList m_itemPropsType;           // Tree item type to item props translation
+    ObjList m_itemPropsType;             // Tree item type to item props translation
     QList<QtTokenDict> m_expStatus;      // List of stored item IDs and expanded status
     QtCellGridDraw m_gridDraw;
     int m_changing;                      // Content is changing from client (not from user):
                                          //  avoid notifications
     NamedList* m_filter;                 // Item filter
+    bool m_haveWidgets;                  // True if we loaded any widget
+    bool m_haveDrawQtItems;              // True if we have any custom drawn data in items
+    int m_setCurrentColumn;              // Column to set when current index changed
+    QtListDrop* m_drop;                  // Drop handler
+    int m_acceptDropOnEmpty;             // Accept drop on widget surface not occupied by any item
+    QtTreeDrag* m_drag;                  // Drag data builder
+    bool m_drawBranches;                 // Allow parent to draw branches
+    int m_timerTriggerSelect;            // Trigger select timer id
+    QtTreeItem* m_lastItemDrawHover;     // Last item we used to update custom drawn hover
 };
+
 
 /**
  * This class holds a contact list tree
@@ -1178,6 +1540,14 @@ public:
      *  properties affecting display are changed
      */
     virtual void listChanged();
+
+    /**
+     * Update a tree item
+     * @param item Item to update
+     * @param params Item parameters
+     * @return True on success
+     */
+    virtual bool updateItem(QtTreeItem& item, const NamedList& params);
 
     /**
      * Find a contact
@@ -1332,14 +1702,6 @@ protected:
     bool removeContact(const String& id);
 
     /**
-     * Update a tree item
-     * @param item Item to update
-     * @param params Item parameters
-     * @return True on success
-     */
-    virtual bool updateItem(QtTreeItem& item, const NamedList& params);
-
-    /**
      * Get the context menu associated with a given item
      * @param item The item (can be 0)
      * @return QMenu pointer or 0
@@ -1365,8 +1727,10 @@ protected:
      * Update a tree item's margins
      * @param item Item to update
      * @param set True to set from item props, false to set an empty rect
+     * @param props Optional pointer to item props, detect it if 0
      */
-    virtual void applyItemMargins(QtTreeItem& item, bool set = true);
+    virtual void applyItemMargins(QtTreeItem& item, bool set = true,
+	QtTreeItemProps* props = 0);
 
     /**
      * Retrieve a group item from root or create a new one
@@ -1434,6 +1798,7 @@ private:
     Qt::CaseSensitivity m_compareNameCs; // Contact name case comparison
 };
 
+
 /**
  * This class holds a contact list contact tree item
  * @short A contact list contact
@@ -1459,6 +1824,7 @@ public:
     QString m_name;
 };
 
+
 /**
  * Utility class used to hold contact groups along with contacts
  * @short Groups and contact items belonging to them
@@ -1477,6 +1843,623 @@ public:
 
     QList<QTreeWidgetItem*> m_groups;
     QList<QtTreeItemList> m_contacts;
+};
+
+
+/**
+ * File list item description. The String holds the file name
+ * @short A file list item
+ */
+class FileItem : public String
+{
+public:
+    /**
+     * Constructor
+     * @param type File item type
+     * @param name File name
+     * @param path File path
+     * @param prov Optional file icon provider 
+     */
+    FileItem(int type, const char* name, const String& path,
+	QFileIconProvider* prov = 0);
+
+    /**
+     * Constructor. Build a FileListTree up directory
+     * @param path The path
+     * @param prov Optional file icon provider 
+     */
+    FileItem(const String& path, QFileIconProvider* prov = 0);
+
+    /**
+     * Destructor
+     */
+    ~FileItem();
+
+    int m_type;
+    String m_fullName;
+    QIcon* m_icon;
+};
+
+
+/**
+ * Load local directory content
+ * @short Thread used to load local directory content
+ */
+class DirListThread : public QThread
+{
+    Q_CLASSINFO("DirListThread","Yate")
+    Q_OBJECT
+public:
+    inline DirListThread(QObject* parent, const String& dir, bool dirs = true,
+	bool files = true)
+	: QThread(parent),
+	m_dir(dir), m_error(0), m_listDirs(dirs), m_listUpDir(false),
+	m_listFiles(files), m_iconProvider(0), m_sort(QtClient::SortNone),
+	m_caseSensitive(false)
+	{}
+    virtual void run();
+
+    String m_dir;
+    int m_error;
+    bool m_listDirs;
+    bool m_listUpDir;
+    bool m_listFiles;
+    ObjList m_dirs;
+    ObjList m_files;
+    QFileIconProvider* m_iconProvider;
+    int m_sort;
+    bool m_caseSensitive;
+
+protected:
+    inline ObjList* addItem(int type, const char* name, ObjList& list, ObjList* last) {
+	    FileItem* it = new FileItem(type,name,m_dir,m_iconProvider);
+	    if (m_sort == QtClient::SortNone)
+		return last->append(it);
+	    return addItemSort(list,it);
+	}
+    ObjList* addItemSort(ObjList& list, FileItem* it);
+    // Called when terminated from run()
+    void runTerminated();
+};
+
+
+/**
+ * This class holds a file list tree
+ * @short Specialized tree showing directories and files
+ */
+class FileListTree : public QtCustomTree
+{
+    YCLASS(FileListTree,QtCustomTree)
+    Q_CLASSINFO("FileListTree","Yate")
+    Q_OBJECT
+    Q_PROPERTY(QString _yate_filesystem_path READ fsPath WRITE setFsPath(QString))
+    Q_PROPERTY(QString _yate_refresh READ refresh WRITE setRefresh(QString))
+public:
+    enum FileListPathType {
+	PathNone = 0,
+	PathRoot,
+	PathHome,
+	PathUpThenHome,
+    };
+
+    /**
+     * List item type enumeration
+     */
+    enum ItemType {
+	TypeDir = QtCustomTree::TypeCount,
+	TypeFile = QtCustomTree::TypeCount + 1,
+	TypeDrive = QtCustomTree::TypeCount + 2,
+    };
+
+    /**
+     * Constructor
+     * @param name The name of the object
+     * @param params List parameters
+     * @param parent List parent
+     */
+    FileListTree(const char* name, const NamedList& params, QWidget* parent);
+
+    /**
+     * Destructor
+     */
+    ~FileListTree();
+
+    /**
+     * Retrieve _yate_filesystem_path property
+     */
+    QString fsPath()
+	{ return QtClient::setUtf8(m_fsPath); }
+
+    /**
+     * Set _yate_filesystem_path property
+     */
+    void setFsPath(QString path);
+
+    /**
+     * Read _yate_refresh property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString refresh()
+	{ return QString(); }
+
+    /**
+     * Set _yate_refresh property
+     */
+    void setRefresh(QString val);
+
+    /**
+     * Change file system path, refresh data
+     * @param path New path
+     * @param force Force updating even if path didn't changed
+     */
+    void setFsPath(const String& path = String::empty(), bool force = true);
+
+    /**
+     * Check if current path is home path
+     * @return True if current path is the home one
+     */
+    inline bool isHomePath()
+	{ return fsPath() == QDir::toNativeSeparators(QDir::homePath()); }
+
+    /**
+     * Refresh data
+     * @param dir List of directory children
+     * @param files List of files children
+     * @param drives List of drives children
+     */
+    void refresh(ObjList* dirs, ObjList* files, ObjList* drives = 0);
+
+    /**
+     * Sort a list of items
+     * @param list Items to sort
+     * @param type Item type
+     */
+    virtual void sortItems(QList<QTreeWidgetItem*>& list, int type);
+
+    /**
+     * Retrieve the icon for a given item
+     * @param item The item
+     * @return The item icon
+     */
+    virtual QIcon icon(QtTreeItem& item);
+
+    /**
+     * Retrieve the icon for a given item type
+     * @param type Item type
+     * @param name Item name
+     * @param provider The icon provider
+     * @return The item icon
+     */
+    static QIcon fileIcon(int type, const String& name, QFileIconProvider* provider);
+
+    /**
+     * Build file full name
+     * @param buf Destination buffer
+     * @param path File path
+     * @param name File name
+     */
+    static inline void buildFileFullName(String& buf, const char* path, const char* name) {
+	    buf = path;
+	    if (!isRootPath(buf))
+		buf << Engine::pathSeparator();
+#ifndef _WINDOWS
+	    else if (!buf)
+		buf << Engine::pathSeparator();
+#endif
+	    buf << name;
+	}
+
+    /**
+     * Check if a path root
+     * @param path Path to check
+     * @return True if the given path is root
+     */
+    static inline bool isRootPath(const String& path) {
+#ifdef _WINDOWS
+	    return path.null();
+#else
+	    return path.null() || (path.at(0) == '/' && !path.at(1));
+#endif
+	}
+
+    static const String s_upDir;
+
+protected slots:
+
+    /**
+     * Catch dir list thread terminate signal
+     */
+    void onDirThreadTerminate();
+
+protected:
+    /**
+     * Start/stop dir list thread
+     */
+    bool setDirListThread(bool on);
+
+    /**
+     * Process item double click
+     * @param item The item
+     * @param column Clicked column
+     */
+    virtual void onItemDoubleClicked(QtTreeItem* item, int column);
+
+    /**
+     * Reset the thread
+     */
+    void resetThread();
+
+    bool m_fileSystemList;               // Show file system dir content
+    bool m_autoChangeDir;                // Auto change directory
+    bool m_listFiles;                    // List files in current directory
+    int m_sort;                          // Sort files
+    int m_listOnFailure;                 // What to list when fails current directory
+    QFileIconProvider* m_iconProvider;   // The icon provider 
+    String m_nameParam;                  // Item name column
+    String m_fsPath;                     // Current path
+    QThread* m_dirListThread;            // Dir list thread
+};
+
+
+/**
+ * This class implements a generic item description
+ * @short Generic item description (base class)
+ */
+class QtPaintItemDesc : public String
+{
+    YCLASS(QtPaintItemDesc,String)
+public:
+    /**
+     * Constructor
+     * @param name Object name
+     */
+    inline QtPaintItemDesc(const char* name = 0)
+	: String(name)
+	{}
+
+    /**
+     * Get a QtPaintButtonDesc from this object
+     * @return QtPaintButtonDesc pointer or 0
+     */
+    virtual QtPaintButtonDesc* button();
+
+    QSize m_size;
+};
+
+
+/**
+ * This class implements a generic item description
+ * @short Generic item description (base class)
+ */
+class QtPaintButtonDesc : public QtPaintItemDesc
+{
+    YCLASS(QtPaintButtonDesc,QtPaintItemDesc)
+public:
+    /**
+     * Constructor
+     * @param name Object name
+     */
+    inline QtPaintButtonDesc(const char* name = 0)
+	: QtPaintItemDesc(name), m_params(""), m_iconSize(16,16)
+	{ m_size = QSize(16,16); }
+
+    /**
+     * Get a QtPaintButtonDesc from this object
+     * @return QtPaintButtonDesc pointer
+     */
+    virtual QtPaintButtonDesc* button();
+
+    /**
+     * Find a button in a list
+     * @param list List to search in
+     * @param name Button name
+     * @param create True (default) to create if not found
+     * @return QtPaintButtonDesc pointer or 0 if found and not a button
+     */
+    static QtPaintButtonDesc* find(ObjList& list, const String& name,
+	bool create = true);
+
+    NamedList m_params;
+    QSize m_iconSize;
+};
+
+
+/**
+ * This class implements an item to be painted
+ * @short An item to be painted
+ */
+class QtPaintItem : public RefObject
+{
+    YCLASS(QtPaintItem,GenObject)
+public:
+    /**
+     * Constructor
+     * @param name Object name
+     * @param size Object size
+     */
+    inline QtPaintItem(const char* name, QSize size)
+	: m_enabled(true), m_hover(false), m_pressed(false),
+	m_size(size), m_name(name)
+	{}
+
+    /**
+     * Retrieve the item name
+     * @return Item name
+     */
+    inline const String& name() const
+	{ return m_name; }
+
+    /**
+     * Retrieve item pressed state
+     * @return Item pressed state
+     */
+    inline bool pressed() const
+	{ return m_pressed; }
+
+    /**
+     * Retrieve item size
+     * @return Item size
+     */
+    inline const QSize& size() const
+	{ return m_size; }
+
+    /**
+     * Retrieve the rectangle this item is drawn in
+     * @return Item display rectangle
+     */
+    inline const QRect& displayRect() const
+	{ return m_displayRect; }
+
+    /**
+     * Retrieve the item action
+     * @return Item action
+     */
+    inline const String& action() const
+	{ return m_action; }
+
+    /**
+     * Set hover state
+     * @param on Hover state
+     * @return True if hover state changed
+     */
+    virtual bool setHover(bool on);
+
+    /**
+     * Set pressed state
+     * @param on Pressed state
+     * @return True if pressed state changed
+     */
+    virtual bool setPressed(bool on);
+
+    /**
+     * Draw the item
+     * @param painter Painter used to draw
+     * @param rect Rectangle to paint in
+     */
+    virtual void draw(QPainter* painter, const QRect& rect) = 0;
+
+    /**
+     * Retrieve the item name
+     * @return Item name
+     */
+    virtual const String& toString() const;
+
+protected:
+    bool m_enabled;
+    bool m_hover;
+    bool m_pressed;
+    String m_action;
+    QSize m_size;
+    QRect m_displayRect;
+
+private:
+    String m_name;
+};
+
+
+/**
+ * This class implements an item to be painted
+ * @short An item to be painted
+ */
+class QtPaintButton : public QtPaintItem
+{
+    YCLASS(QtPaintButton,QtPaintItem)
+public:
+    /**
+     * Constructor
+     * @param desc Button description
+     */
+    QtPaintButton(QtPaintButtonDesc& desc);
+
+    /**
+     * Load button images
+     * @param params Parameters list
+     */
+    void loadImages(const NamedList& params);
+
+    /**
+     * Set hover state
+     * @param on Hover state
+     * @True if hover state changed
+     */
+    virtual bool setHover(bool on);
+
+    /**
+     * Set pressed state
+     * @param on Pressed state
+     * @return True if pressed state changed
+     */
+    virtual bool setPressed(bool on);
+
+    /**
+     * Draw the item
+     * @param painter Painter used to draw
+     * @param rect Rectangle to paint in
+     */
+    virtual void draw(QPainter* painter, const QRect& rect);
+
+protected:
+    // Load an image, adjust its size
+    bool loadImage(QPixmap& pixmap, const NamedList& params, const String& param);
+    // Update state options
+    void updateOptState();
+
+    QPixmap m_normalImage;
+    QPixmap m_hoverImage;
+    QPixmap m_pressedImage;
+    QPixmap* m_image;
+    QSize m_iconSize;
+    QSize m_iconOffset;                       // Draw icon offset
+};
+
+
+/**
+ * This class implements a list of items to be painted
+ * @short Custom item delegate
+ */
+class QtPaintItems : public QtPaintItem
+{
+    YCLASS(QtPaintItems,QtPaintItem)
+public:
+    /**
+     * Constructor
+     * @param name Object name
+     */
+    inline QtPaintItems(const char* name = 0)
+	: QtPaintItem(name,QSize(0,0)),
+	m_margins(10,0,6,0), m_itemSpace(4),
+	m_lastItemHover(0)
+	{}
+
+    /**
+     * Add an item from description
+     * @param desc Item description
+     */
+    void append(QtPaintItemDesc& desc);
+
+    /**
+     * Calculate area needed to paint.
+     * This method should be called after all items are set
+     */
+    void itemsAdded();
+
+    /**
+     * Set hover. Update item at position
+     * @param pos Position to check
+     * @return True if state changed (needs repaint)
+     */
+    bool setHover(const QPoint& pos);
+
+    /**
+     * Set hover state
+     * @param on Hover state
+     * @return True if hover state changed
+     */
+    virtual bool setHover(bool on);
+
+    /**
+     * Mouse pressed/released. Update item at position
+     * @param on Pressed state
+     * @param pos Position to check
+     * @param action Pointer to action to be set on mouse release
+     * @return True if state changed (needs repaint)
+     */
+    bool mousePressed(bool on, const QPoint& pos, String* action = 0);
+
+    /**
+     * Set pressed state
+     * @param on Pressed state
+     * @return True if pressed state changed
+     */
+    virtual bool setPressed(bool on);
+
+    /**
+     * Draw items
+     * @param painter Painter used to draw
+     * @param rect Rect to paint in
+     */
+    virtual void draw(QPainter* painter, const QRect& rect);
+
+protected:
+    ObjList m_items;
+    QRect m_margins;
+    int m_itemSpace;
+    QtPaintItem* m_lastItemHover;        // Last item we handle mouse hover for
+};
+
+
+/**
+ * This class implements a custom item delegate
+ * @short Custom item delegate
+ */
+class QtItemDelegate : public QItemDelegate, public String
+{
+    YCLASS(QtItemDelegate,String)
+    Q_CLASSINFO("QtItemDelegate","Yate")
+    Q_OBJECT
+public:
+    QtItemDelegate(QObject* parent, const NamedList& params = NamedList::empty());
+    virtual void paint(QPainter* painter, const QStyleOptionViewItem& option,
+	const QModelIndex& index) const;
+    inline QList<int>& columns()
+	{ return m_columns; }
+    inline int roleDisplayText() const
+	{ return m_roleDisplayText; }
+    inline int roleImage() const
+	{ return m_roleImage; }
+    // Update column position from column names.
+    // 'cNames' must be the column names in their order, starting from 0
+    void updateColumns(QStringList& cNames);
+    // Build a list of delegates
+    static QList<QAbstractItemDelegate*> buildDelegates(QObject* parent, const NamedList& params,
+	const NamedList* common = 0, const String& prefix = "itemdelegate");
+    // Build a delegate
+    static QAbstractItemDelegate* build(QObject* parent, const String& cls, NamedList& params);
+protected:
+    // Retrieve display text for a given index
+    virtual QString getDisplayText(const QStyleOptionViewItem& opt,
+	const QModelIndex& index) const;
+    // Inherited methods
+    virtual void drawBackground(QPainter* painter, const QStyleOptionViewItem& opt,
+	const QModelIndex& index) const;
+    virtual void drawDecoration(QPainter* painter, const QStyleOptionViewItem& opt,
+	const QRect& rect, const QPixmap& pixmap) const;
+    virtual void drawFocus(QPainter* painter, const QStyleOptionViewItem& opt,
+	const QRect& rect) const;
+    virtual QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option,
+	const QModelIndex& index) const;
+    // Apply item margins
+    void applyMargins(QRect& dest, const QRect& src, bool inc) const;
+
+    bool m_drawFocus;                    // Draw focus
+    int m_roleDisplayText;               // Item display role to handle
+    int m_roleImage;                     // Item role containing image file name
+    int m_roleBackground;                // Item background role to handle
+    int m_roleMargins;                   // Item internal margins role to handle
+    int m_roleQtDrawItems;               // Item draw extra role to handle
+    QStringList m_columnsStr;            // Column names this delegate should be set for
+    QStringList m_editableColsStr;       // List of editable column names
+    QList<int> m_editableCols;           // List of editable columns
+    QList<int> m_columns;                // List of editable columns
+};
+
+
+/**
+ * This class implements a custom item delegate used to display HTML texts
+ * @short Custom HTML item delegate
+ */
+class QtHtmlItemDelegate : public QtItemDelegate
+{
+    YCLASS(QtHtmlItemDelegate,QtItemDelegate)
+    Q_CLASSINFO("QtHtmlItemDelegate","Yate")
+    Q_OBJECT
+public:
+    QtHtmlItemDelegate(QObject* parent, const NamedList& params = NamedList::empty())
+	: QtItemDelegate(parent,params)
+	{}
+protected:
+    virtual void drawDisplay(QPainter* painter, const QStyleOptionViewItem& opt,
+	const QRect& rect, const QString& text) const;
 };
 
 }; // anonymous namespace

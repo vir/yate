@@ -113,7 +113,7 @@ Thread.o: @srcdir@/Thread.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @THREAD_KILL@ @HAVE_PRCTL@ -c $<
 
 TelEngine.o: @srcdir@/TelEngine.cpp $(MKDEPS) $(CINC)
-	$(COMPILE) @ATOMIC_OPS@ -c $<
+	$(COMPILE) @ATOMIC_OPS@ @HAVE_GMTOFF@ -c $<
 
 Client.o: @srcdir@/Client.cpp $(MKDEPS) $(CLINC)
 	$(COMPILE) -c $<

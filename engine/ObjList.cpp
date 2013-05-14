@@ -45,7 +45,7 @@ ObjList::~ObjList()
 
 void* ObjList::getObject(const String& name) const
 {
-    if (name == YSTRING("ObjList"))
+    if (name == YATOM("ObjList"))
 	return const_cast<ObjList*>(this);
     return GenObject::getObject(name);
 }
@@ -263,6 +263,67 @@ void ObjList::clear()
     TelEngine::destruct(n);
 }
 
+static inline ObjList* skipLastEmpty(ObjList* list)
+{
+    ObjList* l = 0;
+    for (; list; list = list->next()) {
+	if (list->get())
+	    break;
+	l = list;
+    }
+    return l;
+}
+
+// Remove all empty objects in the list
+void ObjList::compact()
+{
+    if (!m_next)
+	return;
+    // Compact list head
+    if (!get()) {
+	ObjList* lastEmpty = skipLastEmpty(this);
+	if (!lastEmpty->next()) {
+	    clear();
+	    return;
+	}
+	ObjList* nonEmpty = lastEmpty->next();
+	ObjList* tmp = m_next;
+	m_next = nonEmpty->next();
+	m_obj = nonEmpty->get();
+	m_delete = nonEmpty->m_delete;
+	nonEmpty->m_obj = 0;
+	nonEmpty->m_next = 0;
+	tmp->destruct();
+    }
+    ObjList* last = this;
+    while (last->next()) {
+	// Find last non empty item
+	for (ObjList* o = last->next(); o; o = o->next()) {
+	    if (o->get())
+		last = o;
+	    else
+		break;
+	}
+	if (!last->next())
+	    break;
+	// Next item after last is empty, find the last empty
+	ObjList* lastEmpty = skipLastEmpty(last->next());
+	if (!lastEmpty->next())
+	    break;
+	ObjList* firstNonEmpty = lastEmpty->next();
+	lastEmpty->m_next = 0;
+	ObjList* tmp = last->m_next;
+	last->m_next = firstNonEmpty;
+	last = firstNonEmpty;
+	tmp->destruct();
+    }
+    if (last && last->next()) {
+	ObjList* tmp = last->next();
+	last->m_next = 0;
+	tmp->destruct();
+    }
+}
+
 static void merge(ObjList* first, ObjList* second,int (*compare)(GenObject* obj1, GenObject* obj2, void* data), void* dat)
 {
     if (!(first && second))
@@ -365,7 +426,7 @@ ObjVector::~ObjVector()
 
 void* ObjVector::getObject(const String& name) const
 {
-    if (name == YSTRING("ObjVector"))
+    if (name == YATOM("ObjVector"))
 	return const_cast<ObjVector*>(this);
     return GenObject::getObject(name);
 }
@@ -406,6 +467,16 @@ unsigned int ObjVector::count() const
 	if (m_objects[i])
 	    c++;
     return c;
+}
+
+bool ObjVector::null() const
+{
+    if (!m_objects)
+	return true;
+    for (unsigned int i = 0; i < m_length; i++)
+	if (m_objects[i])
+	    return false;
+    return true;
 }
 
 int ObjVector::index(const GenObject* obj) const

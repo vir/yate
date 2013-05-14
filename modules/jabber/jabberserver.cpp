@@ -3876,7 +3876,7 @@ public:
 	: m_socket(sock)
 	{}
     virtual void* getObject(const String& name) const {
-	    if (name == "Socket*")
+	    if (name == YATOM("Socket*"))
 		return (void*)m_socket;
 	    return RefObject::getObject(name);
 	}

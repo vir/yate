@@ -48,7 +48,7 @@ HashList::~HashList()
 
 void* HashList::getObject(const String& name) const
 {
-    if (name == YSTRING("HashList"))
+    if (name == YATOM("HashList"))
 	return const_cast<HashList*>(this);
     return GenObject::getObject(name);
 }
@@ -78,6 +78,15 @@ ObjList* HashList::find(const GenObject* obj) const
 	if (m_lists[i])
 	    found = m_lists[i]->find(obj);
     return found;
+}
+
+ObjList* HashList::find(const GenObject* obj, unsigned int hash) const
+{
+    XDebug(DebugAll,"HashList::find(%p,%u) [%p]",obj,hash,this);
+    if (!obj)
+	return 0;
+    unsigned int i = hash % m_size;
+    return m_lists[i] ? m_lists[i]->find(obj) : 0;
 }
 
 ObjList* HashList::find(const String& str) const

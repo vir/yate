@@ -62,7 +62,7 @@ bool ScriptParser::parseFile(const char* name, bool fragment)
     if (f.readData(text,(int)len) != len)
 	return false;
     text[len] = '\0';
-    return parse(text,fragment);
+    return parse(text,fragment,name);
 }
 
 void ScriptParser::setCode(ScriptCode* code)
@@ -81,7 +81,7 @@ ScriptContext* ScriptParser::createContext() const
     return new BasicContext;
 }
 
-ScriptRun* ScriptParser::createRunner(ScriptCode* code, ScriptContext* context) const
+ScriptRun* ScriptParser::createRunner(ScriptCode* code, ScriptContext* context, const char* title) const
 {
     if (!code)
 	return 0;
@@ -102,9 +102,9 @@ bool ScriptParser::callable(const String& name)
 // RTTI Interface access
 void* ScriptContext::getObject(const String& name) const
 {
-    if (name == YSTRING("ScriptContext"))
+    if (name == YATOM("ScriptContext"))
 	return const_cast<ScriptContext*>(this);
-    if (name == YSTRING("ExpExtender"))
+    if (name == YATOM("ExpExtender"))
 	return const_cast<ExpExtender*>(static_cast<const ExpExtender*>(this));
     return RefObject::getObject(name);
 }

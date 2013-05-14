@@ -1,5 +1,15 @@
 [general]
 
+; feature_fileinfo: boolean: Advertise file info share capability
+; This parameter is applied on reload and can be overridden in user.login messages
+; Defaults to yes
+;feature_fileinfo=yes
+
+; feature_rsm: boolean: Advertise result set management capability
+; This parameter is applied on reload and can be overridden in user.login messages
+; Defaults to yes
+;feature_rsm=yes
+
 ; stream_readbuffer: integer: The length of the stream read buffer
 ; Defaults to 8192 if missing or invalid. Minimum allowed value is 1024
 ;stream_readbuffer=8192

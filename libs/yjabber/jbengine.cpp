@@ -2562,7 +2562,7 @@ bool JBEntityCapsList::processCaps(String& capsId, XmlElement* xml, JBStream* st
 void JBEntityCapsList::addCaps(NamedList& list, JBEntityCaps& caps)
 {
 #define CHECK_NS(ns,param) \
-    if (caps.m_features.get(ns)) { \
+    if (caps.hasFeature(ns)) { \
 	params->append(param,","); \
 	list.addParam(param,String::boolText(true)); \
     }
@@ -2590,6 +2590,8 @@ void JBEntityCapsList::addCaps(NamedList& list, JBEntityCaps& caps)
 	    case 0:
 		break;
 	}
+	CHECK_NS(XMPPNamespace::FileInfoShare,"caps.fileinfoshare");
+	CHECK_NS(XMPPNamespace::ResultSetMngt,"caps.resultsetmngt");
     }
     CHECK_NS(XMPPNamespace::Muc,"caps.muc");
 #undef CHECK_NS

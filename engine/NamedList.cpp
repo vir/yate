@@ -61,7 +61,7 @@ NamedList& NamedList::operator=(const NamedList& value)
 
 void* NamedList::getObject(const String& name) const
 {
-    if (name == YSTRING("NamedList"))
+    if (name == YATOM("NamedList"))
 	return const_cast<NamedList*>(this);
     return String::getObject(name);
 }

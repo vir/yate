@@ -24,12 +24,15 @@
 #include "yatescript.h"
 #include <yatengine.h>
 
+//#define STATS_TRACE "jstrace"
+
 using namespace TelEngine;
 
 namespace { // anonymous
 
 class ParseNested;
 class JsRunner;
+class JsCodeStats;
 
 class JsContext : public JsObject, public Mutex
 {
@@ -76,6 +79,12 @@ protected:
 	{ obj->ref(); }
 };
 
+struct JsEntry
+{
+    long int number;
+    unsigned int index;
+};
+
 class JsCode : public ScriptCode, public ExpEvaluator
 {
     friend class TelEngine::JsFunction;
@@ -93,6 +102,7 @@ public:
 	OpcFieldOf,
 	OpcTypeof,
 	OpcNew,
+	OpcDelete,
 	OpcFor,
 	OpcWhile,
 	OpcIf,
@@ -125,43 +135,60 @@ public:
 	OpcUndefined,
 	OpcInclude,
 	OpcRequire,
-	OpcDelete,
+	OpcPragma,
     };
     inline JsCode()
-	: ExpEvaluator(C), m_label(0), m_depth(0)
-	  { debugName("JsCode"); }
-
+	: ExpEvaluator(C),
+	  m_pragmas(""), m_label(0), m_depth(0), m_entries(0), m_traceable(false)
+	{ debugName("JsCode"); }
+    ~JsCode();
     virtual void* getObject(const String& name) const
     {
-	if (name == YSTRING("JsCode"))
+	if (name == YATOM("JsCode"))
             return const_cast<JsCode*>(this);
-	if (name == YSTRING("ExpEvaluator"))
+	if (name == YATOM("ExpEvaluator"))
             return const_cast<ExpEvaluator*>((const ExpEvaluator*)this);
 	return ScriptCode::getObject(name);
     }
     virtual bool initialize(ScriptContext* context) const;
     virtual bool evaluate(ScriptRun& runner, ObjList& results) const;
-    virtual ScriptRun* createRunner(ScriptContext* context);
+    virtual ScriptRun* createRunner(ScriptContext* context, const char* title);
     virtual bool null() const;
     bool link();
-    JsObject* parseArray(const char*& expr, bool constOnly);
-    JsObject* parseObject(const char*& expr, bool constOnly);
+    inline bool traceable() const
+	{ return m_traceable; }
+    JsObject* parseArray(ParsePoint& expr, bool constOnly);
+    JsObject* parseObject(ParsePoint& expr, bool constOnly);
+    inline const NamedList& pragmas() const
+	{ return m_pragmas; }
+    inline static unsigned int getLineNo(unsigned int line)
+	{ return line & 0xffffff; }
+    inline static unsigned int getFileNo(unsigned int line)
+	{ return (line >> 24) & 0xff; }
+    inline unsigned int getFileCount() const
+	{ return m_included.length(); }
+    const String& getFileAt(unsigned int index) const;
+    inline const String& getFileName(unsigned int line) const
+	{ return getFileAt(getFileNo(line)); }
 protected:
+    inline void trace(bool allowed)
+	{ m_traceable = allowed; }
+    void setBaseFile(const String& file);
     virtual void formatLineNo(String& buf, unsigned int line) const;
-    virtual bool getString(const char*& expr);
+    virtual bool getString(ParsePoint& expr);
     virtual bool getEscape(const char*& expr, String& str, char sep);
     virtual bool keywordChar(char c) const;
     virtual int getKeyword(const char* str) const;
-    virtual char skipComments(const char*& expr, GenObject* context = 0);
-    virtual int preProcess(const char*& expr, GenObject* context = 0);
-    virtual bool getInstruction(const char*& expr, char stop, GenObject* nested);
-    virtual bool getSimple(const char*& expr, bool constOnly = false);
-    virtual Opcode getOperator(const char*& expr);
-    virtual Opcode getUnaryOperator(const char*& expr);
-    virtual Opcode getPostfixOperator(const char*& expr, int precedence);
+    virtual char skipComments(ParsePoint& expr, GenObject* context = 0);
+    virtual int preProcess(ParsePoint& expr, GenObject* context = 0);
+    virtual bool getInstruction(ParsePoint& expr, char stop, GenObject* nested);
+    virtual bool getSimple(ParsePoint& expr, bool constOnly = false);
+    virtual Opcode getOperator(ParsePoint& expr);
+    virtual Opcode getUnaryOperator(ParsePoint& expr);
+    virtual Opcode getPostfixOperator(ParsePoint& expr, int precedence);
     virtual const char* getOperator(Opcode oper) const;
     virtual int getPrecedence(ExpEvaluator::Opcode oper) const;
-    virtual bool getSeparator(const char*& expr, bool remove);
+    virtual bool getSeparator(ParsePoint& expr, bool remove);
     virtual bool runOperation(ObjList& stack, const ExpOperation& oper, GenObject* context) const;
     virtual bool runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context) const;
     virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context) const;
@@ -170,16 +197,18 @@ private:
     ObjVector m_linked;
     ObjList m_included;
     ObjList m_globals;
-    bool preProcessInclude(const char*& expr, bool once, GenObject* context);
-    bool getOneInstruction(const char*& expr, GenObject* nested);
-    bool parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested);
-    bool parseIf(const char*& expr, GenObject* nested);
-    bool parseSwitch(const char*& expr, GenObject* nested);
-    bool parseFor(const char*& expr, GenObject* nested);
-    bool parseWhile(const char*& expr, GenObject* nested);
-    bool parseVar(const char*& expr);
-    bool parseTry(const char*& expr, GenObject* nested);
-    bool parseFuncDef(const char*& expr, bool publish);
+    NamedList m_pragmas;
+    bool preProcessInclude(ParsePoint& expr, bool once, GenObject* context);
+    bool preProcessPragma(ParsePoint& expr, GenObject* context);
+    bool getOneInstruction(ParsePoint& expr, GenObject* nested);
+    bool parseInner(ParsePoint& expr, JsOpcode opcode, ParseNested* nested);
+    bool parseIf(ParsePoint& expr, GenObject* nested);
+    bool parseSwitch(ParsePoint& expr, GenObject* nested);
+    bool parseFor(ParsePoint& expr, GenObject* nested);
+    bool parseWhile(ParsePoint& expr, GenObject* nested);
+    bool parseVar(ParsePoint& expr);
+    bool parseTry(ParsePoint& expr, GenObject* nested);
+    bool parseFuncDef(ParsePoint& expr, bool publish);
     bool evalList(ObjList& stack, GenObject* context) const;
     bool evalVector(ObjList& stack, GenObject* context) const;
     bool jumpToLabel(long int label, GenObject* context) const;
@@ -195,11 +224,13 @@ private:
 	{ return YOBJECT(JsFunction,m_globals[name]); }
     long int m_label;
     int m_depth;
+    JsEntry* m_entries;
+    bool m_traceable;
 };
 
 class JsIterator : public RefObject
 {
-    YCLASS(JsIterator,RefObject);
+    YCLASS(JsIterator,RefObject)
 public:
     inline JsIterator(const ExpOperation& field, JsObject* obj)
 	: m_field(field.clone()), m_obj(obj)
@@ -224,24 +255,121 @@ private:
     String m_name;
 };
 
+class JsLineStats : public GenObject
+{
+public:
+    inline JsLineStats(unsigned int lineNo, unsigned int instr, u_int64_t usec)
+	: lineNumber(lineNo), operations(instr), microseconds(usec), isCall(false)
+	{ }
+    unsigned int lineNumber;
+    unsigned int operations;
+    u_int64_t microseconds;
+    bool isCall;
+};
+
+class JsCallStats : public JsLineStats
+{
+public:
+    inline JsCallStats(const char* name, unsigned int caller, unsigned int called, unsigned int instr, u_int64_t usec)
+	: JsLineStats(caller,instr,usec),
+	  funcName(name), callsCount(1), calledLine(called)
+	{ isCall = true; }
+    String funcName;
+    unsigned int callsCount;
+    unsigned int calledLine;
+};
+
+class JsFuncStats : public String
+{
+public:
+    inline JsFuncStats(const char* name, unsigned int lineNo)
+	: String(name), lineNumber(lineNo)
+	{ }
+    unsigned int lineNumber;
+    ObjList funcLines;
+    void updateLine(unsigned int lineNo, u_int64_t usec);
+    void updateCall(const char* name, unsigned int caller, unsigned int called, unsigned int instr, u_int64_t usec);
+};
+
+class JsCodeStats : public Mutex, public RefObject
+{
+    YCLASS(JsCodeStats,RefObject)
+public:
+    JsCodeStats(JsCode* code, const char* file = 0);
+    ~JsCodeStats();
+    virtual const String& toString() const
+	{ return m_fileName; }
+    JsFuncStats* getFuncStats(const char* name, unsigned int lineNo);
+    void dump();
+    void dump(const char* file);
+    void dump(Stream& file);
+private:
+    RefPointer<JsCode> m_code;
+    String m_fileName;
+    ObjList m_funcStats;
+};
+
+class JsCallInfo : public String
+{
+    friend class JsRunner;
+private:
+    inline JsCallInfo(JsFuncStats* stats, const char* name,
+	unsigned int caller, unsigned int called, unsigned int instr, u_int64_t time)
+	: String(name),
+	  funcStats(stats), callerLine(caller), calledLine(called), startInstr(instr), startTime(time)
+	{ }
+    inline void traceLine(unsigned int line, u_int64_t time)
+	{ if (funcStats) funcStats->updateLine(line,time); }
+    inline void traceCall(const JsCallInfo* call, unsigned int instr, u_int64_t time)
+	{ if (call && funcStats) funcStats->updateCall(call->c_str(),call->callerLine,call->calledLine,instr,time); }
+
+    JsFuncStats* funcStats;
+    unsigned int callerLine;
+    unsigned int calledLine;
+    unsigned int startInstr;
+    u_int64_t startTime;
+};
+
 class JsRunner : public ScriptRun
 {
+    YCLASS(JsRunner,ScriptRun)
     friend class JsCode;
 public:
-    inline JsRunner(ScriptCode* code, ScriptContext* context)
+    inline JsRunner(ScriptCode* code, ScriptContext* context, const char* title)
 	: ScriptRun(code,context),
-	  m_paused(false), m_opcode(0), m_index(0)
-	{ }
+	  m_paused(false), m_tracing(false), m_opcode(0), m_index(0),
+	  m_instr(0), m_lastLine(0), m_lastTime(0), m_totalTime(0), m_callInfo(0)
+	{ traceCheck(title); }
+    virtual ~JsRunner()
+	{ if (m_tracing) traceDump(); }
+    inline bool tracing() const
+	{ return m_tracing; }
     virtual Status reset(bool init);
     virtual bool pause();
     virtual Status call(const String& name, ObjList& args, ExpOperation* thisObj = 0, ExpOperation* scopeObj = 0);
     virtual bool callable(const String& name);
+    void traceStart(const char* title, const char* file = 0);
+    void tracePrep(const ExpOperation& oper);
+    void tracePost(const ExpOperation& oper);
+    void traceCall(const ExpOperation& oper, const JsFunction& func);
+    void traceReturn();
 protected:
     virtual Status resume();
+    void traceDump();
+    void traceCheck(const char* title);
+    void traceStart(const char* title, JsCodeStats* stats);
 private:
     bool m_paused;
+    bool m_tracing;
     const ObjList* m_opcode;
     unsigned int m_index;
+    unsigned int m_instr;
+    unsigned int m_lastLine;
+    u_int64_t m_lastTime;
+    u_int64_t m_totalTime;
+    JsCallInfo* m_callInfo;
+    ObjList m_traceStack;
+    RefPointer<JsCodeStats> m_stats;
 };
 
 class ParseNested : public GenObject
@@ -263,13 +391,13 @@ public:
 	{ return nested ? static_cast<ParseNested*>(nested)->find(opcode) : 0; }
     inline static ParseNested* findMatch(GenObject* nested, JsCode::JsOpcode opcode)
 	{ return nested ? static_cast<ParseNested*>(nested)->findMatch(opcode) : 0; }
-    static bool parseInner(GenObject* nested, JsCode::JsOpcode opcode, const char*& expr)
+    static bool parseInner(GenObject* nested, JsCode::JsOpcode opcode, ParsePoint& expr)
 	{ ParseNested* inner = findMatch(nested,opcode);
 	    return inner && inner->parseInner(expr,opcode); }
 protected:
     virtual bool isMatch(JsCode::JsOpcode opcode)
 	{ return false; }
-    inline bool parseInner(const char*& expr, JsCode::JsOpcode opcode)
+    inline bool parseInner(ParsePoint& expr, JsCode::JsOpcode opcode)
 	{ return m_code->parseInner(expr,opcode,this); }
     inline ParseNested* find(JsCode::JsOpcode opcode)
 	{ return (opcode == m_opcode) ? this :
@@ -345,6 +473,7 @@ static const TokenDict s_preProc[] =
 {
     MAKEOP("#include", Include),
     MAKEOP("#require", Require),
+    MAKEOP("#pragma", Pragma),
     { 0, 0 }
 };
 #undef MAKEOP
@@ -352,6 +481,9 @@ static const TokenDict s_preProc[] =
 #define MAKEOP(o) { "[" #o "]", JsCode::Opc ## o }
 static const TokenDict s_internals[] =
 {
+    MAKEOP(Field),
+    MAKEOP(Func),
+    MAKEOP(Push),
     MAKEOP(Label),
     MAKEOP(Begin),
     MAKEOP(End),
@@ -367,6 +499,7 @@ static const TokenDict s_internals[] =
 #undef MAKEOP
 
 static const ExpNull s_null;
+static const String s_noFile = "[no file]";
 
 
 GenObject* JsContext::resolveTop(ObjList& stack, const String& name, GenObject* context)
@@ -449,19 +582,19 @@ bool JsContext::runFunction(ObjList& stack, const ExpOperation& oper, GenObject*
     }
     if (name == YSTRING("parseInt")) {
 	long int val = ExpOperation::nonInteger();
-	ExpOperation* op1 = popValue(stack,context);
+	ObjList args;
+	extractArgs(stack,oper,context,args);
+	ExpOperation* op1 = static_cast<ExpOperation*>(args[0]);
 	if (op1) {
-	    ExpOperation* op2 = popValue(stack,context);
+	    int base = 0;
+	    ExpOperation* op2 = static_cast<ExpOperation*>(args[1]);
 	    if (op2) {
-		int base = op1->number();
-		if (base >= 0)
-		    val = op2->trimSpaces().toLong(val,base);
+		base = op2->valInteger();
+		if (base < 2 || base > 36)
+		    base = 0;
 	    }
-	    else
-		val = op1->trimSpaces().toLong(val);
-	    TelEngine::destruct(op2);
+	    val = op1->trimSpaces().toLong(val,base);
 	}
-	TelEngine::destruct(op1);
 	ExpEvaluator::pushOne(stack,new ExpOperation(val));
 	return true;
     }
@@ -651,6 +784,45 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	return true;
     }
 #undef SPLIT_EMPTY
+    if (name == YSTRING("toString")) {
+	ObjList args;
+	extractArgs(stack,oper,context,args);
+	ExpOperation* op = YOBJECT(ExpOperation,str);
+	if (op && op->isInteger()) {
+	    ExpOperation* tmp = static_cast<ExpOperation*>(args[0]);
+	    int radix = tmp ? tmp->valInteger() : 0;
+	    if (radix < 2 || radix > 36)
+		radix = 10;
+	    static const char s_base[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+	    long int n = op->valInteger();
+	    bool neg = false;
+	    if (n < 0) {
+		n = -n;
+		neg = true;
+	    }
+	    String s;
+	    char buf[2];
+	    buf[1] = '\0';
+	    do {
+		buf[0] = s_base[n % radix];
+		s = buf + s;
+	    } while ((n = n / radix));
+	    tmp = static_cast<ExpOperation*>(args[1]);
+	    int len = tmp ? tmp->valInteger() : 0;
+	    if (len > 1) {
+		if (neg)
+		    len--;
+		while (len > (int)s.length())
+		    s = "0" + s;
+	    }
+	    if (neg)
+		s = "-" + s;
+	    ExpEvaluator::pushOne(stack,new ExpOperation(s));
+	    return true;
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(*str));
+	return true;
+    }
     return false;
 }
 
@@ -668,7 +840,8 @@ bool JsContext::runStringField(GenObject* obj, const String& name, ObjList& stac
 
 bool JsContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(DebugAll,"JsContext::runAssign '%s'='%s' [%p]",oper.name().c_str(),oper.c_str(),this);
+    XDebug(DebugAll,"JsContext::runAssign '%s'='%s' (%s) [%p]",
+	oper.name().c_str(),oper.c_str(),oper.typeOf(),this);
     String name = oper.name();
     GenObject* o = resolve(stack,name,context);
     if (o && o != this) {
@@ -683,6 +856,11 @@ bool JsContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* c
     return JsObject::runAssign(stack,oper,context);
 }
 
+
+JsCode::~JsCode()
+{
+    delete[] m_entries;
+}
 
 // Initialize standard globals in the execution context
 bool JsCode::initialize(ScriptContext* context) const
@@ -718,14 +896,19 @@ bool JsCode::link()
     if (!m_opcodes.skipNull())
 	return false;
     m_linked.assign(m_opcodes);
+    delete[] m_entries;
+    m_entries = 0;
     unsigned int n = m_linked.count();
     if (!n)
 	return false;
+    unsigned int entries = 0;
     for (unsigned int i = 0; i < n; i++) {
 	const ExpOperation* l = static_cast<const ExpOperation*>(m_linked[i]);
 	if (!l || l->opcode() != OpcLabel)
 	    continue;
 	long int lbl = l->number();
+	if (lbl >= 0 && l->barrier())
+	    entries++;
 	for (unsigned int j = 0; j < n; j++) {
 	    const ExpOperation* jmp = static_cast<const ExpOperation*>(m_linked[j]);
 	    if (!jmp || jmp->number() != lbl)
@@ -745,10 +928,33 @@ bool JsCode::link()
 		    continue;
 	    }
 	    long int offs = (long int)i - j;
-	    m_linked.set(new ExpOperation(op,0,offs,jmp->barrier()),j);
+	    ExpOperation* newJump = new ExpOperation(op,0,offs,jmp->barrier());
+	    newJump->lineNumber(jmp->lineNumber());
+	    m_linked.set(newJump,j);
 	}
     }
+    if (entries) {
+	m_entries = new JsEntry[entries+1];
+	unsigned int e = 0;
+	for (unsigned int j = 0; j < n; j++) {
+	    const ExpOperation* l = static_cast<const ExpOperation*>(m_linked[j]);
+	    if (l && l->barrier() && l->opcode() == OpcLabel && l->number() >= 0) {
+		m_entries[e].number = l->number();
+		m_entries[e++].index = j;
+	    }
+	}
+	m_entries[entries].number = -1;
+	m_entries[entries].index = 0;
+    }
     return true;
+}
+
+const String& JsCode::getFileAt(unsigned int index) const
+{
+    if (!index)
+	return s_noFile;
+    const GenObject* file = m_included[index - 1];
+    return file ? file->toString() : s_noFile;
 }
 
 void JsCode::formatLineNo(String& buf, unsigned int line) const
@@ -761,7 +967,7 @@ void JsCode::formatLineNo(String& buf, unsigned int line) const
     buf << (file ? file->toString().c_str() : "???") << ":" << (line & 0xffffff);
 }
 
-bool JsCode::getString(const char*& expr)
+bool JsCode::getString(ParsePoint& expr)
 {
     if (inError())
 	return false;
@@ -896,7 +1102,7 @@ int JsCode::getKeyword(const char* str) const
     return len;
 }
 
-char JsCode::skipComments(const char*& expr, GenObject* context)
+char JsCode::skipComments(ParsePoint& expr, GenObject* context)
 {
     char c = skipWhites(expr);
     while (c == '/') {
@@ -923,7 +1129,16 @@ char JsCode::skipComments(const char*& expr, GenObject* context)
     return c;
 }
 
-bool JsCode::preProcessInclude(const char*& expr, bool once, GenObject* context)
+void JsCode::setBaseFile(const String& file)
+{
+    if (file.null() || m_depth || m_included.find(file))
+	return;
+    m_included.append(new String(file));
+    int idx = m_included.index(file);
+    m_lineNo = ((idx + 1) << 24) | 1;
+}
+
+bool JsCode::preProcessInclude(ParsePoint& expr, bool once, GenObject* context)
 {
     if (m_depth > 5)
 	return gotError("Possible recursive include");
@@ -947,12 +1162,12 @@ bool JsCode::preProcessInclude(const char*& expr, bool once, GenObject* context)
 			idx = m_included.index(s);
 		    }
 		    // use the upper bits of line # for file index
-		    unsigned int savedLine = m_lineNo;
-		    m_lineNo = ((idx + 1) << 24) | 1;
+		    unsigned int savedLine = expr.m_lineNo;
+		    expr.m_lineNo = m_lineNo = ((idx + 1) << 24) | 1;
 		    m_depth++;
 		    ok = parser->parseFile(str,true);
 		    m_depth--;
-		    m_lineNo = savedLine;
+		    expr.m_lineNo = m_lineNo = savedLine;
 		}
 	    }
 	    return ok || gotError("Failed to include " + str);
@@ -962,7 +1177,28 @@ bool JsCode::preProcessInclude(const char*& expr, bool once, GenObject* context)
     return gotError("Expecting include file",expr);
 }
 
-int JsCode::preProcess(const char*& expr, GenObject* context)
+bool JsCode::preProcessPragma(ParsePoint& expr, GenObject* context)
+{
+    skipComments(expr);
+    int len = ExpEvaluator::getKeyword(expr);
+    if (len <= 0)
+	return gotError("Expecting pragma code",expr);
+    ParsePoint str = expr;
+    str += len;
+    char c = skipComments(str);
+    if (c == '"' || c == '\'') {
+	String val;
+	if (ExpEvaluator::getString(str,val)) {
+	    m_pragmas.setParam(String(expr,len),val);
+	    expr = str;
+	    return true;
+	}
+	return gotError("Expecting pragma value",expr);
+    }
+    return gotError("Expecting pragma string",expr);
+}
+
+int JsCode::preProcess(ParsePoint& expr, GenObject* context)
 {
     int rval = -1;
     for (;;) {
@@ -980,55 +1216,77 @@ int JsCode::preProcess(const char*& expr, GenObject* context)
 		else
 		    return -1;
 		break;
+	    case OpcPragma:
+		if (!preProcessPragma(expr,context))
+		    return -1;
+		break;
 	    default:
 		return rval;
 	}
     }
 }
 
-bool JsCode::getOneInstruction(const char*& expr, GenObject* nested)
+bool JsCode::getOneInstruction(ParsePoint& expr, GenObject* nested)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getOneInstruction %p '%.30s'",nested,expr);
+    XDebug(this,DebugAll,"JsCode::getOneInstruction %p '%.30s'",nested,(const char*)expr);
+    const char* savedSeps = expr.m_searchedSeps;
     if (skipComments(expr) == '{') {
+	expr.m_searchedSeps = "}";
 	if (!getInstruction(expr,0,nested))
 	    return false;
     }
-    else if (!runCompile(expr,";}",nested))
-	return false;
+    else {
+	expr.m_searchedSeps = ";}";
+	if (!runCompile(expr,";}",nested))
+	    return false;
+	if (skipComments(expr)  == ';') {
+	    expr.m_foundSep = ';';
+	    expr++;
+	}
+    }
+    expr.m_searchedSeps = savedSeps;
+    if (!expr.m_searchedSeps || expr.m_count)
+	expr.m_foundSep = 0;
     return true;
 }
 
-bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
+bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getInstruction %p '%.1s' '%.30s'",nested,&stop,expr);
+    XDebug(this,DebugAll,"JsCode::getInstruction %p '%.1s' 'separators=%s' 'count=%u' '%.30s'",nested,&stop,expr.m_searchedSeps,
+	   expr.m_count,(const char*)expr);
     if (skipComments(expr) == '{') {
 	if (stop == ')')
 	    return false;
 	expr++;
+	expr.m_count++;
 	for (;;) {
 	    if (!runCompile(expr,'}',nested))
 		return false;
 	    bool sep = false;
 	    while (skipComments(expr) && getSeparator(expr,true))
 		sep = true;
-	    if (*expr == '}' || !sep)
+	    if (*expr.m_expr == '}' || !sep)
 		break;
 	}
 	if (*expr != '}')
 	    return gotError("Expecting '}'",expr);
 	expr++;
+	expr.m_foundSep = '}';
+	if (expr.m_count > 0)
+	    expr.m_count--;
 	return true;
     }
     else if (*expr == ';') {
 	expr++;
+	expr.m_foundSep = ';';
 	return true;
     }
-    const char* saved = expr;
-    unsigned int savedLine = m_lineNo;
+    expr.m_foundSep = 0;
+    ParsePoint saved = expr;
     Opcode op = ExpEvaluator::getOperator(expr,s_instr);
     switch ((JsOpcode)op) {
 	case (JsOpcode)OpcNone:
@@ -1055,7 +1313,6 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    return parseIf(expr,nested);
 	case OpcElse:
 	    expr = saved;
-	    m_lineNo = savedLine;
 	    return false;
 	case OpcSwitch:
 	    return parseSwitch(expr,nested);
@@ -1065,7 +1322,7 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    return parseWhile(expr,nested);
 	case OpcCase:
 	    if (!ParseNested::parseInner(nested,OpcCase,expr)) {
-		m_lineNo = savedLine;
+		expr.m_lineNo = saved.m_lineNo;
 		return gotError("case not inside switch",saved);
 	    }
 	    if (skipComments(expr) != ':')
@@ -1074,7 +1331,7 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    break;
 	case OpcDefault:
 	    if (!ParseNested::parseInner(nested,OpcDefault,expr)) {
-		m_lineNo = savedLine;
+		expr.m_lineNo = saved.m_lineNo;
 		return gotError("Unexpected default instruction",saved);
 	    }
 	    if (skipComments(expr) != ':')
@@ -1083,7 +1340,7 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    break;
 	case OpcBreak:
 	    if (!ParseNested::parseInner(nested,OpcBreak,expr)) {
-		m_lineNo = savedLine;
+		expr.m_lineNo = saved.m_lineNo;
 		return gotError("Unexpected break instruction",saved);
 	    }
 	    if (skipComments(expr) != ';')
@@ -1091,7 +1348,7 @@ bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 	    break;
 	case OpcCont:
 	    if (!ParseNested::parseInner(nested,OpcCont,expr)) {
-		m_lineNo = savedLine;
+		expr.m_lineNo = saved.m_lineNo;
 		return gotError("Unexpected continue instruction",saved);
 	    }
 	    if (skipComments(expr) != ';')
@@ -1152,7 +1409,7 @@ private:
 };
 
 // Parse keywords inner to specific instructions
-bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
+bool JsCode::parseInner(ParsePoint& expr, JsOpcode opcode, ParseNested* nested)
 {
     switch (*nested) {
 	case OpcFor:
@@ -1161,11 +1418,11 @@ bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
 		ParseLoop* block = static_cast<ParseLoop*>(nested);
 		switch (opcode) {
 		    case OpcBreak:
-			XDebug(this,DebugAll,"Parsing loop:break '%.30s'",expr);
+			XDebug(this,DebugAll,"Parsing loop:break '%.30s'",(const char*)expr);
 			addOpcode((Opcode)OpcJump,block->m_lblBreak);
 			break;
 		    case OpcCont:
-			XDebug(this,DebugAll,"Parsing loop:continue '%.30s'",expr);
+			XDebug(this,DebugAll,"Parsing loop:continue '%.30s'",(const char*)expr);
 			addOpcode((Opcode)OpcJump,block->m_lblCont);
 			break;
 		    default:
@@ -1182,7 +1439,7 @@ bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
 			    return gotError("Encountered case after default",expr);
 			if (!getSimple(expr,true))
 			    return gotError("Expecting case constant",expr);
-			XDebug(this,DebugAll,"Parsing switch:case: '%.30s'",expr);
+			XDebug(this,DebugAll,"Parsing switch:case: '%.30s'",(const char*)expr);
 			block->m_state = ParseSwitch::InCase;
 			block->m_cases.append(popOpcode());
 			addOpcode(OpcLabel,++m_label);
@@ -1191,13 +1448,13 @@ bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
 		    case OpcDefault:
 			if (block->state() == ParseSwitch::InDefault)
 			    return gotError("Duplicate default case",expr);
-			XDebug(this,DebugAll,"Parsing switch:default: '%.30s'",expr);
+			XDebug(this,DebugAll,"Parsing switch:default: '%.30s'",(const char*)expr);
 			block->m_state = ParseSwitch::InDefault;
 			block->m_lblDefault = ++m_label;
 			addOpcode(OpcLabel,block->m_lblDefault);
 			break;
 		    case OpcBreak:
-			XDebug(this,DebugAll,"Parsing switch:break '%.30s'",expr);
+			XDebug(this,DebugAll,"Parsing switch:break '%.30s'",(const char*)expr);
 			addOpcode((Opcode)OpcJump,static_cast<ParseSwitch*>(nested)->m_lblBreak);
 			break;
 		    default:
@@ -1211,8 +1468,9 @@ bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
     return true;
 }
 
-bool JsCode::parseIf(const char*& expr, GenObject* nested)
+bool JsCode::parseIf(ParsePoint& expr, GenObject* nested)
 {
+    XDebug(this,DebugAll,"JsCode::parseIf() '%.30s'",(const char*)expr);
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
     if (!runCompile(++expr,')'))
@@ -1224,10 +1482,7 @@ bool JsCode::parseIf(const char*& expr, GenObject* nested)
     if (!getOneInstruction(expr,nested))
 	return false;
     skipComments(expr);
-    const char* save = expr;
-    unsigned int savedLine = m_lineNo;
-    if (*expr == ';')
-	skipComments(++expr);
+    ParsePoint save = expr;
     if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
 	ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
 	addOpcode(OpcLabel,cond->number());
@@ -1237,13 +1492,12 @@ bool JsCode::parseIf(const char*& expr, GenObject* nested)
     }
     else {
 	expr = save;
-	m_lineNo = savedLine;
 	addOpcode(OpcLabel,cond->number());
     }
     return true;
 }
 
-bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
+bool JsCode::parseSwitch(ParsePoint& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
@@ -1255,6 +1509,8 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
     if (skipComments(++expr) != '{')
 	return gotError("Expecting '{'",expr);
     expr++;
+    const char* savedSeps = expr.m_searchedSeps;
+    expr.m_searchedSeps = "";
     ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
     ParseSwitch parseStack(this,nested,++m_label);
     for (;;) {
@@ -1269,6 +1525,9 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
     if (*expr != '}')
 	return gotError("Expecting '}'",expr);
     expr++;
+    expr.m_searchedSeps = savedSeps;
+    if (!expr.m_searchedSeps || expr.m_count)
+	expr.m_foundSep = 0;
     // implicit break at end
     addOpcode((Opcode)OpcJump,parseStack.m_lblBreak);
     addOpcode(OpcLabel,jump->number());
@@ -1289,7 +1548,7 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
     return true;
 }
 
-bool JsCode::parseFor(const char*& expr, GenObject* nested)
+bool JsCode::parseFor(ParsePoint& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
@@ -1346,7 +1605,7 @@ bool JsCode::parseFor(const char*& expr, GenObject* nested)
     return true;
 }
 
-bool JsCode::parseWhile(const char*& expr, GenObject* nested)
+bool JsCode::parseWhile(ParsePoint& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
@@ -1368,11 +1627,11 @@ bool JsCode::parseWhile(const char*& expr, GenObject* nested)
     return true;
 }
 
-bool JsCode::parseVar(const char*& expr)
+bool JsCode::parseVar(ParsePoint& expr)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"parseVar '%.30s'",expr);
+    XDebug(this,DebugAll,"parseVar '%.30s'",(const char*)expr);
     skipComments(expr);
     int len = ExpEvaluator::getKeyword(expr);
     if (len <= 0 || expr[len] == '(')
@@ -1385,7 +1644,7 @@ bool JsCode::parseVar(const char*& expr)
     return true;
 }
 
-bool JsCode::parseTry(const char*& expr, GenObject* nested)
+bool JsCode::parseTry(ParsePoint& expr, GenObject* nested)
 {
     addOpcode((Opcode)OpcTry);
     ParseNested parseStack(this,nested,OpcTry);
@@ -1410,9 +1669,9 @@ bool JsCode::parseTry(const char*& expr, GenObject* nested)
     return true;
 }
 
-bool JsCode::parseFuncDef(const char*& expr, bool publish)
+bool JsCode::parseFuncDef(ParsePoint& expr, bool publish)
 {
-    XDebug(this,DebugAll,"JsCode::parseFuncDef '%.30s'",expr);
+    XDebug(this,DebugAll,"JsCode::parseFuncDef '%.30s'",(const char*)expr);
     skipComments(expr);
     int len = getKeyword(expr);
     String name;
@@ -1439,7 +1698,7 @@ bool JsCode::parseFuncDef(const char*& expr, bool publish)
 	return gotError("Expecting '{'",expr);
     expr++;
     ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
-    ExpOperation* lbl = addOpcode(OpcLabel,++m_label);
+    ExpOperation* lbl = addOpcode(OpcLabel,++m_label,true);
     for (;;) {
 	if (!runCompile(expr,'}'))
 	    return false;
@@ -1461,11 +1720,11 @@ bool JsCode::parseFuncDef(const char*& expr, bool publish)
     return true;
 }
 
-ExpEvaluator::Opcode JsCode::getOperator(const char*& expr)
+ExpEvaluator::Opcode JsCode::getOperator(ParsePoint& expr)
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getOperator '%.30s'",expr);
+    XDebug(this,DebugAll,"JsCode::getOperator '%.30s'",(const char*)expr);
     skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_operators);
     if (OpcNone != op)
@@ -1473,11 +1732,11 @@ ExpEvaluator::Opcode JsCode::getOperator(const char*& expr)
     return ExpEvaluator::getOperator(expr);
 }
 
-ExpEvaluator::Opcode JsCode::getUnaryOperator(const char*& expr)
+ExpEvaluator::Opcode JsCode::getUnaryOperator(ParsePoint& expr)
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getUnaryOperator '%.30s'",expr);
+    XDebug(this,DebugAll,"JsCode::getUnaryOperator '%.30s'",(const char*)expr);
     skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_unaryOps);
     if (OpcNone != op)
@@ -1485,11 +1744,11 @@ ExpEvaluator::Opcode JsCode::getUnaryOperator(const char*& expr)
     return ExpEvaluator::getUnaryOperator(expr);
 }
 
-ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr, int precedence)
+ExpEvaluator::Opcode JsCode::getPostfixOperator(ParsePoint& expr, int precedence)
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getPostfixOperator '%.30s'",expr);
+    XDebug(this,DebugAll,"JsCode::getPostfixOperator '%.30s'",(const char*)expr);
     if (skipComments(expr) == '[') {
 	// The Indexing operator has maximum priority!
 	// No need to check it.
@@ -1503,14 +1762,12 @@ ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr, int precedenc
 	return (Opcode)OpcIndex;
     }
     skipComments(expr);
-    const char* save = expr;
-    unsigned int savedLine = m_lineNo;
+    ParsePoint save = expr;
     Opcode op = ExpEvaluator::getOperator(expr,s_postfixOps);
     if (OpcNone != op) {
 	if (getPrecedence(op) >= precedence)
 	    return op;
 	expr = save;
-	m_lineNo = savedLine;
 	return OpcNone;
     }
     return ExpEvaluator::getPostfixOperator(expr,precedence);
@@ -1556,13 +1813,14 @@ int JsCode::getPrecedence(ExpEvaluator::Opcode oper) const
     }
 }
 
-bool JsCode::getSeparator(const char*& expr, bool remove)
+bool JsCode::getSeparator(ParsePoint& expr, bool remove)
 {
     if (inError())
 	return false;
     switch (skipComments(expr)) {
-	case ']':
 	case ';':
+	    expr.m_foundSep =';';
+	case ']':
 	    if (remove)
 		expr++;
 	    return true;
@@ -1570,14 +1828,13 @@ bool JsCode::getSeparator(const char*& expr, bool remove)
     return ExpEvaluator::getSeparator(expr,remove);
 }
 
-bool JsCode::getSimple(const char*& expr, bool constOnly)
+bool JsCode::getSimple(ParsePoint& expr, bool constOnly)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getSimple(%s) '%.30s'",String::boolText(constOnly),expr);
+    XDebug(this,DebugAll,"JsCode::getSimple(%s) '%.30s'",String::boolText(constOnly),(const char*)expr);
     skipComments(expr);
-    const char* save = expr;
-    unsigned int savedLine = m_lineNo;
+    ParsePoint save = expr;
     switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_constants)) {
 	case OpcFalse:
 	    addOpcode(false);
@@ -1594,7 +1851,6 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
 	case OpcFuncDef:
 	    if (constOnly) {
 		expr = save;
-		m_lineNo = savedLine;
 		return false;
 	    }
 	    return parseFuncDef(expr,false);
@@ -1611,7 +1867,7 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
 }
 
 // Parse an inline Javascript Array: [ item1, item2, ... ]
-JsObject* JsCode::parseArray(const char*& expr, bool constOnly)
+JsObject* JsCode::parseArray(ParsePoint& expr, bool constOnly)
 {
     if (skipComments(expr) != '[')
 	return 0;
@@ -1644,7 +1900,7 @@ JsObject* JsCode::parseArray(const char*& expr, bool constOnly)
 
 
 // Parse an inline Javascript Object: { prop1: value1, "prop 2": value2, ... }
-JsObject* JsCode::parseObject(const char*& expr, bool constOnly)
+JsObject* JsCode::parseObject(ParsePoint& expr, bool constOnly)
 {
     if (skipComments(expr) != '{')
 	return 0;
@@ -1698,6 +1954,9 @@ JsObject* JsCode::parseObject(const char*& expr, bool constOnly)
 
 bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* context) const
 {
+    JsRunner* sr = static_cast<JsRunner*>(context);
+    if (sr && sr->tracing())
+	sr->tracePrep(oper);
     switch ((JsOpcode)oper.opcode()) {
 	case OpcEqIdentity:
 	case OpcNeIdentity:
@@ -1816,25 +2075,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		ExpOperation* op = popValue(stack,context);
 		if (!op)
 		    return gotError("Stack underflow",oper.lineNumber());
-		switch (op->opcode()) {
-		    case OpcPush:
-		    case OpcCopy:
-			{
-			    const char* txt = "string";
-			    ExpWrapper* w = YOBJECT(ExpWrapper,op);
-			    if (w)
-				txt = w->object() ? "object" : "undefined";
-			    else if (op->isInteger())
-				txt = "number";
-			    pushOne(stack,new ExpOperation(txt));
-			}
-			break;
-		    case OpcFunc:
-			pushOne(stack,new ExpOperation("function"));
-			break;
-		    default:
-			pushOne(stack,new ExpOperation("internal"));
-		}
+		pushOne(stack,new ExpOperation(op->typeOf()));
 		TelEngine::destruct(op);
 	    }
 	    break;
@@ -1866,7 +2107,8 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 			    ExpWrapper* w = YOBJECT(ExpWrapper,op);
 			    if (w && w->object()) {
 				pushOne(stack,op);
-				return true;
+				op = 0;
+				break;
 			    }
 			}
 			// fall through
@@ -1874,9 +2116,13 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 			TelEngine::destruct(op);
 			return gotError("Expecting class name",oper.lineNumber());
 		}
+		if (!op)
+		    break;
 		ExpFunction ctr(op->name(),op->number());
+		ctr.lineNumber(oper.lineNumber());
 		TelEngine::destruct(op);
-		return runOperation(stack,ctr,context);
+		if (!runOperation(stack,ctr,context))
+		    return false;
 	    }
 	    break;
 	case OpcThrow:
@@ -1942,6 +2188,8 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		}
 		if (op)
 		    pushOne(stack,op);
+		if (sr && sr->tracing())
+		    sr->traceReturn();
 	    }
 	    break;
 	case OpcIn:
@@ -2010,14 +2258,15 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		String* n = iter->get();
 		if (n) {
 		    XDebug(DebugInfo,"Iterator got item: '%s'",n->c_str());
-		    static const ExpOperation s_assign(OpcAssign);
+		    ExpOperation assign(OpcAssign);
+		    assign.lineNumber(oper.lineNumber());
 		    pushOne(stack,iter->field().clone());
 		    if (iter->name())
 			pushOne(stack,new ExpOperation(OpcField,iter->name() + "." + *n));
 		    else
 			pushOne(stack,new ExpOperation(*n));
 		    TelEngine::destruct(n);
-		    ok = runOperation(stack,s_assign,context);
+		    ok = runOperation(stack,assign,context);
 		}
 		if (ok) {
 		    // assign pushes the value back on stack
@@ -2073,17 +2322,12 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		switch ((JsOpcode)oper.opcode()) {
 		    case OpcJumpTrue:
 		    case OpcJRelTrue:
-			if (!val)
-			    return true;
-			break;
-		    case OpcJumpFalse:
-		    case OpcJRelFalse:
-			if (val)
-			    return true;
-			break;
+			val = !val;
 		    default:
 			break;
 		}
+		if (val)
+		    break;
 	    }
 	    // fall through
 	case OpcJump:
@@ -2092,50 +2336,56 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		case OpcJump:
 		case OpcJumpTrue:
 		case OpcJumpFalse:
-		    return jumpToLabel(oper.number(),context) || gotError("Label not found",oper.lineNumber());
+		    if (!jumpToLabel(oper.number(),context))
+			return gotError("Label not found",oper.lineNumber());
+		    break;
 		case OpcJRel:
 		case OpcJRelTrue:
 		case OpcJRelFalse:
-		    return jumpRelative(oper.number(),context) || gotError("Relative jump failed",oper.lineNumber());
+		    if (!jumpRelative(oper.number(),context))
+			return gotError("Relative jump failed",oper.lineNumber());
+		    break;
 		default:
-		    return false;
+		    return gotError("Internal error",oper.lineNumber());
 	    }
 	    break;
 	case OpcDelete:
-	{
-	    ExpOperation* op = popOne(stack);
-	    if (!(context && op))
-		return false;
-	    if (op->opcode() != OpcField) {
-		pushOne(stack,new ExpOperation(true));
+	    {
+		ExpOperation* op = popOne(stack);
+		if (!op)
+		    return gotError("Stack underflow",oper.lineNumber());
+		if (op->opcode() != OpcField) {
+		    pushOne(stack,new ExpOperation(true));
+		    TelEngine::destruct(op);
+		    break;
+		}
+		JsObject* obj = 0;
+		String name = op->name();
 		TelEngine::destruct(op);
-		return true;
+		JsContext* ctx = YOBJECT(JsContext,sr->context());
+		if (ctx)
+		    obj = YOBJECT(JsObject,ctx->resolve(stack,name,context));
+		bool ret = false;
+		if (obj && (!obj->frozen() || !obj->hasField(stack,name,context))
+			&& obj->toString() != YSTRING("()")) {
+		    obj->params().clearParam(name);
+		    ret = true;
+		}
+		DDebug(DebugAll,"Deleted '%s' : %s",name.c_str(),String::boolText(ret));
+		pushOne(stack,new ExpOperation(ret));
 	    }
-	    ScriptRun* sr = static_cast<ScriptRun*>(context);
-	    JsObject* obj = 0;
-	    String name = op->name();
-	    TelEngine::destruct(op);
-	    JsContext* ctx = YOBJECT(JsContext,sr->context());
-	    if (ctx)
-		obj = YOBJECT(JsObject,ctx->resolve(stack,name,context));
-	    bool ret = false;
-	    if (obj && (!obj->frozen() || !obj->hasField(stack,name,context))
-		    && obj->toString() != YSTRING("()")) {
-		obj->params().clearParam(name);
-		ret = true;
-	    }
-	    DDebug(DebugAll,"Deleted '%s' : %s",name.c_str(),String::boolText(ret));
-	    pushOne(stack,new ExpOperation(ret));
-	    return true;
-	}
+	    break;
 	case OpcCopy:
 	    if (!ExpEvaluator::runOperation(stack,oper,context))
 		return false;
 	    resolveObjectParams(YOBJECT(JsObject,stack.get()),stack,context);
-	    return true;
+	    break;
 	default:
-	    return ExpEvaluator::runOperation(stack,oper,context);
+	    if (!ExpEvaluator::runOperation(stack,oper,context))
+		return false;
     }
+    if (sr && sr->tracing())
+	sr->tracePost(oper);
     return true;
 }
 
@@ -2250,13 +2500,22 @@ bool JsCode::jumpToLabel(long int label, GenObject* context) const
 	for (ObjList* l = m_opcodes.skipNull(); l; l = l->skipNext()) {
 	    const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
 	    if (o->opcode() == OpcLabel && o->number() == label) {
-		runner->m_opcode = l;
+		runner->m_opcode = l->skipNext();
 		XDebug(this,DebugInfo,"Jumped to label %ld",label);
 		return true;
 	    }
 	}
     }
     else {
+	if (m_entries) {
+	    for (const JsEntry* e = m_entries; e->number >= 0; e++) {
+		if (e->number == label) {
+		    runner->m_index = e->index;
+		    XDebug(this,DebugInfo,"Fast jumped to index %u",e->index);
+		    return true;
+		}
+	    }
+	}
 	unsigned int n = m_linked.length();
 	if (!n)
 	    return false;
@@ -2382,20 +2641,25 @@ bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* c
 	TelEngine::destruct(param);
     }
     pushOne(stack,new ExpWrapper(ctxt,ctxt->toString(),true));
-    return jumpToLabel(func->label(),context);
+    if (!jumpToLabel(func->label(),context))
+	return false;
+    JsRunner* jsr = static_cast<JsRunner*>(context);
+    if (jsr && jsr->tracing())
+	jsr->traceCall(oper,*func);
+    return true;
 }
 
-ScriptRun* JsCode::createRunner(ScriptContext* context)
+ScriptRun* JsCode::createRunner(ScriptContext* context, const char* title)
 {
     if (!context)
 	return 0;
-    return new JsRunner(this,context);
+    return new JsRunner(this,context,title);
 }
 
 
 bool JsCode::null() const
 {
-    return !(m_opcodes.skipNull() || m_linked.count());
+    return m_linked.null() && !m_opcodes.skipNull();
 }
 
 ScriptRun::Status JsRunner::reset(bool init)
@@ -2489,6 +2753,411 @@ bool JsRunner::callable(const String& name)
     return (c && context() && c->getGlobalFunction(name));
 }
 
+void JsRunner::traceStart(const char* title, const char* file)
+{
+    if (m_tracing)
+	return;
+    m_tracing = true;
+    if (TelEngine::null(file) || !code())
+	return;
+    Debug(DebugInfo,"Preparing Javascript trace file '%s'",file);
+    JsCodeStats* stats = new JsCodeStats(static_cast<JsCode*>(code()),file);
+    traceStart(title,stats);
+    TelEngine::destruct(stats);
+}
+
+void JsRunner::traceStart(const char* title, JsCodeStats* stats)
+{
+    m_stats = stats;
+    if (m_stats) {
+	m_tracing = true;
+	if (!m_callInfo) {
+	    if (TelEngine::null(title))
+		title = "[main flow]";
+	    m_stats->lock();
+	    JsFuncStats* fs = m_stats->getFuncStats(title,0);
+	    m_stats->unlock();
+	    m_traceStack.insert(m_callInfo = new JsCallInfo(fs,title,0,0,0,0));
+	}
+    }
+}
+
+void JsRunner::traceDump()
+{
+    if (!m_stats)
+	Debug(DebugNote,"Executed %u operations in " FMT64U " usec",m_instr,m_totalTime);
+}
+
+void JsRunner::traceCheck(const char* title)
+{
+    if (!(code()))
+	return;
+    JsCode* c = static_cast<JsCode*>(code());
+    if (!c->traceable())
+	return;
+    static const String s_tracingPragma = "trace";
+    const NamedString* ns = c->pragmas().getParam(s_tracingPragma);
+    if (!(ns && ns->toBoolean(true)))
+	return;
+    if (ns->toBoolean(false) || !context()) {
+	traceStart(title);
+	return;
+    }
+    static const String s_tracingObj = "__trace__";
+    NamedString* obj = context()->params().getParam(s_tracingObj);
+    ExpWrapper* w = YOBJECT(ExpWrapper,obj);
+    if (w) {
+	JsCodeStats* stats = YOBJECT(JsCodeStats,w->object());
+	if (stats) {
+	    DDebug(DebugInfo,"Using shared trace file '%s'",stats->toString().c_str());
+	    traceStart(title,stats);
+	}
+	return;
+    }
+    else if (obj) {
+	traceStart(title);
+	return;
+    }
+    traceStart(title,ns->c_str());
+    if (m_stats) {
+	m_stats->ref();
+	context()->params().setParam(new ExpWrapper(m_stats,s_tracingObj));
+    }
+}
+
+void JsRunner::tracePrep(const ExpOperation& oper)
+{
+    if (!m_lastTime)
+	m_lastTime = Time::now();
+    m_lastLine = oper.lineNumber();
+    m_instr++;
+}
+
+void JsRunner::tracePost(const ExpOperation& oper)
+{
+    u_int64_t time = Time::now();
+    u_int64_t diff = 0;
+    if (m_lastTime) {
+	diff = time - m_lastTime;
+	m_totalTime += diff;
+    }
+    m_lastTime = m_paused ? 0 : time;
+
+    if (diff && m_callInfo && m_stats) {
+#ifdef STATS_TRACE
+	String line;
+	static_cast<const JsCode*>(code())->formatLineNo(line,m_lastLine);
+	Debug(STATS_TRACE,DebugNote,"Operation %u %s @ %s %s took " FMT64U " usec",
+	    oper.opcode(),static_cast<const JsCode*>(code())->getOperator(oper.opcode()),
+	    line.c_str(),m_callInfo->c_str(),diff);
+#endif
+	m_stats->lock();
+	m_callInfo->traceLine(m_lastLine,diff);
+	m_stats->unlock();
+    }
+}
+
+void JsRunner::traceCall(const ExpOperation& oper, const JsFunction& func)
+{
+    const ExpOperation* o = 0;
+    if (m_opcode)
+	o = static_cast<const ExpOperation*>(m_opcode->get());
+    if (!o)
+	o = static_cast<const ExpOperation*>(static_cast<const JsCode*>(code())->m_linked[m_index]);
+    if (!o) {
+	String str;
+	static_cast<const JsCode*>(code())->formatLineNo(str,m_lastLine);
+	Debug(DebugWarn,"Current operation unavailable in %s [%p]",str.c_str(),this);
+	return;
+    }
+
+    const String* name = &func.firstName();
+    if (TelEngine::null(name))
+	name = &oper.name();
+    JsFuncStats* fs = 0;
+    if (m_stats) {
+	m_stats->lock();
+	if (m_lastTime) {
+	    u_int64_t diff = Time::now() - m_lastTime;
+	    m_totalTime += diff;
+	    m_lastTime = 0;
+	    if (m_callInfo)
+		m_callInfo->traceLine(m_lastLine,diff);
+	}
+	fs = m_stats->getFuncStats(*name,o->lineNumber());
+	m_stats->unlock();
+    }
+#ifdef STATS_TRACE
+    String caller,called;
+    static_cast<const JsCode*>(code())->formatLineNo(caller,m_lastLine);
+    static_cast<const JsCode*>(code())->formatLineNo(called,o->lineNumber());
+    Debug(STATS_TRACE,DebugCall,"Call %s %s -> %s, instr=%u",
+	name->c_str(),caller.c_str(),called.c_str(),m_instr);
+#endif
+    m_traceStack.insert(m_callInfo = new JsCallInfo(fs,*name,m_lastLine,o->lineNumber(),m_instr,m_totalTime));
+}
+
+void JsRunner::traceReturn()
+{
+    JsCallInfo* info = static_cast<JsCallInfo*>(m_traceStack.remove(false));
+    if (!info) {
+	String str;
+	static_cast<const JsCode*>(code())->formatLineNo(str,m_lastLine);
+	Debug(DebugWarn,"Stats stack underflow in %s [%p]",str.c_str(),this);
+	return;
+    }
+    m_callInfo = static_cast<JsCallInfo*>(m_traceStack.get());
+
+    unsigned int instr = m_instr - info->startInstr;
+    u_int64_t time = Time::now();
+    u_int64_t timeInstr = 0;
+    if (m_lastTime) {
+	timeInstr = time - m_lastTime;
+	m_totalTime += timeInstr;
+	m_lastTime = 0;
+    }
+    u_int64_t timeCall = m_totalTime - info->startTime;
+
+    if (m_stats && timeInstr) {
+	m_stats->lock();
+	info->traceLine(m_lastLine,timeInstr);
+	m_stats->unlock();
+    }
+    if (m_callInfo && m_stats) {
+#ifdef STATS_TRACE
+	String caller,called;
+	static_cast<const JsCode*>(code())->formatLineNo(caller,info->callerLine);
+	static_cast<const JsCode*>(code())->formatLineNo(called,info->calledLine);
+	Debug(STATS_TRACE,DebugCall,"Ret %s %s -> %s, %u oper / " FMT64U " usec",
+	    info->c_str(),caller.c_str(),called.c_str(),instr,timeCall);
+#endif
+	m_stats->lock();
+	m_callInfo->traceCall(info,instr,timeCall);
+	m_stats->unlock();
+    }
+    else {
+	String caller,called;
+	static_cast<const JsCode*>(code())->formatLineNo(caller,info->callerLine);
+	static_cast<const JsCode*>(code())->formatLineNo(called,info->calledLine);
+	Debug(DebugNote,"Function '%s' %s -> %s took %u operations / " FMT64U " usec",
+	    info->c_str(),caller.c_str(),called.c_str(),instr,timeCall);
+    }
+    TelEngine::destruct(info);
+}
+
+
+void JsFuncStats::updateLine(unsigned int lineNo, u_int64_t usec)
+{
+    if (!lineNumber)
+	lineNumber = lineNo;
+#ifdef STATS_TRACE
+    Debug(STATS_TRACE,DebugAll,"Updating %u:%u in %s [%u:%u] with " FMT64U " usec",
+	JsCode::getFileNo(lineNo),JsCode::getLineNo(lineNo),c_str(),
+	JsCode::getFileNo(lineNumber),JsCode::getLineNo(lineNumber),usec);
+#endif
+    ObjList* l = &funcLines;
+    while (l) {
+	JsLineStats* s = static_cast<JsLineStats*>(l->get());
+	if (s) {
+	    if (s->lineNumber == lineNo && !s->isCall) {
+		s->operations++;
+		s->microseconds += usec;
+		return;
+	    }
+	    if (s->lineNumber > lineNo)
+		break;
+	}
+	ObjList* ln = l->next();
+	if (ln) {
+	    l = ln;
+	    continue;
+	}
+	l->append(new JsLineStats(lineNo,1,usec));
+	return;
+    }
+    l->insert(new JsLineStats(lineNo,1,usec));
+}
+
+void JsFuncStats::updateCall(const char* name, unsigned int caller, unsigned int called, unsigned int instr, u_int64_t usec)
+{
+    ObjList* l = &funcLines;
+    while (l) {
+	JsLineStats* s = static_cast<JsLineStats*>(l->get());
+	if (s) {
+	    if (s->lineNumber == caller && s->isCall) {
+		JsCallStats* cs = static_cast<JsCallStats*>(s);
+		if (cs->calledLine == called) {
+		    cs->operations += instr;
+		    cs->microseconds += usec;
+		    cs->callsCount++;
+		    return;
+		}
+	    }
+	    if (s->lineNumber > caller)
+		break;
+	}
+	ObjList* ln = l->next();
+	if (ln) {
+	    l = ln;
+	    continue;
+	}
+#ifndef TRACE_RAW_NAME
+	String tmp(name);
+	if (called)
+	    tmp << " [" << JsCode::getFileNo(called) << ":" << JsCode::getLineNo(called) << "]";
+	name = tmp;
+#endif
+	l->append(new JsCallStats(name,caller,called,instr,usec));
+	return;
+    }
+#ifndef TRACE_RAW_NAME
+    String tmp(name);
+    if (called)
+	tmp << " [" << JsCode::getFileNo(called) << ":" << JsCode::getLineNo(called) << "]";
+    name = tmp;
+#endif
+    l->insert(new JsCallStats(name,caller,called,instr,usec));
+}
+
+
+JsCodeStats::JsCodeStats(JsCode* code, const char* file)
+    : Mutex(false,"JsCodeStats"),
+      m_fileName(file)
+{
+    m_code = code;
+    if (!code)
+	return;
+}
+
+JsCodeStats::~JsCodeStats()
+{
+    dump();
+}
+
+JsFuncStats* JsCodeStats::getFuncStats(const char* name, unsigned int lineNo)
+{
+    String tmp(name);
+#ifndef TRACE_RAW_NAME
+    if (lineNo)
+	tmp << " [" << JsCode::getFileNo(lineNo) << ":" << JsCode::getLineNo(lineNo) << "]";
+#endif
+    ObjList* l = &m_funcStats;
+    while (l) {
+	JsFuncStats* s = static_cast<JsFuncStats*>(l->get());
+	if (s) {
+	    if (s->lineNumber == lineNo && tmp == *s)
+		return s;
+	    if (s->lineNumber > lineNo)
+		break;
+	}
+	ObjList* ln = l->next();
+	if (ln) {
+	    l = ln;
+	    continue;
+	}
+	s = new JsFuncStats(tmp,lineNo);
+	l->append(s);
+	return s;
+    }
+    JsFuncStats* s = new JsFuncStats(tmp,lineNo);
+    l->insert(s);
+    return s;
+}
+
+void JsCodeStats::dump()
+{
+    dump(m_fileName);
+    m_fileName.clear();
+}
+
+void JsCodeStats::dump(const char* file)
+{
+    File f;
+    if (file && m_code && f.openPath(file,true,false,true)) {
+	Debug(DebugInfo,"Writing trace file '%s'",file);
+	dump(f);
+    }
+}
+
+void JsCodeStats::dump(Stream& file)
+{
+    if (!m_code)
+	return;
+    String fl,fn,cfn,cfl;
+    NamedList lMap(""), nMap("");
+    int ifl = 1, ifn = 1;
+    file.writeData("events: Operations Microseconds\n");
+    for (ObjList* f = m_funcStats.skipNull(); f; f = f->skipNext()) {
+	String str("\n");
+	const JsFuncStats* fs = static_cast<const JsFuncStats*>(f->get());
+	String tmp = m_code->getFileName(fs->lineNumber);
+	if (fl != tmp) {
+	    fl = tmp;
+	    tmp = lMap[fl];
+	    if (tmp.null()) {
+		tmp << "(" << ifl++ << ")";
+		lMap.addParam(fl,tmp);
+		tmp << " " << fl;
+	    }
+	    str << "fl=" << tmp << "\n";
+	}
+	if (fn != *fs) {
+	    fn = *fs;
+	    tmp = nMap[fn];
+	    if (tmp.null()) {
+		tmp << "(" << ifn++ << ")";
+		nMap.addParam(fn,tmp);
+		tmp << " " << fn;
+	    }
+	    str << "fn=" << tmp << "\n";
+	}
+	for (ObjList* l = fs->funcLines.skipNull(); l; l = l->skipNext()) {
+	    const JsLineStats* ls = static_cast<const JsLineStats*>(l->get());
+	    tmp = m_code->getFileName(ls->lineNumber);
+	    if (fl != tmp) {
+		fl = tmp;
+		tmp = lMap[fl];
+		if (tmp.null()) {
+		    tmp << "(" << ifl++ << ")";
+		    lMap.addParam(fl,tmp);
+		    tmp << " " << fl;
+		}
+		str << "fl=" << tmp << "\n";
+	    }
+	    if (ls->isCall) {
+		const JsCallStats* cs = static_cast<const JsCallStats*>(ls);
+		tmp = m_code->getFileName(cs->calledLine);
+		if (cfl != tmp) {
+		    cfl = tmp;
+		    tmp = lMap[cfl];
+		    if (tmp.null()) {
+			tmp << "(" << ifl++ << ")";
+			lMap.addParam(cfl,tmp);
+			tmp << " " << cfl;
+		    }
+		    str << "cfl=" << tmp << "\n";
+		}
+		if (cfn != cs->funcName) {
+		    cfn = cs->funcName;
+		    tmp = nMap[cfn];
+		    if (tmp.null()) {
+			tmp << "(" << ifn++ << ")";
+			nMap.addParam(cfn,tmp);
+			tmp << " " << cfn;
+		    }
+		    str << "cfn=" << tmp << "\n";
+		}
+		str << "calls=" << cs->callsCount << " "
+		    << JsCode::getLineNo(cs->calledLine) << "\n";
+	    }
+	    // TODO: properly write microseconds
+	    str << JsCode::getLineNo(ls->lineNumber) << " " << ls->operations << " "
+		<< (unsigned int)ls->microseconds << "\n";
+	}
+	file.writeData(str);
+    }
+}
+
 }; // anonymous namespace
 
 
@@ -2501,7 +3170,7 @@ JsFunction::JsFunction(Mutex* mtx)
 
 JsFunction::JsFunction(Mutex* mtx, const char* name, ObjList* args, long int lbl, ScriptCode* code)
     : JsObject(mtx,String("[function ") + name + "()]",false),
-      m_label(lbl), m_code(code), m_func(name)
+      m_label(lbl), m_code(code), m_func(name), m_name(name)
 {
     init();
     if (args) {
@@ -2590,14 +3259,14 @@ ScriptContext* JsParser::createContext() const
     return new JsContext;
 }
 
-ScriptRun* JsParser::createRunner(ScriptCode* code, ScriptContext* context) const
+ScriptRun* JsParser::createRunner(ScriptCode* code, ScriptContext* context, const char* title) const
 {
     if (!code)
 	return 0;
     ScriptContext* ctxt = 0;
     if (!context)
 	context = ctxt = createContext();
-    ScriptRun* runner = new JsRunner(code,context);
+    ScriptRun* runner = new JsRunner(code,context,title);
     TelEngine::destruct(ctxt);
     return runner;
 }
@@ -2610,17 +3279,23 @@ bool JsParser::callable(const String& name)
 }
 
 // Parse a piece of Javascript text
-bool JsParser::parse(const char* text, bool fragment)
+bool JsParser::parse(const char* text, bool fragment, const char* file)
 {
     if (TelEngine::null(text))
 	return false;
     String::stripBOM(text);
+    ParsePoint expr(text,0,0,file);
     if (fragment)
-	return code() && static_cast<JsCode*>(code())->compile(text,this);
+	return code() && static_cast<JsCode*>(code())->compile(expr,this);
     JsCode* code = new JsCode;
     setCode(code);
     code->deref();
-    if (!code->compile(text,this)) {
+    expr.m_eval = code;
+    if (!TelEngine::null(file)) {
+	code->setBaseFile(file);
+	expr.m_fileName = file;
+    }
+    if (!code->compile(expr,this)) {
 	setCode(0);
 	return false;
     }
@@ -2629,6 +3304,7 @@ bool JsParser::parse(const char* text, bool fragment)
     DDebug(DebugAll,"Simplified: %s",code->dump().c_str());
     if (m_allowLink)
 	code->link();
+    code->trace(m_allowTrace);
     return true;
 }
 
@@ -2652,7 +3328,8 @@ ScriptRun::Status JsParser::eval(const String& text, ExpOperation** result, Scri
 JsObject* JsParser::parseJSON(const char* text)
 {
     JsCode* code = new JsCode;
-    JsObject* jso = code->parseObject(text,true);
+    ParsePoint pp(text,code);
+    JsObject* jso = code->parseObject(pp,true);
     TelEngine::destruct(code);
     return jso;
 }

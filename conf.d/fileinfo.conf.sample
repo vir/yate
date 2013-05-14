@@ -1,0 +1,24 @@
+[general]
+; Global settings for the file info module
+
+
+[call.route]
+; This section configures call.route handling
+; All parameters are applied on reload unless specified they are not
+; All parameters prefixed with "param_" will be set in the message when
+;  successfully routed
+
+; priority: integer: call.route message handler priority
+; This parameter is not applied on reload
+;priority=90
+
+; file_send_target: string: Target to use when routing
+;file_send_target=filetransfer/send/
+
+; set_default_params: boolean: Set default routing parameters
+; If enabled the following parameters will be set (parameters prefixed with
+;  'param_' may override these parameters):
+;   autoclose=true
+;   wait_on_drop=10000
+; Defaults to yes
+;set_default_params=yes

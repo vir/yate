@@ -201,8 +201,10 @@ namespace TelEngine {
 
 #ifdef HAVE_BLOCK_RETURN
 #define YSTRING(s) (*({static const String str(s);&str;}))
+#define YATOM(s) (*({static const String* str(0);str ? str : String::atom(str,s);}))
 #else
 #define YSTRING(s) (s)
+#define YATOM(s) (s)
 #endif
 
 #define YSTRING_INIT_HASH ((unsigned) -1)
@@ -510,6 +512,8 @@ public:
 	Absolute,  // from EPOCH (1-1-1970)
 	Textual,   // absolute GMT in YYYYMMDDhhmmss.uuuuuu format
 	TextLocal, // local time in YYYYMMDDhhmmss.uuuuuu format
+	TextSep,   // absolute GMT in YYYY-MM-DD_hh:mm:ss.uuuuuu format
+	TextLSep,  // local time in YYYY-MM-DD_hh:mm:ss.uuuuuu format
     };
 
     /**
@@ -604,6 +608,13 @@ class Mutex;
 constant YSTRING(const char* string);
 
 /**
+ * Macro to create a shared static String if supported by compiler, use with caution
+ * @param string Literal constant string
+ * @return A const String& if supported, literal string if not supported
+ */
+constant YATOM(const char* string);
+
+/**
  * Macro to create a GenObject class from a base class and implement @ref GenObject::getObject
  * @param type Class that is declared
  * @param base Base class that is inherited
@@ -668,17 +679,17 @@ void YNOCOPY(class type);
 
 #define YCLASS(type,base) \
 public: virtual void* getObject(const String& name) const \
-{ return (name == YSTRING(#type)) ? const_cast<type*>(this) : base::getObject(name); }
+{ return (name == YATOM(#type)) ? const_cast<type*>(this) : base::getObject(name); }
 
 #define YCLASS2(type,base1,base2) \
 public: virtual void* getObject(const String& name) const \
-{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
+{ if (name == YATOM(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   return tmp ? tmp : base2::getObject(name); }
 
 #define YCLASS3(type,base1,base2,base3) \
 public: virtual void* getObject(const String& name) const \
-{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
+{ if (name == YATOM(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   if (tmp) return tmp; \
   tmp = base2::getObject(name); \
@@ -686,23 +697,23 @@ public: virtual void* getObject(const String& name) const \
 
 #define YCLASSIMP(type,base) \
 void* type::getObject(const String& name) const \
-{ return (name == YSTRING(#type)) ? const_cast<type*>(this) : base::getObject(name); }
+{ return (name == YATOM(#type)) ? const_cast<type*>(this) : base::getObject(name); }
 
 #define YCLASSIMP2(type,base1,base2) \
 void* type::getObject(const String& name) const \
-{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
+{ if (name == YATOM(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   return tmp ? tmp : base2::getObject(name); }
 
 #define YCLASSIMP3(type,base1,base2,base3) \
 void* type::getObject(const String& name) const \
-{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
+{ if (name == YATOM(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   if (tmp) return tmp; \
   tmp = base2::getObject(name); \
   return tmp ? tmp : base3::getObject(name); }
 
-#define YOBJECT(type,pntr) (static_cast<type*>(GenObject::getObject(YSTRING(#type),pntr)))
+#define YOBJECT(type,pntr) (static_cast<type*>(GenObject::getObject(YATOM(#type),pntr)))
 
 #define YNOCOPY(type) private: \
 type(const type&); \
@@ -1234,6 +1245,11 @@ public:
     void clear();
 
     /**
+     * Remove all empty objects in the list
+     */
+    void compact();
+
+    /**
      * Get the automatic delete flag
      * @return True if will delete on destruct, false otherwise
      */
@@ -1327,6 +1343,12 @@ public:
      * @return Count of items
      */
     unsigned int count() const;
+
+    /**
+     * Check if the vector is empty
+     * @return True if the vector contains no objects
+     */
+    bool null() const;
 
     /**
      * Get the object at a specific index in vector
@@ -1938,7 +1960,8 @@ public:
      * Appending operator for strings.
      * @see TelEngine::strcat
      */
-    String& operator+=(const char* value);
+    inline String& operator+=(const char* value)
+	{ return append(value,-1); }
 
     /**
      * Appending operator for single characters.
@@ -1974,12 +1997,14 @@ public:
     /**
      * Fast equality operator.
      */
-    bool operator==(const String& value) const;
+    inline bool operator==(const String& value) const
+	{ return (this == &value) || ((hash() == value.hash()) && operator==(value.c_str())); }
 
     /**
      * Fast inequality operator.
      */
-    bool operator!=(const String& value) const;
+    inline bool operator!=(const String& value) const
+	{ return (this != &value) && ((hash() != value.hash()) || operator!=(value.c_str())); }
 
     /**
      * Case-insensitive equality operator.
@@ -2046,6 +2071,14 @@ public:
      * Stream style extraction operator for booleans
      */
     String& operator>>(bool& store);
+
+    /**
+     * Append a string to the current string
+     * @param value String from which to append
+     * @param len Length of the data to copy, -1 for full string
+     * @return Reference to the String
+     */
+    String& append(const char* value, int len);
 
     /**
      * Conditional appending with a separator
@@ -2318,6 +2351,14 @@ public:
     inline String uriUnescape(int* errptr = 0) const
 	{ return uriUnescape(c_str(),errptr); }
 
+    /**
+     * Atom string support helper
+     * @param str Reference to variable to hold the atom string
+     * @param val String value to allocate to the atom
+     * @return Pointer to shared atom string
+     */
+    static const String* atom(const String*& str, const char* val);
+
 protected:
     /**
      * Called whenever the value changed (except in constructors).
@@ -2520,6 +2561,39 @@ private:
     bool matches(const char* value, StringMatchPrivate* matchlist) const;
     mutable void* m_regexp;
     int m_flags;
+};
+
+/**
+ * Indirected shared string offering access to atom strings
+ * @short Atom string holder
+ */
+class Atom
+{
+public:
+    /**
+     * Constructor
+     * @param value Atom's string value
+     */
+    inline explicit Atom(const char* value)
+	: m_atom(0)
+	{ String::atom(m_atom,value); }
+
+    /**
+     * Conversion to "const String &" operator
+     * @return Pointer to the atom String
+     */
+    inline operator const String&() const
+	{ return *m_atom; }
+
+    /**
+     * String method call operator
+     * @return Pointer to the atom String
+     */
+    inline const String* operator->() const
+	{ return m_atom; }
+
+private:
+    const String* m_atom;
 };
 
 /**
@@ -2803,6 +2877,14 @@ public:
     ObjList* find(const GenObject* obj) const;
 
     /**
+     * Get the item in the list that holds an object
+     * @param obj Pointer to the object to search for
+     * @param hash Object hash used to identify the list it belongs to
+     * @return Pointer to the found item or NULL
+     */
+    ObjList* find(const GenObject* obj, unsigned int hash) const;
+
+    /**
      * Get the item in the list that holds an object by String value
      * @param str String value (toString) of the object to search for
      * @return Pointer to the first found item or NULL
@@ -2945,6 +3027,7 @@ private:
     ObjList* m_objList;
     HashList* m_hashList;
     GenObject** m_objects;
+    unsigned int* m_hashes;
     unsigned int m_length;
     unsigned int m_current;
 };
@@ -3111,10 +3194,12 @@ public:
      * @param hour The hour component of the time (0 to 23)
      * @param minute The minute component of the time (0 to 59)
      * @param sec The seconds component of the time (0 to 59)
+     * @param wDay The day of the week (optional)
      * @return True on succes, false if conversion failed
      */
     static bool toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
-	unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec);
+	unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec,
+	unsigned int* wDay = 0);
 
     /**
      * Check if an year is a leap one
@@ -3123,6 +3208,12 @@ public:
      */
     static inline bool isLeap(unsigned int year)
 	{ return (year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)); }
+
+    /**
+     * Retrieve the difference between local time and UTC in seconds east of UTC
+     * @return Difference between local time and UTC in seconds
+     */
+    static int timeZone();
 
 private:
     u_int64_t m_time;
@@ -5878,6 +5969,30 @@ public:
      */
     inline bool connect(const SocketAddr& addr)
 	{ return connect(addr.address(), addr.length()); }
+
+    /**
+     * Asynchronously connects the socket to a remote address.
+     * The socket must be selectable and in non-blocking operation mode
+     * @param addr Address to connect to
+     * @param addrlen Length of the address structure
+     * @param toutUs Timeout interval in microseconds
+     * @param timeout Optional boolean flag to signal timeout
+     * @return True on success
+     */
+    virtual bool connectAsync(struct sockaddr* addr, socklen_t addrlen, unsigned int toutUs,
+	bool* timeout = 0);
+
+    /**
+     * Asynchronously connects the socket to a remote address.
+     * The socket must be selectable and in non-blocking operation mode
+     * @param addr Socket address to connect to
+     * @param toutUs Timeout interval in microseconds
+     * @param timeout Optional boolean flag to signal timeout
+     * @return True on success
+     */
+    inline bool connectAsync(const SocketAddr& addr, unsigned int toutUs,
+	bool* timeout = 0)
+	{ return connectAsync(addr.address(),addr.length(),toutUs,timeout); }
 
     /**
      * Shut down one or both directions of a full-duplex socket.

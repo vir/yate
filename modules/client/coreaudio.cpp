@@ -1010,7 +1010,7 @@ bool CoreAudioHandler::received(Message &msg)
 
     return true;
 }
-	
+
 bool StatusHandler::received(Message &msg)
 {
     const String* sel = msg.getParam("module");
@@ -1033,7 +1033,7 @@ bool MasqHandler::received(Message &msg)
     }
     return false;
 }
-	
+
 bool DropHandler::received(Message &msg)
 {
     String id(msg.getValue("id"));
@@ -1046,7 +1046,7 @@ bool DropHandler::received(Message &msg)
     }
     return false;
 }
-	
+
 bool AttachHandler::received(Message& msg)
 {
     int more = 2;
@@ -1057,7 +1057,7 @@ bool AttachHandler::received(Message& msg)
     	if (!src.startSkip("coreaudio/",false))
 	    src = "";
     }
-	
+
     String cons(msg.getValue("consumer"));
     if (cons.null())
 	more--;
@@ -1072,10 +1072,10 @@ bool AttachHandler::received(Message& msg)
 	Debug(DebugWarn,"CoreAudio asked to attach source '%s' and consumer '%s'",src.c_str(),cons.c_str());
 	return false;
     }
-	
-    RefPointer<DataEndpoint> dd = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+
+    RefPointer<DataEndpoint> dd = static_cast<DataEndpoint*>(msg.userObject(YATOM("DataEndpoint")));
     if (!dd) {
-	CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+	CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
 	if (ch) {
 	    DataEndpoint::commonMutex().lock();
 	    dd = ch->setEndpoint();
@@ -1086,21 +1086,21 @@ bool AttachHandler::received(Message& msg)
 	Debug(DebugWarn,"CoreAudio attach request with no control or data channel!");
 	return false;
     }
-	
+
     if (src) {
 	CoreAudioSource* s = new CoreAudioSource(msg.getIntValue("rate",DEFAULT_SAMPLE_RATE));
 	if (s->init())
 	    dd->setSource(s);
 	s->deref();
     }
-	
+
     if (cons) {
 	CoreAudioConsumer* c = new CoreAudioConsumer(msg.getIntValue("rate",DEFAULT_SAMPLE_RATE));
 	if (c->init())
 	    dd->setConsumer(c);
 	c->deref();
     }
-	
+
     // Stop dispatching if we handled all requested
     return !more;
 }
@@ -1111,7 +1111,7 @@ CoreAudioPlugin::CoreAudioPlugin()
 {
     Output("Loaded module CoreAudio");
 }
-	
+
 void CoreAudioPlugin::initialize()
 {
     Output("Initializing module CoreAudio");
@@ -1129,5 +1129,5 @@ bool CoreAudioPlugin::isBusy() const
 {
     return (s_audioChan != 0);
 }
-	
+
 }; // anonymous namespace

@@ -512,7 +512,7 @@ bool Cache::copyParams(const String& id, NamedList& list, const String* cpParams
 	lock();
 	const char* error = m.getValue("error");
 	if (ok && !error) {
-	    Array* a = static_cast<Array*>(m.userObject("Array"));
+	    Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
 	    int rows = a ? a->getRows() : 0;
 	    if (rows > 0)
 		item = addUnsafe(*a,1,a->getColumns());
@@ -1309,7 +1309,7 @@ void CacheModule::loadCache(const String& name, bool async, ObjList* items)
 	    Debug(this,DebugInfo,"Cache '%s' vanished while loading",name.c_str());
 	    break;
 	}
-	Array* a = static_cast<Array*>(m.userObject("Array"));
+	Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
 	int rows = a ? a->getRows() : 0;
 	unsigned int loadedRows = (rows > 0) ? rows - 1 : 0;
 	if (!items)

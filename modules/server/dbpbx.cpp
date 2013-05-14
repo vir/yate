@@ -150,7 +150,7 @@ bool DbMultiRouter::msgRoute(Message& msg, CallInfo& info, bool first)
     m.addParam("account",m_account);
     m.addParam("query",query);
     if (Engine::dispatch(m) && m.getIntValue("rows") >=1) {
-	Array* a = static_cast<Array*>(m.userObject("Array"));
+	Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
 	if (a) {
 	    copyParams(info,a);
 	    copyParams(msg,a);
@@ -173,7 +173,7 @@ Message* DbMultiRouter::buildExecute(CallInfo& info, bool reroute)
     m.addParam("account",m_account);
     m.addParam("query",query);
     if (Engine::dispatch(m) && m.getIntValue("rows") >=1) {
-	Array* a = static_cast<Array*>(m.userObject("Array"));
+	Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
 	if (a) {
 	    Message* m = defaultExecute(info);
 	    copyParams(info,a);

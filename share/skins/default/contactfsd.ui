@@ -1,0 +1,465 @@
+<ui version="4.0" >
+ <class>conctactfs</class>
+ <widget class="QWidget" name="conctactfs" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>656</width>
+    <height>471</height>
+   </rect>
+  </property>
+  <property name="windowIcon" >
+   <iconset>sharedfile_title.png</iconset>
+  </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
+  </property>
+  <property name="_yate_destroyonclose" stdset="0" >
+   <bool>true</bool>
+  </property>
+  <property name="_yate_destroyonhide" stdset="0" >
+   <bool>true</bool>
+  </property>
+  <layout class="QVBoxLayout" >
+   <property name="spacing" >
+    <number>0</number>
+   </property>
+   <property name="leftMargin" >
+    <number>0</number>
+   </property>
+   <property name="topMargin" >
+    <number>0</number>
+   </property>
+   <property name="rightMargin" >
+    <number>0</number>
+   </property>
+   <property name="bottomMargin" >
+    <number>0</number>
+   </property>
+   <item>
+    <layout class="QHBoxLayout" >
+     <property name="spacing" >
+      <number>0</number>
+     </property>
+     <property name="leftMargin" >
+      <number>6</number>
+     </property>
+     <property name="topMargin" >
+      <number>6</number>
+     </property>
+     <property name="rightMargin" >
+      <number>6</number>
+     </property>
+     <item>
+      <widget class="QSplitter" name="splitter" >
+       <property name="orientation" >
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="handleWidth" >
+        <number>8</number>
+       </property>
+       <property name="childrenCollapsible" >
+        <bool>false</bool>
+       </property>
+       <widget class="QFrame" name="frame_local" >
+        <property name="frameShape" >
+         <enum>QFrame::NoFrame</enum>
+        </property>
+        <property name="frameShadow" >
+         <enum>QFrame::Raised</enum>
+        </property>
+        <layout class="QVBoxLayout" >
+         <property name="spacing" >
+          <number>0</number>
+         </property>
+         <property name="leftMargin" >
+          <number>0</number>
+         </property>
+         <property name="topMargin" >
+          <number>0</number>
+         </property>
+         <property name="rightMargin" >
+          <number>0</number>
+         </property>
+         <property name="bottomMargin" >
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QSplitter" name="splitter_2" >
+           <property name="maximumSize" >
+            <size>
+             <width>16777215</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="orientation" >
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="opaqueResize" >
+            <bool>false</bool>
+           </property>
+           <property name="childrenCollapsible" >
+            <bool>false</bool>
+           </property>
+           <widget class="QFrame" name="frame_dirs" >
+            <property name="sizePolicy" >
+             <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize" >
+             <size>
+              <width>100</width>
+              <height>16</height>
+             </size>
+            </property>
+            <property name="maximumSize" >
+             <size>
+              <width>16777215</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="styleSheet" >
+             <string>QFrame#frame_dirs {
+  border: 1px solid #717fa0;
+}
+</string>
+            </property>
+            <property name="_yate_uiwidget" stdset="0" >
+             <bool>true</bool>
+            </property>
+            <property name="_yate_uiwidget_name" stdset="0" >
+             <string>shared_dir_list</string>
+            </property>
+            <property name="_yate_uiwidget_class" stdset="0" >
+             <string>FileListTree</string>
+            </property>
+            <property name="_yate_uiwidget_params" stdset="0" >
+             <stringlist>
+              <string>_yate_set_draganddrop=drag</string>
+              <string>_yate_drag_url_template=yatedownload:${path}</string>
+              <string>_yate_drag_url_queryparams=account,contact,instance</string>
+              <string>_yate_busywidget=busy.ui</string>
+              <string>property:tabKeyNavigation=false</string>
+              <string>property:sortingEnabled=false</string>
+              <string>property:allColumnsShowFocus=true</string>
+              <string>property:rootIsDecorated=true</string>
+              <string>property:indentation=16</string>
+              <string>property:_yate_horizontalheader=false</string>
+              <string>property:_yate_notifyonenterpressed=true</string>
+              <string>property:_yate_notifyitemchanged=true</string>
+              <string>columns=Name</string>
+              <string>filelist_default_itemheight=20</string>
+              <string>property:_yate_itemstatewidget=dir:name</string>
+              <string>property:_yate_itemexpandedimage=dir:folder_open_16.png</string>
+              <string>property:_yate_itemcollapsedimage=dir:folder_16.png</string>
+             </stringlist>
+            </property>
+           </widget>
+           <widget class="QFrame" name="frame_content" >
+            <property name="sizePolicy" >
+             <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize" >
+             <size>
+              <width>100</width>
+              <height>16</height>
+             </size>
+            </property>
+            <property name="maximumSize" >
+             <size>
+              <width>16777215</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="styleSheet" >
+             <string>QFrame#frame_content {
+  border: 1px solid #717fa0;
+}
+</string>
+            </property>
+            <property name="_yate_uiwidget" stdset="0" >
+             <bool>true</bool>
+            </property>
+            <property name="_yate_uiwidget_name" stdset="0" >
+             <string>shared_dir_content</string>
+            </property>
+            <property name="_yate_uiwidget_class" stdset="0" >
+             <string>FileListTree</string>
+            </property>
+            <property name="_yate_uiwidget_params" stdset="0" >
+             <stringlist>
+              <string>_yate_selection_mode=extended</string>
+              <string>_yate_set_draganddrop=drag</string>
+              <string>_yate_drag_url_template=yatedownload:${path}</string>
+              <string>_yate_drag_url_queryparams=account,contact,instance</string>
+              <string>_yate_busywidget=busy.ui</string>
+              <string>property:tabKeyNavigation=false</string>
+              <string>property:sortingEnabled=false</string>
+              <string>property:allColumnsShowFocus=true</string>
+              <string>property:_yate_horizontalheader=false</string>
+              <string>property:_yate_notifyonenterpressed=true</string>
+              <string>property:_yate_notifyitemchanged=true</string>
+              <string>property:_yate_itemstatewidget=dir:name</string>
+              <string>property:_yate_itemexpandedimage=dir:folder_open_16.png</string>
+              <string>property:_yate_itemcollapsedimage=dir:folder_16.png</string>
+              <string>_griddraw_right_color=#e3e6e9</string>
+              <string>_griddraw_bottom_color=#a9c2c2</string>
+              <string>columns=Name</string>
+              <string>itemdelegate.1=QtHtmlItemDelegate</string>
+              <string>itemdelegate.1.drawfocus=false</string>
+              <string>filelist_default_itemstyle=true</string>
+              <string>filelist_default_itemheight=20</string>
+             </stringlist>
+            </property>
+           </widget>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QFrame" name="frame_remote" >
+        <property name="frameShape" >
+         <enum>QFrame::NoFrame</enum>
+        </property>
+        <property name="frameShadow" >
+         <enum>QFrame::Raised</enum>
+        </property>
+        <layout class="QVBoxLayout" >
+         <property name="spacing" >
+          <number>0</number>
+         </property>
+         <property name="leftMargin" >
+          <number>0</number>
+         </property>
+         <property name="topMargin" >
+          <number>0</number>
+         </property>
+         <property name="rightMargin" >
+          <number>0</number>
+         </property>
+         <property name="bottomMargin" >
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QFrame" name="frame_local_fs" >
+           <property name="sizePolicy" >
+            <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize" >
+            <size>
+             <width>140</width>
+             <height>16</height>
+            </size>
+           </property>
+           <property name="maximumSize" >
+            <size>
+             <width>16777215</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="styleSheet" >
+            <string>QFrame#frame_local_fs {
+  border: 1px solid black;
+}
+</string>
+           </property>
+           <property name="_yate_uiwidget" stdset="0" >
+            <bool>true</bool>
+           </property>
+           <property name="_yate_uiwidget_name" stdset="0" >
+            <string>local_fs</string>
+           </property>
+           <property name="_yate_uiwidget_class" stdset="0" >
+            <string>FileListTree</string>
+           </property>
+           <property name="_yate_uiwidget_params" stdset="0" >
+            <stringlist>
+             <string>_yate_selection_mode=extended</string>
+             <string>_yate_busywidget=busy.ui</string>
+             <string>_yate_busywidget_delay=500</string>
+             <string>_yate_set_draganddrop=drop</string>
+             <string>_yate_accept_drop_schemes=yatedownload</string>
+             <string>property:tabKeyNavigation=false</string>
+             <string>property:sortingEnabled=false</string>
+             <string>property:allColumnsShowFocus=true</string>
+             <string>property:_yate_horizontalheader=false</string>
+             <string>property:_yate_notifyonenterpressed=true</string>
+             <string>property:_yate_notifyitemchanged=true</string>
+             <string>property:_yate_itemacceptdrop=drive:always</string>
+             <string>property:_yate_itemacceptdrop=dir:always</string>
+             <string>property:_yate_itemacceptdrop=file:always</string>
+             <string>property:_yate_itemstatewidget=dir:name</string>
+             <string>property:_yate_itemexpandedimage=dir:folder_open_16.png</string>
+             <string>property:_yate_itemcollapsedimage=dir:folder_16.png</string>
+             <string>_griddraw_right_color=#e3e6e9</string>
+             <string>_griddraw_bottom_color=#a9c2c2</string>
+             <string>columns=Name</string>
+             <string>itemdelegate.1=QtHtmlItemDelegate</string>
+             <string>itemdelegate.1.drawfocus=false</string>
+             <string>itemdelegate.1.noimagerole=true</string>
+             <string>filelist_default_itemstyle=true</string>
+             <string>filelist_default_itemheight=false</string>
+             <string>filelist_filesystemlist=true</string>
+             <string>filelist_filesystemlist_name_column=name</string>
+             <string>filelist_filesystemlist_autochangedir=true</string>
+             <string>filelist_filesystemlist_listfiles=true</string>
+             <string>filelist_filesystemlist_listonfailure=upthenhome</string>
+             <string>filelist_filesystemlist_showicons=false</string>
+             <string>filelist_filesystemlist_startpath=root</string>
+             <string>_yate_accept_drop_dir=true</string>
+             <string>_yate_accept_drop_file=false</string>
+            </stringlist>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QVBoxLayout" >
+     <property name="spacing" >
+      <number>6</number>
+     </property>
+     <property name="leftMargin" >
+      <number>6</number>
+     </property>
+     <property name="topMargin" >
+      <number>6</number>
+     </property>
+     <property name="rightMargin" >
+      <number>6</number>
+     </property>
+     <property name="bottomMargin" >
+      <number>6</number>
+     </property>
+     <item>
+      <layout class="QHBoxLayout" >
+       <property name="spacing" >
+        <number>2</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="account_image" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>16</width>
+           <height>16</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16</width>
+           <height>16</height>
+          </size>
+         </property>
+         <property name="toolTip" >
+          <string>Account</string>
+         </property>
+         <property name="pixmap" >
+          <pixmap>user.png</pixmap>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="account" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>0</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16777215</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="toolTip" >
+          <string>Account</string>
+         </property>
+         <property name="indent" >
+          <number>5</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer>
+         <property name="orientation" >
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeType" >
+          <enum>QSizePolicy::Fixed</enum>
+         </property>
+         <property name="sizeHint" >
+          <size>
+           <width>10</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QToolButton" name="button_hide" >
+         <property name="minimumSize" >
+          <size>
+           <width>0</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16777215</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="text" >
+          <string>Close</string>
+         </property>
+         <property name="icon" >
+          <iconset>cancel.png</iconset>
+         </property>
+         <property name="toolButtonStyle" >
+          <enum>Qt::ToolButtonTextBesideIcon</enum>
+         </property>
+         <property name="_yate_normal_icon" stdset="0" >
+          <string>cancel.png</string>
+         </property>
+         <property name="_yate_pressed_icon" stdset="0" >
+          <string>cancel_pressed.png</string>
+         </property>
+         <property name="_yate_hover_icon" stdset="0" >
+          <string>cancel_hover.png</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

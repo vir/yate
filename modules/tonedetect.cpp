@@ -545,9 +545,9 @@ bool AttachHandler::received(Message& msg)
 	snif.clear();
     if (cons.null() && snif.null())
 	return false;
-    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
-    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
-    DataSource* ds = static_cast<DataSource*>(msg.userObject("DataSource"));
+    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject(YATOM("DataEndpoint")));
+    DataSource* ds = static_cast<DataSource*>(msg.userObject(YATOM("DataSource")));
     if (ch) {
 	if (cons) {
 	    ToneConsumer* c = new ToneConsumer(ch->id(),cons);
@@ -603,8 +603,8 @@ bool RecordHandler::received(Message& msg)
     String id(msg.getValue("id"));
     if (!src.startsWith("tone/"))
 	return false;
-    CallEndpoint* ch = static_cast<CallEndpoint *>(msg.userObject("CallEndpoint"));
-    RefPointer<DataEndpoint> de = static_cast<DataEndpoint *>(msg.userObject("DataEndpoint"));
+    CallEndpoint* ch = static_cast<CallEndpoint *>(msg.userObject(YATOM("CallEndpoint")));
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint *>(msg.userObject(YATOM("DataEndpoint")));
     if (ch) {
 	id = ch->id();
 	if (!de)

@@ -90,9 +90,9 @@ static void alterSource(Message& msg, const String& name)
     Message m("database");
     m.addParam("account",account);
     m.addParam("query",query);
-    if (!Engine::dispatch(m) || (m.getIntValue("rows") != 1) || (m.getIntValue("columns") != 1))
+    if (!Engine::dispatch(m) || (m.getIntValue(YSTRING("rows")) != 1) || (m.getIntValue(YSTRING("columns")) != 1))
 	return;
-    Array* a = static_cast<Array*>(m.userObject("Array"));
+    Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
     if (!a)
 	return;
     GenObject* obj = a->take(0,1);
@@ -179,7 +179,7 @@ DbWriter::~DbWriter()
 
 void* DbWriter::getObject(const String& name) const
 {
-    if (name == "Stream")
+    if (name == YATOM("Stream"))
 	return static_cast<Stream*>(const_cast<DbWriter*>(this));
     return GenObject::getObject(name);
 }

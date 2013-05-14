@@ -311,7 +311,7 @@ void processQueryDB(Message* msg, QueuedCall* call, Array*& data, const char* qu
     // Get data if message succeedded
     if (ok) {
 	if (msg->getIntValue("rows") >= 1)
-	    data = static_cast<Array*>(msg->userObject("Array"));
+	    data = static_cast<Array*>(msg->userObject(YATOM("Array")));
     }
     else
 	Debug(&__plugin,DebugNote,

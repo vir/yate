@@ -78,6 +78,7 @@ debian/tmp/usr/share/yate/skins/default/arch_session_item.ui
 debian/tmp/usr/share/yate/skins/default/ask_32.png
 debian/tmp/usr/share/yate/skins/default/ask.png
 debian/tmp/usr/share/yate/skins/default/book_32.png
+debian/tmp/usr/share/yate/skins/default/busy.ui
 debian/tmp/usr/share/yate/skins/default/cdr_32.png
 debian/tmp/usr/share/yate/skins/default/chat.png
 debian/tmp/usr/share/yate/skins/default/chat.ui
@@ -87,6 +88,8 @@ debian/tmp/usr/share/yate/skins/default/collapsed.png
 debian/tmp/usr/share/yate/skins/default/conference_20.png
 debian/tmp/usr/share/yate/skins/default/contactedit.ui
 debian/tmp/usr/share/yate/skins/default/contactinfo.ui
+debian/tmp/usr/share/yate/skins/default/contactfs.ui
+debian/tmp/usr/share/yate/skins/default/contactfsd.ui
 debian/tmp/usr/share/yate/skins/default/digit0_hover.png
 debian/tmp/usr/share/yate/skins/default/digit0.png
 debian/tmp/usr/share/yate/skins/default/digit0_pressed.png
@@ -246,6 +249,8 @@ debian/tmp/usr/share/yate/skins/default/events_title.png
 debian/tmp/usr/share/yate/skins/default/file_trans.png
 debian/tmp/usr/share/yate/skins/default/file_trans_menu.png
 debian/tmp/usr/share/yate/skins/default/fileprogress_title.png
+debian/tmp/usr/share/yate/skins/default/folder_16.png
+debian/tmp/usr/share/yate/skins/default/folder_open_16.png
 debian/tmp/usr/share/yate/skins/default/hangup_20_hover.png
 debian/tmp/usr/share/yate/skins/default/hangup_20_pressed.png
 debian/tmp/usr/share/yate/skins/default/help_title.png
@@ -311,16 +316,35 @@ debian/tmp/usr/share/yate/skins/default/up_small_off.png
 debian/tmp/usr/share/yate/skins/default/user_hover.png
 debian/tmp/usr/share/yate/skins/default/user_menu.png
 debian/tmp/usr/share/yate/skins/default/user_pressed.png
+debian/tmp/usr/share/yate/skins/default/sendfile_20.png
+debian/tmp/usr/share/yate/skins/default/sendfile_hover_20.png
+debian/tmp/usr/share/yate/skins/default/sendfile_pressed_20.png
+debian/tmp/usr/share/yate/skins/default/sharedfile_20.png
+debian/tmp/usr/share/yate/skins/default/sharedfile_hover_20.png
+debian/tmp/usr/share/yate/skins/default/sharedfile_menu.png
+debian/tmp/usr/share/yate/skins/default/sharedfile_pressed_20.png
+debian/tmp/usr/share/yate/skins/default/sharedfile_title.png
+debian/tmp/usr/share/yate/skins/default/sharefile_20.png
+debian/tmp/usr/share/yate/skins/default/sharefile_hover_20.png
+debian/tmp/usr/share/yate/skins/default/sharefile_menu.png
+debian/tmp/usr/share/yate/skins/default/sharefile_none_20.png
+debian/tmp/usr/share/yate/skins/default/sharefile_none_hover_20.png
+debian/tmp/usr/share/yate/skins/default/sharefile_none_pressed_20.png
+debian/tmp/usr/share/yate/skins/default/sharefile_pressed_20.png
+debian/tmp/usr/share/yate/skins/default/sharefile_title.png
 debian/tmp/usr/share/yate/skins/default/status_away_menu.png
 debian/tmp/usr/share/yate/skins/default/status_busy_menu.png
 debian/tmp/usr/share/yate/skins/default/status_dnd_menu.png
 debian/tmp/usr/share/yate/skins/default/status_offline_menu.png
 debian/tmp/usr/share/yate/skins/default/status_online_menu.png
 debian/tmp/usr/share/yate/skins/default/status_xa_menu.png
-
+debian/tmp/usr/share/yate/skins/default/waiting_32.gif
 
 debian/tmp/etc/yate/yate-qt4.conf
 debian/tmp/usr/lib/yate/qt4/updater.yate
+
+debian/tmp/etc/yate/fileinfo.conf.sample
+debian/tmp/usr/lib/yate/modules/fileinfo.cpp
 
 
 

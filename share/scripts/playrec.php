@@ -34,6 +34,9 @@ require_once("libyate.php");
 /* Always the first action to do */
 Yate::Init();
 
+/* Set tracking name for all installed handlers */
+Yate::SetLocal("trackparam","playrec.php");
+
 /* Install handlers for the DTMF and wave EOF messages */
 Yate::Install("chan.dtmf");
 Yate::Install("chan.notify");

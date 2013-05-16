@@ -33,6 +33,12 @@ require_once("libyate.php");
 /* Always the first action to do */
 Yate::Init();
 
+/* Comment the next line to get output only in logs, not in rmanager */
+Yate::Output(true);
+
+/* Set tracking name for all installed handlers */
+Yate::SetLocal("trackparam","route.php");
+
 /* Install a handler for the call routing message */
 Yate::Install("call.route",80);
 

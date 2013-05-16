@@ -59,6 +59,7 @@ Yate::Init();
 /* Uncomment next line to get debugging messages */
 //Yate::Debug(true);
 
+Yate::SetLocal("trackparam","queue_in.php");
 Yate::SetLocal("id",$ourcallid);
 
 /* The main loop. We pick events and handle them */

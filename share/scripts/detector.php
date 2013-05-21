@@ -138,6 +138,7 @@ function onFax($id)
 /* Always the first action to do */
 Yate::Init();
 
+Yate::SetLocal("trackparam","detector.php");
 Yate::Install("engine.command",85);
 Yate::Install("engine.help",125);
 Yate::Install("call.execute",25);

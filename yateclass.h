@@ -1559,6 +1559,97 @@ class Regexp;
 class StringMatchPrivate;
 
 /**
+ * A simple class to hold a single Unicode character and convert it to / from UTF-8
+ * @short A single Unicode character
+ */
+class YATE_API UChar
+{
+public:
+    /**
+     * Constructor from unsigned numeric code
+     * @param code Code of the Unicode character
+     */
+    inline explicit UChar(unsigned int code = 0)
+	: m_chr(code)
+	{ encode(); }
+
+    /**
+     * Constructor from signed numeric code
+     * @param code Code of the Unicode character
+     */
+    inline explicit UChar(signed int code)
+	: m_chr((code < 0) ? 0 : code)
+	{ encode(); }
+
+    /**
+     * Constructor from signed character
+     * @param code Character to construct from
+     */
+    inline explicit UChar(signed char code)
+	: m_chr((unsigned char)code)
+	{ encode(); }
+
+    /**
+     * Constructor from unsigned character
+     * @param code Character to construct from
+     */
+    inline explicit UChar(unsigned char code)
+	: m_chr(code)
+	{ encode(); }
+
+    /**
+     * Assignment operator from a character code
+     * @param code Character code to assign
+     * @return Reference to this object
+     */
+    inline UChar& operator=(unsigned int code)
+	{ m_chr = code; encode(); return *this; }
+
+    /**
+     * Assignment operator from a character
+     * @param code Character to assign
+     * @return Reference to this object
+     */
+    inline UChar& operator=(char code)
+	{ m_chr = (unsigned char)code; encode(); return *this; }
+
+    /**
+     * Get the Unicode value of the character
+     * @return Code of the character as defined by Unicode
+     */
+    inline unsigned int code() const
+	{ return m_chr; }
+
+    /**
+     * Get the value of the character as UTF-8 string.
+     * @return The character as UTF-8 C string
+     */
+    inline const char* c_str() const
+	{ return m_str; }
+
+    /**
+     * Conversion to "const char *" operator.
+     * @return Pointer to the internally stored UTF-8 string
+     */
+    inline operator const char*() const
+	{ return m_str; };
+
+    /**
+     * Decode the first Unicode character from an UTF-8 C string
+     * @param str String to extract from, will be advanced past the character
+     * @param maxChar Maximum accepted Unicode character code
+     * @param overlong Accept overlong UTF-8 sequences (dangerous!)
+     * @return True if an Unicode character was decoded from string
+     */
+    bool decode(const char*& str, unsigned int maxChar = 0x10ffff, bool overlong = false);
+
+private:
+    void encode();
+    u_int32_t m_chr;
+    char m_str[8];
+};
+
+/**
  * A simple string handling class for C style (one byte) strings.
  * For simplicity and read speed no copy-on-write is performed.
  * Strings have hash capabilities and comparations are using the hash
@@ -1682,30 +1773,30 @@ public:
     /**
      * Get the number of characters in a string assuming UTF-8 encoding
      * @param value C string to compute Unicode length
-     * @param maxSeq Maximum accepted UTF-8 sequence length
+     * @param maxChar Maximum accepted Unicode character code
      * @param overlong Accept overlong UTF-8 sequences (dangerous!)
      * @return Count of Unicode characters, -1 if not valid UTF-8
      */
-    static int lenUtf8(const char* value, unsigned int maxSeq = 4, bool overlong = false);
+    static int lenUtf8(const char* value, unsigned int maxChar = 0x10ffff, bool overlong = false);
 
     /**
      * Get the number of characters in the string assuming UTF-8 encoding
-     * @param maxSeq Maximum accepted UTF-8 sequence length
+     * @param maxChar Maximum accepted Unicode character code
      * @param overlong Accept overlong UTF-8 sequences (dangerous!)
      * @return Count of Unicode characters, -1 if not valid UTF-8
      */
-    inline int lenUtf8(unsigned int maxSeq = 4, bool overlong = false) const
-	{ return lenUtf8(m_string,maxSeq,overlong); }
+    inline int lenUtf8(unsigned int maxChar = 0x10ffff, bool overlong = false) const
+	{ return lenUtf8(m_string,maxChar,overlong); }
 
 
     /**
      * Fix an UTF-8 encoded string by replacing invalid sequences
      * @param replace String to replace invalid sequences, use U+FFFD if null
-     * @param maxSeq Maximum accepted UTF-8 sequence length
+     * @param maxChar Maximum accepted Unicode character code
      * @param overlong Accept overlong UTF-8 sequences (dangerous!)
      * @return Count of invalid UTF-8 sequences that were replaced
      */
-    int fixUtf8(const char* replace = 0, unsigned int maxSeq = 4, bool overlong = false);
+    int fixUtf8(const char* replace = 0, unsigned int maxChar = 0x10ffff, bool overlong = false);
 
     /**
      * Check if a string starts with UTF-8 Byte Order Mark
@@ -2056,6 +2147,11 @@ public:
      * Stream style extraction operator for single characters
      */
     String& operator>>(char& store);
+
+    /**
+     * Stream style extraction operator for single Unicode characters
+     */
+    String& operator>>(UChar& store);
 
     /**
      * Stream style extraction operator for integers

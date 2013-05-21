@@ -128,6 +128,7 @@ function invalidate($address)
     }
 }
 
+Yate::SetLocal("trackparam","resolver.php");
 Yate::Install("call.execute",80);
 Yate::Install("chan.hangup",120,"cause_sip","408");
 Yate::SetLocal("restart",true);

@@ -45,6 +45,7 @@ Yate::Init();
 /* Uncomment next line to get debugging messages */
 //Yate::Debug(true);
 
+Yate::SetLocal("trackparam","queue_out.php");
 Yate::SetLocal("id",$ourcallid);
 Yate::SetLocal("disconnected","true");
 

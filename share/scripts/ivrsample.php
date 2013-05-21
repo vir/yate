@@ -109,8 +109,9 @@ class TheIVR_2 extends IVR
     }
 }
 
-// initialize the Yate PHP library with default values, enable debugging
+// initialize the Yate PHP library with default values, enable output to rmanager and debugging
 Yate::Init();
+Yate::Output(true);
 Yate::Debug(true);
 
 // register the two IVR classes with some names

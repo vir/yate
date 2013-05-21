@@ -82,6 +82,7 @@ if ($prefix == "") {
     $prefix = "#8";
     Yate::Output("Pickup prefix not set, using default '$prefix'");
 }
+Yate::SetLocal("trackparam","pickup.php");
 Yate::Install("call.route",35);
 Yate::Install("call.cdr",110,"direction","outgoing");
 Yate::SetLocal("restart",true);

@@ -38,8 +38,9 @@ require_once("libvoicemail.php");
 /* Always the first action to do */
 Yate::Init();
 
-/* Uncomment next line to get output in console */
+/* Uncomment next line to get output in rmanager, not just in logs */
 //Yate::Output(true);
+
 /* Uncomment next line to get debugging messages */
 //Yate::Debug(true);
 

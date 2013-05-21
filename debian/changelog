@@ -1,4 +1,4 @@
-yate (4.3.1~svn5505) UNRELEASED; urgency=low
+yate (4.3.1~svn5507) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -470,8 +470,13 @@ yate (4.3.1~svn5505) UNRELEASED; urgency=low
     + Prevent controlReturn() from overwriting a previous return
     parameter.  + Copy all call.drop parameters into the channel
     disconnected list.  + New files packaging
+  * Updated to SVN revision 5507: + New files packaging  + Added
+    instructions about Yate::Output to a number of PHP scripts.  + Added
+    tracked name to relevant sample PHP scripts.  + Made String handling
+    of UTF-8 and Unicode easier.  + Added class to handle Unicode
+    characters and their UTF-8 conversions.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 15 May 2013 02:19:21 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 22 May 2013 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

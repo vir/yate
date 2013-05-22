@@ -1055,9 +1055,12 @@ void IAXTransaction::postFrame(IAXFrame::Type type, u_int32_t subclass, void* da
     Lock lock(this);
     if (state() == Terminated)
 	return;
-    adjustTStamp(tStamp);
+    // Pong and LagRp don't need timestamp to be adjusted
+    if (type != IAXFrame::IAX ||
+	(subclass != IAXControl::Pong && subclass != IAXControl::LagRp))
+	adjustTStamp(tStamp);
     IAXFrameOut* frame = new IAXFrameOut(type,subclass,m_lCallNo,m_rCallNo,m_oSeqNo,m_iSeqNo,tStamp,
-			 (unsigned char*)data,len,m_retransCount,m_retransInterval,ackOnly,mark);
+	(unsigned char*)data,len,m_retransCount,m_retransInterval,ackOnly,mark);
     postFrame(frame);
 }
 

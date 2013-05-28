@@ -5918,7 +5918,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 			parameters().addParam("divert_screen",tmp);
 		}
 	    }
-	    else
+	    else if (code != 387)
 		Debug(this,DebugMild,"Received %d redirect without Contact [%p]",code,this);
 	}
 	paramMutex().unlock();

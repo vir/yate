@@ -352,11 +352,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	    const String* s = static_cast<const String*>(f->get());
 	    if (s) {
 		int mode = 0;
-		if (*s == "ilbc20")
-		    ptime = mode = 20;
-		else if (*s == "ilbc30")
-		    ptime = mode = 30;
-		else if (*s == "g729b")
+		if (*s == "g729b")
 		    continue;
 		int payload = s->toInteger(SDPParser::s_payloads,-1);
 		int defcode = payload;
@@ -429,6 +425,10 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 			defcode = payload;
 		    const char* map = lookup(defcode,SDPParser::s_rtpmap);
 		    if (map && m_parser->m_codecs.getBoolValue(*s,defcodecs && DataTranslator::canConvert(*s))) {
+			if (*s == "ilbc20")
+			    ptime = mode = 20;
+			else if (*s == "ilbc30")
+			    ptime = mode = 30;
 			frm << " " << payload;
 			String* temp = new String("rtpmap:");
 			*temp << payload << " " << map;

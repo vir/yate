@@ -108,6 +108,8 @@ public:
 	{ return m_remotePort; }
     inline const SocketAddr& remote() const
 	{ return m_remote; }
+    inline bool callToken() const
+	{ return m_callToken; }
 private:
     void setRegistered(bool registered, const char* reason = 0, const char* error = 0);
     String m_name;
@@ -115,6 +117,7 @@ private:
     String m_password;                  // Password
     String m_callingNo;                 // Calling number
     String m_callingName;               // Calling name
+    bool m_callToken;                   // Advertise CALLTOKEN support
     int m_expire;                       // Expire time
     String m_localAddr;
     String m_remoteAddr;
@@ -601,7 +604,7 @@ static const char* lookupFormat(u_int32_t format, int type)
 
 // Create an idle line
 YIAXLine::YIAXLine(const String& name)
-    : Mutex(true,"IAX:Line"), m_name(name),
+    : Mutex(true,"IAX:Line"), m_name(name), m_callToken(false),
       m_expire(60), m_localPort(4569), m_remotePort(4569),
       m_nextReg(Time::secNow() + 40), m_nextKeepAlive(0),
       m_keepAliveInterval(0),
@@ -719,6 +722,7 @@ bool YIAXLineContainer::updateLine(Message& msg)
 	if (interval < 60)
 	    interval = 60;
 	changed = changeLine(line,line->m_expire,interval) || changed;
+	line->m_callToken = msg.getBoolValue("calltoken",s_callTokenOut);
 	if (changed || op == "login") {
 	    line->m_nextReg = Time::secNow() + (line->m_expire * 3 / 4);
 	    line->m_nextKeepAlive = 0;
@@ -1065,6 +1069,8 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
     ieList.appendString(IAXInfoElement::USERNAME,line->username());
     ieList.appendString(IAXInfoElement::PASSWORD,line->password());
     ieList.appendNumeric(IAXInfoElement::REFRESH,line->expire(),2);
+    if (line->callToken())
+	ieList.appendBinary(IAXInfoElement::CALLTOKEN,0,0);
     // Make it !
     IAXTransaction* tr = startLocalTransaction(regreq ? IAXTransaction::RegReq : IAXTransaction::RegRel,addr,ieList);
     if (tr)

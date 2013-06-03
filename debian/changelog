@@ -1,4 +1,4 @@
-yate (4.3.1~svn5510) UNRELEASED; urgency=low
+yate (4.3.1~svn5517) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -485,8 +485,22 @@ yate (4.3.1~svn5510) UNRELEASED; urgency=low
   * Updated to SVN revision 5510: + Merge remote-tracking branch 'trunk'
     into upstream  + Fixed bug: don't add SDP media ptime parameter if
     ilbc is not offered.
+  * Updated to SVN revision 5517: + Merge remote-tracking branch 'trunk'
+    into upstream  + Fixed timestamps for sent media: send timestamps
+    using media source timestamp, sync audio timestamps with transaction
+    timestamp.  + Merge remote-tracking branch 'trunk' into upstream  +
+    Fixed bug: avoid leaking incoming registration transactions.
+    Improved debug.  + Merge remote-tracking branch 'trunk' into
+    upstream  + Start keep alive interval when line is registered. Allow
+    configuring the interval.  + Merge remote-tracking branch 'trunk'
+    into upstream  + Added calltoken support for outgoing registrations.
+    + Merge remote-tracking branch 'trunk' into upstream  + Don't send
+    refresh IE when unregistering.  + Set failure reason in call.execute
+    when failed to start an outgoing call.  + Merge remote-tracking
+    branch 'trunk' into upstream  + Don't build a minimal message for
+    chan.hangup.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 01 Jun 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 04 Jun 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

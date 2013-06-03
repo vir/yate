@@ -541,6 +541,47 @@ public:
     static TokenDict s_texts[];
 };
 
+
+/**
+ * This class holds IAX format description
+ * @short IAX format description
+ */
+class YIAX_API IAXFormatDesc
+{
+public:
+    /**
+     * Constructor
+     */
+    inline IAXFormatDesc()
+	: m_format(0), m_multiplier(1)
+	{}
+
+    /**
+     * Get the format
+     * @return The format
+     */
+    inline u_int32_t format() const
+	{ return m_format; }
+
+    /**
+     * Get the format multiplier used to translate timestamps
+     * @return The format multiplier (always greater then 0)
+     */
+    inline unsigned int multiplier() const
+	{ return m_multiplier; }
+
+    /**
+     * Set the format
+     * @param fmt The format
+     * @param type Format type as IAXFormat::Media enumeration
+     */
+    void setFormat(u_int32_t fmt, int type);
+
+protected:
+    u_int32_t m_format;                  // The format
+    unsigned int m_multiplier;           // Format multiplier derived from sampling rate
+};
+
 /**
  * This class holds the enumeration values for audio and video formats
  * @short Wrapper class for audio and video formats
@@ -593,7 +634,7 @@ public:
      * @param type Media type
     */
     inline IAXFormat(int type = Audio)
-	: m_type(type), m_format(0), m_formatIn(0), m_formatOut(0)
+	: m_type(type)
 	{}
 
     /**
@@ -608,28 +649,36 @@ public:
      * @return The format
     */
     inline u_int32_t format() const
-	{ return m_format; }
+	{ return m_format.format(); }
 
     /**
      * Get the incoming format
      * @return The incoming format
     */
     inline u_int32_t in() const
-	{ return m_formatIn; }
+	{ return m_formatIn.format(); }
 
     /**
      * Get the outgoing format
      * @return The outgoing format
     */
     inline u_int32_t out() const
-	{ return m_formatOut; }
+	{ return m_formatOut.format(); }
 
     /**
+     * Get the incoming or outgoing format description
+     * @param in True to retrieve the incoming format, false to retrieve the outgoing one
+     * @return Requested format desc
+    */
+    inline const IAXFormatDesc& formatDesc(bool in) const
+	{ return in ? m_formatIn : m_formatOut; }
+
+     /**
      * Get the text associated with the format
      * @return Format name
     */
     inline const char* formatName() const
-	{ return formatName(m_format); }
+	{ return formatName(format()); }
 
     /**
      * Get the text associated with the media type
@@ -746,9 +795,9 @@ public:
 
 protected:
     int m_type;
-    u_int32_t m_format;
-    u_int32_t m_formatIn;
-    u_int32_t m_formatOut;
+    IAXFormatDesc m_format;
+    IAXFormatDesc m_formatIn;
+    IAXFormatDesc m_formatOut;
 };
 
 /**
@@ -1346,10 +1395,10 @@ private:
 
 /**
  * This class holds data used by transaction to sync media.
- * The mutex is not reentrant
+ * The mutexes are not reentrant
  * @short IAX2 transaction media data
  */
-class YIAX_API IAXMediaData : public Mutex
+class YIAX_API IAXMediaData
 {
     friend class IAXTransaction;
 public:
@@ -1357,11 +1406,26 @@ public:
      * Constructor
      */
     inline IAXMediaData()
-	: Mutex(true,"IAXTransaction::InMedia"),
+	: m_inMutex(false,"IAXTransaction::InMedia"),
+	m_outMutex(false,"IAXTransaction::OutMedia"),
+	m_startedIn(false), m_startedOut(false),
+	m_outStartTransTs(0), m_outFirstSrcTs(0),
 	m_lastOut(0), m_lastIn(0), m_sent(0), m_sentBytes(0),
 	m_recv(0), m_recvBytes(0), m_ooPackets(0), m_ooBytes(0),
-	m_showInNoFmt(true)
+	m_showInNoFmt(true), m_showOutOldTs(true),
+	m_dropOut(0), m_dropOutBytes(0)
 	{}
+
+    /**
+     * Increase drop out data
+     * @param len The number of dropped bytes
+     */
+    inline void dropOut(unsigned int len) {
+	    if (len) {
+		m_dropOut++;
+		m_dropOutBytes += len;
+	    }
+	}
 
     /**
      * Print statistics
@@ -1370,6 +1434,12 @@ public:
     void print(String& buf);
 
 protected:
+    Mutex m_inMutex;
+    Mutex m_outMutex;
+    bool m_startedIn;                    // Incoming media started
+    bool m_startedOut;                   // Outgoing media started
+    int m_outStartTransTs;               // Transaction timestamp where media send started
+    unsigned int m_outFirstSrcTs;        // First outgoing source packet timestamp as received from source
     u_int32_t m_lastOut;                 // Last transmitted mini timestamp
     u_int32_t m_lastIn;                  // Last received timestamp
     unsigned int m_sent;                 // Packets sent
@@ -1379,6 +1449,9 @@ protected:
     unsigned int m_ooPackets;            // Dropped received out of order packets
     unsigned int m_ooBytes;              // Dropped received out of order bytes
     bool m_showInNoFmt;                  // Show incoming media arrival without format debug
+    bool m_showOutOldTs;                 // Show dropped media out debug message
+    unsigned int m_dropOut;              // The number of dropped outgoing packets
+    unsigned int m_dropOutBytes;         // The number of dropped outgoing bytes
 };
 
 /**
@@ -1565,14 +1638,26 @@ public:
      * @param type Media type to retrieve
      * @return IAXFormat pointer or 0 for invalid type
      */
-    IAXFormat* getFormat(int type);
+    inline IAXFormat* getFormat(int type) {
+	    if (type == IAXFormat::Audio)
+		return &m_format;
+	    if (type == IAXFormat::Video)
+		return &m_formatVideo;
+	    return 0;
+	}
 
     /**
      * Retrieve the media data for a given type
      * @param type Media type to retrieve
      * @return IAXMediaData pointer or 0 for invalid type
      */
-    IAXMediaData* getData(int type);
+    inline IAXMediaData* getData(int type) {
+	    if (type == IAXFormat::Audio)
+		return &m_dataAudio;
+	    if (type == IAXFormat::Video)
+		return &m_dataVideo;
+	    return 0;
+	}
 
     /**
      * Retrieve the media format used during initialization
@@ -1636,7 +1721,7 @@ public:
     /**
      * Process received media data
      * @param data Received data
-     * @param tStamp Mini frame timestamp
+     * @param tStamp Mini frame timestamp multiplied by format multiplier
      * @param type Media type
      * @param full True if received in a full frame
      * @param mark Mark flag
@@ -1648,12 +1733,13 @@ public:
     /**
      * Send media data to remote peer. Update the outgoing media format if changed
      * @param data Data to send
+     * @param tStamp Data timestamp
      * @param format Data format
      * @param type Media type
      * @param mark Mark flag
      * @return The number of bytes sent
      */
-    unsigned int sendMedia(const DataBlock& data, u_int32_t format,
+    unsigned int sendMedia(const DataBlock& data, unsigned int tStamp, u_int32_t format,
 	int type = IAXFormat::Audio, bool mark = false);
 
     /**
@@ -2243,6 +2329,11 @@ private:
     IAXFormat m_formatVideo;			// Video format
     u_int32_t m_capability;			// Media capability of this transaction
     bool m_callToken;                           // Call token supported/expected
+    unsigned int m_adjustTsOutThreshold;        // Adjust outgoing data timestamp threshold
+    unsigned int m_adjustTsOutOverrun;          // Value used to adjust outgoing data timestamp on data
+                                                //  overrun (incoming data with rate greater then expected)
+    unsigned int m_adjustTsOutUnderrun;         // Value used to adjust outgoing data timestamp on data
+                                                //  underrun (incoming data with rate less then expected)
     // Meta trunking
     IAXMetaTrunkFrame* m_trunkFrame;		// Reference to a trunk frame if trunking is enabled for this transaction
     int64_t m_trunkInOffsetTimeMs;		// Offset between transaction start and trunk start
@@ -2531,6 +2622,27 @@ public:
         { return m_capability; }
 
     /**
+     * Retrieve outgoing data timestamp adjust values
+     * @param thres Adjust outgoing data timestamp threshold
+     * @param over Value used to adjust outgoing data timestamp on data overrun
+     * @param under Value used to adjust outgoing data timestamp on data underrun
+     */
+    inline void getOutDataAdjust(unsigned int& thres, unsigned int& over,
+	unsigned int& under) const {
+	    thres = m_adjustTsOutThreshold;
+	    over = m_adjustTsOutOverrun;
+	    under = m_adjustTsOutUnderrun;
+	}
+
+    /**
+     * Initialize outgoing data timestamp adjust values.
+     * This method is thread safe
+     * @param params Parameters list
+     * @param tr Optional transaction to init, initialize the engine's data if 0
+     */
+    void initOutDataAdjust(const NamedList& params, IAXTransaction* tr = 0);
+
+    /**
      * (Re)Initialize the engine
      * @param params Parameter list
      */
@@ -2785,6 +2897,11 @@ private:
     u_int32_t m_format;				// The default media format
     u_int32_t m_formatVideo;                    // Default video format
     u_int32_t m_capability;			// The media capability
+    unsigned int m_adjustTsOutThreshold;        // Adjust outgoing data timestamp threshold
+    unsigned int m_adjustTsOutOverrun;          // Value used to adjust outgoing data timestamp on data
+                                                //  overrun (incoming data with rate greater then expected)
+    unsigned int m_adjustTsOutUnderrun;         // Value used to adjust outgoing data timestamp on data
+                                                //  underrun (incoming data with rate less then expected)
     // Trunking
     Mutex m_mutexTrunk;				// Mutex for trunk operations
     ObjList m_trunkList;			// Trunk frames list

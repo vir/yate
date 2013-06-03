@@ -1014,13 +1014,10 @@ void YIAXEngine::processMedia(IAXTransaction* transaction, DataBlock& data,
 	if (conn) {
 	    DataSource* src = conn->getSourceMedia(type);
 	    if (src) {
-		unsigned long ts = tStamp;
-		if (IAXFormat::Audio == type)
-		    ts *= 8; // assume 8kHz sampling
 		unsigned long flags = 0;
 		if (mark)
 		    flags = DataNode::DataMark;
-		src->Forward(data,ts,flags);
+		src->Forward(data,tStamp,flags);
 	    }
 	    else
 		DDebug(this,DebugAll,"processMedia. No media source");
@@ -1474,6 +1471,7 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
     IAXTransaction* tr = m_iaxEngine->call(addr,params);
     if (!tr)
 	return false;
+    tr->getEngine()->initOutDataAdjust(msg,tr);
     YIAXConnection* conn = new YIAXConnection(m_iaxEngine,tr,&msg,&params);
     conn->initChan();
     tr->setUserData(conn);
@@ -1660,7 +1658,7 @@ unsigned long YIAXConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	m_total += data.length();
 	if (m_connection->transaction()) {
 	    bool mark = (flags & DataMark) != 0;
-	    sent = m_connection->transaction()->sendMedia(data,format(),m_type,mark);
+	    sent = m_connection->transaction()->sendMedia(data,tStamp,format(),m_type,mark);
 	}
     }
     return sent;
@@ -1734,6 +1732,7 @@ void YIAXConnection::callAccept(Message& msg)
     DDebug(this,DebugCall,"callAccept [%p]",this);
     m_mutexTrans.lock();
     if (m_transaction) {
+	m_transaction->getEngine()->initOutDataAdjust(msg,m_transaction);
 	u_int32_t codecs = iplugin.getEngine()->capability();
 	if (msg.getValue("formats")) {
 	    u_int32_t ca = IAXFormat::mask(codecs,IAXFormat::Audio);

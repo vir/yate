@@ -30,6 +30,39 @@
 ; Defaults to yes
 ;calltoken_rejectmissing=yes
 
+; adjust_ts_out_threshold: integer: The difference, in milliseconds, between sent audio data
+;  timestamp and transaction timestamp at which audio data timestamp will be adjusted
+; Its value will be rouded up to a multiple of 10
+; This value is applied on reload for new calls only
+; It can be overridden from routing
+; Defaults to 120
+; Allowed interval: 20 .. 300
+;adjust_ts_out_threshold=120
+
+; adjust_ts_out_over: integer: Interval, in milliseconds, to adjust sent audio data
+;  timestamp on data overrun (the sender transmits data on a rate greater then expected)
+; When applied the packets will be dropped until data timestamp will be at least at the
+;  value of last sent packet timestamp
+; NOTE: Choose values greater the packet time to drop more packets at a time.
+;  Lower values will drop less packets in a row but this will happen more frequently
+; Its value will be rouded up to a multiple of 10
+; This value is applied on reload for new calls only
+; It can be overridden from routing
+; It can't be greater then adjust_ts_out_threshold
+; Defaults to 120
+; Allowed interval: 10 .. adjust_ts_out_threshold
+;adjust_ts_out_over=120
+
+; adjust_ts_out_under: integer: Interval, in milliseconds, to adjust sent audio data
+;  timestamp on data underrun (the sender transmits data on a rate less then expected)
+; Its value will be rouded up to a multiple of 10
+; This value is applied on reload for new calls only
+; It can be overridden from routing
+; It can't be greater then 2 * adjust_ts_out_threshold - 1
+; Defaults to 60
+; Allowed interval: 10 .. 2 * adjust_ts_out_threshold - 1
+;adjust_ts_out_under=60
+
 ; tos: keyword: Type Of Service to set in outgoing UDP packets
 ; numeric TOS value or: lowdelay, throughput, reliability, mincost
 ;tos=0

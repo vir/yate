@@ -640,6 +640,37 @@ void IAXAuthMethod::authList(String& dest, u_int16_t auth, char sep)
     }
 }
 
+
+/*
+ * IAXFormatDesc
+ */
+// Set the format
+void IAXFormatDesc::setFormat(u_int32_t fmt, int type)
+{
+    m_format = IAXFormat::mask(fmt,type);
+    if (!m_format) {
+	m_multiplier = 1;
+	return;
+    }
+    if (type == IAXFormat::Audio) {
+	switch (m_format) {
+	    case IAXFormat::G722:
+		// 16kHz samplig rate
+		m_multiplier = 16;
+		break;
+	    default:
+		// Assume 8kHz sampling rate
+		m_multiplier = 8;
+	}
+    }
+    else if (type == IAXFormat::Video)
+	// Assume 90kHz sampling rate for video
+	m_multiplier = 90;
+    else
+	m_multiplier = 1;
+}
+
+
 /*
  * IAXFormat
  */
@@ -680,11 +711,11 @@ const String IAXFormat::s_typesList[IAXFormat::TypeCount] = { "audio", "video", 
 void IAXFormat::set(u_int32_t* fmt, u_int32_t* fmtIn, u_int32_t* fmtOut)
 {
     if (fmt)
-	m_format = mask(*fmt,m_type);
+	m_format.setFormat(*fmt,m_type);
     if (fmtIn)
-	m_formatIn = mask(*fmtIn,m_type);
+	m_formatIn.setFormat(*fmtIn,m_type);
     if (fmtOut)
-	m_formatOut = mask(*fmtOut,m_type);
+	m_formatOut.setFormat(*fmtOut,m_type);
 }
 
 void IAXFormat::formatList(String& dest, u_int32_t formats, const TokenDict* dict,

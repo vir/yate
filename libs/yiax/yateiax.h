@@ -1536,6 +1536,13 @@ public:
         { return m_type; }
 
     /**
+     * Retrieve transaction type name
+     * @return Transaction type name
+     */
+    inline const char* typeName()
+	{ return typeName(type()); }
+
+    /**
      * Get the state of this transaction
      * @return The state of the transaction as enumeration
      */
@@ -1893,6 +1900,19 @@ public:
      * @param location Additional location info to be shown in debug
      */
     void print(bool printStats = false, bool printFrames = false, const char* location = "status");
+
+    /**
+     * Retrieve transaction type name from transaction type
+     * @param type Transaction type
+     * @return Requested type name
+     */
+    static inline const char* typeName(int type)
+	{ return lookup(type,s_typeName); }
+
+    /**
+     * Transaction type name
+     */
+    static const TokenDict s_typeName[];
 
     /**
      * Standard message sent if unsupported/unknown/none authentication methosd was received

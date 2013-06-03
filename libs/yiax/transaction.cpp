@@ -199,7 +199,8 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	case RegReq:
 	case RegRel:
 	    ies->appendString(IAXInfoElement::USERNAME,m_username);
-	    ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
+	    if (type == RegReq)
+		ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
 	    if (m_callToken)
 		ies->appendBinary(IAXInfoElement::CALLTOKEN,0,0);
 	    frametype = (type == RegReq ? IAXControl::RegReq : IAXControl::RegRel);

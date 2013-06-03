@@ -512,7 +512,7 @@ u_int32_t IAXEngine::transactionCount()
     return n;
 }
 
-void IAXEngine::keepAlive(SocketAddr& addr)
+void IAXEngine::keepAlive(const SocketAddr& addr)
 {
 #if 0
     unsigned char buf[12] = {0x80,0,0,0,0,0,0,0,0,0,IAXFrame::IAX,IAXControl::Inval};

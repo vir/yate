@@ -106,6 +106,8 @@ public:
 	{ return m_localPort; }
     inline int remotePort() const
 	{ return m_remotePort; }
+    inline const SocketAddr& remote() const
+	{ return m_remote; }
 private:
     void setRegistered(bool registered, const char* reason = 0, const char* error = 0);
     String m_name;
@@ -118,8 +120,10 @@ private:
     String m_remoteAddr;
     int m_localPort;
     int m_remotePort;
+    SocketAddr m_remote;
     u_int32_t m_nextReg;                // Time to next registration
-    u_int32_t m_nextKeepAlive;          // Time to next keep alive signal
+    u_int64_t m_nextKeepAlive;          // Time to next keep alive signal
+    unsigned int m_keepAliveInterval;   // Keep alive interval
     bool m_registered;			// Registered flag. If true the line is registered
     bool m_register;                    // Operation flag: True - register
     IAXTransaction* m_transaction;
@@ -600,6 +604,7 @@ YIAXLine::YIAXLine(const String& name)
     : Mutex(true,"IAX:Line"), m_name(name),
       m_expire(60), m_localPort(4569), m_remotePort(4569),
       m_nextReg(Time::secNow() + 40), m_nextKeepAlive(0),
+      m_keepAliveInterval(0),
       m_registered(false),
       m_register(true),
       m_transaction(0)
@@ -618,6 +623,10 @@ void YIAXLine::setRegistered(bool registered, const char* reason, const char* er
     if ((m_registered == registered) && !reason)
 	return;
     m_registered = registered;
+    if (!m_registered) {
+	m_nextKeepAlive = 0;
+	m_remote.clear();
+    }
     if (m_username) {
 	Message* m = new Message("user.notify");
 	m->addParam("account",toString());
@@ -648,6 +657,7 @@ bool YIAXLineContainer::changeLine(YIAXLine* line, String& dest, const String& s
 	return false;
     if (line->m_registered) {
 	line->m_registered = false;
+	line->m_remote.clear();
 	registerLine(line,false);
     }
     dest = src;
@@ -661,6 +671,7 @@ bool YIAXLineContainer::changeLine(YIAXLine* line, int& dest, int src)
 	return false;
     if (line->m_registered) {
 	line->m_registered = false;
+	line->m_remote.clear();
 	registerLine(line,false);
     }
     dest = src;
@@ -698,6 +709,7 @@ bool YIAXLineContainer::updateLine(Message& msg)
 	    port = msg.getIntValue("port");
 	if (port > 0)
 	    changed = changeLine(line,line->m_remotePort,port);
+	line->m_keepAliveInterval = msg.getIntValue("keepalive",25,0);
 	changed = changeLine(line,line->m_remoteAddr,addr) || changed;
 	changed = changeLine(line,line->m_username,msg.getValue("username")) || changed;
 	changed = changeLine(line,line->m_password,msg.getValue("password")) || changed;
@@ -800,6 +812,10 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 		line->m_remotePort,reason.safe());
 	clearTransaction(line);
 	line->setRegistered(ok,reason,event->type() == IAXEvent::Reject ? "noauth" : 0);
+	if (ok && trans) {
+	    Lock lck(trans);
+	    line->m_remote = trans->remoteAddr();
+	}
 	remove = !line->m_register;
     }
     line->unlock();
@@ -863,23 +879,26 @@ void YIAXLineContainer::evTimer(Time& time)
     GenObject* gen = 0; 
     while (0 != (gen = iter.get())) {
 	RefPointer<YIAXLine> line = static_cast<YIAXLine*>(gen);
+	if (!line)
+	    continue;
 	unlock();
-	if (line) {
-	    line->lock();
-	    if (sec > line->m_nextReg) {
-		line->m_nextReg += line->expire();
-		registerLine(line,line->m_register);
-	    }
-	    else if (line->m_registered && sec > line->m_nextKeepAlive) {
-		line->m_nextKeepAlive = sec + 25;
-		SocketAddr addr(AF_INET);
-		addr.host(line->remoteAddr());
-		addr.port(line->remotePort());
-		iplugin.getEngine()->keepAlive(addr);
-	    }
-	    line->unlock();
-	    line = 0;
+	line->lock();
+	if (sec > line->m_nextReg) {
+	    line->m_nextReg += line->expire();
+	    registerLine(line,line->m_register);
 	}
+	else if (line->m_registered && line->m_keepAliveInterval &&
+	    time > line->m_nextKeepAlive) {
+	    if (line->m_nextKeepAlive && line->remote().host()) {
+		DDebug(&iplugin,DebugAll,"IAX line '%s' sending keep alive to %s:%d [%p]",
+		    line->toString().c_str(),line->remote().host().c_str(),
+		    line->remote().port(),(YIAXLine*)line);
+		iplugin.getEngine()->keepAlive(line->remote());
+	    }
+	    line->m_nextKeepAlive = time + line->m_keepAliveInterval * 1000000;
+	}
+	line->unlock();
+	line = 0;
 	lock();
     }
     unlock();
@@ -939,6 +958,7 @@ void YIAXLineContainer::registerLine(YIAXLine* line, bool reg)
     if (!line)
 	return;
     line->m_register = reg;
+    line->m_nextKeepAlive = 0;
     clearTransaction(line);
     iplugin.getEngine()->reg(line,reg);
 }

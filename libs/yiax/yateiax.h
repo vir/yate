@@ -2718,7 +2718,7 @@ public:
      * Send an INVAL with call numbers set to 0 to a remote peer to keep it alive
      * @param addr Address to send to
      */
-    void keepAlive(SocketAddr& addr);
+    void keepAlive(const SocketAddr& addr);
 
     /**
      * Process a new format received with a full frame

@@ -37,6 +37,12 @@ using namespace TelEngine;
 // Minimum value for local call numbers
 #define IAX2_MIN_CALLNO 2
 
+// Outgoing data adjust timestamp defaults
+#define IAX2_ADJUSTTSOUT_THRES 120
+#define IAX2_ADJUSTTSOUT_OVER 120
+#define IAX2_ADJUSTTSOUT_UNDER 60
+
+
 // Build an MD5 digest from secret, address, integer value and engine run id
 // MD5(addr.host() + secret + addr.port() + t)
 static void buildSecretDigest(String& buf, const String& secret, unsigned int t,
@@ -70,6 +76,9 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
     m_format(format),
     m_formatVideo(0),
     m_capability(capab),
+    m_adjustTsOutThreshold(IAX2_ADJUSTTSOUT_THRES),
+    m_adjustTsOutOverrun(IAX2_ADJUSTTSOUT_OVER),
+    m_adjustTsOutUnderrun(IAX2_ADJUSTTSOUT_UNDER),
     m_mutexTrunk(true,"IAXEngine::Trunk"),
     m_trunkSendInterval(trunkSendInterval)
 {
@@ -312,6 +321,81 @@ bool IAXEngine::process()
     return ok;
 }
 
+static inline void roundUp10(unsigned int& value)
+{
+    unsigned int rest = value % 10;
+    if (rest)
+	value += 10 - rest;
+}
+
+// Initialize outgoing data timestamp adjust values
+void IAXEngine::initOutDataAdjust(const NamedList& params, IAXTransaction* tr)
+{
+    const String* thresS = 0;
+    const String* overS = 0;
+    const String* underS = 0;
+    NamedIterator iter(params);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (ns->name() == YSTRING("adjust_ts_out_threshold"))
+	    thresS = ns;
+	else if (ns->name() == YSTRING("adjust_ts_out_over"))
+	    overS = ns;
+	else if (ns->name() == YSTRING("adjust_ts_out_under"))
+	    underS = ns;
+    }
+    // No need to set transaction's data if no parameter found
+    if (tr && !(thresS || overS || underS))
+	return;
+    Lock lck(tr ? (Mutex*)tr : (Mutex*)this);
+    unsigned int thresDef = IAX2_ADJUSTTSOUT_THRES;
+    unsigned int overDef = IAX2_ADJUSTTSOUT_OVER;
+    unsigned int underDef = IAX2_ADJUSTTSOUT_UNDER;
+    if (tr) {
+	thresDef = tr->m_adjustTsOutThreshold;
+	overDef = tr->m_adjustTsOutOverrun;
+	underDef = tr->m_adjustTsOutUnderrun;
+    }
+    unsigned int thres = thresS ? thresS->toInteger(thresDef,0,20,300) : thresDef;
+    unsigned int over = overS ? overS->toInteger(overDef,0,10) : overDef;
+    unsigned int under = underS ? underS->toInteger(underDef,0,10) : underDef;
+    bool adjusted = false;
+    // Round down to multiple of 10
+    roundUp10(thres);
+    roundUp10(over);
+    roundUp10(under);
+    // Overrun must not be greater then threshold
+    if (over > thres) {
+	over = thres;
+	adjusted = true;
+    }
+    // Underrun must be less then 2 * threshold
+    unsigned int doubleThres = 2 * thres;
+    if (under >= doubleThres) {
+	under = doubleThres - 10;
+	adjusted = true;
+    }
+    if (tr) {
+	tr->m_adjustTsOutThreshold = thres;
+	tr->m_adjustTsOutOverrun = over;
+	tr->m_adjustTsOutUnderrun = under;
+	Debug(this,DebugAll,
+	    "Transaction(%u,%u) adjust ts out set to thres=%u over=%u under=%u [%p]",
+	    tr->localCallNo(),tr->remoteCallNo(),thres,over,under,tr);
+	return;
+    }
+    m_adjustTsOutThreshold = thres;
+    m_adjustTsOutOverrun = over;
+    m_adjustTsOutUnderrun = under;
+    if (adjusted)
+	Debug(this,DebugConf,
+	    "Adjust ts out set to thres=%u over=%u under=%u from thres=%s over=%s under=%s",
+	    thres,over,under,TelEngine::c_safe(thresS),
+	    TelEngine::c_safe(overS),TelEngine::c_safe(underS));
+    else
+	Debug(this,DebugAll,"Adjust ts out set to thres=%u over=%u under=%u",
+	    thres,over,under);
+}
+
 // (Re)Initialize the engine
 void IAXEngine::initialize(const NamedList& params)
 {
@@ -324,6 +408,7 @@ void IAXEngine::initialize(const NamedList& params)
     m_showCallTokenFailures = params.getBoolValue("calltoken_printfailure");
     m_rejectMissingCallToken = params.getBoolValue("calltoken_rejectmissing",true);
     m_printMsg = params.getBoolValue("printmsg",true);
+    initOutDataAdjust(params);
 }
 
 void IAXEngine::readSocket(SocketAddr& addr)

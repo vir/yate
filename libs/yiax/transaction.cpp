@@ -200,6 +200,8 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	case RegRel:
 	    ies->appendString(IAXInfoElement::USERNAME,m_username);
 	    ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
+	    if (m_callToken)
+		ies->appendBinary(IAXInfoElement::CALLTOKEN,0,0);
 	    frametype = (type == RegReq ? IAXControl::RegReq : IAXControl::RegRel);
 	    break;
 	case Poke:
@@ -1076,6 +1078,8 @@ void IAXTransaction::init(IAXIEList& ieList)
 	    ieList.getNumeric(IAXInfoElement::REFRESH,m_expire);
 	case RegRel:
 	    ieList.getString(IAXInfoElement::USERNAME,m_username);
+	    if (outgoing())
+		m_callToken = (0 != ieList.getIE(IAXInfoElement::CALLTOKEN));
 	    break;
 	case Poke:
 	default: ;

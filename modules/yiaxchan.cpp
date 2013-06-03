@@ -1495,8 +1495,10 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
     IAXTransaction* tr = m_iaxEngine->call(addr,params);
-    if (!tr)
+    if (!tr) {
+	msg.copyParams(params,"error");
 	return false;
+    }
     tr->getEngine()->initOutDataAdjust(msg,tr);
     YIAXConnection* conn = new YIAXConnection(m_iaxEngine,tr,&msg,&params);
     conn->initChan();

@@ -37,6 +37,12 @@ using namespace TelEngine;
 // Minimum value for local call numbers
 #define IAX2_MIN_CALLNO 2
 
+// Outgoing data adjust timestamp defaults
+#define IAX2_ADJUSTTSOUT_THRES 120
+#define IAX2_ADJUSTTSOUT_OVER 120
+#define IAX2_ADJUSTTSOUT_UNDER 60
+
+
 // Build an MD5 digest from secret, address, integer value and engine run id
 // MD5(addr.host() + secret + addr.port() + t)
 static void buildSecretDigest(String& buf, const String& secret, unsigned int t,
@@ -70,6 +76,9 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
     m_format(format),
     m_formatVideo(0),
     m_capability(capab),
+    m_adjustTsOutThreshold(IAX2_ADJUSTTSOUT_THRES),
+    m_adjustTsOutOverrun(IAX2_ADJUSTTSOUT_OVER),
+    m_adjustTsOutUnderrun(IAX2_ADJUSTTSOUT_UNDER),
     m_mutexTrunk(true,"IAXEngine::Trunk"),
     m_trunkSendInterval(trunkSendInterval)
 {
@@ -141,27 +150,27 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 {
     if (!frame)
 	return 0;
-    IAXTransaction* tr;
-    ObjList* l;
+    IAXTransaction* tr = 0;
+    ObjList* l = 0;
     Lock lock(this);
     // Transaction exists for this frame?
-    // Incomplete transactions. They MUST receive a full frame
-    IAXFullFrame* fullFrame = frame->fullFrame();
-    if (fullFrame) {
+    // Incomplete transactions. They MUST receive a full frame with destination call number set
+    IAXFullFrame* full = frame->fullFrame();
+    if (full && full->destCallNo()) {
 	l = m_incompleteTransList.skipNull();
 	for (; l; l = l->next()) {
 	    tr = static_cast<IAXTransaction*>(l->get());
-	    if (!(tr && tr->localCallNo() == fullFrame->destCallNo() && addr == tr->remoteAddr()))
+	    if (!(tr && tr->localCallNo() == full->destCallNo() && addr == tr->remoteAddr()))
 		continue;
 	    // Incomplete outgoing receiving call token
-	    if (fullFrame->type() == IAXFrame::IAX &&
-		fullFrame->subclass() == IAXControl::CallToken) {
+	    if (full->type() == IAXFrame::IAX &&
+		full->subclass() == IAXControl::CallToken) {
 		RefPointer<IAXTransaction> t = tr;
 		lock.drop();
 		if (!t)
 		    return 0;
-		fullFrame->updateIEList(true);
-		IAXIEList* list = fullFrame->ieList();
+		full->updateIEList(true);
+		IAXIEList* list = full->ieList();
 		DataBlock db;
 		if (list)
 		    list->getBinary(IAXInfoElement::CALLTOKEN,db);
@@ -183,12 +192,14 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
     }
     // Complete transactions
     l = m_transList[frame->sourceCallNo() % m_transListCount];
-    for (; l; l = l->next()) {
+    if (l)
+	l = l->skipNull();
+    for (; l; l = l->skipNext()) {
 	tr = static_cast<IAXTransaction*>(l->get());
-	if (!(tr && tr->remoteCallNo() == frame->sourceCallNo()))
+	if (tr->remoteCallNo() != frame->sourceCallNo())
 	    continue;
 	// Mini frame
-	if (!fullFrame) {
+	if (!full) {
 	    if (addr == tr->remoteAddr()) {
 		// keep transaction referenced but unlock the engine
 		RefPointer<IAXTransaction> t = tr;
@@ -199,7 +210,7 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 	}
 	// Full frame
 	// Has a local number assigned? If not, test socket
-	if (fullFrame->destCallNo() || addr == tr->remoteAddr()) {
+	if (full->destCallNo() || addr == tr->remoteAddr()) {
 	    // keep transaction referenced but unlock the engine
 	    RefPointer<IAXTransaction> t = tr;
 	    lock.drop();
@@ -208,11 +219,11 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
     }
     // Frame doesn't belong to an existing transaction
     // Test if it is a full frame with an IAX control message that needs a new transaction
-    if (!fullFrame || frame->type() != IAXFrame::IAX)
+    if (!full || frame->type() != IAXFrame::IAX)
 	return 0;
-    switch (fullFrame->subclass()) {
+    switch (full->subclass()) {
 	case IAXControl::New:
-	     if (!checkCallToken(addr,*fullFrame))
+	    if (!checkCallToken(addr,*full))
 		return 0;
 	case IAXControl::RegReq:
 	case IAXControl::RegRel:
@@ -225,28 +236,29 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 	    // These are often used as keepalives
 	    return 0;
 	default:
-	    if (fullFrame) {
-	        if (fullFrame->destCallNo() == 0)
-		    Debug(this,DebugAll,"Unsupported incoming transaction Frame(%u,%u). Source call no: %u",
-			frame->type(),fullFrame->subclass(),fullFrame->sourceCallNo());
-		else
-		    Debug(this,DebugAll,"Unmatched Frame(%u,%u) for (%u,%u)",
-			frame->type(),fullFrame->subclass(),fullFrame->destCallNo(),fullFrame->sourceCallNo());
-
-		sendInval(fullFrame,addr);
-	    }
+	    if (full->destCallNo() == 0)
+		Debug(this,DebugAll,
+		    "Unsupported incoming transaction Frame(%u,%u). Source call no: %u",
+		    frame->type(),full->subclass(),full->sourceCallNo());
+	    else
+		Debug(this,DebugAll,"Unmatched Frame(%u,%u) for (%u,%u)",
+		    frame->type(),full->subclass(),full->destCallNo(),full->sourceCallNo());
+		sendInval(full,addr);
 	    return 0;
     }
     // Generate local number
     u_int16_t lcn = generateCallNo();
-    if (!lcn)
-	return 0;
-    // Create and add transaction
-    tr = IAXTransaction::factoryIn(this,fullFrame,lcn,addr);
-    if (tr)
-	m_transList[frame->sourceCallNo() % m_transListCount]->append(tr);
-    else
-	releaseCallNo(lcn);
+    if (lcn) {
+	// Create and add transaction
+	tr = IAXTransaction::factoryIn(this,full,lcn,addr);
+	if (tr)
+	    m_transList[frame->sourceCallNo() % m_transListCount]->append(tr);
+	else
+	    releaseCallNo(lcn);
+    }
+    if (!tr)
+	Debug(this,DebugInfo,"Failed to build incoming transaction for Frame(%u,%u)",
+	    frame->type(),full->subclass());
     return tr;
 }
 
@@ -312,6 +324,81 @@ bool IAXEngine::process()
     return ok;
 }
 
+static inline void roundUp10(unsigned int& value)
+{
+    unsigned int rest = value % 10;
+    if (rest)
+	value += 10 - rest;
+}
+
+// Initialize outgoing data timestamp adjust values
+void IAXEngine::initOutDataAdjust(const NamedList& params, IAXTransaction* tr)
+{
+    const String* thresS = 0;
+    const String* overS = 0;
+    const String* underS = 0;
+    NamedIterator iter(params);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (ns->name() == YSTRING("adjust_ts_out_threshold"))
+	    thresS = ns;
+	else if (ns->name() == YSTRING("adjust_ts_out_over"))
+	    overS = ns;
+	else if (ns->name() == YSTRING("adjust_ts_out_under"))
+	    underS = ns;
+    }
+    // No need to set transaction's data if no parameter found
+    if (tr && !(thresS || overS || underS))
+	return;
+    Lock lck(tr ? (Mutex*)tr : (Mutex*)this);
+    unsigned int thresDef = IAX2_ADJUSTTSOUT_THRES;
+    unsigned int overDef = IAX2_ADJUSTTSOUT_OVER;
+    unsigned int underDef = IAX2_ADJUSTTSOUT_UNDER;
+    if (tr) {
+	thresDef = tr->m_adjustTsOutThreshold;
+	overDef = tr->m_adjustTsOutOverrun;
+	underDef = tr->m_adjustTsOutUnderrun;
+    }
+    unsigned int thres = thresS ? thresS->toInteger(thresDef,0,20,300) : thresDef;
+    unsigned int over = overS ? overS->toInteger(overDef,0,10) : overDef;
+    unsigned int under = underS ? underS->toInteger(underDef,0,10) : underDef;
+    bool adjusted = false;
+    // Round down to multiple of 10
+    roundUp10(thres);
+    roundUp10(over);
+    roundUp10(under);
+    // Overrun must not be greater then threshold
+    if (over > thres) {
+	over = thres;
+	adjusted = true;
+    }
+    // Underrun must be less then 2 * threshold
+    unsigned int doubleThres = 2 * thres;
+    if (under >= doubleThres) {
+	under = doubleThres - 10;
+	adjusted = true;
+    }
+    if (tr) {
+	tr->m_adjustTsOutThreshold = thres;
+	tr->m_adjustTsOutOverrun = over;
+	tr->m_adjustTsOutUnderrun = under;
+	Debug(this,DebugAll,
+	    "Transaction(%u,%u) adjust ts out set to thres=%u over=%u under=%u [%p]",
+	    tr->localCallNo(),tr->remoteCallNo(),thres,over,under,tr);
+	return;
+    }
+    m_adjustTsOutThreshold = thres;
+    m_adjustTsOutOverrun = over;
+    m_adjustTsOutUnderrun = under;
+    if (adjusted)
+	Debug(this,DebugConf,
+	    "Adjust ts out set to thres=%u over=%u under=%u from thres=%s over=%s under=%s",
+	    thres,over,under,TelEngine::c_safe(thresS),
+	    TelEngine::c_safe(overS),TelEngine::c_safe(underS));
+    else
+	Debug(this,DebugAll,"Adjust ts out set to thres=%u over=%u under=%u",
+	    thres,over,under);
+}
+
 // (Re)Initialize the engine
 void IAXEngine::initialize(const NamedList& params)
 {
@@ -324,6 +411,7 @@ void IAXEngine::initialize(const NamedList& params)
     m_showCallTokenFailures = params.getBoolValue("calltoken_printfailure");
     m_rejectMissingCallToken = params.getBoolValue("calltoken_rejectmissing",true);
     m_printMsg = params.getBoolValue("printmsg",true);
+    initOutDataAdjust(params);
 }
 
 void IAXEngine::readSocket(SocketAddr& addr)
@@ -424,7 +512,7 @@ u_int32_t IAXEngine::transactionCount()
     return n;
 }
 
-void IAXEngine::keepAlive(SocketAddr& addr)
+void IAXEngine::keepAlive(const SocketAddr& addr)
 {
 #if 0
     unsigned char buf[12] = {0x80,0,0,0,0,0,0,0,0,0,IAXFrame::IAX,IAXControl::Inval};

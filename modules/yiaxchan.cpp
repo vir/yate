@@ -106,6 +106,10 @@ public:
 	{ return m_localPort; }
     inline int remotePort() const
 	{ return m_remotePort; }
+    inline const SocketAddr& remote() const
+	{ return m_remote; }
+    inline bool callToken() const
+	{ return m_callToken; }
 private:
     void setRegistered(bool registered, const char* reason = 0, const char* error = 0);
     String m_name;
@@ -113,13 +117,16 @@ private:
     String m_password;                  // Password
     String m_callingNo;                 // Calling number
     String m_callingName;               // Calling name
+    bool m_callToken;                   // Advertise CALLTOKEN support
     int m_expire;                       // Expire time
     String m_localAddr;
     String m_remoteAddr;
     int m_localPort;
     int m_remotePort;
+    SocketAddr m_remote;
     u_int32_t m_nextReg;                // Time to next registration
-    u_int32_t m_nextKeepAlive;          // Time to next keep alive signal
+    u_int64_t m_nextKeepAlive;          // Time to next keep alive signal
+    unsigned int m_keepAliveInterval;   // Keep alive interval
     bool m_registered;			// Registered flag. If true the line is registered
     bool m_register;                    // Operation flag: True - register
     IAXTransaction* m_transaction;
@@ -597,9 +604,10 @@ static const char* lookupFormat(u_int32_t format, int type)
 
 // Create an idle line
 YIAXLine::YIAXLine(const String& name)
-    : Mutex(true,"IAX:Line"), m_name(name),
+    : Mutex(true,"IAX:Line"), m_name(name), m_callToken(false),
       m_expire(60), m_localPort(4569), m_remotePort(4569),
       m_nextReg(Time::secNow() + 40), m_nextKeepAlive(0),
+      m_keepAliveInterval(0),
       m_registered(false),
       m_register(true),
       m_transaction(0)
@@ -618,6 +626,10 @@ void YIAXLine::setRegistered(bool registered, const char* reason, const char* er
     if ((m_registered == registered) && !reason)
 	return;
     m_registered = registered;
+    if (!m_registered) {
+	m_nextKeepAlive = 0;
+	m_remote.clear();
+    }
     if (m_username) {
 	Message* m = new Message("user.notify");
 	m->addParam("account",toString());
@@ -648,6 +660,7 @@ bool YIAXLineContainer::changeLine(YIAXLine* line, String& dest, const String& s
 	return false;
     if (line->m_registered) {
 	line->m_registered = false;
+	line->m_remote.clear();
 	registerLine(line,false);
     }
     dest = src;
@@ -661,6 +674,7 @@ bool YIAXLineContainer::changeLine(YIAXLine* line, int& dest, int src)
 	return false;
     if (line->m_registered) {
 	line->m_registered = false;
+	line->m_remote.clear();
 	registerLine(line,false);
     }
     dest = src;
@@ -698,6 +712,7 @@ bool YIAXLineContainer::updateLine(Message& msg)
 	    port = msg.getIntValue("port");
 	if (port > 0)
 	    changed = changeLine(line,line->m_remotePort,port);
+	line->m_keepAliveInterval = msg.getIntValue("keepalive",25,0);
 	changed = changeLine(line,line->m_remoteAddr,addr) || changed;
 	changed = changeLine(line,line->m_username,msg.getValue("username")) || changed;
 	changed = changeLine(line,line->m_password,msg.getValue("password")) || changed;
@@ -707,6 +722,7 @@ bool YIAXLineContainer::updateLine(Message& msg)
 	if (interval < 60)
 	    interval = 60;
 	changed = changeLine(line,line->m_expire,interval) || changed;
+	line->m_callToken = msg.getBoolValue("calltoken",s_callTokenOut);
 	if (changed || op == "login") {
 	    line->m_nextReg = Time::secNow() + (line->m_expire * 3 / 4);
 	    line->m_nextKeepAlive = 0;
@@ -800,6 +816,10 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 		line->m_remotePort,reason.safe());
 	clearTransaction(line);
 	line->setRegistered(ok,reason,event->type() == IAXEvent::Reject ? "noauth" : 0);
+	if (ok && trans) {
+	    Lock lck(trans);
+	    line->m_remote = trans->remoteAddr();
+	}
 	remove = !line->m_register;
     }
     line->unlock();
@@ -863,23 +883,26 @@ void YIAXLineContainer::evTimer(Time& time)
     GenObject* gen = 0; 
     while (0 != (gen = iter.get())) {
 	RefPointer<YIAXLine> line = static_cast<YIAXLine*>(gen);
+	if (!line)
+	    continue;
 	unlock();
-	if (line) {
-	    line->lock();
-	    if (sec > line->m_nextReg) {
-		line->m_nextReg += line->expire();
-		registerLine(line,line->m_register);
-	    }
-	    else if (line->m_registered && sec > line->m_nextKeepAlive) {
-		line->m_nextKeepAlive = sec + 25;
-		SocketAddr addr(AF_INET);
-		addr.host(line->remoteAddr());
-		addr.port(line->remotePort());
-		iplugin.getEngine()->keepAlive(addr);
-	    }
-	    line->unlock();
-	    line = 0;
+	line->lock();
+	if (sec > line->m_nextReg) {
+	    line->m_nextReg += line->expire();
+	    registerLine(line,line->m_register);
 	}
+	else if (line->m_registered && line->m_keepAliveInterval &&
+	    time > line->m_nextKeepAlive) {
+	    if (line->m_nextKeepAlive && line->remote().host()) {
+		DDebug(&iplugin,DebugAll,"IAX line '%s' sending keep alive to %s:%d [%p]",
+		    line->toString().c_str(),line->remote().host().c_str(),
+		    line->remote().port(),(YIAXLine*)line);
+		iplugin.getEngine()->keepAlive(line->remote());
+	    }
+	    line->m_nextKeepAlive = time + line->m_keepAliveInterval * 1000000;
+	}
+	line->unlock();
+	line = 0;
 	lock();
     }
     unlock();
@@ -939,6 +962,7 @@ void YIAXLineContainer::registerLine(YIAXLine* line, bool reg)
     if (!line)
 	return;
     line->m_register = reg;
+    line->m_nextKeepAlive = 0;
     clearTransaction(line);
     iplugin.getEngine()->reg(line,reg);
 }
@@ -1014,13 +1038,10 @@ void YIAXEngine::processMedia(IAXTransaction* transaction, DataBlock& data,
 	if (conn) {
 	    DataSource* src = conn->getSourceMedia(type);
 	    if (src) {
-		unsigned long ts = tStamp;
-		if (IAXFormat::Audio == type)
-		    ts *= 8; // assume 8kHz sampling
 		unsigned long flags = 0;
 		if (mark)
 		    flags = DataNode::DataMark;
-		src->Forward(data,ts,flags);
+		src->Forward(data,tStamp,flags);
 	    }
 	    else
 		DDebug(this,DebugAll,"processMedia. No media source");
@@ -1048,6 +1069,8 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
     ieList.appendString(IAXInfoElement::USERNAME,line->username());
     ieList.appendString(IAXInfoElement::PASSWORD,line->password());
     ieList.appendNumeric(IAXInfoElement::REFRESH,line->expire(),2);
+    if (line->callToken())
+	ieList.appendBinary(IAXInfoElement::CALLTOKEN,0,0);
     // Make it !
     IAXTransaction* tr = startLocalTransaction(regreq ? IAXTransaction::RegReq : IAXTransaction::RegRel,addr,ieList);
     if (tr)
@@ -1472,8 +1495,11 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
     IAXTransaction* tr = m_iaxEngine->call(addr,params);
-    if (!tr)
+    if (!tr) {
+	msg.copyParams(params,"error");
 	return false;
+    }
+    tr->getEngine()->initOutDataAdjust(msg,tr);
     YIAXConnection* conn = new YIAXConnection(m_iaxEngine,tr,&msg,&params);
     conn->initChan();
     tr->setUserData(conn);
@@ -1660,7 +1686,7 @@ unsigned long YIAXConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	m_total += data.length();
 	if (m_connection->transaction()) {
 	    bool mark = (flags & DataMark) != 0;
-	    sent = m_connection->transaction()->sendMedia(data,format(),m_type,mark);
+	    sent = m_connection->transaction()->sendMedia(data,tStamp,format(),m_type,mark);
 	}
     }
     return sent;
@@ -1734,6 +1760,7 @@ void YIAXConnection::callAccept(Message& msg)
     DDebug(this,DebugCall,"callAccept [%p]",this);
     m_mutexTrans.lock();
     if (m_transaction) {
+	m_transaction->getEngine()->initOutDataAdjust(msg,m_transaction);
 	u_int32_t codecs = iplugin.getEngine()->capability();
 	if (msg.getValue("formats")) {
 	    u_int32_t ca = IAXFormat::mask(codecs,IAXFormat::Audio);
@@ -1977,7 +2004,7 @@ void YIAXConnection::hangup(int location, const char* reason, bool reject)
     clearMedia(false);
     clearMedia(true,IAXFormat::Video);
     clearMedia(false,IAXFormat::Video);
-    Message* m = message("chan.hangup",true);
+    Message* m = message("chan.hangup");
     m->setParam("status","hangup");
     m->setParam("reason",m_reason);
     m_mutexTrans.lock();

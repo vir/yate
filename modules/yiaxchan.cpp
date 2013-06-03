@@ -2004,7 +2004,7 @@ void YIAXConnection::hangup(int location, const char* reason, bool reject)
     clearMedia(false);
     clearMedia(true,IAXFormat::Video);
     clearMedia(false,IAXFormat::Video);
-    Message* m = message("chan.hangup",true);
+    Message* m = message("chan.hangup");
     m->setParam("status","hangup");
     m->setParam("reason",m_reason);
     m_mutexTrans.lock();

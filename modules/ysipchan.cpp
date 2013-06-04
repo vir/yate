@@ -1006,13 +1006,16 @@ public:
     YateSIPGenerate(SIPMessage* m);
     virtual ~YateSIPGenerate();
     bool process(SIPEvent* ev);
-    bool busy() const
+    inline bool busy() const
 	{ return m_tr != 0; }
-    int code() const
+    inline int code() const
 	{ return m_code; }
+    inline const SIPMessage* answer() const
+	{ return m_msg; }
 private:
     void clearTransaction();
     SIPTransaction* m_tr;
+    RefPointer<SIPMessage> m_msg;
     int m_code;
 };
 
@@ -1731,6 +1734,93 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
     }
     if (rfc3323)
 	sip.addHeader("Privacy",rfc3323);
+}
+
+// Copy body from SIP message to Yate message
+static void copySipBody(NamedList& msg, const SIPMessage& sip)
+{
+    if (!sip.body)
+	return;
+    // add the body if it's a string one
+    MimeStringBody* strBody = YOBJECT(MimeStringBody,sip.body);
+    if (strBody) {
+	msg.addParam("xsip_type",strBody->getType());
+	msg.addParam("xsip_body",strBody->text());
+    }
+    else {
+	MimeLinesBody* txtBody = YOBJECT(MimeLinesBody,sip.body);
+	if (txtBody) {
+	    String bodyText((const char*)txtBody->getBody().data(),txtBody->getBody().length());
+	    msg.addParam("xsip_type",txtBody->getType());
+	    msg.addParam("xsip_body",bodyText);
+	}
+	else {
+	    const DataBlock& binBody = sip.body->getBody();
+	    String bodyText;
+	    int enc = s_defEncoding;
+	    switch (enc) {
+		case SipHandler::BodyRaw:
+		    bodyText.assign((const char*)binBody.data(),binBody.length());
+		    break;
+		case SipHandler::BodyHex:
+		    bodyText.hexify(binBody.data(),binBody.length());
+		    break;
+		case SipHandler::BodyHexS:
+		    bodyText.hexify(binBody.data(),binBody.length(),' ');
+		    break;
+		default:
+		    enc = SipHandler::BodyBase64;
+		    {
+			Base64 b64(binBody.data(),binBody.length(),false);
+			b64.encode(bodyText);
+			b64.clear(false);
+		    }
+	    }
+	    msg.addParam("xsip_type",sip.body->getType());
+	    msg.addParam("xsip_body_encoding",lookup(enc,SipHandler::s_bodyEnc));
+	    msg.addParam("xsip_body",bodyText);
+	}
+    }
+}
+
+// Copy body from Yate message to SIP message
+static void copySipBody(SIPMessage& sip, const NamedList& msg)
+{
+    const String& type = msg[YSTRING("xsip_type")];
+    const String& body = msg[YSTRING("xsip_body")];
+    if (type && body) {
+	const String& bodyEnc = msg[YSTRING("xsip_body_encoding")];
+	if (bodyEnc.null())
+	    sip.setBody(new MimeStringBody(type,body.c_str(),body.length()));
+	else {
+	    DataBlock binBody;
+	    bool ok = false;
+	    switch (bodyEnc.toInteger(SipHandler::s_bodyEnc)) {
+		case SipHandler::BodyRaw:
+		    binBody.append(body);
+		    ok = true;
+		    break;
+		case SipHandler::BodyHex:
+		    ok = binBody.unHexify(body,body.length());
+		    break;
+		case SipHandler::BodyHexS:
+		    ok = binBody.unHexify(body,body.length(),' ');
+		    break;
+		case SipHandler::BodyBase64:
+		    {
+			Base64 b64;
+			b64 << body;
+			ok = b64.decode(binBody);
+		    }
+		    break;
+	    }
+
+	    if (ok)
+		sip.setBody(new MimeBinaryBody(type,(const char*)binBody.data(),binBody.length()));
+	    else
+		Debug(&plugin,DebugWarn,"Invalid xsip_body_encoding '%s'",bodyEnc.c_str());
+	}
+    }
 }
 
 // Check if the given body have the given type
@@ -4939,46 +5029,7 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     copySipHeaders(m,*message,false);
 
     doDecodeIsupBody(&plugin,m,message->body);
-    // add the body if it's a string one
-    MimeStringBody* strBody = YOBJECT(MimeStringBody,message->body);
-    if (strBody) {
-	m.addParam("xsip_type",strBody->getType());
-	m.addParam("xsip_body",strBody->text());
-    }
-    else {
-	MimeLinesBody* txtBody = YOBJECT(MimeLinesBody,message->body);
-	if (txtBody) {
-	    String bodyText((const char*)txtBody->getBody().data(),txtBody->getBody().length());
-	    m.addParam("xsip_type",txtBody->getType());
-	    m.addParam("xsip_body",bodyText);
-	}
-	else if (message->body) {
-	    const DataBlock& binBody = message->body->getBody();
-	    String bodyText;
-	    int enc = s_defEncoding;
-	    switch (enc) {
-		case SipHandler::BodyRaw:
-		    bodyText.assign((const char*)binBody.data(),binBody.length());
-		    break;
-		case SipHandler::BodyHex:
-		    bodyText.hexify(binBody.data(),binBody.length());
-		    break;
-		case SipHandler::BodyHexS:
-		    bodyText.hexify(binBody.data(),binBody.length(),' ');
-		    break;
-		default:
-		    enc = SipHandler::BodyBase64;
-		    {
-			Base64 b64(binBody.data(),binBody.length(),false);
-			b64.encode(bodyText);
-			b64.clear(false);
-		    }
-	    }
-	    m.addParam("xsip_type",message->body->getType());
-	    m.addParam("xsip_body_encoding",lookup(enc,SipHandler::s_bodyEnc));
-	    m.addParam("xsip_body",bodyText);
-	}
-    }
+    copySipBody(m,*message);
 
     int code = 0;
     if (Engine::dispatch(m)) {
@@ -7731,11 +7782,12 @@ bool YateSIPGenerate::process(SIPEvent* ev)
 	clearTransaction();
 	return false;
     }
-    const SIPMessage* msg = ev->getMessage();
+    SIPMessage* msg = ev->getMessage();
     if (!(msg && msg->isAnswer()))
 	return false;
     if (ev->getState() != SIPTransaction::Process)
 	return false;
+    m_msg = msg;
     clearTransaction();
     Debug(&plugin,DebugAll,"YateSIPGenerate got answer %d [%p]",
 	m_code,this);
@@ -7835,43 +7887,14 @@ bool SipHandler::received(Message &msg)
     }
     sip->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*sip,msg,"sip_");
-    const String& type = msg[YSTRING("xsip_type")];
-    const String& body = msg[YSTRING("xsip_body")];
-    if (type && body) {
-	const String& bodyEnc = msg[YSTRING("xsip_body_encoding")];
-	if (bodyEnc.null())
-	    sip->setBody(new MimeStringBody(type,body.c_str(),body.length()));
-	else {
-	    DataBlock binBody;
-	    bool ok = false;
-	    switch (bodyEnc.toInteger(s_bodyEnc)) {
-		case BodyRaw:
-		    binBody.append(body);
-		    ok = true;
-		    break;
-		case BodyHex:
-		    ok = binBody.unHexify(body,body.length());
-		    break;
-		case BodyHexS:
-		    ok = binBody.unHexify(body,body.length(),' ');
-		    break;
-		case BodyBase64:
-		    {
-			Base64 b64;
-			b64 << body;
-			ok = b64.decode(binBody);
-		    }
-		    break;
-	    }
-
-	    if (ok)
-		sip->setBody(new MimeBinaryBody(type,(const char*)binBody.data(),binBody.length()));
-	    else
-		Debug(&plugin,DebugWarn,"Invalid xsip_body_encoding '%s'",bodyEnc.c_str());
-	}
-    }
-    sip->complete(plugin.ep()->engine(),msg.getValue(YSTRING("user")),domain,0,
+    copySipBody(*sip,msg);
+    const char* user = msg.getValue(YSTRING("user"));
+    sip->complete(plugin.ep()->engine(),user,domain,0,
 	msg.getIntValue(YSTRING("xsip_flags"),-1));
+    user = msg.getValue(YSTRING("authname"),user);
+    const char* pass = msg.getValue(YSTRING("password"));
+    if (user && pass)
+	sip->setAutoAuth(user,pass);
     if (!msg.getBoolValue(YSTRING("wait"))) {
 	// no answer requested - start transaction and forget
 	plugin.ep()->engine()->addMessage(sip);
@@ -7881,8 +7904,15 @@ bool SipHandler::received(Message &msg)
     YateSIPGenerate gen(sip);
     while (gen.busy())
 	Thread::idle();
-    if (gen.code())
+    if (gen.code()) {
 	msg.setParam("code",String(gen.code()));
+	msg.clearParam("sip",'_');
+	msg.clearParam("xsip",'_');
+	if (gen.answer()) {
+	    copySipHeaders(msg,*gen.answer());
+	    copySipBody(msg,*gen.answer());
+	}
+    }
     else
 	msg.clearParam("code");
     return true;

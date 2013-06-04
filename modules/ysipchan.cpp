@@ -5030,6 +5030,14 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
 
     doDecodeIsupBody(&plugin,m,message->body);
     copySipBody(m,*message);
+    // attempt to find out if the handler modified the body
+    unsigned int bodyHash = YSTRING_INIT_HASH;
+    unsigned int bodyLen = 0;
+    const String* body = m.getParam(YSTRING("xsip_body"));
+    if (body) {
+	bodyHash = body->hash();
+	bodyLen = body->length();
+    }
 
     int code = 0;
     if (Engine::dispatch(m)) {
@@ -5046,6 +5054,9 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     if ((code >= 200) && (code < 700)) {
 	SIPMessage* resp = new SIPMessage(message,code);
 	copySipHeaders(*resp,m);
+	body = m.getParam(YSTRING("xsip_body"));
+	if (body && (body->hash() != bodyHash || body->length() != bodyLen))
+	    copySipBody(*resp,m);
 	t->setResponse(resp);
 	resp->deref();
 	return true;

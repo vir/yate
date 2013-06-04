@@ -129,7 +129,7 @@ private:
     unsigned int m_keepAliveInterval;   // Keep alive interval
     bool m_registered;			// Registered flag. If true the line is registered
     bool m_register;                    // Operation flag: True - register
-    IAXTransaction* m_transaction;
+    RefPointer<IAXTransaction> m_transaction;
 };
 
 /*
@@ -194,23 +194,32 @@ public:
     inline bool hasLine(const String& line)
 	{ Lock lock(this); return findLine(line) != 0; }
 
-    /**
-     * Get a copy of the lines list
+    /*
+     * Retrieve the lines list
      */
-    inline ObjList* lines()
-	{ Lock lock(this); return m_lines.skipNull();}
+    inline ObjList& lines()
+	{ return m_lines;}
 
 protected:
     // Clear a line's transaction
-    void clearTransaction(YIAXLine* line);
+    void clearTransaction(YIAXLine* line, bool abortReg = true);
     // Change a line String parameter. Unregister it if changed
     bool changeLine(YIAXLine* line, String& dest, const String& src);
     bool changeLine(YIAXLine* line, int& dest, int src);
     // Update a line
     bool updateLine(YIAXLine* line, Message &msg);
     bool addLine(Message &msg);
-    YIAXLine* findLine(const String& name);
-    YIAXLine* findLine(YIAXLine* line);
+    // Find a line by name
+    inline YIAXLine* findLine(const String& name) {
+	    ObjList* o = m_lines.find(name);
+	    return o ? static_cast<YIAXLine*>(o->get()) : 0;
+	}
+    // Find a line by address, return same if found
+    inline YIAXLine* findLine(YIAXLine* line)
+	{ return (line && m_lines.find(line)) ? line : 0; }
+    // Find line from event. Clear event transaction if line is not found
+    // Return referenced pointer
+    YIAXLine* findLine(IAXEvent* ev);
     // (Un)register a line
     void registerLine(YIAXLine* line, bool reg);
 private:
@@ -300,9 +309,9 @@ public:
      * Initiate an outgoing registration (release) request.
      * @param line YIAXLine pointer to use for registration.
      * @param regreq Registration request flag. If false a registration release will take place.
-     * @return IAXTransaction pointer on success.
+     * @return True on success.
      */
-    IAXTransaction* reg(YIAXLine* line, bool regreq = true);
+    bool reg(YIAXLine* line, bool regreq = true);
 
     /*
      * Initiate an aoutgoing call.
@@ -643,14 +652,21 @@ void YIAXLine::setRegistered(bool registered, const char* reason, const char* er
 }
 
 // Clear a line's transaction
-void YIAXLineContainer::clearTransaction(YIAXLine* line)
+void YIAXLineContainer::clearTransaction(YIAXLine* line, bool abortReg)
 {
     if (!(line && line->m_transaction))
 	return;
-    IAXTransaction* trans = line->m_transaction;
+    lock();
+    DDebug(&iplugin,DebugAll,"Line(%s) clearing transaction (%p) [%p]",
+	line->toString().c_str(),(IAXTransaction*)line->m_transaction,line);
+    RefPointer<IAXTransaction> trans = line->m_transaction;
     line->m_transaction = 0;
-    trans->abortReg();
-    trans->setUserData(0);
+    if (trans)
+	trans->setUserData(0);
+    unlock();
+    if (abortReg && trans)
+	trans->abortReg();
+    trans = 0;
 }
 
 // Change a line String parameter. Unregister it if changed
@@ -689,13 +705,14 @@ bool YIAXLineContainer::updateLine(Message& msg)
     const String& name = msg["account"];
     DDebug(&iplugin,DebugAll,"Updating line '%s'",name.c_str());
     Lock lck(this);
-    YIAXLine* line = findLine(name);
+    RefPointer<YIAXLine> line = findLine(name);
+    bool oldLine = true;
     if (!line) {
 	if (!login)
 	    return false;
 	line = new YIAXLine(name);
-	line->ref();
-	m_lines.append(line);
+	m_lines.append((YIAXLine*)line);
+	oldLine = false;
     }
     lck.drop();
     line->lock();
@@ -732,39 +749,29 @@ bool YIAXLineContainer::updateLine(Message& msg)
     else if (line->m_register)
 	registerLine(line,false);
     line->unlock();
-    // The line might be removed in regTerminate()
-    Lock lock(this);
-    YIAXLine* l = findLine(line);
-    if (l) {
-	TelEngine::destruct(l);
-	TelEngine::destruct(line);
+    if (oldLine) {
+	// The line might be removed in regTerminate()
+	Lock lock(this);
+	if (!findLine((YIAXLine*)line) && line->ref())
+	    m_lines.append(m_lines.append((YIAXLine*)line));
     }
-    else
-	m_lines.append(line);
+    line = 0;
     return true;
 }
 
 // Handle registration related transaction terminations
 void YIAXLineContainer::regTerminate(IAXEvent* event)
 {
-    if (!event)
+    YIAXLine* line = findLine(event);
+    DDebug(&iplugin,DebugAll,"YIAXLineContainer::regTerminate() ev=%d line=%p (%s)",
+	event ? event->type() : -1,line,line ? line->toString().c_str() : "");
+    if (!line)
 	return;
     IAXTransaction* trans = event->getTransaction();
-    if (!trans)
-	return;
-    YIAXLine* line = findLine(static_cast<YIAXLine*>(trans->getUserData()));
-    if (!line) {
-	trans->setUserData(0);
-	return;
-    }
     line->lock();
-    if (line->m_transaction != trans) {
-	line->unlock();
-	trans->setUserData(0);
-	return;
-    }
     String reason;
     bool ok = false;
+    bool handled = true;
     switch (event->type()) {
 	case IAXEvent::Accept:
 	    if (line->m_register) {
@@ -797,13 +804,16 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 	    line->m_nextReg = Time::secNow() + (line->expire() / 2);
 	    reason = "timeout";
 	    break;
+	case IAXEvent::Terminated:
+	    // retry at 50% of the expire time
+	    line->m_nextReg = Time::secNow() + (line->expire() / 2);
+	    reason = "failure";
+	    break;
 	default:
-	    ;
+	    handled = false;
     }
     bool remove = false;
-    if (event->type() == IAXEvent::Accept ||
-	event->type() == IAXEvent::Reject ||
-	event->type() == IAXEvent::Timeout) {
+    if (handled) {
 	const char* what = line->m_register ? "logon" : "logoff";
 	const char* tf = line->m_register ? "to" : "from";
 	if (event->type() == IAXEvent::Accept)
@@ -814,7 +824,7 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 	    Debug(&iplugin,DebugWarn,"IAX line '%s' %s failure %s %s:%d reason=%s",
 		line->toString().c_str(),what,tf,line->m_remoteAddr.c_str(),
 		line->m_remotePort,reason.safe());
-	clearTransaction(line);
+	clearTransaction(line,false);
 	line->setRegistered(ok,reason,event->type() == IAXEvent::Reject ? "noauth" : 0);
 	if (ok && trans) {
 	    Lock lck(trans);
@@ -833,27 +843,17 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 // Handle registration related authentication
 void YIAXLineContainer::regAuthReq(IAXEvent* event)
 {
-    if (!event || event->type() != IAXEvent::AuthReq)
+    YIAXLine* line = findLine(event);
+    DDebug(&iplugin,DebugAll,"YIAXLineContainer::regAuthReq() ev=%d line=%p",
+	event ? event->type() : -1,line);
+    if (!line)
 	return;
-    IAXTransaction* trans = event->getTransaction();
-    if (!trans)
-	return;
-    YIAXLine* line = findLine(static_cast<YIAXLine*>(trans->getUserData()));
-    if (!line) {
-	trans->setUserData(0);
-	return;
-    }
+    IAXTransaction* tr = event->getTransaction();
     line->lock();
-    if (line->m_transaction == trans) {
-	String response;
-	iplugin.getEngine()->getMD5FromChallenge(response,trans->challenge(),line->password());
-	line->unlock();
-	trans->sendAuthReply(response);
-    }
-    else {
-	line->unlock();
-	trans->setUserData(0);
-    }
+    String response;
+    iplugin.getEngine()->getMD5FromChallenge(response,tr->challenge(),line->password());
+    line->unlock();
+    tr->sendAuthReply(response);
     TelEngine::destruct(line);
 }
 
@@ -864,6 +864,7 @@ void YIAXLineContainer::handleEvent(IAXEvent* event)
 	case IAXEvent::Accept:
 	case IAXEvent::Reject:
 	case IAXEvent::Timeout:
+	case IAXEvent::Terminated:
 	    regTerminate(event);
 	    break;
 	case IAXEvent::AuthReq:
@@ -894,7 +895,7 @@ void YIAXLineContainer::evTimer(Time& time)
 	else if (line->m_registered && line->m_keepAliveInterval &&
 	    time > line->m_nextKeepAlive) {
 	    if (line->m_nextKeepAlive && line->remote().host()) {
-		DDebug(&iplugin,DebugAll,"IAX line '%s' sending keep alive to %s:%d [%p]",
+		DDebug(&iplugin,DebugAll,"Line(%s) sending keep alive to %s:%d [%p]",
 		    line->toString().c_str(),line->remote().host().c_str(),
 		    line->remote().port(),(YIAXLine*)line);
 		iplugin.getEngine()->keepAlive(line->remote());
@@ -912,9 +913,11 @@ void YIAXLineContainer::evTimer(Time& time)
 bool YIAXLineContainer::fillList(String& name, NamedList& dest, SocketAddr& addr, bool& registered)
 {
     registered = false;
+    Lock lck(this);
     YIAXLine* line = findLine(name);
     if (!line)
 	return false;
+    lck.drop();
     line->lock();
     dest.setParam("username",line->username());
     dest.setParam("password",line->password());
@@ -932,27 +935,24 @@ bool YIAXLineContainer::fillList(String& name, NamedList& dest, SocketAddr& addr
     return true;
 }
 
-// Find a line by name
-YIAXLine* YIAXLineContainer::findLine(const String& name)
+// Find line from event. Clear event transaction if line is not found
+// Return referenced pointer
+YIAXLine* YIAXLineContainer::findLine(IAXEvent* ev)
 {
-    Lock lock(this);
-    ObjList* o = m_lines.find(name);
-    if (!o)
+    if (!ev)
 	return 0;
-    YIAXLine* line = static_cast<YIAXLine*>(o->get());
-    line->ref();
-    return line;
-}
-
-// Find a line by address, return same if found
-YIAXLine* YIAXLineContainer::findLine(YIAXLine* line)
-{
-    if (!line)
+    IAXTransaction* tr = ev->getTransaction();
+    if (!tr)
 	return 0;
-    Lock lock(this);
-    if (!m_lines.find(line))
-	return 0;
-    line->ref();
+    Lock lck(this);
+    YIAXLine* line = findLine(static_cast<YIAXLine*>(tr->getUserData()));
+    bool ok = line && line->m_transaction == tr && line->ref();
+    lck.drop();
+    if (!ok) {
+	tr->setUserData(0);
+	tr->abortReg();
+	line = 0;
+    }
     return line;
 }
 
@@ -1054,10 +1054,10 @@ void YIAXEngine::processMedia(IAXTransaction* transaction, DataBlock& data,
 }
 
 // Create a new registration transaction for a line
-IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
+bool YIAXEngine::reg(YIAXLine* line, bool regreq)
 {
     if (!line)
-	return 0;
+	return false;
     SocketAddr addr(AF_INET);
     addr.host(line->remoteAddr());
     addr.port(line->remotePort());
@@ -1072,11 +1072,20 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
     if (line->callToken())
 	ieList.appendBinary(IAXInfoElement::CALLTOKEN,0,0);
     // Make it !
-    IAXTransaction* tr = startLocalTransaction(regreq ? IAXTransaction::RegReq : IAXTransaction::RegRel,addr,ieList);
-    if (tr)
-	tr->setUserData(line);
-    line->m_transaction = tr;
-    return tr;
+    // Lock lines to protect line transaction pointer
+    // Lock engine to safe ref the transaction
+    Lock lck(s_lines);
+    lock();
+    line->m_transaction = startLocalTransaction(
+	regreq ? IAXTransaction::RegReq : IAXTransaction::RegRel,addr,ieList);
+    unlock();
+    if (line->m_transaction) {
+	line->m_transaction->setUserData(line);
+	Debug(&iplugin,DebugAll,"Line(%s) set transaction (%p) lCallNo=%u [%p]",
+	    line->toString().c_str(),(IAXTransaction*)line->m_transaction,
+	    line->m_transaction->localCallNo(),line);
+    }
+    return line->m_transaction != 0;
 }
 
 // Create a new call transaction from target address and message params
@@ -1228,11 +1237,10 @@ void YIAXEngine::processEvent(IAXEvent* event)
 	    break;
 	case IAXTransaction::RegReq:
 	case IAXTransaction::RegRel:
-	    if (event->type() == IAXEvent::New || event->type() == IAXEvent::AuthRep)
+	    if (event->getTransaction()->outgoing())
+		s_lines.handleEvent(event);
+	    else if (event->type() == IAXEvent::New || event->type() == IAXEvent::AuthRep)
 		processRemoteReg(event,(event->type() == IAXEvent::New));
-	    else
-		if (event->getTransaction()->getUserData())
-		    s_lines.handleEvent(event);
 	    break;
 	default: ;
     }
@@ -1641,18 +1649,23 @@ void YIAXDriver::msgStatus(Message& msg)
 	    msg.retValue() << "module=" << name();
 	    msg.retValue() << ",protocol=IAX";
 	    msg.retValue() << ",format=Username|Status;";
-	    msg.retValue() << "accounts=" << s_lines.lines()->count();
-	    if (!msg.getBoolValue("details",true)) {
-		msg.retValue() << "\r\n";
-		return;
-	    }
-	    for (ObjList* o = s_lines.lines(); o; o = o->skipNext()) {
+	    unsigned int n = 0;
+	    String det;
+	    bool details = msg.getBoolValue("details",true);
+	    s_lines.lock();
+	    for (ObjList* o = s_lines.lines().skipNull(); o; o = o->skipNext()) {
+		n++;
+		if (!details)
+		    continue;
 		YIAXLine* line = static_cast<YIAXLine*>(o->get());
-		str.append(line->toString(),",") << "=";
-		str.append(line->username()) << "|";
-		str << (line-> registered() ? "online" : "offline");
+		Lock lckLine(line);
+		det.append(line->toString(),",") << "=";
+		det.append(line->username()) << "|";
+		det << (line->registered() ? "online" : "offline");
 	    }
-	    msg.retValue().append(str,";"); 
+	    s_lines.unlock();
+	    msg.retValue() << "accounts=" << n;
+	    msg.retValue().append(det,";"); 
 	    msg.retValue() << "\r\n";
 	    return;
 	}

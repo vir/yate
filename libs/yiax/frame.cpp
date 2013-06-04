@@ -29,18 +29,18 @@
 
 using namespace TelEngine;
 
-inline void setStringFromInteger(String& dest, u_int32_t value, u_int8_t length)
+static inline void setStringFromInteger(String& dest, u_int32_t value, u_int8_t length)
 {
     char tmp[11];
     switch (length) {
 	case 1:
-	    sprintf(tmp,"%0#4x",(u_int8_t)value);
+	    sprintf(tmp,"0x%02x",(u_int8_t)value);
 	    break;
 	case 2:
-	    sprintf(tmp,"%0#6x",(u_int16_t)value);
+	    sprintf(tmp,"0x%04x",(u_int16_t)value);
 	    break;
 	default:
-	    sprintf(tmp,"%0#10x",value);
+	    sprintf(tmp,"0x%08x",value);
 	    break;
     }
     dest = tmp;
@@ -75,7 +75,69 @@ IAXTrunkFrameTrans* IAXTrunkFrameTrans::find(ObjList& list, u_int16_t rCallNo)
 /*
  * IAXInfoElement
  */
-TokenDict IAXInfoElement::s_ieData[] = {
+const TokenDict IAXInfoElement::s_causeName[] = {
+    {"unallocated",                    1}, // Unallocated (unassigned) number
+    {"noroute-to-network",             2}, // No route to specified transit network
+    {"noroute",                        3}, // No route to destination
+    {"channel-unacceptable",           6}, // Channel unacceptable
+    {"call-delivered",                 7}, // Call awarded and being delivered in an established channel
+    {"normal-clearing",               16}, // Normal Clearing
+    {"busy",                          17}, // User busy
+    {"noresponse",                    18}, // No user responding
+    {"noanswer",                      19}, // No answer from user (user alerted)
+    {"rejected",                      21}, // Call Rejected
+    {"moved",                         22}, // Number changed
+    {"out-of-order",                  27}, // Destination out of order
+    {"invalid-number",                28}, // Invalid number format
+    {"facility-rejected",             29}, // Facility rejected
+    {"status-enquiry-rsp",            30}, // Response to STATUS ENQUIRY
+    {"normal",                        31}, // Normal, unspecified
+    {"congestion",                    34}, // No circuit/channel available
+    {"channel-congestion",            34},
+    {"net-out-of-order",              38}, // Network out of order
+    {"noconn",                        41},
+    {"temporary-failure",             41}, // Temporary failure
+    {"congestion",                    42}, // Switching equipment congestion
+    {"switch-congestion",             42},
+    {"access-info-discarded",         43}, // Access information discarded
+    {"channel-unavailable",           44}, // Requested channel not available
+    {"preempted",                     45}, // Preempted
+    {"noresource",                    47}, // Resource unavailable, unspecified
+    {"facility-not-subscribed",       50}, // Requested facility not subscribed
+    {"barred-out",                    52}, // Outgoing call barred
+    {"barred-in",                     54}, // Incoming call barred
+    {"bearer-cap-not-auth",           57}, // Bearer capability not authorized
+    {"bearer-cap-not-available",      58}, // Bearer capability not presently available
+    {"nomedia",                       58},
+    {"service-unavailable",           63}, // Service or option not available
+    {"bearer-cap-not-implemented",    65}, // Bearer capability not implemented
+    {"channel-type-not-implemented",  66}, // Channel type not implemented
+    {"facility-not-implemented",      69}, // Requested facility not implemented
+    {"restrict-bearer-cap-avail",     70}, // Only restricted digital information bearer capability is available
+    {"service-not-implemented",       79}, // Service or option not implemented, unspecified
+    {"invalid-callref",               81}, // Invalid call reference value
+    {"unknown-channel",               82}, // Identified channel does not exist
+    {"unknown-callid",                83}, // A suspended call exists, but this call identity does not
+    {"duplicate-callid",              84}, // Call identity in use
+    {"no-call-suspended",             85}, // No call suspended
+    {"suspended-call-cleared",        86}, // Call having the requested call identity has been cleared
+    {"incompatible-dest",             88}, // Incompatible destination
+    {"invalid-transit-net",           91}, // Invalid transit network selection
+    {"invalid-message",               95}, // Invalid message, unspecified
+    {"missing-mandatory-ie",          96}, // Mandatory information element is missing
+    {"unknown-message",               97}, // Message type non-existent or not implemented
+    {"wrong-message",                 98}, // Message not compatible with call state, non-existent or not implemented
+    {"unknown-ie",                    99}, // Information element non-existent or not implemented
+    {"invalid-ie",                   100}, // Invalid information element contents
+    {"wrong-state-message",          101}, // Message not compatible with call state
+    {"timeout",                      102}, // Recovery on timer expiry
+    {"mandatory-ie-len",             103}, // Mandatory information element length error
+    {"protocol-error",               111}, // Protocol error, unspecified
+    {"interworking",                 127}, // Interworking, unspecified
+    {0,0}
+};
+
+const TokenDict IAXInfoElement::s_ieData[] = {
     {"CALLED_NUMBER",     CALLED_NUMBER},
     {"CALLING_NUMBER",    CALLING_NUMBER},
     {"CALLING_ANI",       CALLING_ANI},
@@ -435,6 +497,15 @@ void IAXIEList::toBuffer(DataBlock& buf)
     }
 }
 
+static inline void addNumericName(String& buf, IAXInfoElement* ie, const TokenDict* dict,
+    const char* prefix = " (", const char* suffix = ")")
+{
+    int val = (static_cast<IAXInfoElementNumeric*>(ie))->data();
+    const char* s = lookup(val,dict);
+    if (s)
+	buf << prefix << s << suffix;
+}
+
 void IAXIEList::toString(String& dest, const char* indent)
 {
     ObjList* obj = m_list.skipNull();
@@ -557,9 +628,12 @@ void IAXIEList::toString(String& dest, const char* indent)
 	    case IAXInfoElement::IAX_UNKNOWN:
 	    case IAXInfoElement::CALLINGPRES:		//TODO: print more data
 	    case IAXInfoElement::CALLINGTON:		//TODO: print more data
-	    case IAXInfoElement::CAUSECODE:		//TODO: print more data
 	    case IAXInfoElement::ENCRYPTION:		//TODO: print more data
 		ie->toString(dest);
+		break;
+	    case IAXInfoElement::CAUSECODE:
+		ie->toString(dest);
+		addNumericName(dest,ie,IAXInfoElement::s_causeName);
 		break;
 	    case IAXInfoElement::MSGCOUNT:
 		{

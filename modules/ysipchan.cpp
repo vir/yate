@@ -4734,12 +4734,15 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     String raddr;
     int rport = 0;
     message->getParty()->getAddr(raddr,rport,false);
-    bool nat = isNatBetween(addr.getHost(),raddr);
-    if (!nat) {
-	int port = addr.getPort();
-	if (!port)
-	    port = 5060;
-	nat = (rport != port) && msg.getBoolValue(YSTRING("nat_port_support"),true);
+    bool nat = false;
+    if (addr.getProtocol().startsWith("sip")) {
+	nat = isNatBetween(addr.getHost(),raddr);
+	if (!nat) {
+	    int port = addr.getPort();
+	    if (!port)
+		port = (addr.getProtocol() == YSTRING("sips")) ? 5061 : 5060;
+	    nat = (rport != port) && msg.getBoolValue(YSTRING("nat_port_support"),true);
+	}
     }
     bool natChanged = false;
     if (msg.getBoolValue(YSTRING("nat_support"),s_auto_nat && nat)) {

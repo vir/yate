@@ -914,7 +914,7 @@ bool YIAXLineContainer::fillList(String& name, NamedList& dest, SocketAddr& addr
 {
     registered = false;
     Lock lck(this);
-    YIAXLine* line = findLine(name);
+    RefPointer<YIAXLine> line = findLine(name);
     if (!line)
 	return false;
     lck.drop();
@@ -929,7 +929,7 @@ bool YIAXLineContainer::fillList(String& name, NamedList& dest, SocketAddr& addr
     int p = line->remotePort();
     registered = line->registered();
     line->unlock();
-    TelEngine::destruct(line);
+    line = 0;
     addr.host(a);
     addr.port(p);
     return true;

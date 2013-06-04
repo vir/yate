@@ -4880,6 +4880,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	if (trans)
 	    trans->fillMessage(msg,true);
     }
+    copySipHeaders(msg,*message,true);
     SIPMessage* r = 0;
     // Always OK deregistration attempts
     if (Engine::dispatch(msg) || dereg) {

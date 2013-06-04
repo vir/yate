@@ -521,7 +521,7 @@ public:
 
 protected:
     // location: 0: from peer, else: from protocol
-    void hangup(int location, const char* reason = 0, bool reject = false);
+    void hangup(int location, const char* error = 0, const char* reason = 0, bool reject = false);
     void startMedia(bool in, int type = IAXFormat::Audio);
     void clearMedia(bool in, int type = IAXFormat::Audio);
     void evAuthRep(IAXEvent* event);
@@ -1803,7 +1803,7 @@ void YIAXConnection::callRejected(const char* error, const char* reason, const M
 	error = reason;
     String s(error);
     Lock lock(m_mutexTrans);
-    if (m_transaction && s == "noauth") {
+    if (m_transaction && error && String(error) == "noauth") {
 	if (safeRefIncrease()) {
 	    Debug(this,DebugInfo,"callRejected. Requesting authentication [%p]",this);
 	    m_transaction->sendAuth();
@@ -1813,8 +1813,8 @@ void YIAXConnection::callRejected(const char* error, const char* reason, const M
 	    error = "temporary-failure";
     }
     lock.drop();
-    Debug(this,DebugCall,"callRejected. Reason: '%s' [%p]",error,this);
-    hangup(0,reason,true);
+    Debug(this,DebugCall,"callRejected. Error: '%s' [%p]",error,this);
+    hangup(0,error,reason,true);
 }
 
 bool YIAXConnection::callRouted(Message& msg)
@@ -1968,10 +1968,21 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	case IAXEvent::Hangup:
 	case IAXEvent::Reject:
 	    {
+		String error;
 		String reason;
 		event->getList().getString(IAXInfoElement::CAUSE,reason);
-		DDebug(this,DebugCall,"REJECT/HANGUP: '%s' [%p]",reason.c_str(),this);
-		hangup(event->local() ? 1 : -1,reason);
+		u_int32_t code = 0;
+		event->getList().getNumeric(IAXInfoElement::CAUSECODE,code);
+		if (code) {
+		    const char* s = IAXInfoElement::causeName(code);
+		    if (s)
+			error = s;
+		    else
+			error = (unsigned int)code;
+		}
+		DDebug(this,DebugCall,"REJECT/HANGUP: error='%s' reason='%s' [%p]",
+		    error.c_str(),reason.c_str(),this);
+		hangup(event->local() ? 1 : -1,error,reason);
 	    }
 	    break;
 	case IAXEvent::Timeout:
@@ -2003,15 +2014,15 @@ void YIAXConnection::handleEvent(IAXEvent* event)
     }
 }
 
-void YIAXConnection::hangup(int location, const char* reason, bool reject)
+void YIAXConnection::hangup(int location, const char* error, const char* reason, bool reject)
 {
     if (!m_hangup)
 	return;
     m_hangup = false;
-    if (m_reason.null())
-	m_reason = reason;
-    if (m_reason.null())
-	m_reason = Engine::exiting() ? "shutdown" : "unknown";
+    if (!m_reason)
+	m_reason = error ? error : reason;
+    if (!m_reason && location != -1)
+	m_reason = Engine::exiting() ? "shutdown" : "";
     const char* loc = location ? (location > 0 ? "internal" : "remote") : "peer";
     clearMedia(true);
     clearMedia(false);
@@ -2034,10 +2045,18 @@ void YIAXConnection::hangup(int location, const char* reason, bool reject)
 	    d->print(tmp);
 	    m->addParam("iax_stats_video",tmp);
 	}
+	u_int8_t code = 0;
+	if (m_reason) {
+	    int val = IAXInfoElement::causeCode(m_reason);
+	    if (val)
+		code = val;
+	    else
+		code = m_reason.toInteger(0,0,0,127);
+	}
 	if (reject)
-	    m_transaction->sendReject(m_reason);
+	    m_transaction->sendReject(reason,code);
 	else
-	    m_transaction->sendHangup(m_reason);
+	    m_transaction->sendHangup(reason,code);
 	m_transaction->setUserData(0);
         m_transaction = 0;
     }
@@ -2060,7 +2079,7 @@ bool YIAXConnection::route(bool authenticated)
     else {
 	DDebug(this,DebugAll,"Route pass 1: No username [%p]",this);
 	if (!iplugin.getEngine()->acceptFormatAndCapability(m_transaction)) {
-	    hangup(0,IAXTransaction::s_iax_modNoMediaFormat,true);
+	    hangup(0,"nomedia",0,true);
 	    return false;
 	}
 	// Advertise the not yet authenticated username
@@ -2194,7 +2213,7 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
     }
     DDebug(this,DebugCall,"Not authenticated. Rejecting [%p]",this);
     event->setFinal();
-    hangup(1,"noauth",true);
+    hangup(1,"noauth",0,true);
 }
 
 void YIAXConnection::evAuthReq(IAXEvent* event)

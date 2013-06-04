@@ -1,4 +1,4 @@
-yate (4.3.1~svn5517) UNRELEASED; urgency=low
+yate (4.3.1~svn5526) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -499,8 +499,27 @@ yate (4.3.1~svn5517) UNRELEASED; urgency=low
     when failed to start an outgoing call.  + Merge remote-tracking
     branch 'trunk' into upstream  + Don't build a minimal message for
     chan.hangup.
+  * Updated to SVN revision 5526: + Merge remote-tracking branch 'trunk'
+    into upstream  + Fixed line transaction (re)set race conditions.  +
+    Merge remote-tracking branch 'trunk' into upstream  + Fixed bug:
+    avoid destroying a line when making an outgoing call on it.  + Merge
+    remote-tracking branch 'trunk' into upstream  + Fixed bug: terminate
+    a rejected transaction when ACK is received.  + Merge remote-
+    tracking branch 'trunk' into upstream  + Fixes parsing of if { if {
+    instr1; } else instr2; instr3;} blocks of code and the likes.  + Bug
+    fix: set the number of expected separators to 0 when parsing for an
+    instruction that does not start with {, reset it to the previous
+    value when the parsing of the instruction has finished.  + Merge
+    remote-tracking branch 'trunk' into upstream  + Properly send and
+    handle call termination reason.  + Merge remote-tracking branch
+    'trunk' into upstream  + Apply NAT detection only when registering a
+    SIP or SIPS URI.  + SIP headers and body can be returned from
+    generic UAC transactions.  + Added possibility to set credentials in
+    generic UAC transactions.  + Allow returning a message body from a
+    generic SIP handler.  + Populate user.register with custom SIP
+    headers.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 04 Jun 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 05 Jun 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

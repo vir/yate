@@ -165,9 +165,30 @@ public:
     static inline const char* ieText(u_int8_t ieCode)
 	{ return lookup(ieCode,s_ieData); }
 
+    /**
+     * Retrieve the cause name associated with a given code
+     * @param code Cause code
+     * @return Cause name, 0 if not found
+     */
+    static inline const char* causeName(int code)
+	{ return lookup(code,s_causeName); }
+
+    /**
+     * Retrieve the cause code associated with a given name
+     * @param name Cause name
+     * @param defVal Default value to return if not found
+     * @return Cause code
+     */
+    static inline int causeCode(const char* name, int defVal = 0)
+	{ return lookup(name,s_causeName,defVal); }
+
+    /**
+     * Cause code dictionary
+     */
+    static const TokenDict s_causeName[];
 
 private:
-    static TokenDict s_ieData[];// Association between IE type and text
+    static const TokenDict s_ieData[];// Association between IE type and text
     Type m_type;		// Type of this IE
 };
 

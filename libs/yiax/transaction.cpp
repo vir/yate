@@ -1264,7 +1264,9 @@ IAXEvent* IAXTransaction::getEventResponse(IAXFrameOut* frame, bool& delFrame)
 	frame->setAck();
 	// Terminating frame sent
 	if (m_state == Terminating) {
-	    if (frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::Hangup)
+	    if (frame->type() == IAXFrame::IAX &&
+		(frame->subclass() == IAXControl::Hangup ||
+		frame->subclass() == IAXControl::Reject))
 		return terminate(IAXEvent::Terminated,true);
 	    if (!outgoing()) {
 		if (m_type == RegReq || m_type == RegRel) {

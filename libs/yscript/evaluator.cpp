@@ -627,7 +627,7 @@ bool ExpEvaluator::runCompile(ParsePoint& expr, const char* stop, GenObject* nes
     char stopChar = stop ? stop[0] : '\0';
     for (;;) {
 	while (!stackPos && skipComments(expr) && (!stop || !::strchr(stop,*expr)) && getInstruction(expr,stopChar,nested))
-	   if (expr.m_searchedSeps && expr.m_foundSep && ::strchr(expr.m_searchedSeps,expr.m_foundSep))
+	   if (!expr.m_count && expr.m_searchedSeps && expr.m_foundSep && ::strchr(expr.m_searchedSeps,expr.m_foundSep))
 		return true;
 	if (inError())
 	    return false;

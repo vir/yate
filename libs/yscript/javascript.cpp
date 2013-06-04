@@ -1232,6 +1232,7 @@ bool JsCode::getOneInstruction(ParsePoint& expr, GenObject* nested)
 	return false;
     XDebug(this,DebugAll,"JsCode::getOneInstruction %p '%.30s'",nested,(const char*)expr);
     const char* savedSeps = expr.m_searchedSeps;
+    unsigned int count = expr.m_count;
     if (skipComments(expr) == '{') {
 	expr.m_searchedSeps = "}";
 	if (!getInstruction(expr,0,nested))
@@ -1239,6 +1240,7 @@ bool JsCode::getOneInstruction(ParsePoint& expr, GenObject* nested)
     }
     else {
 	expr.m_searchedSeps = ";}";
+	expr.m_count = 0;
 	if (!runCompile(expr,";}",nested))
 	    return false;
 	if (skipComments(expr)  == ';') {
@@ -1249,6 +1251,7 @@ bool JsCode::getOneInstruction(ParsePoint& expr, GenObject* nested)
     expr.m_searchedSeps = savedSeps;
     if (!expr.m_searchedSeps || expr.m_count)
 	expr.m_foundSep = 0;
+    expr.m_count = count;
     return true;
 }
 

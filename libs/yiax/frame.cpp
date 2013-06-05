@@ -137,6 +137,42 @@ const TokenDict IAXInfoElement::s_causeName[] = {
     {0,0}
 };
 
+const TokenDict IAXInfoElement::s_typeOfNumber[] = {
+    {"unknown",          0x00},      // Unknown
+    {"international",    0x10},      // International number
+    {"national",         0x20},      // National number
+    {"net-specific",     0x30},      // Network specific number
+    {"subscriber",       0x40},      // Subscriber number
+    {"abbreviated",      0x60},      // Abbreviated number
+    {"reserved",         0x70},      // Reserved for extension
+    {0,0}
+};
+
+const TokenDict IAXInfoElement::s_presentation[] = {
+    {"allowed",          0x00},      // Presentation allowed
+    {"restricted",       0x20},      // Presentation restricted
+    {"unavailable",      0x40},      // Number not available due to interworking
+    // Aliases for presentation=...
+    {"yes",              0x00},
+    {"true",             0x00},
+    {"no",               0x20},
+    {"false",            0x20},
+    {0,0}
+};
+
+const TokenDict IAXInfoElement::s_screening[] = {
+    {"user-provided",        0x00},  // User-provided, not screened
+    {"user-provided-passed", 0x01},  // User-provided, verified and passed
+    {"user-provided-failed", 0x02},  // User-provided, verified and failed
+    {"network-provided",     0x03},  // Network provided
+    // Aliases for screening=...
+    {"yes",                  0x01},  // User-provided, verified and passed
+    {"true",                 0x01},
+    {"no",                   0x00},  // User-provided, not screened
+    {"false",                0x00},
+    {0,0}
+};
+
 const TokenDict IAXInfoElement::s_ieData[] = {
     {"CALLED_NUMBER",     CALLED_NUMBER},
     {"CALLING_NUMBER",    CALLING_NUMBER},
@@ -190,6 +226,8 @@ const TokenDict IAXInfoElement::s_ieData[] = {
     {"RR_DROPPED",        RR_DROPPED},
     {"RR_OOO",            RR_OOO},
     {"CALLTOKEN",         CALLTOKEN},
+    {"CAPABILITY2",       CAPABILITY2},
+    {"FORMAT2",           FORMAT2},
     {0,0}
 };
 
@@ -402,6 +440,12 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
 		appendBinary((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
 		i += data[i] + 1;
 		break;
+	    case IAXInfoElement::CAPABILITY2:
+	    case IAXInfoElement::FORMAT2:
+		// Binary: 1 byte version + array of bytes (media format flags)
+		appendBinary((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
+		i += data[i] + 1;
+		break;
 	    // 4 bytes
 	    case IAXInfoElement::CAPABILITY:
 	    case IAXInfoElement::FORMAT:
@@ -506,6 +550,43 @@ static inline void addNumericName(String& buf, IAXInfoElement* ie, const TokenDi
 	buf << prefix << s << suffix;
 }
 
+static inline void addCallingPres(String& buf, IAXInfoElement* ie)
+{
+    int val = (static_cast<IAXInfoElementNumeric*>(ie))->data();
+    const char* pres = lookup(val & 0xf0,IAXInfoElement::s_presentation);
+    const char* screen = lookup(val & 0x0f,IAXInfoElement::s_screening);
+    if (!(pres || screen))
+	return;
+    buf << " (";
+    if (pres)
+	buf << pres;
+    if (screen)
+	buf << (pres ? "," : "") << screen;
+    buf << ")";
+}
+
+static inline void addValPadded0(String& buf, unsigned int val, const char* prefix)
+{
+    buf << prefix;
+    if (val < 10)
+	buf << "0";
+    buf << val;
+}
+
+static void addDateTime(String& buf, IAXInfoElement* ie)
+{
+    u_int32_t val = (static_cast<IAXInfoElementNumeric*>(ie))->data();
+    unsigned int y,mon,d,h,min,s;
+    IAXEngine::decodeDateTime(val,y,mon,d,h,min,s);
+    buf << " (" << y;
+    addValPadded0(buf,mon,".");
+    addValPadded0(buf,d,".");
+    addValPadded0(buf,h," ");
+    addValPadded0(buf,min,":");
+    addValPadded0(buf,s,":");
+    buf << ")";
+}
+
 void IAXIEList::toString(String& dest, const char* indent)
 {
     ObjList* obj = m_list.skipNull();
@@ -585,8 +666,9 @@ void IAXIEList::toString(String& dest, const char* indent)
 		dest << " (" << tmp << ')';
 		}
 		break;
-	    case IAXInfoElement::DATETIME:		//TODO: print more data
+	    case IAXInfoElement::DATETIME:
 		ie->toString(dest);
+		addDateTime(dest,ie);
 		break;
 	    case IAXInfoElement::SAMPLINGRATE:
 		dest << (unsigned int)((static_cast<IAXInfoElementNumeric*>(ie))->data()) << " Hz";
@@ -626,10 +708,16 @@ void IAXIEList::toString(String& dest, const char* indent)
 		break;
 	    // 1 byte
 	    case IAXInfoElement::IAX_UNKNOWN:
-	    case IAXInfoElement::CALLINGPRES:		//TODO: print more data
-	    case IAXInfoElement::CALLINGTON:		//TODO: print more data
 	    case IAXInfoElement::ENCRYPTION:		//TODO: print more data
 		ie->toString(dest);
+		break;
+	    case IAXInfoElement::CALLINGPRES:
+		ie->toString(dest);
+		addCallingPres(dest,ie);
+		break;
+	    case IAXInfoElement::CALLINGTON:
+		ie->toString(dest);
+		addNumericName(dest,ie,IAXInfoElement::s_typeOfNumber);
 		break;
 	    case IAXInfoElement::CAUSECODE:
 		ie->toString(dest);
@@ -650,12 +738,15 @@ void IAXIEList::toString(String& dest, const char* indent)
     }
 }
 
-IAXInfoElement* IAXIEList::getIE(IAXInfoElement::Type type)
+IAXInfoElement* IAXIEList::getIE(IAXInfoElement::Type type, bool remove)
 {
-    for (ObjList* l = m_list.skipNull(); l; l = l->next()) {
+    for (ObjList* l = m_list.skipNull(); l; l = l->skipNext()) {
 	IAXInfoElement* ie = static_cast<IAXInfoElement*>(l->get());
-	if (ie && ie->type() == type)
-	    return ie;
+	if (ie->type() != type)
+	    continue;
+	if (remove)
+	    l->remove(false);
+	return ie;
     }
     return 0;
 }
@@ -925,15 +1016,21 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 	}
 	u_int32_t sc = 0;
 	bool mark = false;
-	if (buf[10] != IAXFrame::Video)
-	    sc = IAXFrame::unpackSubclass(buf[11]);
+	unsigned char type = buf[10];
+	if (type != IAXFrame::Video) {
+	    // Hack: Control StopSounds is sent with subclass 255
+	    if (type != IAXFrame::Control || buf[11] != 255)
+		sc = IAXFrame::unpackSubclass(buf[11]);
+	    else
+		sc = IAXFullFrame::StopSounds;
+	}
 	else {
 	    mark = 0 != (buf[11] & 0x40);
 	    // Clear the mark flag
 	    sc = IAXFrame::unpackSubclass(buf[11] & 0xbf);
 	}
 	u_int32_t ts = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
-	return new IAXFullFrame((IAXFrame::Type)buf[10],sc,scn,dcn,buf[8],buf[9],ts,retrans,buf+12,len-12,mark);
+	return new IAXFullFrame((IAXFrame::Type)type,sc,scn,dcn,buf[8],buf[9],ts,retrans,buf+12,len-12,mark);
     }
     // Meta frame ?
     if (scn == 0) {
@@ -1107,6 +1204,8 @@ TokenDict IAXFullFrame::s_controlTypes[] = {
         {"HOLD",        Hold},
         {"UNHOLD",      Unhold},
         {"VIDUPDATE",   VidUpdate},
+        {"SRCUPDATE",   SrcUpdate},
+        {"STOPSOUNDS",  StopSounds},
         {0,0}
 	};
 

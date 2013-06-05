@@ -73,6 +73,8 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
     m_callTokenAge(10),
     m_showCallTokenFailures(false),
     m_printMsg(true),
+    m_callerNumType(0),
+    m_callingPres(0),
     m_format(format),
     m_formatVideo(0),
     m_capability(capab),
@@ -403,14 +405,13 @@ void IAXEngine::initOutDataAdjust(const NamedList& params, IAXTransaction* tr)
 void IAXEngine::initialize(const NamedList& params)
 {
     m_callToken = params.getBoolValue("calltoken_in");
-    int callTokenAge = params.getIntValue("calltoken_age",10);
-    if (callTokenAge > 1 && callTokenAge < 25)
-	m_callTokenAge = callTokenAge;
-    else
-	m_callTokenAge = 10;
+    m_callTokenAge = params.getIntValue("calltoken_age",10,1,25);
     m_showCallTokenFailures = params.getBoolValue("calltoken_printfailure");
     m_rejectMissingCallToken = params.getBoolValue("calltoken_rejectmissing",true);
     m_printMsg = params.getBoolValue("printmsg",true);
+    m_callerNumType = lookup(params["numtype"],IAXInfoElement::s_typeOfNumber);
+    m_callingPres = lookup(params["presentation"],IAXInfoElement::s_presentation) |
+	lookup(params["screening"],IAXInfoElement::s_screening);
     initOutDataAdjust(params);
 }
 
@@ -521,6 +522,19 @@ void IAXEngine::keepAlive(const SocketAddr& addr)
     IAXFullFrame* f = new IAXFullFrame(IAXFrame::IAX,IAXControl::Inval,0,0,0,0,0);
     writeSocket(f->data().data(),f->data().length(),addr,f);
     f->deref();
+}
+
+// Decode a DATETIME value
+void IAXEngine::decodeDateTime(u_int32_t dt, unsigned int& year, unsigned int& month,
+    unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec)
+{
+   // RFC 5456 Section 8.6.28
+   year = 2000 + ((dt & 0xfe000000) >> 25);
+   month = (dt & 0x1e00000) >> 21;
+   day = (dt & 0x1f0000) >> 16;
+   hour = (dt & 0xf800) >> 11;
+   minute = (dt & 0x7e0) >> 5;
+   sec = dt & 0x1f;
 }
 
 bool IAXEngine::processTrunkFrames(u_int32_t time)

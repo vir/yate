@@ -510,7 +510,7 @@ public:
 
     void handleEvent(IAXEvent* event);
 
-    bool route(bool authenticated = false);
+    bool route(IAXEvent* event, bool authenticated = false);
 
     // Retrieve the data consumer from IAXFormat media type
     YIAXConsumer* getConsumer(int type);
@@ -604,6 +604,17 @@ static const char* lookupFormat(u_int32_t format, int type)
     if (type == IAXFormat::Video)
 	return lookup(format,dict_payloads_video);
     return 0;
+}
+
+// Retrieve a parameter, find its value in a dictionary
+// Return true if a non empty parameter was found
+static inline bool getKeyword(const NamedList& list, const String& param,
+    const TokenDict* tokens, int& val)
+{
+    const char* s = list.getValue(param);
+    if (s)
+	val = lookup(s,tokens);
+    return (s != 0);
 }
 
 
@@ -1117,6 +1128,15 @@ IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
     ieList.appendString(IAXInfoElement::USERNAME,params.getValue("username"));
     ieList.appendString(IAXInfoElement::PASSWORD,params.getValue("password"));
     ieList.appendString(IAXInfoElement::CALLING_NUMBER,params.getValue("caller"));
+    int tmp = 0;
+    if (getKeyword(params,YSTRING("callernumtype"),IAXInfoElement::s_typeOfNumber,tmp))
+	ieList.appendNumeric(IAXInfoElement::CALLINGTON,tmp,1);
+    u_int8_t cPres = callingPres();
+    if (getKeyword(params,YSTRING("callerpres"),IAXInfoElement::s_presentation,tmp))
+	cPres = (cPres & 0x0f) | tmp;
+    if (getKeyword(params,YSTRING("callerscreening"),IAXInfoElement::s_screening,tmp))
+	cPres = (cPres & 0xf0) | tmp;
+    ieList.appendNumeric(IAXInfoElement::CALLINGPRES,cPres,1);
     ieList.appendString(IAXInfoElement::CALLING_NAME,params.getValue("callername"));
     ieList.appendString(IAXInfoElement::CALLED_NUMBER,params.getValue("called"));
     ieList.appendString(IAXInfoElement::CALLED_CONTEXT,params.getValue("iaxcontext"));
@@ -1224,7 +1244,7 @@ void YIAXEngine::processEvent(IAXEvent* event)
 			connection = new YIAXConnection(this,event->getTransaction());
 			connection->initChan();
 			event->getTransaction()->setUserData(connection);
-			if (!connection->route())
+			if (!connection->route(event))
 			    event->getTransaction()->setUserData(0);
 		    }
 		    else {
@@ -2065,7 +2085,7 @@ void YIAXConnection::hangup(int location, const char* error, const char* reason,
     Debug(this,DebugCall,"Hangup location=%s reason=%s [%p]",loc,m_reason.safe(),this);
 }
 
-bool YIAXConnection::route(bool authenticated)
+bool YIAXConnection::route(IAXEvent* ev, bool authenticated)
 {
     if (!m_transaction)
 	return false;
@@ -2088,6 +2108,15 @@ bool YIAXConnection::route(bool authenticated)
     }
     m->addParam("called",m_transaction->calledNo());
     m->addParam("caller",m_transaction->callingNo());
+    if (ev) {
+	u_int32_t val = 0;
+	if (ev->getList().getNumeric(IAXInfoElement::CALLINGTON,val))
+	    IAXEngine::addKeyword(*m,"callernumtype",IAXInfoElement::s_typeOfNumber,val);
+	if (ev->getList().getNumeric(IAXInfoElement::CALLINGPRES,val)) {
+	    IAXEngine::addKeyword(*m,"callerpres",IAXInfoElement::s_presentation,val & 0xf0);
+	    IAXEngine::addKeyword(*m,"callerscreening",IAXInfoElement::s_screening,val & 0x0f);
+	}
+    }
     m->addParam("callername",m_transaction->callingName());
     m->addParam("ip_host",m_transaction->remoteAddr().host());
     m->addParam("ip_port",String(m_transaction->remoteAddr().port()));
@@ -2208,7 +2237,7 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
     bool requestAuth, invalidAuth;
     if (iplugin.userAuth(event->getTransaction(),true,requestAuth,invalidAuth,billid())) {
 	// Authenticated. Route the user.
-	route(true);
+	route(event,true);
 	return;
     }
     DDebug(this,DebugCall,"Not authenticated. Rejecting [%p]",this);

@@ -187,11 +187,18 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	    ies->insertVersion();
 	    ies->appendString(IAXInfoElement::USERNAME,m_username);
 	    ies->appendString(IAXInfoElement::CALLING_NUMBER,m_callingNo);
+	    if (!ies->appendIE(ieList,IAXInfoElement::CALLINGTON))
+		ies->appendNumeric(IAXInfoElement::CALLINGTON,m_engine->callerNumType(),1);
+	    if (!ies->appendIE(ieList,IAXInfoElement::CALLINGPRES))
+		ies->appendNumeric(IAXInfoElement::CALLINGPRES,m_engine->callingPres(),1);
+	    if (!ies->appendIE(ieList,IAXInfoElement::CALLINGTNS))
+		ies->appendNumeric(IAXInfoElement::CALLINGTNS,0,2);
 	    ies->appendString(IAXInfoElement::CALLING_NAME,m_callingName);
 	    ies->appendString(IAXInfoElement::CALLED_NUMBER,m_calledNo);
 	    ies->appendString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);
 	    ies->appendNumeric(IAXInfoElement::FORMAT,m_format.format() | m_formatVideo.format(),4);
 	    ies->appendNumeric(IAXInfoElement::CAPABILITY,m_capability,4);
+	    ies->appendString(IAXInfoElement::CODEC_PREFS,String::empty());
 	    if (m_callToken)
 		ies->appendBinary(IAXInfoElement::CALLTOKEN,0,0);
 	    frametype = IAXControl::New;
@@ -768,6 +775,11 @@ bool IAXTransaction::sendReject(const char* cause, u_int8_t code)
 	case RegReq:
 	case RegRel:
 	    frametype = IAXControl::RegRej;
+	    // Parameters are required for this frame
+	    if (!code)
+		code = 29;               // Facility rejected
+	    if (!cause)
+		cause = "";
 	    break;
 	case Poke:
 	default:

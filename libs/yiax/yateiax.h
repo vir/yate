@@ -187,6 +187,21 @@ public:
      */
     static const TokenDict s_causeName[];
 
+    /**
+     * Number type dictionary
+     */
+    static const TokenDict s_typeOfNumber[];
+
+    /**
+     * Number presentation dictionary
+     */
+    static const TokenDict s_presentation[];
+
+    /**
+     * Number screening dictionary
+     */
+    static const TokenDict s_screening[];
+
 private:
     static const TokenDict s_ieData[];// Association between IE type and text
     Type m_type;		// Type of this IE
@@ -436,6 +451,19 @@ public:
 	{ m_list.append(ie); }
 
     /**
+     * Append an Information Element taken from another list
+     * @param src Source IE list
+     * @param type IE to move
+     * @return True if found and added
+     */
+    inline bool appendIE(IAXIEList& src, IAXInfoElement::Type type) {
+	    IAXInfoElement* ie = src.getIE(type,true);
+	    if (ie)
+		appendIE(ie);
+	    return ie != 0;
+	}
+
+    /**
      * Append an Information Element to the list
      * @param type The type of the IAXInfoElement to append
      */
@@ -500,11 +528,12 @@ public:
     void toString(String& dest, const char* indent = 0);
 
     /**
-     * Get an IAXInfoElement from the list
+     * Retrieve an IAXInfoElement from the list
      * @param type The desired type
+     * @param remove True to remove from list. The caller will own the object
      * @return An IAXInfoElement pointer or 0 if the list doesn't contain an IE of this type
      */
-    IAXInfoElement* getIE(IAXInfoElement::Type type);
+    IAXInfoElement* getIE(IAXInfoElement::Type type, bool remove = false);
 
     /**
      * Get the data of a list item into a String. Before any operation dest is cleared
@@ -2561,6 +2590,20 @@ public:
     virtual ~IAXEngine();
 
     /**
+     * Retrieve the default caller number type
+     * @return Default caller number type
+     */
+    inline u_int8_t callerNumType() const
+	{ return m_callerNumType; }
+
+    /**
+     * Retrieve the default caller number presentation and screening concatenated value
+     * @return Default caller number presentation and screening
+     */
+    inline u_int8_t callingPres() const
+	{ return m_callingPres; }
+
+    /**
      * Add a parsed frame to the transaction list
      * @param addr Address from which the frame was received
      * @param frame A parsed IAX frame
@@ -2866,6 +2909,22 @@ public:
     static int addrSecretAge(const String& buf, const String& secret,
 	const SocketAddr& addr);
 
+    /**
+     * Add string (keyword) if found in a dictionary or integer parameter to a named list
+     * @param list Destination list
+     * @param param Parameter to add to the list
+     * @param tokens The dictionary used to find the given value
+     * @param val The value to find/add to the list
+     */
+    static inline void addKeyword(NamedList& list, const char* param,
+	const TokenDict* tokens, unsigned int val) {
+	    const char* value = lookup(val,tokens);
+	    if (value)
+		list.addParam(param,value);
+	    else
+		list.addParam(param,String(val));
+	}
+
 protected:
     /**
      * Process all trunk meta frames in the queue
@@ -2934,6 +2993,8 @@ private:
     bool m_showCallTokenFailures;               // Print incoming call token failures to output
     bool m_rejectMissingCallToken;              // Reject/ignore incoming calls without call token if mandatory
     bool m_printMsg;                            // Print frame to output
+    u_int8_t m_callerNumType;                   // Caller number type
+    u_int8_t m_callingPres;                     // Caller presentation + screening
     // Media
     u_int32_t m_format;				// The default media format
     u_int32_t m_formatVideo;                    // Default video format

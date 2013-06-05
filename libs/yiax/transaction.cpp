@@ -198,6 +198,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	    ies->appendString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);
 	    ies->appendNumeric(IAXInfoElement::FORMAT,m_format.format() | m_formatVideo.format(),4);
 	    ies->appendNumeric(IAXInfoElement::CAPABILITY,m_capability,4);
+	    ies->appendString(IAXInfoElement::CODEC_PREFS,String::empty());
 	    if (m_callToken)
 		ies->appendBinary(IAXInfoElement::CALLTOKEN,0,0);
 	    frametype = IAXControl::New;
@@ -774,6 +775,11 @@ bool IAXTransaction::sendReject(const char* cause, u_int8_t code)
 	case RegReq:
 	case RegRel:
 	    frametype = IAXControl::RegRej;
+	    // Parameters are required for this frame
+	    if (!code)
+		code = 29;               // Facility rejected
+	    if (!cause)
+		cause = "";
 	    break;
 	case Poke:
 	default:

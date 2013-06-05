@@ -187,6 +187,12 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	    ies->insertVersion();
 	    ies->appendString(IAXInfoElement::USERNAME,m_username);
 	    ies->appendString(IAXInfoElement::CALLING_NUMBER,m_callingNo);
+	    if (!ies->appendIE(ieList,IAXInfoElement::CALLINGTON))
+		ies->appendNumeric(IAXInfoElement::CALLINGTON,m_engine->callerNumType(),1);
+	    if (!ies->appendIE(ieList,IAXInfoElement::CALLINGPRES))
+		ies->appendNumeric(IAXInfoElement::CALLINGPRES,m_engine->callingPres(),1);
+	    if (!ies->appendIE(ieList,IAXInfoElement::CALLINGTNS))
+		ies->appendNumeric(IAXInfoElement::CALLINGTNS,0,2);
 	    ies->appendString(IAXInfoElement::CALLING_NAME,m_callingName);
 	    ies->appendString(IAXInfoElement::CALLED_NUMBER,m_calledNo);
 	    ies->appendString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);

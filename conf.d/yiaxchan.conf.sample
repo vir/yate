@@ -11,6 +11,27 @@
 ; Defaults to yes
 ;force_bind=yes
 
+; numtype: string:  Default calling number type for outgoing calls
+; This parameter is applied on reload
+; It can be overridden from routing by 'callernumtype' parameter
+; Values: unknown,international,national,net-specific,subscriber,abbreviated,reserved
+; Defaults to unknown if missing or incorrect
+;numtype=unknown
+
+; presentation: string: Default number presentation for outgoing calls
+; This parameter is applied on reload
+; It can be overridden from routing by 'callerpres' parameter
+; Values: allowed, restricted, unavailable
+; Defaults to allowed if missing or incorrect
+;presentation=allowed
+
+; screening: string:  Default number screening for outgoing calls
+; This parameter is applied on reload
+; It can be overridden from routing by 'callerscreening' parameter
+; Values: user-provided, user-provided-passed, user-provided-failed, network-provided
+; Defaults to user-provided if missing or incorrect
+;screening=user-provided
+
 ; calltoken_in: boolean: Use call token ip address authentication on incoming calls
 ; Note: If the caller don't support the call token IAX extension the call request
 ;  will be ignored anyway

@@ -124,7 +124,9 @@ public:
         RR_DELAY = 0x31,         // W
         RR_DROPPED = 0x32,       // DW
         RR_OOO = 0x33,           // DW
-        CALLTOKEN = 0X36,        // BIN
+        CALLTOKEN = 0x36,        // BIN
+        CAPABILITY2 = 0x37,      // BIN		1 byte version + array
+        FORMAT2 = 0x38,          // BIN		1 byte version + array
     };
 
     /**
@@ -1102,6 +1104,8 @@ public:
         Hold = 0x10,
         Unhold = 0x11,
         VidUpdate = 0x12,
+        SrcUpdate = 0x14,
+        StopSounds = 0xff,
     };
 
     /**
@@ -2924,6 +2928,19 @@ public:
 	    else
 		list.addParam(param,String(val));
 	}
+
+    /**
+     * Decode a DATETIME value
+     * @param dt Value to decode
+     * @param year The year component of the date
+     * @param month The month component of the date
+     * @param day The day component of the date
+     * @param hour The hour component of the time
+     * @param minute The minute component of the time
+     * @param sec The seconds component of the time
+     */
+    static void decodeDateTime(u_int32_t dt, unsigned int& year, unsigned int& month,
+	unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec);
 
 protected:
     /**

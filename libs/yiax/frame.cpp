@@ -226,6 +226,8 @@ const TokenDict IAXInfoElement::s_ieData[] = {
     {"RR_DROPPED",        RR_DROPPED},
     {"RR_OOO",            RR_OOO},
     {"CALLTOKEN",         CALLTOKEN},
+    {"CAPABILITY2",       CAPABILITY2},
+    {"FORMAT2",           FORMAT2},
     {0,0}
 };
 
@@ -438,6 +440,12 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
 		appendBinary((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
 		i += data[i] + 1;
 		break;
+	    case IAXInfoElement::CAPABILITY2:
+	    case IAXInfoElement::FORMAT2:
+		// Binary: 1 byte version + array of bytes (media format flags)
+		appendBinary((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
+		i += data[i] + 1;
+		break;
 	    // 4 bytes
 	    case IAXInfoElement::CAPABILITY:
 	    case IAXInfoElement::FORMAT:
@@ -557,6 +565,28 @@ static inline void addCallingPres(String& buf, IAXInfoElement* ie)
     buf << ")";
 }
 
+static inline void addValPadded0(String& buf, unsigned int val, const char* prefix)
+{
+    buf << prefix;
+    if (val < 10)
+	buf << "0";
+    buf << val;
+}
+
+static void addDateTime(String& buf, IAXInfoElement* ie)
+{
+    u_int32_t val = (static_cast<IAXInfoElementNumeric*>(ie))->data();
+    unsigned int y,mon,d,h,min,s;
+    IAXEngine::decodeDateTime(val,y,mon,d,h,min,s);
+    buf << " (" << y;
+    addValPadded0(buf,mon,".");
+    addValPadded0(buf,d,".");
+    addValPadded0(buf,h," ");
+    addValPadded0(buf,min,":");
+    addValPadded0(buf,s,":");
+    buf << ")";
+}
+
 void IAXIEList::toString(String& dest, const char* indent)
 {
     ObjList* obj = m_list.skipNull();
@@ -636,8 +666,9 @@ void IAXIEList::toString(String& dest, const char* indent)
 		dest << " (" << tmp << ')';
 		}
 		break;
-	    case IAXInfoElement::DATETIME:		//TODO: print more data
+	    case IAXInfoElement::DATETIME:
 		ie->toString(dest);
+		addDateTime(dest,ie);
 		break;
 	    case IAXInfoElement::SAMPLINGRATE:
 		dest << (unsigned int)((static_cast<IAXInfoElementNumeric*>(ie))->data()) << " Hz";
@@ -985,15 +1016,21 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 	}
 	u_int32_t sc = 0;
 	bool mark = false;
-	if (buf[10] != IAXFrame::Video)
-	    sc = IAXFrame::unpackSubclass(buf[11]);
+	unsigned char type = buf[10];
+	if (type != IAXFrame::Video) {
+	    // Hack: Control StopSounds is sent with subclass 255
+	    if (type != IAXFrame::Control || buf[11] != 255)
+		sc = IAXFrame::unpackSubclass(buf[11]);
+	    else
+		sc = IAXFullFrame::StopSounds;
+	}
 	else {
 	    mark = 0 != (buf[11] & 0x40);
 	    // Clear the mark flag
 	    sc = IAXFrame::unpackSubclass(buf[11] & 0xbf);
 	}
 	u_int32_t ts = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
-	return new IAXFullFrame((IAXFrame::Type)buf[10],sc,scn,dcn,buf[8],buf[9],ts,retrans,buf+12,len-12,mark);
+	return new IAXFullFrame((IAXFrame::Type)type,sc,scn,dcn,buf[8],buf[9],ts,retrans,buf+12,len-12,mark);
     }
     // Meta frame ?
     if (scn == 0) {
@@ -1167,6 +1204,8 @@ TokenDict IAXFullFrame::s_controlTypes[] = {
         {"HOLD",        Hold},
         {"UNHOLD",      Unhold},
         {"VIDUPDATE",   VidUpdate},
+        {"SRCUPDATE",   SrcUpdate},
+        {"STOPSOUNDS",  StopSounds},
         {0,0}
 	};
 

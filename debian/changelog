@@ -1,4 +1,4 @@
-yate (4.3.1~svn5526) UNRELEASED; urgency=low
+yate (4.3.1~svn5529) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -518,8 +518,14 @@ yate (4.3.1~svn5526) UNRELEASED; urgency=low
     generic UAC transactions.  + Allow returning a message body from a
     generic SIP handler.  + Populate user.register with custom SIP
     headers.
+  * Updated to SVN revision 5529: + Merge remote-tracking branch 'trunk'
+    into upstream  + Set and handle caller number type, presentation and
+    screening.  + Merge remote-tracking branch 'trunk' into upstream  +
+    Send missing required parameters in New and RegRej.  + Merge remote-
+    tracking branch 'trunk' into upstream  + Added some missing frame
+    and IEs names to decoder.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 05 Jun 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 06 Jun 2013 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

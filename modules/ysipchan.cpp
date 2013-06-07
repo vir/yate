@@ -611,6 +611,8 @@ public:
 	{ return m_prack; }
     inline bool info() const
 	{ return m_info; }
+    inline bool foreignAuth() const
+	{ return m_foreignAuth; }
 private:
     static bool copyAuthParams(NamedList* dest, const NamedList& src, bool ok = true);
     YateSIPEndPoint* m_ep;
@@ -1543,6 +1545,11 @@ static const char* s_rejectHeaders[] = {
     "cseq",
     "max-forwards",
     "content-length",
+    0
+};
+
+// List of authentication headers we normally don't handle generically
+static const char* s_authHeaders[] = {
     "www-authenticate",
     "proxy-authenticate",
     "authorization",
@@ -1560,7 +1567,7 @@ static bool matchAny(const String& name, const char** strs)
 }
 
 // Copy headers from SIP message to Yate message
-static void copySipHeaders(NamedList& msg, const SIPMessage& sip, bool filter = true)
+static void copySipHeaders(NamedList& msg, const SIPMessage& sip, bool filter = true, bool auth = false)
 {
     const ObjList* l = sip.header.skipNull();
     for (; l; l = l->skipNext()) {
@@ -1571,15 +1578,11 @@ static void copySipHeaders(NamedList& msg, const SIPMessage& sip, bool filter = 
 	    continue;
 	if (filter && matchAny(name,s_filterHeaders))
 	    continue;
-	String tmp(*t);
-	const ObjList* p = t->params().skipNull();
-	for (; p; p = p->skipNext()) {
-	    NamedString* s = static_cast<NamedString*>(p->get());
-	    tmp << ";" << s->name();
-	    if (!s->null())
-		tmp << "=" << *s;
-	}
-	msg.addParam("sip_"+name,tmp);
+	if (!auth && matchAny(name,s_authHeaders))
+	    continue;
+	String tmp;
+	t->buildLine(tmp,false);
+	msg.addParam("sip_" + name,tmp);
     }
 }
 
@@ -4880,7 +4883,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	if (trans)
 	    trans->fillMessage(msg,true);
     }
-    copySipHeaders(msg,*message,true);
+    copySipHeaders(msg,*message,true,static_cast<const YateSIPEngine*>(t->getEngine())->foreignAuth());
     SIPMessage* r = 0;
     // Always OK deregistration attempts
     if (Engine::dispatch(msg) || dereg) {
@@ -5027,7 +5030,7 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     // establish the dialog here so user code will have the dialog tag handy
     t->setDialogTag();
     m.addParam("xsip_dlgtag",t->getDialogTag());
-    copySipHeaders(m,*message,false);
+    copySipHeaders(m,*message,false,static_cast<const YateSIPEngine*>(t->getEngine())->foreignAuth());
 
     doDecodeIsupBody(&plugin,m,message->body);
     copySipBody(m,*message);
@@ -5290,7 +5293,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("sip_to",ev->getMessage()->getHeaderValue("To"));
     m->addParam("sip_callid",m_callid);
     m->addParam("device",ev->getMessage()->getHeaderValue("User-Agent"));
-    copySipHeaders(*m,*ev->getMessage());
+    copySipHeaders(*m,*ev->getMessage(),true,static_cast<const YateSIPEngine*>(tr->getEngine())->foreignAuth());
 
     const char* reason = 0;
     hl = m_tr->initialMessage()->getHeader("Referred-By");
@@ -5906,7 +5909,8 @@ void YateSIPConnection::mediaChanged(const SDPMedia& media)
 bool YateSIPConnection::process(SIPEvent* ev)
 {
     const SIPMessage* msg = ev->getMessage();
-    int code = ev->getTransaction()->getResponseCode();
+    SIPTransaction* tr = ev->getTransaction();
+    int code = tr->getResponseCode();
     DDebug(this,DebugInfo,"YateSIPConnection::process(%p) %s %s code=%d [%p]",
 	ev,ev->isActive() ? "active" : "inactive",
 	SIPTransaction::stateName(ev->getState()),code,this);
@@ -5920,19 +5924,19 @@ bool YateSIPConnection::process(SIPEvent* ev)
 #endif
 
     // Change party
-    if (ev->getTransaction()->getEngine()->autoChangeParty() && ev->isActive() &&
+    if (tr->getEngine()->autoChangeParty() && ev->isActive() &&
 	msg && !msg->isOutgoing())
 	setPartyChanged(msg->getParty(),this);
 
     Lock mylock(driver());
-    if (ev->getTransaction() == m_tr2) {
+    if (tr == m_tr2) {
 	mylock.drop();
 	return processTransaction2(ev,msg,code);
     }
 
     bool updateTags = true;
     SIPDialog oldDlg(m_dialog);
-    m_dialog = *ev->getTransaction()->recentMessage();
+    m_dialog = *tr->recentMessage();
     mylock.drop();
 
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300) && (code <= 699)) {
@@ -5952,7 +5956,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    if (ok)
 		parameters().copyParams(tmp);
 	}
-	copySipHeaders(parameters(),*msg);
+	copySipHeaders(parameters(),*msg,true,static_cast<const YateSIPEngine*>(tr->getEngine())->foreignAuth());
 	if (code < 400) {
 	    // this is a redirect, it should provide a Contact and possibly a Diversion
 	    const MimeHeaderLine* hl = msg->getHeader("Contact");
@@ -7921,7 +7925,7 @@ bool SipHandler::received(Message &msg)
 	msg.clearParam("sip",'_');
 	msg.clearParam("xsip",'_');
 	if (gen.answer()) {
-	    copySipHeaders(msg,*gen.answer());
+	    copySipHeaders(msg,*gen.answer(),true,plugin.ep()->engine()->foreignAuth());
 	    copySipBody(msg,*gen.answer());
 	}
     }

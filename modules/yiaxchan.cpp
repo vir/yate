@@ -2309,7 +2309,7 @@ void IAXURI::parse()
     if (m_parsed)
 	return;
     String tmp(*this), _port;
-    static const Regexp r("^\\([Ii][Aa][Xx]2\\+:\\)\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?\\(/[[:alnum:]]*\\)\\?\\([@?][^@?:/]*\\)\\?$");
+    static const Regexp r("^\\([Ii][Aa][Xx]2\\?:\\)\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?\\(/[[:alnum:]]*\\)\\?\\([@?][^@?:/]*\\)\\?$");
     if (tmp.matches(r))
     {
 	m_username = tmp.matchString(2);

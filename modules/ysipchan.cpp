@@ -3983,6 +3983,12 @@ void YateSIPEngine::initialize(NamedList* params)
     m_reqTransCount = params->getIntValue("sip_req_trans_count",4,2,10,false);
     m_rspTransCount = params->getIntValue("sip_rsp_trans_count",5,2,10,false);
     m_autoChangeParty = params->getBoolValue("autochangeparty");
+    int64_t t1 = params->getIntValue("t1",500,100,5000,false);
+    int64_t t2 = params->getIntValue("t4",5000,1000,25000,false);
+    if (t2 < 3 * t1)
+	t2 = 3 * t1;
+    m_t1 = 1000 * t1;
+    m_t4 = 1000 * t2;
     DDebug(this,DebugAll,"Initialized sip_req_trans_count=%d sip_rsp_trans_count=%d",
 	m_reqTransCount,m_rspTransCount);
 }

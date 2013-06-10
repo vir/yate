@@ -138,7 +138,7 @@
 ;monitor=false
 
 ; RTP destinations to be monitored. Should be a comma separated list.
-; i.e. rtp_directions=192.168.168.185,127.0.0.1
+; i.e. rtp_directions=192.x.y.z,127.0.0.1
 ;rtp_directions=
 
 ; interval in secconds at which collected data should be reset. Defaults to 3600 seconds.

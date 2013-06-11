@@ -544,6 +544,7 @@ private:
     Mutex m_mutexTrans;                 // Safe m_transaction operations
     Mutex m_mutexRefIncreased;          // Safe ref/deref connection
     bool m_refIncreased;                // If true, the reference counter was increased
+    unsigned int m_routeCount;          // Incoming: route counter
     RefPointer<DataSource> m_sources[IAXFormat::TypeCount]; // Keep all types of sources
 };
 
@@ -1763,22 +1764,24 @@ unsigned long YIAXSource::Forward(const DataBlock& data, unsigned long tStamp, u
 /**
  * YIAXConnection
  */
-YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transaction, Message* msg,
+YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* tr, Message* msg,
     NamedList* params)
-    : Channel(&iplugin,0,transaction->outgoing()),
-      m_iaxEngine(iaxEngine), m_transaction(transaction), m_mutedIn(false), m_mutedOut(false),
+    : Channel(&iplugin,0,tr->outgoing()),
+      m_iaxEngine(iaxEngine), m_transaction(tr), m_mutedIn(false), m_mutedOut(false),
       m_audio(false), m_video(false),
       m_hangup(true),
       m_mutexTrans(true,"YIAXConnection::trans"),
       m_mutexRefIncreased(true,"YIAXConnection::refIncreased"),
-      m_refIncreased(false)
+      m_refIncreased(false),
+      m_routeCount(0)
 {
-    Debug(this,DebugAll,"Created %s [%p]",isOutgoing()?"outgoing":"incoming",this);
+    Debug(this,DebugAll,"%s call. Transaction (%p) callno=%u [%p]",
+	isOutgoing() ? "Outgoing" : "Incoming",tr,tr->localCallNo(),this);
     setMaxcall(msg);
     Message* m = message("chan.startup",msg);
     m->setParam("direction",status());
-    if (transaction)
-	m_address << transaction->remoteAddr().host() << ":" << transaction->remoteAddr().port();
+    if (tr)
+	m_address << tr->remoteAddr().host() << ":" << tr->remoteAddr().port();
     if (msg)
 	m_targetid = msg->getValue("id");
     if (params) {
@@ -1826,22 +1829,19 @@ void YIAXConnection::callAccept(Message& msg)
 // Call rejected, check if we have to authenticate caller
 void YIAXConnection::callRejected(const char* error, const char* reason, const Message* msg)
 {
-    Channel::callRejected(error,reason,msg);
     if (!error)
 	error = reason;
-    String s(error);
     Lock lock(m_mutexTrans);
-    if (m_transaction && error && String(error) == "noauth") {
+    if (m_routeCount == 1 && m_transaction && error && String(error) == "noauth") {
 	if (safeRefIncrease()) {
-	    Debug(this,DebugInfo,"callRejected. Requesting authentication [%p]",this);
+	    Debug(this,DebugAll,"Requesting authentication [%p]",this);
 	    m_transaction->sendAuth();
 	    return;
 	}
-	else
-	    error = "temporary-failure";
+	error = "temporary-failure";
     }
     lock.drop();
-    Debug(this,DebugCall,"callRejected. Error: '%s' [%p]",error,this);
+    Channel::callRejected(error,reason,msg);
     hangup(0,error,reason,true);
 }
 
@@ -2095,10 +2095,13 @@ void YIAXConnection::hangup(int location, const char* error, const char* reason,
 
 bool YIAXConnection::route(IAXEvent* ev, bool authenticated)
 {
+    Lock lock(&m_mutexTrans);
     if (!m_transaction)
 	return false;
+    if (m_routeCount >= 2)
+	return false;
+    m_routeCount++;
     Message* m = message("call.preroute",false,true);
-    Lock lock(&m_mutexTrans);
     if (authenticated) {
 	DDebug(this,DebugAll,"Route pass 2: Password accepted [%p]",this);
 	m_refIncreased = false;
@@ -2243,14 +2246,17 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
 {
     DDebug(this,DebugAll,"AUTHREP [%p]",this);
     bool requestAuth, invalidAuth;
+    const char* reason = "noauth";
     if (iplugin.userAuth(event->getTransaction(),true,requestAuth,invalidAuth,billid())) {
-	// Authenticated. Route the user.
-	route(event,true);
-	return;
+	if (route(event,true))
+	    return;
+	Debug(this,DebugNote,"Failed to route. Rejecting [%p]",this);
+	reason = "temporary-failure";
     }
-    DDebug(this,DebugCall,"Not authenticated. Rejecting [%p]",this);
+    else
+	Debug(this,DebugNote,"Not authenticated. Rejecting [%p]",this);
     event->setFinal();
-    hangup(1,"noauth",0,true);
+    hangup(1,reason,0,true);
 }
 
 void YIAXConnection::evAuthReq(IAXEvent* event)

@@ -1518,9 +1518,6 @@ IAXEvent* IAXTransaction::getEventStartTrans(IAXFullFrame* frame, bool& delFrame
 		    return 0;
 		}
 		init(ev->getList());
-		// Check username
-		if (!m_username)
-		    return internalReject(s_iax_modNoUsername);
 	    }
 	    return ev;
 	case RegReq:
@@ -1529,10 +1526,9 @@ IAXEvent* IAXTransaction::getEventStartTrans(IAXFullFrame* frame, bool& delFrame
 		(frame->subclass() == IAXControl::RegReq || frame->subclass() == IAXControl::RegRel)))
 		break;
 	    ev = createEvent(IAXEvent::New,false,frame,NewRemoteInvite);
-	    init(ev->getList());
-	    // Check username
-	    if (!m_username)
+	    if (!ev->getList().getIE(IAXInfoElement::USERNAME))
 		return internalReject(s_iax_modNoUsername);
+	    init(ev->getList());
 	    return ev;
 	case Poke:
 	    if (!(frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::Poke))

@@ -259,11 +259,12 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 {
     if (!frame)
 	return 0;
+    IAXFullFrame* full = frame->fullFrame();
     if (state() == Terminated) {
-	sendInval();
+	if (full)
+	    m_engine->sendInval(full,remoteAddr());
 	return 0;
     }
-    IAXFullFrame* full = frame->fullFrame();
     if (state() == Terminating) {
 	// Local terminate: Accept only Ack. Remote terminate: Accept none.
 	bool ok = false;
@@ -1272,7 +1273,7 @@ IAXEvent* IAXTransaction::createEvent(u_int8_t evType, bool local, IAXFullFrame*
 	    ev = new IAXEvent((IAXEvent::Type)evType,local,false,this,frame);
     }
     if (ev && ev->getList().invalidIEList()) {
-	sendInval();
+	m_engine->sendInval(frame,remoteAddr());
 	delete ev;
 	ev = waitForTerminate(IAXEvent::Invalid,local,frame);
     }
@@ -1695,14 +1696,6 @@ void IAXTransaction::sendAck(const IAXFullFrame* frame)
 	"Transaction(%u,%u). Send ACK for Frame(%u,%u) oseq: %u iseq: %u [%p]",
 	localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),frame->oSeqNo(),
 	frame->iSeqNo(),this);
-    m_engine->writeSocket(f->data().data(),f->data().length(),remoteAddr(),f);
-    f->deref();
-}
-
-void IAXTransaction::sendInval()
-{
-    IAXFullFrame* f = new IAXFullFrame(IAXFrame::IAX,IAXControl::Inval,localCallNo(),
-	remoteCallNo(),m_oSeqNo,m_iSeqNo,(u_int32_t)timeStamp());
     m_engine->writeSocket(f->data().data(),f->data().length(),remoteAddr(),f);
     f->deref();
 }

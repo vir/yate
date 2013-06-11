@@ -218,8 +218,11 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
     }
     // Frame doesn't belong to an existing transaction
     // Test if it is a full frame with an IAX control message that needs a new transaction
-    if (!full || frame->type() != IAXFrame::IAX)
+    if (!full || frame->type() != IAXFrame::IAX) {
+	if (full)
+	    sendInval(full,addr);
 	return 0;
+    }
     switch (full->subclass()) {
 	case IAXControl::New:
 	    if (!checkCallToken(addr,*full))
@@ -296,8 +299,12 @@ void IAXEngine::sendInval(IAXFullFrame* frame, const SocketAddr& addr)
 {
     if (!frame)
 	return;
-    DDebug(this,DebugInfo,"Sending INVAL for unmatched frame(%u,%u) with OSeq=%u ISeq=%u",frame->type(),frame->subclass(),
-	frame->oSeqNo(),frame->iSeqNo());
+    // Check for frames that should not receive INVAL
+    if (frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::Inval)
+	return;
+    DDebug(this,DebugInfo,
+	"Sending INVAL for unmatched frame(%u,%u) with OSeq=%u ISeq=%u",
+	frame->type(),frame->subclass(),frame->oSeqNo(),frame->iSeqNo());
     IAXFullFrame* f = new IAXFullFrame(IAXFrame::IAX,IAXControl::Inval,frame->destCallNo(),
 	frame->sourceCallNo(),frame->iSeqNo(),frame->oSeqNo(),frame->timeStamp());
     writeSocket(f->data().data(),f->data().length(),addr,f);

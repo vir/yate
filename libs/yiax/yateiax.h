@@ -2378,11 +2378,6 @@ protected:
     void sendAck(const IAXFullFrame* frame);
 
     /**
-     * Send an INVAL frame
-     */
-    void sendInval();
-
-    /**
      * Send an VNAK frame
      */
     void sendVNAK();

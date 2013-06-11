@@ -50,25 +50,24 @@ static inline void setStringFromInteger(String& dest, u_int32_t value, u_int8_t 
 class IAXTrunkFrameTrans : public GenObject
 {
 public:
-    inline IAXTrunkFrameTrans(IAXTransaction* tr, u_int32_t frameTs)
-	: m_tr(tr), m_frameTs(frameTs), m_trunkIndex(0)
+    inline IAXTrunkFrameTrans(u_int16_t callNo)
+	: m_callNo(callNo)
 	{}
-    ~IAXTrunkFrameTrans()
-	{ TelEngine::destruct(m_tr); }
-    static IAXTrunkFrameTrans* find(ObjList& list, u_int16_t rCallNo);
-    IAXTransaction* m_tr;
-    u_int32_t m_frameTs;
-    unsigned int m_trunkIndex;
+    static IAXTrunkFrameTrans* get(ObjList& list, u_int16_t rCallNo);
+    u_int16_t m_callNo;
+    ObjList m_blocks;
 };
 
-IAXTrunkFrameTrans* IAXTrunkFrameTrans::find(ObjList& list, u_int16_t rCallNo)
+IAXTrunkFrameTrans* IAXTrunkFrameTrans::get(ObjList& list, u_int16_t callNo)
 {
     for (ObjList* o = list.skipNull(); o; o = o->skipNext()) {
 	IAXTrunkFrameTrans* t = static_cast<IAXTrunkFrameTrans*>(o->get());
-	if (t->m_tr->remoteCallNo() == rCallNo)
+	if (t->m_callNo == callNo)
 	    return t;
     }
-    return 0;
+    IAXTrunkFrameTrans* t = new IAXTrunkFrameTrans(callNo);
+    list.append(t);
+    return t;
 }
 
 
@@ -1080,42 +1079,32 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 	    u_int32_t ts = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
 	    buf += 8;
 	    len -= 8;
-	    u_int64_t timeMs = Time::msecNow();
+	    Time now;
 	    ObjList list;
 	    while (len >= 4) {
 		u_int16_t dlen = (buf[2] << 8) | buf[3];
 		if ((unsigned int)(dlen + 4) > len)
-		    return 0;
+		    break;
 		scn = (buf[0] << 8) | buf[1];
 		bool retrans = false;
 		if (scn & 0x8000) {
 		    retrans = true;
 		    scn &= 0x7fff;
 		}
-		IAXTrunkFrameTrans* t = IAXTrunkFrameTrans::find(list,scn);
-		if (!t) {
-		    IAXTransaction* tr = engine->findTransaction(*addr,scn);
-		    if (tr) {
-			u_int32_t frameTs = 0;
-			if (tr->updateTrunkRecvTs(frameTs,ts,timeMs)) {
-			    t = new IAXTrunkFrameTrans(tr,frameTs);
-			    list.append(t);
-			}
-			else
-			    TelEngine::destruct(tr);
-		    }
-		}
-		else
-		    // Adjust timestamp: there are more packets for the same transaction
-		    t->m_frameTs++;
-		if (t) {
-		    IAXFrame* frame = new IAXFrame(IAXFrame::Voice,scn,t->m_frameTs,retrans,buf+4,dlen);
-		    if (!t->m_tr->processFrame(frame))
-			frame->deref();
-		}
+		IAXTrunkFrameTrans* t = IAXTrunkFrameTrans::get(list,scn);
+		t->m_blocks.append(new DataBlock((void*)(buf+4),dlen));
 		dlen += 4;
 		buf += dlen;
 		len -= dlen;
+	    }
+	    for (ObjList* o = list.skipNull(); o; o = o->skipNext()) {
+		IAXTrunkFrameTrans* t = static_cast<IAXTrunkFrameTrans*>(o->get());
+		IAXTransaction* tr = engine->findTransaction(*addr,t->m_callNo);
+		if (!tr)
+		    continue;
+		tr->processMiniNoTs(ts,t->m_blocks,now);
+		TelEngine::destruct(tr);
+		
 	    }
 	}
 	return 0;
@@ -1450,74 +1439,158 @@ void IAXFrameOut::adjustAuthTimeout(u_int64_t nextTransTime)
     m_nextTransTime = nextTransTime;
 }
 
+
+/*
+* IAXTrunkInfo
+*/
+// Init all data from parameters
+void IAXTrunkInfo::init(const NamedList& params, const String& prefix,
+    const IAXTrunkInfo* def)
+{
+    initTrunking(params,prefix,def,true);
+    initTrunking(params,prefix,def,false);
+}
+
+// Init from parameters
+void IAXTrunkInfo::initTrunking(const NamedList& params, const String& prefix,
+    const IAXTrunkInfo* def, bool out)
+{
+    if (out) {
+	m_timestamps = params.getBoolValue(prefix + "timestamps",
+	    !def || def->m_timestamps);
+	m_sendInterval = params.getIntValue(prefix + "sendinterval",
+	    def ? def->m_sendInterval : IAX2_TRUNKFRAME_SEND_DEF,IAX2_TRUNKFRAME_SEND_MIN);
+	m_maxLen = params.getIntValue(prefix + "maxlen",
+	    def ? def->m_maxLen : IAX2_TRUNKFRAME_LEN_DEF,IAX2_TRUNKFRAME_LEN_MIN);
+    }
+    else {
+	m_trunkInSyncUsingTs = params.getBoolValue(prefix + "nominits_sync_use_ts",
+	    !def || def->m_trunkInSyncUsingTs);
+	m_trunkInTsDiffRestart = params.getIntValue(prefix + "nominits_ts_diff_restart",
+	    def ? m_trunkInTsDiffRestart : 5000,1000);
+    }
+}
+
+
 /*
 * IAXMetaTrunkFrame
 */
-#define IAX2_METATRUNK_HEADERLENGTH 8
-#define IAX2_MINIFRAME_HEADERLENGTH 6
-
-IAXMetaTrunkFrame::IAXMetaTrunkFrame(IAXEngine* engine, const SocketAddr& addr)
-    : Mutex(true,"IAXMetaTrunkFrame"),
-      m_data(0), m_dataAddIdx(IAX2_METATRUNK_HEADERLENGTH), m_engine(engine), m_addr(addr)
+IAXMetaTrunkFrame::IAXMetaTrunkFrame(IAXEngine* engine, const SocketAddr& addr,
+    bool timestamps, unsigned int maxLen, unsigned int sendInterval)
+    : Mutex(false,"IAXMetaTrunkFrame"),
+    m_data(0), m_dataAddIdx(IAX2_TRUNKFRAME_HEADERLENGTH),
+    m_timeStamp(0), m_send(0), m_lastSentTs(0),
+    m_sendInterval(sendInterval),
+    m_engine(engine), m_addr(addr),
+    m_trunkTimestamps(timestamps), m_maxLen(maxLen), m_maxDataLen(0),
+    m_miniHdrLen(timestamps ? 6 : 4)
 {
-    m_data = new u_int8_t[m_engine->maxFullFrameDataLen()];
+    // Make sure we don't receive invalid values
+    if (m_maxLen < IAX2_TRUNKFRAME_LEN_MIN)
+	m_maxLen = IAX2_TRUNKFRAME_LEN_MIN;
+    m_data = new u_int8_t[m_maxLen];
+    // Audio data length can't be greater the remaining space
+    // Also make sure we can put it in 2 bytes
+    m_maxDataLen = m_maxLen - IAX2_TRUNKFRAME_HEADERLENGTH - m_miniHdrLen;
+    if (m_maxDataLen > 0xffff)
+	m_maxDataLen = 0xffff;
     // Meta indicator
     *(u_int16_t*)m_data = 0;
     // Meta command & Command data (use timestamps)
     m_data[2] = 1;
-    m_data[3] = 1;
-    // Frame timestamp
-    setTimestamp((u_int32_t)Time::msecNow());
+    m_data[3] = m_trunkTimestamps ? 1 : 0;
 }
 
 IAXMetaTrunkFrame::~IAXMetaTrunkFrame()
-{ 
-    m_engine->removeTrunkFrame(this);
-    delete[] m_data; 
-}
-
-void IAXMetaTrunkFrame::setTimestamp(u_int32_t tStamp)
 {
-    m_timestamp = tStamp;
-    m_data[4] = (u_int8_t)(tStamp >> 24);
-    m_data[5] = (u_int8_t)(tStamp >> 16);
-    m_data[6] = (u_int8_t)(tStamp >> 8);
-    m_data[7] = (u_int8_t)tStamp;
+    delete[] m_data;
 }
 
 bool IAXMetaTrunkFrame::add(u_int16_t sCallNo, const DataBlock& data, u_int32_t tStamp)
 {
-    Lock lock(this);
-    bool b = true;
     // Do we have data ?
     if (!data.length())
-	return b;
+	return false;
+    // Avoid buffer overflow
+    if (data.length() > m_maxDataLen) {
+	Debug(m_engine,DebugGoOn,
+	    "Trunk frame '%s:%d' can't add %u bytes (max=%u) for call %u [%p]",
+	    m_addr.host().c_str(),m_addr.port(),data.length(),m_maxDataLen,sCallNo,this);
+	return false;
+    }
+    Lock lck(this);
+    if (!m_timeStamp)
+	setTimestamp(Time::now());
+    bool b = true;
     // If no more room, send it
-    if (m_dataAddIdx + data.length() + IAX2_MINIFRAME_HEADERLENGTH > m_engine->maxFullFrameDataLen())
-	b = send((u_int32_t)Time::msecNow());
-    // Is the first mini frame ?
-    if (m_dataAddIdx == IAX2_METATRUNK_HEADERLENGTH)
-	m_timestamp = (u_int32_t)Time::msecNow();
+    if (m_dataAddIdx + data.length() + m_miniHdrLen > m_maxLen)
+	b = doSend();
+    XDebug(m_engine,DebugAll,"Trunk frame '%s:%d' adding %u payload bytes call=%u [%p]",
+	m_addr.host().c_str(),m_addr.port(),data.length(),sCallNo,this);
     // Add the mini frame
-    m_data[m_dataAddIdx++] = (u_int8_t)(data.length() >> 8);
-    m_data[m_dataAddIdx++] = (u_int8_t)data.length();
-    m_data[m_dataAddIdx++] = (u_int8_t)(sCallNo >> 8);
-    m_data[m_dataAddIdx++] = (u_int8_t)sCallNo;
-    m_data[m_dataAddIdx++] = (u_int8_t)(tStamp >> 8);
-    m_data[m_dataAddIdx++] = (u_int8_t)tStamp;
+    if (m_trunkTimestamps) {
+	// data length + call no + timestamp
+	m_data[m_dataAddIdx++] = (u_int8_t)(data.length() >> 8);
+	m_data[m_dataAddIdx++] = (u_int8_t)data.length();
+	m_data[m_dataAddIdx++] = (u_int8_t)(sCallNo >> 8);
+	m_data[m_dataAddIdx++] = (u_int8_t)sCallNo;
+	m_data[m_dataAddIdx++] = (u_int8_t)(tStamp >> 8);
+	m_data[m_dataAddIdx++] = (u_int8_t)tStamp;
+    }
+    else {
+	// call no + data length
+	m_data[m_dataAddIdx++] = (u_int8_t)(sCallNo >> 8);
+	m_data[m_dataAddIdx++] = (u_int8_t)sCallNo;
+	m_data[m_dataAddIdx++] = (u_int8_t)(data.length() >> 8);
+	m_data[m_dataAddIdx++] = (u_int8_t)data.length();
+    }
     memcpy(m_data + m_dataAddIdx,data.data(),data.length());
     m_dataAddIdx += data.length();
     return b;
 }
 
-bool IAXMetaTrunkFrame::send(u_int32_t tStamp)
+// Send this frame to remote peer
+bool IAXMetaTrunkFrame::doSend(const Time& now, bool onTime)
 {
-    Lock lock(this);
-    setTimestamp(tStamp);
+#define IAX2_TRUNKDATA_DELTA 160
+    bool dontSend = (m_dataAddIdx <= IAX2_TRUNKFRAME_HEADERLENGTH);
+    u_int64_t ellapsed = (now - m_timeStamp) / 1000;
+    if (ellapsed <= 0xffffffff) {
+	// Sent on time: set timestamp from send interval
+	// Sent on buffer full: set timestamp from ellapsed time
+	u_int32_t ts = 0;
+	if (onTime) {
+	    setSendTime(now);
+	    ts = m_lastSentTs + m_sendInterval;
+	    if (ts != ellapsed) {
+		// Adjust timestamp
+		if (ts > ellapsed) {
+		    if ((ts - ellapsed) >= IAX2_TRUNKDATA_DELTA)
+			ts = (u_int32_t)ellapsed;
+	        }
+		else if ((ellapsed - ts) >= IAX2_TRUNKDATA_DELTA)
+		    ts = (u_int32_t)ellapsed;
+	    }
+	}
+	else
+	    ts = (u_int32_t)ellapsed;
+	if (ts > m_lastSentTs || dontSend)
+	    m_lastSentTs = ts;
+	else
+	    m_lastSentTs++;
+    }
+    else {
+	// Timestamp wraparound: reset
+	setTimestamp(now);
+	m_lastSentTs = 0;
+    }
+    if (dontSend)
+	return false;
+    XDebug(m_engine,DebugAll,"Trunk frame '%s:%d' sending %u tStamp=%u [%p]",
+	m_addr.host().c_str(),m_addr.port(),m_dataAddIdx,m_lastSentTs,this);
+    setTimestamp(m_lastSentTs);
     bool b = m_engine->writeSocket(m_data,m_dataAddIdx,m_addr);
-    // Reset index & timestamp
-    m_dataAddIdx = IAX2_METATRUNK_HEADERLENGTH;
-    m_timestamp = 0;
+    m_dataAddIdx = IAX2_TRUNKFRAME_HEADERLENGTH;
     return b;
 }
 

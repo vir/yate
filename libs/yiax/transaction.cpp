@@ -94,8 +94,15 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
     m_adjustTsOutThreshold(0),
     m_adjustTsOutOverrun(0),
     m_adjustTsOutUnderrun(0),
+    m_lastVoiceFrameIn(0),
+    m_lastVoiceFrameInTs(0),
+    m_reqVoiceVNAK(0),
     m_trunkFrame(0),
-    m_trunkInOffsetTimeMs(0), m_trunkInLastTs(0), m_warnTrunkInTimestamp(true)
+    m_trunkInSyncUsingTs(true),
+    m_trunkInStartTime(0),
+    m_trunkInTsDelta(0),
+    m_trunkInTsDiffRestart(5000),
+    m_trunkInFirstTs(0)
 {
     // Setup transaction
     m_retransCount = engine->retransCount();
@@ -123,6 +130,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
 	localCallNo(),remoteCallNo(),typeName(),m_addr.host().c_str(),m_addr.port(),this);
     engine->getOutDataAdjust(m_adjustTsOutThreshold,m_adjustTsOutOverrun,
 	m_adjustTsOutUnderrun);
+    engine->initTrunkIn(this);
     // Append frame to incoming list
     Lock lock(this);
     m_inFrames.append(frame);
@@ -163,8 +171,15 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_adjustTsOutThreshold(0),
     m_adjustTsOutOverrun(0),
     m_adjustTsOutUnderrun(0),
+    m_lastVoiceFrameIn(0),
+    m_lastVoiceFrameInTs(0),
+    m_reqVoiceVNAK(0),
     m_trunkFrame(0),
-    m_trunkInOffsetTimeMs(0), m_trunkInLastTs(0), m_warnTrunkInTimestamp(true)
+    m_trunkInSyncUsingTs(true),
+    m_trunkInStartTime(0),
+    m_trunkInTsDelta(0),
+    m_trunkInTsDiffRestart(5000),
+    m_trunkInFirstTs(0)
 {
     Debug(m_engine,DebugAll,"Transaction(%u,%u) outgoing type=%s remote=%s:%d [%p]",
 	localCallNo(),remoteCallNo(),typeName(),m_addr.host().c_str(),m_addr.port(),this);
@@ -224,6 +239,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     }
     engine->getOutDataAdjust(m_adjustTsOutThreshold,m_adjustTsOutOverrun,
 	m_adjustTsOutUnderrun);
+    engine->initTrunkIn(this);
     postFrameIes(IAXFrame::IAX,frametype,ies);
     changeState(NewLocalInvite);
 }
@@ -312,8 +328,12 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 	    t = IAXFormat::Video;
 	if (!processMediaFrame(full,t))
 	    return 0;
-	// Frame accepted: process voice data
 	lock.drop();
+	if (t == IAXFormat::Audio) {
+	    Lock lck(m_dataAudio.m_inMutex);
+	    m_lastVoiceFrameIn = Time::now();
+	    m_lastVoiceFrameInTs = frame->timeStamp();
+	}
 	return processMedia(frame->data(),frame->timeStamp(),t,true,frame->mark());
     }
     // Process incoming Ping
@@ -347,6 +367,10 @@ IAXTransaction* IAXTransaction::processMedia(DataBlock& data, u_int32_t tStamp, 
 	return 0;
     }
     Lock lck(d->m_inMutex);
+    if (type == IAXFormat::Audio && !m_lastVoiceFrameIn) {
+	receivedVoiceMiniBeforeFull();
+	return 0;
+    }
     const IAXFormatDesc& desc = fmt->formatDesc(true);
     if (!desc.format()) {
 	if (d->m_showInNoFmt) {
@@ -543,7 +567,7 @@ unsigned int IAXTransaction::sendMedia(const DataBlock& data, unsigned int tStam
 	if (fullFrame) {
 	    // Send trunked frame before full frame to keep the media order
 	    if (m_trunkFrame)
-		m_engine->sendTrunkFrame(m_trunkFrame);
+		m_trunkFrame->send();
 	    postFrame(IAXFrame::Voice,fmt->out(),data.data(),data.length(),ts,true);
 	    sent = data.length();
 	}
@@ -908,10 +932,13 @@ bool IAXTransaction::abortReg()
 
 bool IAXTransaction::enableTrunking(IAXMetaTrunkFrame* trunkFrame)
 {
+    if (!trunkFrame)
+	return false;
+    Lock lck(m_dataAudio.m_outMutex);
     if (m_trunkFrame)
 	return false;
     // Get a reference to the trunk frame
-    if (!(trunkFrame && trunkFrame->ref()))
+    if (!trunkFrame->ref())
 	return false;
     m_trunkFrame = trunkFrame;
     return true;
@@ -952,45 +979,49 @@ void IAXTransaction::processCallToken(const DataBlock& callToken)
     sendFrame(frame);
 }
 
-// Update transaction incoming trunk data (used for trunk without timestamps)
-bool IAXTransaction::updateTrunkRecvTs(u_int32_t& frameTs, u_int32_t ts, u_int64_t currentTimeMs)
+// Process incoming audio miniframes from trunk without timestamps
+void IAXTransaction::processMiniNoTs(u_int32_t ts, ObjList& blocks, const Time& now)
 {
-    Lock lck(this);
-    if (m_trunkInLastTs) {
-	bool ok = (ts > m_trunkInLastTs);
-	if (!ok) {
-	    // Allow frames older then 5 seconds to restart trunk
-	    if ((m_trunkInLastTs - ts) >= 5000) {
-		ok = true;
-		m_trunkInOffsetTimeMs = 0;
-	    }
-	    else
-		ok = (m_trunkInOffsetTimeMs == 0);
-	}
-	if (!ok) {
-	    if (m_warnTrunkInTimestamp) {
-		Debug(m_engine,DebugNote,
-		    "Transaction(%u,%u) ignoring trunked mini-frame without timestamps from %s:%d with ts=%u last=%u [%p]",
-		    localCallNo(),remoteCallNo(),remoteAddr().host().c_str(),remoteAddr().port(),
-		    ts,m_trunkInLastTs,this);
-		m_warnTrunkInTimestamp = false;
-	    }
-	    return false;
-	}
-	m_warnTrunkInTimestamp = true;
+    Lock lck(m_dataAudio.m_inMutex);
+    if (!m_lastVoiceFrameIn) {
+	receivedVoiceMiniBeforeFull();
+	return;
     }
-    m_trunkInLastTs = ts;
-    if (!m_trunkInOffsetTimeMs) {
-	if (!currentTimeMs)
-	    currentTimeMs = Time::msecNow();
-	u_int64_t trunkStart = currentTimeMs - ts;
-	m_trunkInOffsetTimeMs = (int64_t)m_timeStamp - trunkStart;
+    u_int32_t tStamp = 0;
+    if (m_trunkInSyncUsingTs) {
+	if (m_trunkInStartTime) {
+	    if (ts < m_trunkInFirstTs) {
+		// Restart?
+		if ((m_trunkInFirstTs - ts) > m_trunkInTsDiffRestart)
+		    restartTrunkIn(now,ts);
+		else {
+		    // Drop
+		    for (ObjList* o = blocks.skipNull(); o; o = o->skipNext()) {
+			DataBlock* db = static_cast<DataBlock*>(o->get());
+			if (db->length()) {
+			    m_dataAudio.m_ooPackets++;
+			    m_dataAudio.m_ooBytes += db->length();
+			}
+		    }
+		    return;
+		}
+	    }
+	}
+	else
+	    restartTrunkIn(now,ts);
+	tStamp = m_trunkInTsDelta + (ts - m_trunkInFirstTs);
     }
-    if (m_trunkInOffsetTimeMs >= 0)
-	frameTs = ts - (u_int32_t)m_trunkInOffsetTimeMs;
     else
-	frameTs = ts + (u_int32_t)(-m_trunkInOffsetTimeMs);
-    return true;
+	tStamp = (u_int32_t)((now - m_lastVoiceFrameIn) / 1000) + m_lastVoiceFrameInTs;
+    XDebug(m_engine,DebugAll,"(%u,%u) processMiniNoTs(sync=%u packets=%u) %u --> %u [%p]",
+	localCallNo(),remoteCallNo(),m_trunkInSyncUsingTs,blocks.count(),ts,tStamp,this);
+    lck.drop();
+    for (ObjList* o = blocks.skipNull(); o; o = o->skipNext()) {
+	DataBlock* db = static_cast<DataBlock*>(o->get());
+	// Signal full frame timestamp (we calculate it from full voice frame)
+	processMedia(*db,tStamp,IAXFormat::Audio,true);
+	tStamp++;
+    }
 }
 
 void IAXTransaction::print(bool printStats, bool printFrames, const char* location)
@@ -1197,8 +1228,11 @@ void IAXTransaction::postFrame(IAXFrame::Type type, u_int32_t subclass, void* da
 	return;
     // Pong and LagRp don't need timestamp to be adjusted
     // Don't adjust for video
-    if ((type != IAXFrame::IAX && type == IAXFrame::Video) ||
-	(subclass != IAXControl::Pong && subclass != IAXControl::LagRp))
+    if (type == IAXFrame::IAX) {
+	if (subclass != IAXControl::Pong && subclass != IAXControl::LagRp)
+	    adjustTStamp(tStamp);
+    }
+    else if (type != IAXFrame::Video)
 	adjustTStamp(tStamp);
     IAXFrameOut* frame = new IAXFrameOut(type,subclass,m_lCallNo,m_rCallNo,m_oSeqNo,m_iSeqNo,tStamp,
 	(unsigned char*)data,len,m_retransCount,m_retransInterval,ackOnly,mark);
@@ -1996,6 +2030,19 @@ void IAXTransaction::postFrame(IAXFrameOut* frame)
     incrementSeqNo(frame,false);
     m_outFrames.append(frame);
     sendFrame(frame);
+}
+
+void IAXTransaction::receivedVoiceMiniBeforeFull()
+{
+    if (m_reqVoiceVNAK > 15)
+	return;
+    m_reqVoiceVNAK++;
+    if (m_reqVoiceVNAK == 3)
+	Debug(m_engine,DebugAll,
+	    "Transaction(%u,%u) received audio miniframe before full voice frame [%p]",
+	    localCallNo(),remoteCallNo(),this);
+    if (0 == (m_reqVoiceVNAK % 3))
+	sendVNAK();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

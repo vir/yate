@@ -32,6 +32,66 @@
 ; Defaults to user-provided if missing or incorrect
 ;screening=user-provided
 
+; trunk_timestamps: boolean: Configure how trunked audio data is sent, enable it for
+;  trunked data with timestamps and disable it to send trunked data without timestamps
+; This parameter is applied on reload
+; It can be overridden when routing by 'trunkin_timestamps' for incoming calls
+;  or 'trunkout_timestamps' for outgoing calls
+; This parameter is applied when a new trunk is created (a trunked call is created and
+;  there is no trunk for the same remote address)
+; Defaults to yes
+;trunk_timestamps=yes
+
+; trunk_sendinterval: integer: Interval, in milliseconds, to send trunked trunked audio data
+; The interval is measured from the first packet put in a trunk
+; Trunked data is sent when this interval ellapses or the buffer is full
+; This parameter is applied on reload
+; It can be overridden when routing by 'trunkin_sendinterval' for incoming calls
+;  or 'trunkout_sendinterval' for outgoing calls
+; This parameter is applied when a new trunk is created (a trunked call is created and
+;  there is no trunk for the same remote address)
+; Minimum allowed value is 5
+; Defaults to 20
+;trunk_sendinterval=20
+
+; trunk_maxlen: integer: Maximum value for trunked data frames.
+; This value includes the length if trunk frame header (8 bytes)
+; Trunked data is sent when the send interval ellapses or the buffer is full
+; This parameter is applied on reload
+; It can be overridden when routing by 'trunkin_maxlen' for incoming calls
+;  or 'trunkout_maxlen' for outgoing calls
+; This parameter is applied when a new trunk is created (a trunked call is created and
+;  there is no trunk for the same remote address)
+; Minimum allowed value is 20
+; Defaults to 1400
+;trunk_maxlen=1400
+
+; trunk_nominits_sync_use_ts: boolean: Configure how to re-build timestamps when
+;  processing incoming trunked audio without miniframe timestamps
+; When enabled the transaction will use trunk timestamp and last received full voice
+;  frame time and timestamp to build miniframe timestamps
+; When disabled the transaction will use the time difference between current time and
+;  last received full voice frame to build the miniframe timestamps
+; This parameter is applied on reload
+; It can be overridden when routing by 'trunkin_nominits_sync_use_ts' for incoming calls
+;  or 'trunkout_nominits_sync_use_ts' for outgoing calls
+; Defaults to yes
+;trunk_nominits_sync_use_ts=yes
+
+; trunk_nominits_ts_diff_restart: integer: The difference (in milliseconds) between
+;  current timestamp and first timestamp of incoming trunked audio data without miniframe
+;  timestamps at which to restart timestamps build data
+; This value is used when received trunk timestamp is older then first timestamp
+; If the difference is less then this value the miniframes will be dropped
+; This will deal with trunk timestamp wraparound or restarted by remote party
+; This parameter is ignored if trunk_nominits_sync_use_ts is disabled
+; This parameter is applied on reload
+; It can be overridden when routing by 'trunkin_nominits_ts_diff_restart' for incoming
+;  calls or 'trunkout_nominits_ts_diff_restart' for outgoing calls
+; Minimum allowed value is 1000
+; Defaults to 5000
+;trunk_nominits_ts_diff_restart=5000
+
 ; calltoken_in: boolean: Use call token ip address authentication on incoming calls
 ; Note: If the caller don't support the call token IAX extension the call request
 ;  will be ignored anyway

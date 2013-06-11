@@ -284,16 +284,18 @@ public:
      * @param authTimeout Timeout (in seconds) of acknoledged auth frames sent
      * @param transTimeout Timeout (in seconds) on remote request of transactions belonging to this engine
      * @param maxFullFrameDataLen Max full frame IE list (buffer) length
-     * @param trunkSendInterval Send trunk meta frame interval
      * @param authRequired Automatically challenge all clients for authentication
      */
     YIAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
 	u_int16_t authTimeout, u_int16_t transTimeout,
-	u_int16_t maxFullFrameDataLen, u_int32_t trunkSendInterval, bool authRequired,
+	u_int16_t maxFullFrameDataLen, bool authRequired,
 	NamedList* params);
 
     virtual ~YIAXEngine()
 	{}
+
+    // Setup a given transaction from parameters
+    void initTransaction(IAXTransaction* tr, const NamedList& params);
 
     /*
      * Process media from remote peer.
@@ -1032,12 +1034,23 @@ void YIAXTrunking::run()
 YIAXEngine::YIAXEngine(const char* iface, int port, u_int16_t transListCount,
 	u_int16_t retransCount, u_int16_t retransInterval, u_int16_t authTimeout,
 	u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
-	u_int32_t trunkSendInterval, bool authRequired, NamedList* params)
+	bool authRequired, NamedList* params)
     : IAXEngine(iface,port,transListCount,retransCount,retransInterval,authTimeout,
-	transTimeout,maxFullFrameDataLen,0,0,
-	trunkSendInterval,authRequired,params),
+	transTimeout,maxFullFrameDataLen,0,0,authRequired,params),
       m_threadsCreated(false)
 {
+}
+
+// Setup a given transaction from parameters
+void YIAXEngine::initTransaction(IAXTransaction* tr, const NamedList& params)
+{
+    if (!tr)
+	return;
+    String prefix = tr->outgoing() ? "trunkout" : "trunkin";
+    String pref = prefix + "_";
+    if (params.getBoolValue(prefix))
+	enableTrunking(tr,&params,pref);
+    initTrunkIn(tr,&params,pref);
 }
 
 // Handle received voice data, forward it to connection's source
@@ -1439,14 +1452,13 @@ void YIAXDriver::initialize()
     u_int16_t authTimeout = 30;
     u_int16_t transTimeout = 10;
     u_int16_t maxFullFrameDataLen = 1400;
-    u_int32_t trunkSendInterval = 10;
     m_port = gen->getIntValue("port",4569);
     String iface = gen->getValue("addr","0.0.0.0");
     // set max chans
     maxChans(gen->getIntValue("maxchans",maxChans()));
     bool authReq = cfg.getBoolValue("registrar","auth_required",true);
-    m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,retransCount,retransInterval,authTimeout,
-	transTimeout,maxFullFrameDataLen,trunkSendInterval,authReq,gen);
+    m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,retransCount,
+	retransInterval,authTimeout,transTimeout,maxFullFrameDataLen,authReq,gen);
     m_iaxEngine->debugChain(this);
     m_iaxEngine->initFormats(cfg.getSection("formats"));
     int tos = gen->getIntValue("tos",dict_tos,0);
@@ -1536,9 +1548,7 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
 	conn->callConnect(msg);
 	msg.setParam("peerid",conn->id());
 	msg.setParam("targetid",conn->id());
-	// Enable trunking if trunkout parameter is enabled
-	if (msg.getBoolValue("trunkout"))
-	    m_iaxEngine->enableTrunking(tr);
+	(static_cast<YIAXEngine*>(tr->getEngine()))->initTransaction(tr,msg);
     }
     else
 	tr->setUserData(0);
@@ -1806,10 +1816,8 @@ void YIAXConnection::callAccept(Message& msg)
 	u_int32_t ci = IAXFormat::mask(codecs,IAXFormat::Image);
 	iplugin.updateCodecsFromRoute(ci,msg,IAXFormat::Image);
 	iplugin.getEngine()->acceptFormatAndCapability(m_transaction,&ci,IAXFormat::Image);
+	(static_cast<YIAXEngine*>(m_transaction->getEngine()))->initTransaction(m_transaction,msg);
 	m_transaction->sendAccept();
-	// Enable trunking if trunkin parameter is enabled
-	if (msg.getBoolValue("trunkin"))
-	    m_iaxEngine->enableTrunking(m_transaction);
     }
     m_mutexTrans.unlock();
     Channel::callAccept(msg);

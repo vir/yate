@@ -57,8 +57,7 @@ static void buildSecretDigest(String& buf, const String& secret, unsigned int t,
 
 IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
 	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
-	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval, bool authRequired,
-	NamedList* params)
+	u_int32_t format, u_int32_t capab, bool authRequired, NamedList* params)
     : Mutex(true,"IAXEngine"),
     m_lastGetEvIndex(0),
     m_authRequired(authRequired),
@@ -81,8 +80,7 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
     m_adjustTsOutThreshold(IAX2_ADJUSTTSOUT_THRES),
     m_adjustTsOutOverrun(IAX2_ADJUSTTSOUT_OVER),
     m_adjustTsOutUnderrun(IAX2_ADJUSTTSOUT_UNDER),
-    m_mutexTrunk(true,"IAXEngine::Trunk"),
-    m_trunkSendInterval(trunkSendInterval)
+    m_mutexTrunk(false,"IAXEngine::Trunk")
 {
     debugName("iaxengine");
     Debug(this,DebugAll,"Automatically request authentication set to '%s'.",
@@ -412,6 +410,7 @@ void IAXEngine::initialize(const NamedList& params)
     m_callerNumType = lookup(params["numtype"],IAXInfoElement::s_typeOfNumber);
     m_callingPres = lookup(params["presentation"],IAXInfoElement::s_presentation) |
 	lookup(params["screening"],IAXInfoElement::s_screening);
+    m_trunkInfoDef.init(params,"trunk_");
     initOutDataAdjust(params);
 }
 
@@ -420,6 +419,8 @@ void IAXEngine::readSocket(SocketAddr& addr)
     unsigned char buf[1500];
 
     while (1) {
+	if (Thread::check(false))
+	    break;
 	int len = m_socket.recvFrom(buf,sizeof(buf),addr);
 	if (len == Socket::socketError()) {
 	    if (!m_socket.canRetry()) {
@@ -428,7 +429,7 @@ void IAXEngine::readSocket(SocketAddr& addr)
 		Debug(this,DebugWarn,"Socket read error: %s (%d)",
 		    tmp.c_str(),m_socket.error());
 	    }
-	    Thread::idle(true);
+	    Thread::idle(false);
 	    continue;
 	}
 	addFrame(addr,buf,len);
@@ -471,10 +472,10 @@ bool IAXEngine::writeSocket(const void* buf, int len, const SocketAddr& addr,
 void IAXEngine::runGetEvents()
 {
     while (1) {
-	if (!process()) {
-	    Thread::idle(true);
-	    continue;
-	}
+	if (Thread::check(false))
+	    break;
+	if (!process())
+	    Thread::idle(false);
     }
 }
 
@@ -537,21 +538,27 @@ void IAXEngine::decodeDateTime(u_int32_t dt, unsigned int& year, unsigned int& m
    sec = dt & 0x1f;
 }
 
-bool IAXEngine::processTrunkFrames(u_int32_t time)
+bool IAXEngine::processTrunkFrames(const Time& time)
 {
-    Lock lock(&m_mutexTrunk);
+    Lock lck(m_mutexTrunk);
     bool sent = false;
-    for (ObjList* l = m_trunkList.skipNull(); l; l = l->skipNext()) {
+    for (ObjList* l = m_trunkList.skipNull(); l;) {
+	if (Thread::check(false))
+	    break;
 	IAXMetaTrunkFrame* frame = static_cast<IAXMetaTrunkFrame*>(l->get());
-	// Frame has mini frame(s) ?
-	if (!frame->timestamp())
+	if (frame->refcount() != 1) {
+	    l = l->skipNext();
+	    if (frame->timerTick(time))
+		sent = true;
 	    continue;
-	int32_t interval = time - frame->timestamp();
-        if (!interval || (interval && (u_int32_t)interval < m_trunkSendInterval))
-	    continue;
-	// If the time wrapped around, send it. Worst case: we'll send an empty frame
-	frame->send(time);
-	sent = true;
+	}
+	Debug(this,DebugAll,
+	    "Removing trunk frame (%p) '%s:%d' timestamps=%s maxlen=%u interval=%ums",
+	    frame,frame->addr().host().c_str(),frame->addr().port(),
+	    String::boolText(frame->trunkTimestamps()),frame->maxLen(),
+	    frame->sendInterval());
+	l->remove();
+	l = l->skipNull();
     }
     return sent;
 }
@@ -573,15 +580,18 @@ IAXEvent* IAXEngine::getEvent(u_int64_t time)
     // Find for incomplete transactions
     l = m_incompleteTransList.skipNull();
     for (; l; l = l->next()) {
+	if (Thread::check(false))
+	    break;
 	tr = static_cast<IAXTransaction*>(l->get());
 	if (tr && 0 != (ev = tr->getEvent(time))) {
 	    unlock();
 	    return ev;
 	}
-	continue;
     }
     // Find for complete transactions, start with current index
     while (m_lastGetEvIndex < m_transListCount) {
+	if (Thread::check(false))
+	    break;
 	l = m_transList[m_lastGetEvIndex++]->skipNull();
 	if (!l)
 	    continue;
@@ -633,18 +643,16 @@ void IAXEngine::releaseCallNo(u_int16_t lcallno)
     m_lUsedCallNo[lcallno] = false;
 }
 
-IAXTransaction* IAXEngine::startLocalTransaction(IAXTransaction::Type type, const SocketAddr& addr, IAXIEList& ieList, bool trunking)
+IAXTransaction* IAXEngine::startLocalTransaction(IAXTransaction::Type type,
+    const SocketAddr& addr, IAXIEList& ieList)
 {
     Lock lock(this);
     u_int16_t lcn = generateCallNo();
     if (!lcn)
 	return 0;
     IAXTransaction* tr = IAXTransaction::factoryOut(this,type,lcn,addr,ieList);
-    if (tr) {
+    if (tr)
 	m_incompleteTransList.append(tr);
-	if (trunking)
-	    enableTrunking(tr);
-    }
     else
 	releaseCallNo(lcn);
     return tr;
@@ -774,31 +782,55 @@ void IAXEngine::defaultEventHandler(IAXEvent* event)
     }
 }
 
-void IAXEngine::enableTrunking(IAXTransaction* trans)
+void IAXEngine::enableTrunking(IAXTransaction* trans, const NamedList* params,
+    const String& prefix)
 {
     if (!trans || trans->type() != IAXTransaction::New)
 	return;
-    Lock lock(&m_mutexTrunk);
+    Lock lock(m_mutexTrunk);
     IAXMetaTrunkFrame* frame;
     // Already enabled ?
-    for (ObjList* l = m_trunkList.skipNull(); l; l = l->next()) {
+    for (ObjList* l = m_trunkList.skipNull(); l; l = l->skipNext()) {
 	frame = static_cast<IAXMetaTrunkFrame*>(l->get());
-	if (frame && frame->addr() == trans->remoteAddr()) {
+	if (frame->addr() == trans->remoteAddr()) {
 	    trans->enableTrunking(frame);
 	    return;
 	}
     }
-    frame = new IAXMetaTrunkFrame(this,trans->remoteAddr());
-    if (trans->enableTrunking(frame))
+    IAXTrunkInfo tmp;
+    IAXTrunkInfo* trunk = &m_trunkInfoDef;
+    if (params) {
+	tmp.initTrunking(*params,prefix,trunk,true);
+	trunk = &tmp;
+    }
+    frame = new IAXMetaTrunkFrame(this,trans->remoteAddr(),trunk->m_timestamps,
+	trunk->m_maxLen,trunk->m_sendInterval);
+    if (trans->enableTrunking(frame)) {
 	m_trunkList.append(frame);
-    // Deref frame: Only transactions are allowed to keep references for it
-    frame->deref();
+	Debug(this,DebugAll,
+	    "Added trunk frame (%p) '%s:%d' timestamps=%s maxlen=%u interval=%ums",
+	    frame,frame->addr().host().c_str(),frame->addr().port(),
+	    String::boolText(frame->trunkTimestamps()),frame->maxLen(),
+	    frame->sendInterval());
+    }
+    else
+	TelEngine::destruct(frame);
 }
 
-void IAXEngine::removeTrunkFrame(IAXMetaTrunkFrame* trunkFrame)
+// Init incoming trunking data for a given transaction
+void IAXEngine::initTrunkIn(IAXTransaction* trans, const NamedList* params,
+    const String& prefix)
 {
-    Lock lock(&m_mutexTrunk);
-    m_trunkList.remove(trunkFrame,false);
+    if (!trans)
+	return;
+    IAXTrunkInfo tmp;
+    IAXTrunkInfo* trunk = &m_trunkInfoDef;
+    if (params) {
+	tmp.initTrunking(*params,prefix,trunk,false);
+	trunk = &tmp;
+    }
+    trans->m_trunkInSyncUsingTs = trunk->m_trunkInSyncUsingTs;
+    trans->m_trunkInTsDiffRestart = trunk->m_trunkInTsDiffRestart;
 }
 
 void IAXEngine::runProcessTrunkFrames()

@@ -1447,8 +1447,15 @@ void IAXFrameOut::adjustAuthTimeout(u_int64_t nextTransTime)
 void IAXTrunkInfo::init(const NamedList& params, const String& prefix,
     const IAXTrunkInfo* def)
 {
-    initTrunking(params,prefix,def,true);
-    initTrunking(params,prefix,def,false);
+    m_retransCount = params.getIntValue(prefix + "retrans_count",
+	def ? def->m_retransCount : IAX2_RETRANS_COUNT_DEF,
+	IAX2_RETRANS_COUNT_MIN,IAX2_RETRANS_COUNT_MAX);
+    m_retransInterval = params.getIntValue(prefix + "retrans_interval",
+	def ? def->m_retransInterval : IAX2_RETRANS_INTERVAL_DEF,
+	IAX2_RETRANS_INTERVAL_MIN,IAX2_RETRANS_INTERVAL_MAX);
+    m_pingInterval = params.getIntValue(prefix + "ping_interval",
+	def ? def->m_retransInterval : IAX2_PING_INTERVAL_DEF,
+	IAX2_PING_INTERVAL_MIN);
 }
 
 // Init from parameters

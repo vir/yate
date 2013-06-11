@@ -104,10 +104,6 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
     m_trunkInTsDiffRestart(5000),
     m_trunkInFirstTs(0)
 {
-    // Setup transaction
-    m_retransCount = engine->retransCount();
-    m_retransInterval = engine->retransInterval();
-    m_timeToNextPing = m_timeStamp + m_pingInterval;
     switch (frame->subclass()) {
 	case IAXControl::New:
 	    m_type = New;
@@ -126,11 +122,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
 		localCallNo(),remoteCallNo(),frame->subclass(),this);
 	    return;
     }
-    Debug(m_engine,DebugAll,"Transaction(%u,%u) incoming type=%s remote=%s:%d [%p]",
-	localCallNo(),remoteCallNo(),typeName(),m_addr.host().c_str(),m_addr.port(),this);
-    engine->getOutDataAdjust(m_adjustTsOutThreshold,m_adjustTsOutOverrun,
-	m_adjustTsOutUnderrun);
-    engine->initTrunkIn(this);
+    init();
     // Append frame to incoming list
     Lock lock(this);
     m_inFrames.append(frame);
@@ -181,8 +173,6 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_trunkInTsDiffRestart(5000),
     m_trunkInFirstTs(0)
 {
-    Debug(m_engine,DebugAll,"Transaction(%u,%u) outgoing type=%s remote=%s:%d [%p]",
-	localCallNo(),remoteCallNo(),typeName(),m_addr.host().c_str(),m_addr.port(),this);
     // Init data members
     if (!m_addr.port()) {
 	XDebug(m_engine,DebugAll,
@@ -190,9 +180,6 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	    localCallNo(),remoteCallNo(),this);
 	m_addr.port(4569);
     }
-    m_retransCount = engine->retransCount();
-    m_retransInterval = engine->retransInterval();
-    m_timeToNextPing = m_timeStamp + m_pingInterval;
     init(ieList);
     IAXControl::Type frametype;
     IAXIEList* ies = new IAXIEList;
@@ -237,9 +224,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	    m_type = Incorrect;
 	    return;
     }
-    engine->getOutDataAdjust(m_adjustTsOutThreshold,m_adjustTsOutOverrun,
-	m_adjustTsOutUnderrun);
-    engine->initTrunkIn(this);
+    init();
     postFrameIes(IAXFrame::IAX,frametype,ies);
     changeState(NewLocalInvite);
 }
@@ -663,13 +648,15 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
 	if (state() == NewRemoteInvite_AuthSent && frame->ack())
 	    frame->adjustAuthTimeout(time + m_engine->authTimeout() * 1000);
 	// No response. Timeout ?
-	if (frame->timeout() && frame->timeForRetrans(time)) {
-	    if (m_state == Terminating)
-		// Client already notified: Terminate transaction
-		ev = terminate(IAXEvent::Timeout,true);
-	    else
-		// Client not notified: Notify it and terminate transaction
-		ev = terminate(IAXEvent::Timeout,true,frame,false);
+	if (!frame->retransCount()) {
+	    if (frame->timeForRetrans(time)) {
+		if (m_state == Terminating)
+		    // Client already notified: Terminate transaction
+		    ev = terminate(IAXEvent::Timeout,true);
+		else
+		    // Client not notified: Notify it and terminate transaction
+		    ev = terminate(IAXEvent::Timeout,true,frame,false);
+	    }
 	    break;
 	}
 	// Retransmit ?
@@ -677,8 +664,10 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
 	    if (frame->ack())
 		frame->transmitted();   // Frame acknoledged: just update retransmission info
 	    else {
-		Debug(m_engine,DebugNote,"Transaction(%u,%u) resending Frame(%u,%u) oseq=%u iseq=%u stamp=%u [%p]",
-		    localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),frame->oSeqNo(),frame->iSeqNo(),frame->timeStamp(),this);
+		Debug(m_engine,DebugNote,
+		    "Transaction(%u,%u) resending Frame(%u,%u) oseq=%u iseq=%u stamp=%u remaining=%u [%p]",
+		    localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),
+		    frame->oSeqNo(),frame->iSeqNo(),frame->timeStamp(),frame->retransCount() - 1,this);
 		sendFrame(frame);       // Retransmission
 	    }
 	}
@@ -2019,7 +2008,7 @@ void IAXTransaction::postFrame(IAXFrameOut* frame)
 {
     if (!frame)
 	return;
-    DDebug(m_engine,DebugAll,
+    Debug(m_engine,DebugAll,
 	"Transaction(%u,%u) posting Frame(%u,%u) oseq=%u iseq=%u stamp=%u [%p]",
 	localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),
 	m_oSeqNo,m_iSeqNo,frame->timeStamp(),this);
@@ -2039,6 +2028,24 @@ void IAXTransaction::receivedVoiceMiniBeforeFull()
 	    localCallNo(),remoteCallNo(),this);
     if (0 == (m_reqVoiceVNAK % 3))
 	sendVNAK();
+}
+
+void IAXTransaction::init()
+{
+    Debug(m_engine,DebugAll,"Transaction %s call=%u type=%s remote=%s:%d [%p]",
+	outgoing() ? "outgoing" : "incoming",localCallNo(),typeName(),m_addr.host().c_str(),
+	m_addr.port(),this);
+    m_engine->getOutDataAdjust(m_adjustTsOutThreshold,m_adjustTsOutOverrun,m_adjustTsOutUnderrun);
+    RefPointer<IAXTrunkInfo> ti;
+    if (!m_engine->trunkInfo(ti))
+	return;
+    m_trunkInSyncUsingTs = ti->m_trunkInSyncUsingTs;
+    m_trunkInTsDiffRestart = ti->m_trunkInTsDiffRestart;
+    m_retransCount = ti->m_retransCount;
+    m_retransInterval = ti->m_retransInterval;
+    m_pingInterval = ti->m_pingInterval;
+    ti = 0;
+    m_timeToNextPing = m_timeStamp + m_pingInterval;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

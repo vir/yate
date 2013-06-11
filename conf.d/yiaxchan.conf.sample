@@ -111,6 +111,24 @@
 ; Defaults to yes
 ;calltoken_rejectmissing=yes
 
+; retrans_count: integer: The number of frame retransmissions
+; This parameter is applied on reload for new calls only
+; Allowed interval: 1..10
+; Defaults to 4
+;retrans_count=4
+
+; retrans_interval: integer: The first frame retransmission interval in milliseconds
+; This parameter is applied on reload for new calls only
+; Allowed interval: 200..5000
+; Defaults to 500
+;retrans_interval=500
+
+; ping_interval: integer: The interval, in milliseconds, to send ping
+; This parameter is applied on reload for new calls only
+; Minimum allowed value is 10000
+; Defaults to 20000
+;ping_interval=20000
+
 ; adjust_ts_out_threshold: integer: The difference, in milliseconds, between sent audio data
 ;  timestamp and transaction timestamp at which audio data timestamp will be adjusted
 ; Its value will be rouded up to a multiple of 10

@@ -279,14 +279,12 @@ public:
      * @param iface Interface address to use
      * @param port UDP port to use
      * @param transListCount Number of entries in the transaction hash table
-     * @param retransCount Retransmission counter for each transaction belonging to this engine
-     * @param retransInterval Retransmission interval default value in miliseconds
      * @param authTimeout Timeout (in seconds) of acknoledged auth frames sent
      * @param transTimeout Timeout (in seconds) on remote request of transactions belonging to this engine
      * @param maxFullFrameDataLen Max full frame IE list (buffer) length
      * @param authRequired Automatically challenge all clients for authentication
      */
-    YIAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
+    YIAXEngine(const char* iface, int port, u_int16_t transListCount,
 	u_int16_t authTimeout, u_int16_t transTimeout,
 	u_int16_t maxFullFrameDataLen, bool authRequired,
 	NamedList* params);
@@ -1033,10 +1031,9 @@ void YIAXTrunking::run()
  * YIAXEngine
  */
 YIAXEngine::YIAXEngine(const char* iface, int port, u_int16_t transListCount,
-	u_int16_t retransCount, u_int16_t retransInterval, u_int16_t authTimeout,
-	u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
+	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
 	bool authRequired, NamedList* params)
-    : IAXEngine(iface,port,transListCount,retransCount,retransInterval,authTimeout,
+    : IAXEngine(iface,port,transListCount,authTimeout,
 	transTimeout,maxFullFrameDataLen,0,0,authRequired,params),
       m_threadsCreated(false)
 {
@@ -1448,8 +1445,6 @@ void YIAXDriver::initialize()
     Engine::install(new YIAXRegDataHandler);
     // Init IAX engine
     u_int16_t transListCount = 64;
-    u_int16_t retransCount = 4;
-    u_int16_t retransInterval = 500;
     u_int16_t authTimeout = 30;
     u_int16_t transTimeout = 10;
     u_int16_t maxFullFrameDataLen = 1400;
@@ -1458,8 +1453,8 @@ void YIAXDriver::initialize()
     // set max chans
     maxChans(gen->getIntValue("maxchans",maxChans()));
     bool authReq = cfg.getBoolValue("registrar","auth_required",true);
-    m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,retransCount,
-	retransInterval,authTimeout,transTimeout,maxFullFrameDataLen,authReq,gen);
+    m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,
+	authTimeout,transTimeout,maxFullFrameDataLen,authReq,gen);
     m_iaxEngine->debugChain(this);
     m_iaxEngine->initFormats(cfg.getSection("formats"));
     int tos = gen->getIntValue("tos",dict_tos,0);

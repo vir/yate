@@ -79,6 +79,18 @@ class IAXEngine;                         // IAX engine
 #define IAX2_TRUNKFRAME_SEND_MIN 5
 #define IAX2_TRUNKFRAME_SEND_DEF 20
 
+// Frame retransmission
+#define IAX2_RETRANS_COUNT_MIN 1
+#define IAX2_RETRANS_COUNT_MAX 10
+#define IAX2_RETRANS_COUNT_DEF 4
+#define IAX2_RETRANS_INTERVAL_MIN 200
+#define IAX2_RETRANS_INTERVAL_MAX 5000
+#define IAX2_RETRANS_INTERVAL_DEF 500
+
+// Ping
+#define IAX2_PING_INTERVAL_MIN 10000
+#define IAX2_PING_INTERVAL_DEF 20000
+
 /**
  * This class holds a single Information Element with no data
  * @short A single IAX2 Information Element
@@ -1344,11 +1356,11 @@ public:
 	{}
 
     /**
-     * Get the timeout (retransmission counter) of this frame
-     * @return True if the retransmission counter is 0
+     * Get the retransmission counter of this frame
+     * @return The retransmission counter is 0
      */
-    inline bool timeout() const
-        { return m_retransCount == 0; }
+    inline unsigned int retransCount() const
+        { return m_retransCount; }
 
     /**
      * Ask the frame if it's time for retransmit
@@ -1406,7 +1418,7 @@ private:
  * This class holds trunk description
  * @short Trunk info
  */
-class YIAX_API IAXTrunkInfo : public GenObject
+class YIAX_API IAXTrunkInfo : public RefObject
 {
 public:
     /**
@@ -1415,22 +1427,25 @@ public:
     inline IAXTrunkInfo()
 	: m_timestamps(true), m_sendInterval(IAX2_TRUNKFRAME_SEND_DEF),
 	m_maxLen(IAX2_TRUNKFRAME_LEN_DEF), m_trunkInSyncUsingTs(true),
-	m_trunkInTsDiffRestart(5000)
+	m_trunkInTsDiffRestart(5000),
+	m_retransCount(IAX2_RETRANS_COUNT_DEF),
+	m_retransInterval(IAX2_RETRANS_INTERVAL_DEF),
+	m_pingInterval(IAX2_PING_INTERVAL_DEF)
 	{}
 
     /**
-     * Init all data from parameters
+     * Init non trunking related data
      * @param params Parameter list
-     * @param prefix Parameter prefix (used as value for enable parameter also)
+     * @param prefix Parameter prefix
      * @param def Optional defaults
      */
-    void init(const NamedList& params, const String& prefix,
+    void init(const NamedList& params, const String& prefix = String::empty(),
 	const IAXTrunkInfo* def = 0);
 
     /**
      * Init trunking from parameters
      * @param params Parameter list
-     * @param prefix Parameter prefix (used as value for enable parameter also)
+     * @param prefix Parameter prefix
      * @param def Optional defaults
      * @param out True to init outgoing trunk data, false to init incoming trunk info
      */
@@ -1444,6 +1459,9 @@ public:
                                          //  time or trunk timestamp to re-build frame ts
     u_int32_t m_trunkInTsDiffRestart;    // Incoming trunk without timestamp: diff between
                                          //  timestamps at which we restart
+    unsigned int m_retransCount;         // Frame retransmission counter
+    unsigned int m_retransInterval;      // Frame retransmission interval in milliseconds
+    unsigned int m_pingInterval;         // Ping interval in milliseconds
 };
 
 /**
@@ -2471,6 +2489,7 @@ private:
     void adjustTStamp(u_int32_t& tStamp);
     void postFrame(IAXFrameOut* frame);
     void receivedVoiceMiniBeforeFull();
+    void init();
     inline void restartTrunkIn(u_int64_t now, u_int32_t ts) {
 	    m_trunkInStartTime = now;
 	    u_int64_t dt = (now - m_lastVoiceFrameIn) / 1000;
@@ -2500,8 +2519,8 @@ private:
     IAXEvent* m_currentEvent;			// Pointer to last generated event or 0
     // Outgoing frames management
     ObjList m_outFrames;			// Transaction & protocol control outgoing frames
-    u_int16_t m_retransCount;			// Retransmission counter. 0 --> Timeout
-    u_int32_t m_retransInterval;		// Frame retransmission interval
+    unsigned int m_retransCount;		// Retransmission counter. 0 --> Timeout
+    unsigned int m_retransInterval;		// Frame retransmission interval
     // Incoming frames management
     ObjList m_inFrames;				// Transaction & protocol control incoming frames
     static unsigned char m_maxInFrames;		// Max frames number allowed in m_inFrames
@@ -2700,8 +2719,6 @@ public:
      * @param iface Address of the interface to use, default all (0.0.0.0)
      * @param port UDP port to run the protocol on
      * @param transListCount Number of entries in the transaction hash table
-     * @param retransCount Retransmission counter for each transaction belonging to this engine
-     * @param retransInterval Retransmission interval default value in miliseconds
      * @param authTimeout Timeout (in seconds) of acknoledged auth frames sent
      * @param transTimeout Timeout (in seconds) on remote request of transactions belonging to this engine
      * @param maxFullFrameDataLen Max full frame IE list (buffer) length
@@ -2710,7 +2727,7 @@ public:
      * @param authRequired Automatically challenge all clients for authentication
      * @param params Optional extra parameter list
      */
-    IAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
+    IAXEngine(const char* iface, int port, u_int16_t transListCount,
 	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
 	u_int32_t format, u_int32_t capab, bool authRequired, NamedList* params = 0);
 
@@ -2778,20 +2795,6 @@ public:
      * @return True if at least one event was processed
      */
     bool process();
-
-    /**
-     * Get default frame retransmission counter
-     * @return Frame retransmission counter
-     */
-    inline u_int16_t retransCount() const
-        { return m_retransCount; }
-
-    /**
-     * Get default frame retransmission starting interval
-     * @return Frame retransmission starting interval
-     */
-    inline u_int16_t retransInterval() const
-        { return m_retransInterval; }
 
     /**
      * Check if a transaction should automatically request authentication
@@ -2972,10 +2975,14 @@ public:
 
     /**
      * Retrieve the default trunk info data
-     * @return Trunk info pointer, 0 if not found
+     * @param info Destination to be set with trunk info pointer
+     * @return True if destination pointr is valid
      */
-    inline IAXTrunkInfo* trunkInfo()
-	{ return &m_trunkInfoDef; }
+    inline bool trunkInfo(RefPointer<IAXTrunkInfo>& info) {
+	    Lock lck(m_trunkInfoMutex);
+	    info = m_trunkInfoDef;
+	    return info != 0;
+	}
 
     /**
      * Send an INVAL frame
@@ -3129,8 +3136,6 @@ private:
     int m_maxFullFrameDataLen;			// Max full frame data (IE list) length
     u_int16_t m_startLocalCallNo;		// Start index of local call number allocation
     u_int16_t m_transListCount;			// m_transList count
-    u_int16_t m_retransCount;			// Retransmission counter for each transaction belonging to this engine
-    u_int16_t m_retransInterval;		// Retransmission interval default value in miliseconds
     u_int16_t m_authTimeout;			// Timeout (in seconds) of acknoledged auth frames sent
     u_int32_t m_transTimeout;			// Timeout (in seconds) on remote request of transactions
     						//  belonging to this engine
@@ -3154,7 +3159,8 @@ private:
     // Trunking
     Mutex m_mutexTrunk;				// Mutex for trunk operations
     ObjList m_trunkList;			// Trunk frames list
-    IAXTrunkInfo m_trunkInfoDef;                // Defaults for trunk data
+    Mutex m_trunkInfoMutex;                     // Trunk info mutex
+    RefPointer<IAXTrunkInfo> m_trunkInfoDef;    // Defaults for trunk data
 };
 
 }

@@ -55,7 +55,7 @@ static void buildSecretDigest(String& buf, const String& secret, unsigned int t,
 }
 
 
-IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
+IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount,
 	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
 	u_int32_t format, u_int32_t capab, bool authRequired, NamedList* params)
     : Mutex(true,"IAXEngine"),
@@ -64,8 +64,6 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
     m_maxFullFrameDataLen(maxFullFrameDataLen),
     m_startLocalCallNo(0),
     m_transListCount(0),
-    m_retransCount(retransCount),
-    m_retransInterval(retransInterval),
     m_authTimeout(authTimeout),
     m_transTimeout(transTimeout),
     m_callToken(false),
@@ -80,7 +78,8 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
     m_adjustTsOutThreshold(IAX2_ADJUSTTSOUT_THRES),
     m_adjustTsOutOverrun(IAX2_ADJUSTTSOUT_OVER),
     m_adjustTsOutUnderrun(IAX2_ADJUSTTSOUT_UNDER),
-    m_mutexTrunk(false,"IAXEngine::Trunk")
+    m_mutexTrunk(false,"IAXEngine::Trunk"),
+    m_trunkInfoMutex(false,"IAXEngine::TrunkInfo")
 {
     debugName("iaxengine");
     Debug(this,DebugAll,"Automatically request authentication set to '%s'.",
@@ -410,8 +409,14 @@ void IAXEngine::initialize(const NamedList& params)
     m_callerNumType = lookup(params["numtype"],IAXInfoElement::s_typeOfNumber);
     m_callingPres = lookup(params["presentation"],IAXInfoElement::s_presentation) |
 	lookup(params["screening"],IAXInfoElement::s_screening);
-    m_trunkInfoDef.init(params,"trunk_");
     initOutDataAdjust(params);
+    IAXTrunkInfo* ti = new IAXTrunkInfo;
+    ti->initTrunking(params,"trunk_",0,true);
+    ti->initTrunking(params,"trunk_",0,false);
+    ti->init(params);
+    Lock lck(m_trunkInfoMutex);
+    m_trunkInfoDef = ti;
+    TelEngine::destruct(ti);
 }
 
 void IAXEngine::readSocket(SocketAddr& addr)
@@ -782,6 +787,20 @@ void IAXEngine::defaultEventHandler(IAXEvent* event)
     }
 }
 
+static bool getTrunkingInfo(RefPointer<IAXTrunkInfo>& ti, IAXEngine* engine,
+    const NamedList* params, const String& prefix, bool out)
+{
+    if (!engine->trunkInfo(ti))
+	return false;
+    if (!params)
+	return true;
+    IAXTrunkInfo* tmp = new IAXTrunkInfo;
+    tmp->initTrunking(*params,prefix,ti,out);
+    ti = tmp;
+    TelEngine::destruct(tmp);
+    return true;
+}
+
 void IAXEngine::enableTrunking(IAXTransaction* trans, const NamedList* params,
     const String& prefix)
 {
@@ -797,14 +816,12 @@ void IAXEngine::enableTrunking(IAXTransaction* trans, const NamedList* params,
 	    return;
 	}
     }
-    IAXTrunkInfo tmp;
-    IAXTrunkInfo* trunk = &m_trunkInfoDef;
-    if (params) {
-	tmp.initTrunking(*params,prefix,trunk,true);
-	trunk = &tmp;
-    }
-    frame = new IAXMetaTrunkFrame(this,trans->remoteAddr(),trunk->m_timestamps,
-	trunk->m_maxLen,trunk->m_sendInterval);
+    RefPointer<IAXTrunkInfo> ti;
+    if (!getTrunkingInfo(ti,this,params,prefix,true))
+	return;
+    frame = new IAXMetaTrunkFrame(this,trans->remoteAddr(),ti->m_timestamps,
+	ti->m_maxLen,ti->m_sendInterval);
+    ti = 0;
     if (trans->enableTrunking(frame)) {
 	m_trunkList.append(frame);
 	Debug(this,DebugAll,
@@ -823,14 +840,12 @@ void IAXEngine::initTrunkIn(IAXTransaction* trans, const NamedList* params,
 {
     if (!trans)
 	return;
-    IAXTrunkInfo tmp;
-    IAXTrunkInfo* trunk = &m_trunkInfoDef;
-    if (params) {
-	tmp.initTrunking(*params,prefix,trunk,false);
-	trunk = &tmp;
-    }
-    trans->m_trunkInSyncUsingTs = trunk->m_trunkInSyncUsingTs;
-    trans->m_trunkInTsDiffRestart = trunk->m_trunkInTsDiffRestart;
+    RefPointer<IAXTrunkInfo> ti;
+    if (!getTrunkingInfo(ti,this,params,prefix,false))
+	return;
+    trans->m_trunkInSyncUsingTs = ti->m_trunkInSyncUsingTs;
+    trans->m_trunkInTsDiffRestart = ti->m_trunkInTsDiffRestart;
+    ti = 0;
 }
 
 void IAXEngine::runProcessTrunkFrames()

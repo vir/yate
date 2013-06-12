@@ -162,6 +162,13 @@
 ; Allowed interval: 10 .. 2 * adjust_ts_out_threshold - 1
 ;adjust_ts_out_under=60
 
+; challenge_timeout: integer: Interval, in milliseconds, in which a remote party should
+;  reply with credentials when we are challenging it
+; This value is applied on reload
+; Minimum allowed value is 5000
+; Defaults to 30000
+;challenge_timeout=30000
+
 ; tos: keyword: Type Of Service to set in outgoing UDP packets
 ; numeric TOS value or: lowdelay, throughput, reliability, mincost
 ;tos=0

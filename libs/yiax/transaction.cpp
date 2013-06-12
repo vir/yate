@@ -648,11 +648,19 @@ IAXEvent* IAXTransaction::getEvent(const Time& now)
 	}
 	// Adjust timeout for acknowledged auth frames sent with no auth response
 	// This is used to give some time to remote peer to send us credentials
-	if (state() == NewRemoteInvite_AuthSent && frame->ack() && frame->isAuthReq())
-	    frame->setTimeout(now + m_engine->authTimeout() * 1000000);
+	if (state() == NewRemoteInvite_AuthSent && frame->ack() && frame->isAuthReq() &&
+	    frame->canSetTimeout()) {
+	    frame->setTimeout(now + m_engine->challengeTout() * 1000);
+	    DDebug(m_engine,DebugAll,
+		"Transaction(%u,%u) set absolute timeout for Frame(%u,%u) [%p]",
+		localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),this);
+	}
 	// No response. Timeout ?
 	if (!frame->retransCount()) {
 	    if (frame->timeForRetrans(now)) {
+		Debug(m_engine,m_state == Terminating ? DebugAll : DebugNote,
+		    "Transaction(%u,%u) Frame(%u,%u) timed out [%p]",
+		    localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),this);
 		if (m_state == Terminating)
 		    // Client already notified: Terminate transaction
 		    ev = terminate(IAXEvent::Timeout,true);

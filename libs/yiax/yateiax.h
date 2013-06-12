@@ -91,6 +91,10 @@ class IAXEngine;                         // IAX engine
 #define IAX2_PING_INTERVAL_MIN 10000
 #define IAX2_PING_INTERVAL_DEF 20000
 
+// Sent challenge timeout
+#define IAX2_CHALLENGETOUT_MIN 5000
+#define IAX2_CHALLENGETOUT_DEF 30000
+
 /**
  * This class holds a single Information Element with no data
  * @short A single IAX2 Information Element
@@ -1433,6 +1437,13 @@ public:
 	{ return m_ackOnly; }
 
     /**
+     * Check if absolute timeout can be set
+     * @return True if absolute timeout can be set
+     */
+    inline bool canSetTimeout()
+	{ return m_retransTimeInterval != 0; }
+
+    /**
      * Set absolute timeout. Reset retransmission counter
      * @param tout Timeout time
      */
@@ -2740,8 +2751,6 @@ public:
      * @param iface Address of the interface to use, default all (0.0.0.0)
      * @param port UDP port to run the protocol on
      * @param transListCount Number of entries in the transaction hash table
-     * @param authTimeout Timeout (in seconds) of acknoledged auth frames sent
-     * @param transTimeout Timeout (in seconds) on remote request of transactions belonging to this engine
      * @param maxFullFrameDataLen Max full frame IE list (buffer) length
      * @param format Default media format
      * @param capab Media capabilities of this engine
@@ -2749,8 +2758,8 @@ public:
      * @param params Optional extra parameter list
      */
     IAXEngine(const char* iface, int port, u_int16_t transListCount,
-	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
-	u_int32_t format, u_int32_t capab, bool authRequired, NamedList* params = 0);
+	u_int16_t maxFullFrameDataLen, u_int32_t format, u_int32_t capab,
+	bool authRequired, NamedList* params = 0);
 
     /**
      * Destructor
@@ -2825,18 +2834,11 @@ public:
         { return m_authRequired; }
 
     /**
-     * Get the timeout (in seconds) of acknoledged auth frames sent
-     * @return Auth timeout in seconds
+     * Get the timeout interval sent challenge
+     * @return Sent challenge timeout interval
      */
-    inline u_int16_t authTimeout() const
-        { return m_authTimeout; }
-
-    /**
-     * Get the timeout (in seconds) of transactions belonging to this engine
-     * @return Timeout (in seconds) of transactions belonging to this engine
-     */
-    inline u_int32_t transactionTimeout() const
-        { return m_transTimeout; }
+    inline unsigned int challengeTout() const
+        { return m_challengeTout; }
 
     /**
      * Get the maximum allowed frame length
@@ -3165,9 +3167,7 @@ private:
     int m_maxFullFrameDataLen;			// Max full frame data (IE list) length
     u_int16_t m_startLocalCallNo;		// Start index of local call number allocation
     u_int16_t m_transListCount;			// m_transList count
-    u_int16_t m_authTimeout;			// Timeout (in seconds) of acknoledged auth frames sent
-    u_int32_t m_transTimeout;			// Timeout (in seconds) on remote request of transactions
-    						//  belonging to this engine
+    unsigned int m_challengeTout;		// Sent challenge timeout interval
     bool m_callToken;                           // Call token required on incoming calls
     String m_callTokenSecret;                   // Secret used to generate call tokens
     int m_callTokenAge;                         // Max allowed call token age

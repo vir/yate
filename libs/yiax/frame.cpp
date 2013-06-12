@@ -1426,7 +1426,7 @@ void IAXTrunkInfo::init(const NamedList& params, const String& prefix,
 	def ? def->m_retransInterval : IAX2_RETRANS_INTERVAL_DEF,
 	IAX2_RETRANS_INTERVAL_MIN,IAX2_RETRANS_INTERVAL_MAX);
     m_pingInterval = params.getIntValue(prefix + "ping_interval",
-	def ? def->m_retransInterval : IAX2_PING_INTERVAL_DEF,
+	def ? def->m_pingInterval : IAX2_PING_INTERVAL_DEF,
 	IAX2_PING_INTERVAL_MIN);
 }
 

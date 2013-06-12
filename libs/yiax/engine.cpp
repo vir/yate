@@ -56,7 +56,7 @@ static void buildSecretDigest(String& buf, const String& secret, unsigned int t,
 
 
 IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount,
-	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
+	u_int16_t maxFullFrameDataLen,
 	u_int32_t format, u_int32_t capab, bool authRequired, NamedList* params)
     : Mutex(true,"IAXEngine"),
     m_lastGetEvIndex(0),
@@ -64,8 +64,7 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount,
     m_maxFullFrameDataLen(maxFullFrameDataLen),
     m_startLocalCallNo(0),
     m_transListCount(0),
-    m_authTimeout(authTimeout),
-    m_transTimeout(transTimeout),
+    m_challengeTout(IAX2_CHALLENGETOUT_DEF),
     m_callToken(false),
     m_callTokenAge(10),
     m_showCallTokenFailures(false),
@@ -82,8 +81,6 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount,
     m_trunkInfoMutex(false,"IAXEngine::TrunkInfo")
 {
     debugName("iaxengine");
-    Debug(this,DebugAll,"Automatically request authentication set to '%s'.",
-	(authRequired?"YES":"NO"));
     if ((port <= 0) || port > 65535)
 	port = 4569;
     if (transListCount < 4)
@@ -413,6 +410,8 @@ void IAXEngine::initialize(const NamedList& params)
     m_callerNumType = lookup(params["numtype"],IAXInfoElement::s_typeOfNumber);
     m_callingPres = lookup(params["presentation"],IAXInfoElement::s_presentation) |
 	lookup(params["screening"],IAXInfoElement::s_screening);
+    m_challengeTout = params.getIntValue("challenge_timeout",
+	IAX2_CHALLENGETOUT_DEF,IAX2_CHALLENGETOUT_MIN);
     initOutDataAdjust(params);
     IAXTrunkInfo* ti = new IAXTrunkInfo;
     ti->initTrunking(params,"trunk_",0,true);

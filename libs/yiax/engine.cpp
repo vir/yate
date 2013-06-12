@@ -178,15 +178,12 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 		return 0;
 	    }
 	    // Complete transaction
-	    if (tr->processFrame(frame)) {
-		tr->m_rCallNo = frame->sourceCallNo();
-		m_incompleteTransList.remove(tr,false);
-		m_transList[frame->sourceCallNo() % m_transListCount]->append(tr);
-		XDebug(this,DebugAll,"New incomplete outgoing transaction completed (%u,%u)",
-		    tr->localCallNo(),tr->remoteCallNo());
-		return tr;
-	    }
-	    break;
+	    tr->m_rCallNo = frame->sourceCallNo();
+	    m_incompleteTransList.remove(tr,false);
+	    m_transList[frame->sourceCallNo() % m_transListCount]->append(tr);
+	    XDebug(this,DebugAll,"New incomplete outgoing transaction completed (%u,%u)",
+		tr->localCallNo(),tr->remoteCallNo());
+	    return tr->processFrame(frame);
 	}
     }
     // Complete transactions
@@ -315,7 +312,7 @@ bool IAXEngine::process()
 {
     bool ok = false;
     for (;;) {
-	IAXEvent* event = getEvent(Time::msecNow());
+	IAXEvent* event = getEvent();
 	if (!event)
 	    break;
 	ok = true;
@@ -550,6 +547,15 @@ void IAXEngine::decodeDateTime(u_int32_t dt, unsigned int& year, unsigned int& m
    sec = dt & 0x1f;
 }
 
+// Calculate overall timeout from interval and retransmission counter
+unsigned int IAXEngine::overallTout(unsigned int interval, unsigned int nRetrans)
+{
+    unsigned int tmp = interval;
+    for (unsigned int i = 1; i <= nRetrans; i++)
+	tmp += interval * (1 << i);
+    return tmp;
+}
+
 bool IAXEngine::processTrunkFrames(const Time& time)
 {
     Lock lck(m_mutexTrunk);
@@ -582,7 +588,7 @@ void IAXEngine::processEvent(IAXEvent* event)
     delete event;
 }
 
-IAXEvent* IAXEngine::getEvent(u_int64_t time)
+IAXEvent* IAXEngine::getEvent(const Time& now)
 {
     IAXTransaction* tr;
     IAXEvent* ev;
@@ -595,7 +601,7 @@ IAXEvent* IAXEngine::getEvent(u_int64_t time)
 	if (Thread::check(false))
 	    break;
 	tr = static_cast<IAXTransaction*>(l->get());
-	if (tr && 0 != (ev = tr->getEvent(time))) {
+	if (tr && 0 != (ev = tr->getEvent(now))) {
 	    unlock();
 	    return ev;
 	}
@@ -618,7 +624,7 @@ IAXEvent* IAXEngine::getEvent(u_int64_t time)
 	    if (!t)
 		continue;
 	    unlock();
-	    if (0 != (ev = t->getEvent(time)))
+	    if (0 != (ev = t->getEvent(now)))
 		return ev;
 	    lock();
 	}

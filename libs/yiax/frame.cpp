@@ -1411,34 +1411,6 @@ void IAXFullFrame::setDataHeader()
     m_data.assign(header,sizeof(header));
 }
 
-/*
- * IAXFrameOut
- */
-void IAXFrameOut::setRetrans()
-{
-    if (!m_retrans) {
-	m_retrans = true;
-	((unsigned char*)m_data.data())[2] |= 0x80;
-    }
-}
-
-void IAXFrameOut::transmitted()
-{
-    if (m_retransCount) {
-	m_retransCount--;
-	m_retransTimeInterval *= 2;
-	m_nextTransTime += m_retransTimeInterval;
-   }
-}
-
-void IAXFrameOut::adjustAuthTimeout(u_int64_t nextTransTime)
-{
-    if (!(type() == IAXFrame::IAX && (subclass() == IAXControl::AuthReq || subclass() ==IAXControl::RegAuth)))
-	return;
-    m_retransCount = 1;
-    m_nextTransTime = nextTransTime;
-}
-
 
 /*
 * IAXTrunkInfo

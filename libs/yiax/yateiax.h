@@ -1226,6 +1226,22 @@ public:
 	{ return m_subclass; }
 
     /**
+     * Check if this frame is used to request authentication
+     * @return True if this frame is used to request authentication (like RegReq or RegAuth)
+     */
+    inline bool isAuthReq() const {
+	    return type() == IAXFrame::IAX &&
+		(subclass() == IAXControl::AuthReq || subclass() == IAXControl::RegAuth);
+	}
+
+    /**
+     * Check if this frame is an INVAL one
+     * @return True if this frame is INVAL
+     */
+    inline bool isInval() const
+	{ return type() == IAXFrame::IAX && subclass() == IAXControl::Inval; }
+
+    /**
      * Get a pointer to this frame if it is a full frame
      * @return A pointer to this frame
      */
@@ -1312,16 +1328,19 @@ public:
      * @param buf IE buffer
      * @param len IE buffer length
      * @param retransCount Retransmission counter
-     * @param retransInterval Time interval to the next retransmission
+     * @param retransIntervalMs Time interval to the next retransmission
      * @param ackOnly Acknoledge only flag. If true, the frame only expects an ACK
      * @param mark Mark flag
      */
     inline IAXFrameOut(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
-                       unsigned char oSeqNo, unsigned char iSeqNo, u_int32_t tStamp, const unsigned char* buf, unsigned int len,
-                       u_int16_t retransCount, u_int32_t retransInterval, bool ackOnly, bool mark = false)
+                       unsigned char oSeqNo, unsigned char iSeqNo, u_int32_t tStamp,
+		       const unsigned char* buf, unsigned int len,
+                       u_int16_t retransCount, u_int32_t retransIntervalMs,
+		       bool ackOnly, bool mark = false)
         : IAXFullFrame(type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,buf,len,mark),
-          m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount), m_retransTimeInterval(retransInterval),
-	  m_nextTransTime(Time::msecNow() + m_retransTimeInterval)
+          m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount),
+          m_retransTimeInterval(retransIntervalMs * 1000),
+	  m_nextTransTime(Time::now() + m_retransTimeInterval)
 	{}
 
     /**
@@ -1336,17 +1355,19 @@ public:
      * @param ieList List of frame IEs
      * @param maxlen Max frame data length
      * @param retransCount Retransmission counter
-     * @param retransInterval Time interval to the next retransmission
+     * @param retransIntervalMs Time interval to the next retransmission
      * @param ackOnly Acknoledge only flag. If true, the frame only expects an ACK
      * @param mark Mark flag
      */
     inline IAXFrameOut(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
                        unsigned char oSeqNo, unsigned char iSeqNo, u_int32_t tStamp,
 		       IAXIEList* ieList, u_int16_t maxlen,
-                       u_int16_t retransCount, u_int32_t retransInterval, bool ackOnly, bool mark = false)
+                       u_int16_t retransCount, u_int32_t retransIntervalMs, bool ackOnly,
+		       bool mark = false)
         : IAXFullFrame(type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,ieList,maxlen,mark),
-          m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount), m_retransTimeInterval(retransInterval),
-	  m_nextTransTime(Time::msecNow() + m_retransTimeInterval)
+          m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount),
+          m_retransTimeInterval(retransIntervalMs * 1000),
+	  m_nextTransTime(Time::now() + m_retransTimeInterval)
 	{}
 
     /**
@@ -1368,17 +1389,28 @@ public:
      * @return True if it's time to retransmit
      */
     inline bool timeForRetrans(u_int64_t time) const
-        { return time > m_nextTransTime; }
+        { return time >= m_nextTransTime; }
 
     /**
      * Set the retransmission flag of this frame
      */
-    void setRetrans();
+    inline void setRetrans() {
+	    if (m_retrans)
+		return;
+	    m_retrans = true;
+	    ((unsigned char*)m_data.data())[2] |= 0x80;
+	}
 
     /**
      * Update the retransmission counter and the time to next retransmission
      */
-    void transmitted();
+    inline void transmitted() {
+	    if (!m_retransCount)
+		return;
+	    m_retransCount--;
+	    m_retransTimeInterval *= 2;
+	    m_nextTransTime += m_retransTimeInterval;
+	}
 
     /**
      * Get the acknoledged flag of this frame
@@ -1401,10 +1433,16 @@ public:
 	{ return m_ackOnly; }
 
     /**
-     * Increase the timeout for acknoledged authentication frames sent and set the counter to 1
-     * @param nextTransTime Next transmission time
+     * Set absolute timeout. Reset retransmission counter
+     * @param tout Timeout time
      */
-    void adjustAuthTimeout(u_int64_t nextTransTime);
+    inline void setTimeout(u_int64_t tout) {
+	    if (!m_retransTimeInterval)
+		return;
+	    m_retransTimeInterval = 0;
+	    m_retransCount = 0;
+	    m_nextTransTime = tout;
+	}
 
 private:
     bool m_ack;				// Acknoledge flag
@@ -1941,10 +1979,10 @@ public:
     /**
      * Get an IAX event from the queue
      * This method is thread safe.
-     * @param time The time this method was called
+     * @param now Current time
      * @return Pointer to an IAXEvent or 0 if none available
      */
-    IAXEvent* getEvent(u_int64_t time);
+    IAXEvent* getEvent(const Time& now = Time());
 
     /**
      * Get the maximum allowed number of full frames in the incoming frame list
@@ -2195,9 +2233,9 @@ protected:
      * @param evType IAXEvent type to generate
      * @param local If true it is a locally generated event
      * @param frame Frame to build event from
-     * @return Pointer to a valid IAXEvent
+     * @return Pointer to a valid IAXEvent if evType if non 0, 0 otherwise
      */
-    IAXEvent* waitForTerminate(u_int8_t evType, bool local, IAXFullFrame* frame);
+    IAXEvent* waitForTerminate(u_int8_t evType = 0, bool local = true, IAXFullFrame* frame = 0);
 
     /**
      * Constructs an IAXFrameOut frame, send it to remote peer and put it in the transmission list
@@ -2429,13 +2467,6 @@ protected:
     IAXEvent* remoteRejectCall(IAXFullFrame* frame, bool& delFrame);
 
     /**
-     * Terminate the transaction if state is Terminating on a remote request
-     * @param time Current time
-     * @return A valid IAXEvent or 0
-     */
-    IAXEvent* getEventTerminating(u_int64_t time);
-
-    /**
      * Process received media full frames
      * @param frame Received frame
      * @param type Media type
@@ -2449,12 +2480,6 @@ protected:
      * @return 0
      */
     IAXTransaction* retransmitOnVNAK(u_int16_t seqNo);
-
-    /**
-     * Generate an Accept event after internally accepting a transaction
-     * @return A valid IAXEvent
-     */
-    IAXEvent* internalAccept();
 
     /**
      * Generate a Reject event after internally rejecting a transaction
@@ -2498,7 +2523,7 @@ private:
     Type m_type;				// Transaction type
     State m_state;				// Transaction state
     u_int64_t m_timeStamp;			// Transaction creation timestamp
-    u_int32_t m_timeout;			// Transaction timeout (in seconds) on remote termination request
+    u_int64_t m_timeout;			// Transaction timeout in Terminating state
     SocketAddr m_addr;				// Socket
     u_int16_t m_lCallNo;			// Local peer call id
     u_int16_t m_rCallNo;			// Remote peer call id
@@ -2571,7 +2596,8 @@ public:
      * Event type as enumeration
      */
     enum Type {
-        Invalid = 0,		// Invalid frame received
+	DontSet = 0,            // Used internal
+        Invalid,		// Invalid frame received
 	Terminated,		// Transaction terminated
         Timeout,		// Transaction timeout
 	NotImplemented,		// Feature not implemented
@@ -3074,6 +3100,14 @@ public:
     static void decodeDateTime(u_int32_t dt, unsigned int& year, unsigned int& month,
 	unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec);
 
+    /**
+     * Calculate overall timeout from interval and retransmission counter
+     * @param interval The first retransmisssion interval
+     * @param nRetrans The number of retransmissions
+     * @return The overall timeout
+     */
+    static unsigned int overallTout(unsigned int interval, unsigned int nRetrans);
+
 protected:
     /**
      * Process all trunk meta frames in the queue
@@ -3093,10 +3127,10 @@ protected:
     /**
      * Get an IAX event from the queue.
      * This method is thread safe.
-     * @param time Time of the call
+     * @param now Current time
      * @return Pointer to an IAXEvent or 0 if none is available
      */
-    IAXEvent* getEvent(u_int64_t time);
+    IAXEvent* getEvent(const Time& now = Time());
 
     /**
      * Generate call number. Update used call numbers list

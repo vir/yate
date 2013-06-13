@@ -131,7 +131,7 @@ HMUTEX GlobalMutex::s_mutex;
 static GlobalMutex s_global;
 static unsigned long s_maxwait = 0;
 static bool s_unsafe = MUTEX_STATIC_UNSAFE;
-static bool s_safety = true;
+static bool s_safety = false;
 
 volatile int MutexPrivate::s_count = 0;
 volatile int MutexPrivate::s_locks = 0;
@@ -250,12 +250,13 @@ bool MutexPrivate::lock(long maxwait)
 	maxwait = (long)s_maxwait;
 	warn = true;
     }
-    if (s_safety)
+    bool safety = s_safety;
+    if (safety)
 	GlobalMutex::lock();
     Thread* thr = Thread::current();
     if (thr)
 	thr->m_locking = true;
-    if (s_safety) {
+    if (safety) {
 	m_waiting++;
 	GlobalMutex::unlock();
     }
@@ -299,14 +300,14 @@ bool MutexPrivate::lock(long maxwait)
 #endif // HAVE_TIMEDLOCK
     }
 #endif // _WINDOWS
-    if (s_safety) {
+    if (safety) {
 	GlobalMutex::lock();
 	m_waiting--;
     }
     if (thr)
 	thr->m_locking = false;
     if (rval) {
-	if (s_safety)
+	if (safety)
 	    s_locks++;
 	m_locked++;
 	if (thr) {
@@ -316,7 +317,7 @@ bool MutexPrivate::lock(long maxwait)
 	else
 	    m_owner = 0;
     }
-    if (s_safety)
+    if (safety)
 	GlobalMutex::unlock();
     if (warn && !rval)
 	Debug(DebugFail,"Thread '%s' could not lock mutex '%s' owned by '%s' waited by %u others for %lu usec!",
@@ -328,7 +329,8 @@ bool MutexPrivate::unlock()
 {
     bool ok = false;
     // Hope we don't hit a bug related to the debug mutex!
-    if (s_safety)
+    bool safety = s_safety;
+    if (safety)
 	GlobalMutex::lock();
     if (m_locked) {
 	Thread* thr = Thread::current();
@@ -341,7 +343,7 @@ bool MutexPrivate::unlock()
 		    m_name,tname,m_owner,this);
 	    m_owner = 0;
 	}
-	if (s_safety) {
+	if (safety) {
 	    int locks = --s_locks;
 	    if (locks < 0) {
 		// this is very very bad - abort right now
@@ -360,7 +362,7 @@ bool MutexPrivate::unlock()
     }
     else
 	Debug(DebugFail,"MutexPrivate::unlock called on unlocked '%s' [%p]",m_name,this);
-    if (s_safety)
+    if (safety)
 	GlobalMutex::unlock();
     return ok;
 }
@@ -404,12 +406,13 @@ bool SemaphorePrivate::lock(long maxwait)
 	maxwait = (long)s_maxwait;
 	warn = true;
     }
-    if (s_safety)
+    bool safety = s_safety;
+    if (safety)
 	GlobalMutex::lock();
     Thread* thr = Thread::current();
     if (thr)
 	thr->m_locking = true;
-    if (s_safety) {
+    if (safety) {
 	s_locks++;
 	m_waiting++;
 	GlobalMutex::unlock();
@@ -454,7 +457,7 @@ bool SemaphorePrivate::lock(long maxwait)
 #endif // HAVE_TIMEDWAIT
     }
 #endif // _WINDOWS
-    if (s_safety) {
+    if (safety) {
 	GlobalMutex::lock();
 	int locks = --s_locks;
 	if (locks < 0) {
@@ -467,7 +470,7 @@ bool SemaphorePrivate::lock(long maxwait)
     }
     if (thr)
 	thr->m_locking = false;
-    if (s_safety)
+    if (safety)
 	GlobalMutex::unlock();
     if (warn && !rval)
 	Debug(DebugFail,"Thread '%s' could not lock semaphore '%s' waited by %u others for %lu usec!",
@@ -478,7 +481,8 @@ bool SemaphorePrivate::lock(long maxwait)
 bool SemaphorePrivate::unlock()
 {
     if (!s_unsafe) {
-	if (s_safety)
+	bool safety = s_safety;
+	if (safety)
 	    GlobalMutex::lock();
 #ifdef _WINDOWS
 	::ReleaseSemaphore(m_semaphore,1,NULL);
@@ -487,7 +491,7 @@ bool SemaphorePrivate::unlock()
 	if (!::sem_getvalue(&m_semaphore,&val) && (val < (int)m_maxcount))
 	    ::sem_post(&m_semaphore);
 #endif
-	if (s_safety)
+	if (safety)
 	    GlobalMutex::unlock();
     }
     return true;
@@ -521,9 +525,9 @@ void Lockable::startUsingNow()
     s_unsafe = false;
 }
 
-void Lockable::disableSafety()
+void Lockable::enableSafety(bool safe)
 {
-    s_safety = false;
+    s_safety = safe;
 }
 
 void Lockable::wait(unsigned long maxwait)

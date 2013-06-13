@@ -414,11 +414,15 @@ void IAXEngine::initialize(const NamedList& params)
 	IAX2_CHALLENGETOUT_DEF,IAX2_CHALLENGETOUT_MIN);
     initOutDataAdjust(params);
     IAXTrunkInfo* ti = new IAXTrunkInfo;
-    ti->initTrunking(params,"trunk_",0,true);
-    ti->initTrunking(params,"trunk_",0,false);
+    ti->initTrunking(params,"trunk_");
     ti->init(params);
     Lock lck(m_trunkInfoMutex);
     m_trunkInfoDef = ti;
+#ifdef XDEBUG
+    String tiS;
+    m_trunkInfoDef->dump(tiS,"\r\n");
+    Debug(this,DebugAll,"Initialized trunk info defaults:\r\n-----\r\n%s\r\n-----",tiS.c_str());
+#endif
     TelEngine::destruct(ti);
 }
 
@@ -807,7 +811,7 @@ static bool getTrunkingInfo(RefPointer<IAXTrunkInfo>& ti, IAXEngine* engine,
     if (!params)
 	return true;
     IAXTrunkInfo* tmp = new IAXTrunkInfo;
-    tmp->initTrunking(*params,prefix,ti,out);
+    tmp->initTrunking(*params,prefix,ti,out,!out);
     ti = tmp;
     TelEngine::destruct(tmp);
     return true;
@@ -846,6 +850,35 @@ void IAXEngine::enableTrunking(IAXTransaction* trans, const NamedList* params,
 	TelEngine::destruct(frame);
 }
 
+// Enable trunking for the given transaction. Allocate a trunk meta frame if needed.
+void IAXEngine::enableTrunking(IAXTransaction* trans, IAXTrunkInfo& data)
+{
+    if (!trans || trans->type() != IAXTransaction::New)
+	return;
+    Lock lock(m_mutexTrunk);
+    IAXMetaTrunkFrame* frame;
+    // Already enabled ?
+    for (ObjList* l = m_trunkList.skipNull(); l; l = l->skipNext()) {
+	frame = static_cast<IAXMetaTrunkFrame*>(l->get());
+	if (frame->addr() == trans->remoteAddr()) {
+	    trans->enableTrunking(frame);
+	    return;
+	}
+    }
+    frame = new IAXMetaTrunkFrame(this,trans->remoteAddr(),data.m_timestamps,
+	data.m_maxLen,data.m_sendInterval);
+    if (trans->enableTrunking(frame)) {
+	m_trunkList.append(frame);
+	Debug(this,DebugAll,
+	    "Added trunk frame (%p) '%s:%d' timestamps=%s maxlen=%u interval=%ums",
+	    frame,frame->addr().host().c_str(),frame->addr().port(),
+	    String::boolText(frame->trunkTimestamps()),frame->maxLen(),
+	    frame->sendInterval());
+    }
+    else
+	TelEngine::destruct(frame);
+}
+
 // Init incoming trunking data for a given transaction
 void IAXEngine::initTrunkIn(IAXTransaction* trans, const NamedList* params,
     const String& prefix)
@@ -853,11 +886,24 @@ void IAXEngine::initTrunkIn(IAXTransaction* trans, const NamedList* params,
     if (!trans)
 	return;
     RefPointer<IAXTrunkInfo> ti;
-    if (!getTrunkingInfo(ti,this,params,prefix,false))
-	return;
-    trans->m_trunkInSyncUsingTs = ti->m_trunkInSyncUsingTs;
-    trans->m_trunkInTsDiffRestart = ti->m_trunkInTsDiffRestart;
+    if (getTrunkingInfo(ti,this,params,prefix,false))
+	initTrunkIn(trans,*ti);
     ti = 0;
+}
+
+// Init incoming trunking data for a given transaction
+void IAXEngine::initTrunkIn(IAXTransaction* trans, IAXTrunkInfo& data)
+{
+    if (!trans)
+	return;
+    trans->m_trunkInSyncUsingTs = data.m_trunkInSyncUsingTs;
+    trans->m_trunkInTsDiffRestart = data.m_trunkInTsDiffRestart;
+#ifdef XDEBUG
+    String tmp;
+    data.dump(tmp," ",false,true,false);
+    Debug(this,DebugAll,"initTrunkIn(%p) callno=%u set %s",
+	trans,trans->localCallNo(),tmp.c_str());
+#endif
 }
 
 void IAXEngine::runProcessTrunkFrames()

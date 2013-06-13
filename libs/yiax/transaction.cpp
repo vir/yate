@@ -67,6 +67,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
     m_localReqEnd(false),
     m_type(Incorrect),
     m_state(Unknown),
+    m_destroy(false),
     m_timeStamp(Time::msecNow() - 1),
     m_timeout(0),
     m_addr(addr),
@@ -136,6 +137,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_localReqEnd(false),
     m_type(type),
     m_state(Unknown),
+    m_destroy(false),
     m_timeStamp(Time::msecNow() - 1),
     m_timeout(0),
     m_addr(addr),
@@ -603,6 +605,11 @@ IAXEvent* IAXTransaction::getEvent(const Time& now)
     Lock lock(this);
     if (state() == Terminated)
 	return 0;
+    if (m_destroy) {
+	if (m_currentEvent)
+	    return 0;
+	return keepEvent(terminate(IAXEvent::Terminated,true));
+    }
     // Send ack for received frames
     ackInFrames();
     // Do we have a generated event ?

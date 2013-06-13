@@ -56,7 +56,19 @@
 ; IAX:
 ;   server: Registrar address or domain. A port can be specified here (e.g. 1.2.3.4:7999)
 ;   port: Registrar port if not specified in 'server' parameter
-;   If not set the port defaults to 4569
+;     If not set the port defaults to 4569
+;   trunking: Enable trunking for outgoing calls sent on this line
+;   The following parameters can also be set (see yiaxchan.conf.sample for more info):
+;   trunk_timestamps: Configure how trunked audio data is sent, enable it for
+;     trunked data with timestamps and disable it to send trunked data without timestamps
+;   trunk_sendinterval: integer: Interval, in milliseconds, to send trunked trunked audio
+;     data
+;   trunk_maxlen: integer: Maximum value for trunked data frames
+;   trunk_nominits_sync_use_ts: boolean: Configure how to re-build timestamps when
+;     processing incoming trunked audio without miniframe timestamps
+;   trunk_nominits_ts_diff_restart: integer: The difference (in milliseconds) between
+;     current timestamp and first timestamp of incoming trunked audio data without
+;     miniframe timestamps at which to restart timestamps build data
 ;
 ; H323:
 ;   server: Registrar IP address

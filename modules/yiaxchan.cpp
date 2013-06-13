@@ -110,6 +110,10 @@ public:
 	{ return m_remote; }
     inline bool callToken() const
 	{ return m_callToken; }
+    inline bool trunking() const
+	{ return m_trunking; }
+    inline const NamedList& trunkInfo() const
+	{ return m_trunkInfo; }
 private:
     void setRegistered(bool registered, const char* reason = 0, const char* error = 0);
     String m_name;
@@ -130,6 +134,8 @@ private:
     bool m_registered;			// Registered flag. If true the line is registered
     bool m_register;                    // Operation flag: True - register
     RefPointer<IAXTransaction> m_transaction;
+    NamedList m_trunkInfo;              // Trunk info parameters
+    bool m_trunking;                    // Enable trunking
 };
 
 /*
@@ -182,12 +188,15 @@ public:
      */
     void evTimer(Time& time);
 
-    /*
-     * Fill a named list from a line
-     * This method is thread safe
-     */
-    bool fillList(String& name, NamedList& dest, SocketAddr& addr, bool& registered);
+    // Fill parameters with information taken from line
+    void fillList(YIAXLine& line, NamedList& dest, SocketAddr& addr);
 
+    // Find a line by name
+    inline bool findLine(RefPointer<YIAXLine>& line, const String& name) {
+	    Lock lck(this);
+	    line = findLine(name);
+	    return line != 0;
+	}
     /*
      * Check if a line exists
      */
@@ -289,7 +298,7 @@ public:
 	{}
 
     // Setup a given transaction from parameters
-    void initTransaction(IAXTransaction* tr, const NamedList& params);
+    void initTransaction(IAXTransaction* tr, const NamedList& params, YIAXLine* line = 0);
 
     /*
      * Process media from remote peer.
@@ -627,7 +636,9 @@ YIAXLine::YIAXLine(const String& name)
       m_keepAliveInterval(0),
       m_registered(false),
       m_register(true),
-      m_transaction(0)
+      m_transaction(0),
+      m_trunkInfo(""),
+      m_trunking(false)
 {
     DDebug(&iplugin,DebugAll,"YIAXLine(%s) [%p]",m_name.c_str(),this);
 }
@@ -748,6 +759,9 @@ bool YIAXLineContainer::updateLine(Message& msg)
 	    interval = 60;
 	changed = changeLine(line,line->m_expire,interval) || changed;
 	line->m_callToken = msg.getBoolValue("calltoken",s_callTokenOut);
+	line->m_trunking = msg.getBoolValue("trunking");
+	line->m_trunkInfo.clearParams();
+	line->m_trunkInfo.copySubParams(msg,"trunk_");
 	if (changed || op == "login") {
 	    line->m_nextReg = Time::secNow() + (line->m_expire * 3 / 4);
 	    line->m_nextKeepAlive = 0;
@@ -918,29 +932,20 @@ void YIAXLineContainer::evTimer(Time& time)
 }
 
 // Fill parameters with information taken from line
-bool YIAXLineContainer::fillList(String& name, NamedList& dest, SocketAddr& addr, bool& registered)
+void YIAXLineContainer::fillList(YIAXLine& line, NamedList& dest, SocketAddr& addr)
 {
-    registered = false;
-    Lock lck(this);
-    RefPointer<YIAXLine> line = findLine(name);
-    if (!line)
-	return false;
-    lck.drop();
-    line->lock();
-    dest.setParam("username",line->username());
-    dest.setParam("password",line->password());
-    if (line->callingNo())
-	dest.setParam("caller",line->callingNo());
-    if (line->callingName())
-	dest.setParam("callername",line->callingName());
-    String a = line->remoteAddr();
-    int p = line->remotePort();
-    registered = line->registered();
-    line->unlock();
-    line = 0;
+    line.lock();
+    dest.setParam("username",line.username());
+    dest.setParam("password",line.password());
+    if (line.callingNo())
+	dest.setParam("caller",line.callingNo());
+    if (line.callingName())
+	dest.setParam("callername",line.callingName());
+    String a = line.remoteAddr();
+    int p = line.remotePort();
+    line.unlock();
     addr.host(a);
     addr.port(p);
-    return true;
 }
 
 // Find line from event. Clear event transaction if line is not found
@@ -1034,15 +1039,35 @@ YIAXEngine::YIAXEngine(const char* iface, int port, u_int16_t transListCount,
 }
 
 // Setup a given transaction from parameters
-void YIAXEngine::initTransaction(IAXTransaction* tr, const NamedList& params)
+void YIAXEngine::initTransaction(IAXTransaction* tr, const NamedList& params, YIAXLine* line)
 {
     if (!tr)
 	return;
     String prefix = tr->outgoing() ? "trunkout" : "trunkin";
     String pref = prefix + "_";
-    if (params.getBoolValue(prefix))
-	enableTrunking(tr,&params,pref);
-    initTrunkIn(tr,&params,pref);
+    IAXTrunkInfo* trunk = 0;
+    Lock lckLine(line);
+    bool trunkOut = params.getBoolValue(prefix,line && line->trunking());
+    if (line && line->trunkInfo().getParam(0)) {
+	RefPointer<IAXTrunkInfo> def;
+	tr->getEngine()->trunkInfo(def);
+	trunk = new IAXTrunkInfo;
+	trunk->initTrunking(line->trunkInfo(),String::empty(),def,trunkOut,true);
+	trunk->updateTrunking(params,pref,trunkOut,true);
+    }
+    lckLine.drop();
+    tr->getEngine()->initOutDataAdjust(params,tr);
+    if (trunkOut) {
+	if (trunk)
+	    enableTrunking(tr,*trunk);
+	else
+	    enableTrunking(tr,&params,pref);
+    }
+    if (trunk)
+	initTrunkIn(tr,*trunk);
+    else
+	initTrunkIn(tr,&params,pref);
+    TelEngine::destruct(trunk);
 }
 
 // Handle received voice data, forward it to connection's source
@@ -1490,25 +1515,33 @@ bool YIAXDriver::msgRoute(Message& msg)
 
 bool YIAXDriver::msgExecute(Message& msg, String& dest)
 {
-    if (!msg.userData()) {
-	Debug(this,DebugAll,"No data channel for this IAX call!");
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
+    if (!ch) {
+	Debug(this,DebugAll,"IAX call failed: no endpoint");
 	return false;
     }
     NamedList params(msg);
     SocketAddr addr(AF_INET);
+    RefPointer<YIAXLine> line;
     if (isE164(dest)) {
-	String* line = params.getParam("line");
-	bool lineReg = (line == 0);
-	if (line && !s_lines.fillList(*line,params,addr,lineReg)) {
-	    Debug(this,DebugNote,"IAX call failed: no line '%s'",line->c_str());
+	const String& lName = params["line"];
+	if (!lName) {
+	    Debug(this,DebugNote,"IAX call to '%s' failed: no line",dest.c_str());
+	    msg.setParam("error","failure");
+	    return false;
+	}
+	if (!s_lines.findLine(line,lName)) {
+	    Debug(this,DebugNote,"IAX call failed: no line '%s'",lName.c_str());
 	    msg.setParam("error","offline");
 	    return false;
 	}
-	if (!lineReg) {
-	    Debug(this,DebugNote,"IAX call failed: line '%s' is not registered!",line->c_str());
+	if (!line->registered()) {
+	    Debug(this,DebugNote,"IAX call failed: line '%s' is not registered",
+		lName.c_str());
 	    msg.setParam("error","offline");
 	    return false;
 	}
+	s_lines.fillList(*line,params,addr);
 	params.setParam("called",dest);
     }
     else {
@@ -1519,7 +1552,8 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
 	uri.setAddr(addr);
     }
     if (!addr.host().length()) {
-	Debug(this,DebugAll,"Missing host name in this IAX call");
+	Debug(this,DebugNote,"IAX call failed: no remote address");
+	msg.setParam("error","failure");
 	return false;
     }
     IAXTransaction* tr = m_iaxEngine->call(addr,params);
@@ -1527,19 +1561,20 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
 	msg.copyParams(params,"error");
 	return false;
     }
-    tr->getEngine()->initOutDataAdjust(msg,tr);
     YIAXConnection* conn = new YIAXConnection(m_iaxEngine,tr,&msg,&params);
     conn->initChan();
     tr->setUserData(conn);
-    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
-    if (ch && conn->connect(ch,msg.getValue("reason"))) {
+    m_iaxEngine->initTransaction(tr,msg,line);
+    if (conn->connect(ch,msg.getValue("reason"))) {
 	conn->callConnect(msg);
 	msg.setParam("peerid",conn->id());
 	msg.setParam("targetid",conn->id());
-	(static_cast<YIAXEngine*>(tr->getEngine()))->initTransaction(tr,msg);
     }
-    else
+    else {
 	tr->setUserData(0);
+	tr->setDestroy();
+    }
+    line = 0;
     conn->deref();
     return true;
 }
@@ -1793,7 +1828,6 @@ void YIAXConnection::callAccept(Message& msg)
     DDebug(this,DebugCall,"callAccept [%p]",this);
     m_mutexTrans.lock();
     if (m_transaction) {
-	m_transaction->getEngine()->initOutDataAdjust(msg,m_transaction);
 	u_int32_t codecs = iplugin.getEngine()->capability();
 	if (msg.getValue("formats")) {
 	    u_int32_t ca = IAXFormat::mask(codecs,IAXFormat::Audio);

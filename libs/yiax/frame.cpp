@@ -1432,7 +1432,7 @@ void IAXTrunkInfo::init(const NamedList& params, const String& prefix,
 
 // Init from parameters
 void IAXTrunkInfo::initTrunking(const NamedList& params, const String& prefix,
-    const IAXTrunkInfo* def, bool out)
+    const IAXTrunkInfo* def, bool out, bool in)
 {
     if (out) {
 	m_timestamps = params.getBoolValue(prefix + "timestamps",
@@ -1442,11 +1442,48 @@ void IAXTrunkInfo::initTrunking(const NamedList& params, const String& prefix,
 	m_maxLen = params.getIntValue(prefix + "maxlen",
 	    def ? def->m_maxLen : IAX2_TRUNKFRAME_LEN_DEF,IAX2_TRUNKFRAME_LEN_MIN);
     }
-    else {
+    if (in) {
 	m_trunkInSyncUsingTs = params.getBoolValue(prefix + "nominits_sync_use_ts",
 	    !def || def->m_trunkInSyncUsingTs);
 	m_trunkInTsDiffRestart = params.getIntValue(prefix + "nominits_ts_diff_restart",
 	    def ? m_trunkInTsDiffRestart : 5000,1000);
+    }
+}
+
+// Update trunking from parameters. Don't change values not present in list
+void IAXTrunkInfo::updateTrunking(const NamedList& params, const String& prefix,
+    bool out, bool in)
+{
+    if (out) {
+	m_timestamps = params.getBoolValue(prefix + "timestamps",m_timestamps);
+	m_sendInterval = params.getIntValue(prefix + "sendinterval",
+	    m_sendInterval,IAX2_TRUNKFRAME_SEND_MIN);
+	m_maxLen = params.getIntValue(prefix + "maxlen",m_maxLen,IAX2_TRUNKFRAME_LEN_MIN);
+    }
+    if (in) {
+	m_trunkInSyncUsingTs = params.getBoolValue(prefix + "nominits_sync_use_ts",
+	    m_trunkInSyncUsingTs);
+	m_trunkInTsDiffRestart = params.getIntValue(prefix + "nominits_ts_diff_restart",
+	    m_trunkInTsDiffRestart,1000);
+    }
+}
+
+// Dump info
+void IAXTrunkInfo::dump(String& buf, const char* sep, bool out, bool in, bool other)
+{
+    if (out) {
+	buf.append("timestamps=",sep) << String::boolText(m_timestamps);
+	buf << sep << "sendinterval=" << m_sendInterval;
+	buf << sep << "maxlen=" << m_maxLen;
+    }
+    if (in) {
+	buf.append("nominits_sync_use_ts=",sep) << String::boolText(m_trunkInSyncUsingTs);
+	buf << sep << "nominits_ts_diff_restart=" << m_trunkInTsDiffRestart;
+    }
+    if (other) {
+	buf.append("retrans_count=",sep) << m_retransCount;
+	buf << sep << "retrans_interval=" << m_retransInterval;
+	buf << sep << "ping_interval=" << m_pingInterval;
     }
 }
 

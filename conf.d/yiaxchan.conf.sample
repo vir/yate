@@ -1,3 +1,21 @@
+; Trunking notes:
+; Trunking can be enabled when routing by a 'trunkout' parameter for outgoing calls
+;  and 'trunkin' parameter for incoming calls.
+; When registering a line to a remote server trunking can be enabled using a 'trunking'
+;  parameter set in 'user.login' message
+; The following parameters can be set in 'user.login' to override the defaults:
+;  trunk_timestamps, trunk_sendinterval, trunk_maxlen,
+;  trunk_nominits_sync_use_ts, trunk_nominits_ts_diff_restart
+; When setting trunking parameters for a call the order is:
+;  - init with configured parameters value
+;  - override with parameters set for line (outgoing calls only)
+;  - override parameters set when routing
+; IMPORTANT: When a call is set to send trunked data all parameters related to
+;  trunk (timestamps use, send interval, max packet length) are ignored if there
+;  is another call using trunking with the same remote ip/port.
+;  TAKE CARE WHEN SETTING TRUNKING PARAMETERS IN MORE THEN 1 PLACE FOR THE SAME
+;   REMOTE IP/PORT !!! 
+
 [general]
 ; This section sets global variables of the implementation
 

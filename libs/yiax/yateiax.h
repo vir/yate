@@ -1496,10 +1496,32 @@ public:
      * @param params Parameter list
      * @param prefix Parameter prefix
      * @param def Optional defaults
-     * @param out True to init outgoing trunk data, false to init incoming trunk info
+     * @param out True to init outgoing trunk data
+     * @param in True to init incoming trunk data
      */
-    void initTrunking(const NamedList& params, const String& prefix,
-	const IAXTrunkInfo* def = 0, bool out = true);
+    void initTrunking(const NamedList& params, const String& prefix = String::empty(),
+	const IAXTrunkInfo* def = 0, bool out = true, bool in = true);
+
+    /**
+     * Update trunking from parameters. Don't change values not present in list
+     * @param params Parameter list
+     * @param prefix Parameter prefix
+     * @param out True to update outgoing trunk data
+     * @param in True to update incoming trunk data
+     */
+    void updateTrunking(const NamedList& params, const String& prefix = String::empty(),
+	bool out = true, bool in = true);
+
+    /**
+     * Dump info
+     * @param buf Destination buffer
+     * @param sep Parameters separator
+     * @param out True to dump outgoing trunking info
+     * @param in True to dump incoming trunking info
+     * @param other True to dump non trunking info
+     */
+    void dump(String& buf, const char* sep = " ", bool out = true, bool in = true,
+	bool other = true);
 
     bool m_timestamps;                   // Trunk type: with(out) timestamps
     unsigned int m_sendInterval;         // Send interval
@@ -1954,6 +1976,12 @@ public:
      */
     inline const String& authdata()
 	{ return m_authdata; }
+
+    /**
+     * Set the destroy flag
+     */
+    inline void setDestroy()
+	{ m_destroy = true; }
 
     /**
      * Process a frame from remote peer
@@ -2533,6 +2561,7 @@ private:
     bool m_localReqEnd;				// Local client requested terminate
     Type m_type;				// Transaction type
     State m_state;				// Transaction state
+    bool m_destroy;                             // Destroy flag
     u_int64_t m_timeStamp;			// Transaction creation timestamp
     u_int64_t m_timeout;			// Transaction timeout in Terminating state
     SocketAddr m_addr;				// Socket
@@ -2981,20 +3010,35 @@ public:
      * Enable trunking for the given transaction. Allocate a trunk meta frame if needed.
      * Trunk data is ignored if a trunk object for transaction remote address already exists
      * @param trans Transaction to enable trunking for
-     * @param params Optional trunk parameters list
+     * @param params Trunk parameters list, may be 0
      * @param prefix Trunk parameters name prefix
      */
-    void enableTrunking(IAXTransaction* trans, const NamedList* params = 0,
+    void enableTrunking(IAXTransaction* trans, const NamedList* params,
+	const String& prefix = String::empty());
+
+    /**
+     * Enable trunking for the given transaction. Allocate a trunk meta frame if needed.
+     * Trunk data is ignored if a trunk object for transaction remote address already exists
+     * @param trans Transaction to enable trunking for
+     * @param data Trunk info to use
+     */
+    void enableTrunking(IAXTransaction* trans, IAXTrunkInfo& data);
+
+    /**
+     * Init incoming trunking data for a given transaction
+     * @param trans Transaction to init
+     * @param params Trunk parameters list, may be 0
+     * @param prefix Trunk parameters name prefix
+     */
+    void initTrunkIn(IAXTransaction* trans, const NamedList* params,
 	const String& prefix = String::empty());
 
     /**
      * Init incoming trunking data for a given transaction
      * @param trans Transaction to init
-     * @param params Optional trunk parameters list
-     * @param prefix Trunk parameters name prefix
+     * @param data Trunk info to use
      */
-    void initTrunkIn(IAXTransaction* trans, const NamedList* params = 0,
-	const String& prefix = String::empty());
+    void initTrunkIn(IAXTransaction* trans, IAXTrunkInfo& data);
 
     /**
      * Retrieve the default trunk info data

@@ -822,32 +822,10 @@ void IAXEngine::enableTrunking(IAXTransaction* trans, const NamedList* params,
 {
     if (!trans || trans->type() != IAXTransaction::New)
 	return;
-    Lock lock(m_mutexTrunk);
-    IAXMetaTrunkFrame* frame;
-    // Already enabled ?
-    for (ObjList* l = m_trunkList.skipNull(); l; l = l->skipNext()) {
-	frame = static_cast<IAXMetaTrunkFrame*>(l->get());
-	if (frame->addr() == trans->remoteAddr()) {
-	    trans->enableTrunking(frame);
-	    return;
-	}
-    }
     RefPointer<IAXTrunkInfo> ti;
-    if (!getTrunkingInfo(ti,this,params,prefix,true))
-	return;
-    frame = new IAXMetaTrunkFrame(this,trans->remoteAddr(),ti->m_timestamps,
-	ti->m_maxLen,ti->m_sendInterval);
+    if (getTrunkingInfo(ti,this,params,prefix,true))
+	enableTrunking(trans,*ti);
     ti = 0;
-    if (trans->enableTrunking(frame)) {
-	m_trunkList.append(frame);
-	Debug(this,DebugAll,
-	    "Added trunk frame (%p) '%s:%d' timestamps=%s maxlen=%u interval=%ums",
-	    frame,frame->addr().host().c_str(),frame->addr().port(),
-	    String::boolText(frame->trunkTimestamps()),frame->maxLen(),
-	    frame->sendInterval());
-    }
-    else
-	TelEngine::destruct(frame);
 }
 
 // Enable trunking for the given transaction. Allocate a trunk meta frame if needed.
@@ -861,13 +839,13 @@ void IAXEngine::enableTrunking(IAXTransaction* trans, IAXTrunkInfo& data)
     for (ObjList* l = m_trunkList.skipNull(); l; l = l->skipNext()) {
 	frame = static_cast<IAXMetaTrunkFrame*>(l->get());
 	if (frame->addr() == trans->remoteAddr()) {
-	    trans->enableTrunking(frame);
+	    trans->enableTrunking(frame,data.m_efficientUse);
 	    return;
 	}
     }
     frame = new IAXMetaTrunkFrame(this,trans->remoteAddr(),data.m_timestamps,
 	data.m_maxLen,data.m_sendInterval);
-    if (trans->enableTrunking(frame)) {
+    if (trans->enableTrunking(frame,data.m_efficientUse)) {
 	m_trunkList.append(frame);
 	Debug(this,DebugAll,
 	    "Added trunk frame (%p) '%s:%d' timestamps=%s maxlen=%u interval=%ums",

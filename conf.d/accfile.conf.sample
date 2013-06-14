@@ -61,12 +61,13 @@
 ;   The following parameters can also be set (see yiaxchan.conf.sample for more info):
 ;   trunk_timestamps: Configure how trunked audio data is sent, enable it for
 ;     trunked data with timestamps and disable it to send trunked data without timestamps
-;   trunk_sendinterval: integer: Interval, in milliseconds, to send trunked trunked audio
-;     data
-;   trunk_maxlen: integer: Maximum value for trunked data frames
-;   trunk_nominits_sync_use_ts: boolean: Configure how to re-build timestamps when
+;   trunk_sendinterval: Interval, in milliseconds, to send trunked trunked audio data
+;   trunk_efficient_use: Use the trunk efficiently: don't send trunking data when
+;     there is only 1 call using it
+;   trunk_maxlen: Maximum value for trunked data frames
+;   trunk_nominits_sync_use_ts: Configure how to re-build timestamps when
 ;     processing incoming trunked audio without miniframe timestamps
-;   trunk_nominits_ts_diff_restart: integer: The difference (in milliseconds) between
+;   trunk_nominits_ts_diff_restart: The difference (in milliseconds) between
 ;     current timestamp and first timestamp of incoming trunked audio data without
 ;     miniframe timestamps at which to restart timestamps build data
 ;

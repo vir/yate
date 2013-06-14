@@ -1113,15 +1113,6 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
     return new IAXFrame(IAXFrame::Voice,scn,dcn,false,buf+4,len-4);
 }
 
-// Build a miniframe buffer
-void IAXFrame::buildMiniFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t tStamp,
-    void* data, unsigned int len)
-{
-    unsigned char header[4] = {sCallNo >> 8,sCallNo & 0xff,tStamp >> 8,tStamp & 0xff};
-    dest.assign(header,4);
-    dest.append(data,len);
-}
-
 // Build a video meta frame buffer
 void IAXFrame::buildVideoMetaFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t tStamp,
     bool mark, void* data, unsigned int len)
@@ -1441,6 +1432,8 @@ void IAXTrunkInfo::initTrunking(const NamedList& params, const String& prefix,
 	    def ? def->m_sendInterval : IAX2_TRUNKFRAME_SEND_DEF,IAX2_TRUNKFRAME_SEND_MIN);
 	m_maxLen = params.getIntValue(prefix + "maxlen",
 	    def ? def->m_maxLen : IAX2_TRUNKFRAME_LEN_DEF,IAX2_TRUNKFRAME_LEN_MIN);
+	m_efficientUse = params.getBoolValue(prefix + "efficient_use",
+	    def && def->m_efficientUse);
     }
     if (in) {
 	m_trunkInSyncUsingTs = params.getBoolValue(prefix + "nominits_sync_use_ts",
@@ -1459,6 +1452,7 @@ void IAXTrunkInfo::updateTrunking(const NamedList& params, const String& prefix,
 	m_sendInterval = params.getIntValue(prefix + "sendinterval",
 	    m_sendInterval,IAX2_TRUNKFRAME_SEND_MIN);
 	m_maxLen = params.getIntValue(prefix + "maxlen",m_maxLen,IAX2_TRUNKFRAME_LEN_MIN);
+	m_efficientUse = params.getBoolValue(prefix + "efficient_use",m_efficientUse);
     }
     if (in) {
 	m_trunkInSyncUsingTs = params.getBoolValue(prefix + "nominits_sync_use_ts",
@@ -1475,6 +1469,7 @@ void IAXTrunkInfo::dump(String& buf, const char* sep, bool out, bool in, bool ot
 	buf.append("timestamps=",sep) << String::boolText(m_timestamps);
 	buf << sep << "sendinterval=" << m_sendInterval;
 	buf << sep << "maxlen=" << m_maxLen;
+	buf << sep << "efficient_use=" << String::boolText(m_efficientUse);
     }
     if (in) {
 	buf.append("nominits_sync_use_ts=",sep) << String::boolText(m_trunkInSyncUsingTs);
@@ -1494,7 +1489,7 @@ void IAXTrunkInfo::dump(String& buf, const char* sep, bool out, bool in, bool ot
 IAXMetaTrunkFrame::IAXMetaTrunkFrame(IAXEngine* engine, const SocketAddr& addr,
     bool timestamps, unsigned int maxLen, unsigned int sendInterval)
     : Mutex(false,"IAXMetaTrunkFrame"),
-    m_data(0), m_dataAddIdx(IAX2_TRUNKFRAME_HEADERLENGTH),
+    m_calls(0), m_data(0), m_dataAddIdx(IAX2_TRUNKFRAME_HEADERLENGTH),
     m_timeStamp(0), m_send(0), m_lastSentTs(0),
     m_sendInterval(sendInterval),
     m_engine(engine), m_addr(addr),
@@ -1515,32 +1510,39 @@ IAXMetaTrunkFrame::IAXMetaTrunkFrame(IAXEngine* engine, const SocketAddr& addr,
     // Meta command & Command data (use timestamps)
     m_data[2] = 1;
     m_data[3] = m_trunkTimestamps ? 1 : 0;
+    XDebug(m_engine,DebugAll,"Trunk frame '%s:%d' created [%p]",
+	m_addr.host().c_str(),m_addr.port(),this);
 }
 
 IAXMetaTrunkFrame::~IAXMetaTrunkFrame()
 {
+    if (!m_calls)
+	XDebug(m_engine,DebugAll,"Trunk frame '%s:%d' destroyed [%p]",
+	    m_addr.host().c_str(),m_addr.port(),this);
+    else
+	Debug(m_engine,DebugMild,"Trunk frame '%s:%d' destroyed with %u calls [%p]",
+	    m_addr.host().c_str(),m_addr.port(),m_calls,this);
     delete[] m_data;
 }
 
-bool IAXMetaTrunkFrame::add(u_int16_t sCallNo, const DataBlock& data, u_int32_t tStamp)
+unsigned int IAXMetaTrunkFrame::add(u_int16_t sCallNo, const DataBlock& data, u_int32_t tStamp)
 {
     // Do we have data ?
     if (!data.length())
-	return false;
+	return 0;
     // Avoid buffer overflow
     if (data.length() > m_maxDataLen) {
 	Debug(m_engine,DebugGoOn,
 	    "Trunk frame '%s:%d' can't add %u bytes (max=%u) for call %u [%p]",
 	    m_addr.host().c_str(),m_addr.port(),data.length(),m_maxDataLen,sCallNo,this);
-	return false;
+	return 0;
     }
     Lock lck(this);
     if (!m_timeStamp)
 	setTimestamp(Time::now());
-    bool b = true;
     // If no more room, send it
     if (m_dataAddIdx + data.length() + m_miniHdrLen > m_maxLen)
-	b = doSend();
+	doSend();
     XDebug(m_engine,DebugAll,"Trunk frame '%s:%d' adding %u payload bytes call=%u [%p]",
 	m_addr.host().c_str(),m_addr.port(),data.length(),sCallNo,this);
     // Add the mini frame
@@ -1562,7 +1564,7 @@ bool IAXMetaTrunkFrame::add(u_int16_t sCallNo, const DataBlock& data, u_int32_t 
     }
     memcpy(m_data + m_dataAddIdx,data.data(),data.length());
     m_dataAddIdx += data.length();
-    return b;
+    return data.length();
 }
 
 // Send this frame to remote peer
@@ -1602,8 +1604,8 @@ bool IAXMetaTrunkFrame::doSend(const Time& now, bool onTime)
     }
     if (dontSend)
 	return false;
-    XDebug(m_engine,DebugAll,"Trunk frame '%s:%d' sending %u tStamp=%u [%p]",
-	m_addr.host().c_str(),m_addr.port(),m_dataAddIdx,m_lastSentTs,this);
+    XDebug(m_engine,DebugAll,"Trunk frame '%s:%d' sending %u tStamp=%u calls=%u [%p]",
+	m_addr.host().c_str(),m_addr.port(),m_dataAddIdx,m_lastSentTs,m_calls,this);
     setTimestamp(m_lastSentTs);
     bool b = m_engine->writeSocket(m_data,m_dataAddIdx,m_addr);
     m_dataAddIdx = IAX2_TRUNKFRAME_HEADERLENGTH;

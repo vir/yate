@@ -36,6 +36,20 @@ const TokenDict IAXTransaction::s_typeName[] = {
     {0,0},
 };
 
+const TokenDict IAXTransaction::s_stateName[] = {
+    {"Connected",                Connected},
+    {"NewLocalInvite",           NewLocalInvite},
+    {"NewLocalInvite_AuthRecv",  NewLocalInvite_AuthRecv},
+    {"NewLocalInvite_RepSent",   NewLocalInvite_RepSent},
+    {"NewRemoteInvite",          NewRemoteInvite},
+    {"NewRemoteInvite_AuthSent", NewRemoteInvite_AuthSent},
+    {"NewRemoteInvite_RepRecv",  NewRemoteInvite_RepRecv},
+    {"Terminating",              Terminating},
+    {"Terminated",               Terminated},
+    {"Unknown",                  Unknown},
+    {0,0},
+};
+
 String IAXTransaction::s_iax_modNoAuthMethod("Unsupported or missing authentication method or missing challenge");
 String IAXTransaction::s_iax_modNoMediaFormat("Unsupported or missing media format or capability");
 String IAXTransaction::s_iax_modInvalidAuth("Invalid authentication request, response or challenge");
@@ -99,6 +113,9 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
     m_lastVoiceFrameInTs(0),
     m_reqVoiceVNAK(0),
     m_trunkFrame(0),
+    m_trunkFrameCallsSet(false),
+    m_trunkOutEfficientUse(false),
+    m_trunkOutSend(false),
     m_trunkInSyncUsingTs(true),
     m_trunkInStartTime(0),
     m_trunkInTsDelta(0),
@@ -169,6 +186,9 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_lastVoiceFrameInTs(0),
     m_reqVoiceVNAK(0),
     m_trunkFrame(0),
+    m_trunkFrameCallsSet(false),
+    m_trunkOutEfficientUse(false),
+    m_trunkOutSend(false),
     m_trunkInSyncUsingTs(true),
     m_trunkInStartTime(0),
     m_trunkInTsDelta(0),
@@ -424,6 +444,26 @@ IAXTransaction* IAXTransaction::processMedia(DataBlock& data, u_int32_t tStamp, 
     return 0;
 }
 
+static inline unsigned int sendMini(IAXTransaction* tr, const DataBlock& d, u_int32_t ts)
+{
+    unsigned int sent = 0;
+    DataBlock buf;
+    IAXFrame::buildMiniFrame(buf,tr->localCallNo(),ts,d.data(),d.length());
+    tr->getEngine()->writeSocket(buf.data(),buf.length(),tr->remoteAddr(),0,&sent);
+    // Decrease sent bytes with mini frame header
+    if (sent > 4)
+	return sent - 4;
+    return 0;
+}
+
+static inline void setTrunkFrameCalls(IAXMetaTrunkFrame* frame, bool& set)
+{
+    if (set)
+	return;
+    set = true;
+    frame->changeCalls(true);
+}
+
 unsigned int IAXTransaction::sendMedia(const DataBlock& data, unsigned int tStamp,
     u_int32_t format, int type, bool mark)
 {
@@ -548,25 +588,24 @@ unsigned int IAXTransaction::sendMedia(const DataBlock& data, unsigned int tStam
     if (type == IAXFormat::Audio) {
 	if (fullFrame) {
 	    // Send trunked frame before full frame to keep the media order
-	    if (m_trunkFrame)
-		m_trunkFrame->send();
+	    if (m_trunkFrame) {
+		setTrunkFrameCalls(m_trunkFrame,m_trunkFrameCallsSet);
+		if (m_trunkOutSend)
+		    m_trunkFrame->send();
+	    }
 	    postFrame(IAXFrame::Voice,fmt->out(),data.data(),data.length(),ts,true);
 	    sent = data.length();
 	}
 	else if (m_trunkFrame) {
-	    m_trunkFrame->add(localCallNo(),data,ts);
-	    sent = data.length();
-	}
-	else {
-	    DataBlock buf;
-	    IAXFrame::buildMiniFrame(buf,localCallNo(),ts,data.data(),data.length());
-	    m_engine->writeSocket(buf.data(),buf.length(),remoteAddr(),0,&sent);
-	    // Decrease with mini frame header
-	    if (sent > 4)
-		sent -= 4;
+	    setTrunkFrameCalls(m_trunkFrame,m_trunkFrameCallsSet);
+	    m_trunkOutSend = !(m_trunkOutEfficientUse && m_trunkFrame->calls() <= 1);
+	    if (m_trunkOutSend)
+		sent = m_trunkFrame->add(localCallNo(),data,ts);
 	    else
-		sent = 0;
+		sent = sendMini(this,data,ts);
 	}
+	else
+	    sent = sendMini(this,data,ts);
     }
     else if (type == IAXFormat::Video) {
 	if (fullFrame) {
@@ -944,7 +983,7 @@ bool IAXTransaction::abortReg()
     return true;
 }
 
-bool IAXTransaction::enableTrunking(IAXMetaTrunkFrame* trunkFrame)
+bool IAXTransaction::enableTrunking(IAXMetaTrunkFrame* trunkFrame, bool efficientUse)
 {
     if (!trunkFrame)
 	return false;
@@ -954,6 +993,9 @@ bool IAXTransaction::enableTrunking(IAXMetaTrunkFrame* trunkFrame)
     // Get a reference to the trunk frame
     if (!trunkFrame->ref())
 	return false;
+    m_trunkOutSend = false;
+    m_trunkFrameCallsSet = false;
+    m_trunkOutEfficientUse = efficientUse;
     m_trunkFrame = trunkFrame;
     return true;
 }
@@ -1105,7 +1147,7 @@ void IAXTransaction::destroyed()
 #else
     print(true,true,"destroyed");
 #endif
-    TelEngine::destruct(m_trunkFrame);
+    resetTrunk();
     if (state() != Terminating && state() != Terminated)
 	sendReject("Server shutdown");
     RefObject::destroyed();
@@ -1203,8 +1245,16 @@ bool IAXTransaction::changeState(State newState)
 	    return false;
 	default: ;
     }
-    XDebug(m_engine,DebugInfo,"Transaction(%u,%u). State change: %u --> %u [%p]",localCallNo(),remoteCallNo(),m_state,newState,this);
+    Debug(m_engine,DebugAll,"Transaction(%u,%u) state changed %s --> %s [%p]",
+	localCallNo(),remoteCallNo(),stateName(),lookup(newState,s_stateName),this);
     m_state = newState;
+    switch (m_state) {
+	case Terminated:
+	case Terminating:
+	    resetTrunk();
+	    break;
+	default: ;
+    }
     return true;
 }
 
@@ -2054,6 +2104,15 @@ void IAXTransaction::receivedVoiceMiniBeforeFull()
 	    localCallNo(),remoteCallNo(),this);
     if (0 == (m_reqVoiceVNAK % 3))
 	sendVNAK();
+}
+
+void IAXTransaction::resetTrunk()
+{
+    if (!m_trunkFrame)
+	return;
+    if (m_trunkFrameCallsSet)
+	m_trunkFrame->changeCalls(false);
+    TelEngine::destruct(m_trunkFrame);
 }
 
 void IAXTransaction::init()

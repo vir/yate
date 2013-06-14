@@ -1052,12 +1052,16 @@ public:
      * Build a miniframe buffer
      * @param dest Destination buffer
      * @param sCallNo Source call number
-     * @param tStamp Frame timestamp
+     * @param ts Frame timestamp
      * @param data Data
      * @param len Data length
      */
-    static void buildMiniFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t tStamp,
-	void* data, unsigned int len);
+    static inline void buildMiniFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t ts,
+	void* data, unsigned int len) {
+	    unsigned char header[4] = {sCallNo >> 8,sCallNo & 0xff,ts >> 8,ts & 0xff};
+	    dest.assign(header,4);
+	    dest.append(data,len);
+	}
 
     /**
      * Build a video meta frame buffer
@@ -1475,7 +1479,8 @@ public:
      */
     inline IAXTrunkInfo()
 	: m_timestamps(true), m_sendInterval(IAX2_TRUNKFRAME_SEND_DEF),
-	m_maxLen(IAX2_TRUNKFRAME_LEN_DEF), m_trunkInSyncUsingTs(true),
+	m_maxLen(IAX2_TRUNKFRAME_LEN_DEF),
+	m_efficientUse(false), m_trunkInSyncUsingTs(true),
 	m_trunkInTsDiffRestart(5000),
 	m_retransCount(IAX2_RETRANS_COUNT_DEF),
 	m_retransInterval(IAX2_RETRANS_INTERVAL_DEF),
@@ -1526,6 +1531,7 @@ public:
     bool m_timestamps;                   // Trunk type: with(out) timestamps
     unsigned int m_sendInterval;         // Send interval
     unsigned int m_maxLen;               // Max frame length
+    bool m_efficientUse;                 // Outgoing trunking: use or not the trunk based on calls using it
     bool m_trunkInSyncUsingTs;           // Incoming trunk without timestamps: use trunk
                                          //  time or trunk timestamp to re-build frame ts
     u_int32_t m_trunkInTsDiffRestart;    // Incoming trunk without timestamp: diff between
@@ -1566,6 +1572,25 @@ public:
 	{ return m_addr; }
 
     /**
+     * Retrieve the number of calls using this trunk
+     * @return The number of calls using this trunk
+     */
+    inline unsigned int calls() const
+	{ return m_calls; }
+
+    /**
+     * Change the number of calls using this trunk
+     * @param add True to add a call, false to remove it
+     */
+    inline void changeCalls(bool add) {
+	    Lock lck(this);
+	    if (add)
+		m_calls++;
+	    else if (m_calls)
+		m_calls--;
+	}
+
+    /**
      * Check if the frame is adding mini frames timestamps
      * @return True if the frame is adding mini frames timestamps
      */
@@ -1591,9 +1616,9 @@ public:
      * @param sCallNo Sorce call number
      * @param data Mini frame data
      * @param tStamp Mini frame timestamp
-     * @return False if the frame was sent and the write operation failed
+     * @return The number of data bytes added to trunk, 0 on failure
      */
-    bool add(u_int16_t sCallNo, const DataBlock& data, u_int32_t tStamp);
+    unsigned int add(u_int16_t sCallNo, const DataBlock& data, u_int32_t tStamp);
 
     /**
      * Send this frame to remote peer if the time arrived
@@ -1639,6 +1664,7 @@ private:
 	    m_data[7] = (u_int8_t)tStamp;
 	}
 
+    unsigned int m_calls;       // The number of calls using it
     u_int8_t* m_data;		// Data buffer
     u_int16_t m_dataAddIdx;	// Current add index
     u_int64_t m_timeStamp;      // First time data was added
@@ -1808,6 +1834,13 @@ public:
      */
     inline State state() const
         { return m_state; }
+
+    /**
+     * Retrieve the transaction state name
+     * @return Transaction state name
+     */
+    inline const char* stateName()
+	{ return stateName(state()); }
 
     /**
      * Get the timestamp of this transaction
@@ -2139,9 +2172,10 @@ public:
     /**
      * Enable trunking for this transaction
      * @param trunkFrame Pointer to IAXMetaTrunkFrame used to send trunked media
+     * @param efficientUse Use or not the trunk based on calls using it
      * @return False trunking is already enabled for this transactio or trunkFrame is 0
      */
-    bool enableTrunking(IAXMetaTrunkFrame* trunkFrame);
+    bool enableTrunking(IAXMetaTrunkFrame* trunkFrame, bool efficientUse);
 
     /**
      * Process a received call token
@@ -2175,9 +2209,22 @@ public:
 	{ return lookup(type,s_typeName); }
 
     /**
+     * Retrieve transaction state name
+     * @param state Transaction state
+     * @return Requested state name
+     */
+    static inline const char* stateName(int state)
+	{ return lookup(state,s_stateName); }
+
+    /**
      * Transaction type name
      */
     static const TokenDict s_typeName[];
+
+    /**
+     * Transaction state name
+     */
+    static const TokenDict s_stateName[];
 
     /**
      * Standard message sent if unsupported/unknown/none authentication methosd was received
@@ -2548,6 +2595,7 @@ private:
     void adjustTStamp(u_int32_t& tStamp);
     void postFrame(IAXFrameOut* frame);
     void receivedVoiceMiniBeforeFull();
+    void resetTrunk();
     void init();
     inline void restartTrunkIn(u_int64_t now, u_int32_t ts) {
 	    m_trunkInStartTime = now;
@@ -2615,6 +2663,9 @@ private:
     int m_reqVoiceVNAK;                         // Send VNAK if not received full voice frame
     // Meta trunking
     IAXMetaTrunkFrame* m_trunkFrame;		// Reference to a trunk frame if trunking is enabled for this transaction
+    bool m_trunkFrameCallsSet;                  // Trunk frame calls increased
+    bool m_trunkOutEfficientUse;                // Use or not the trunk frame based on calls using it
+    bool m_trunkOutSend;                        // Currently using the trunk frame
     bool m_trunkInSyncUsingTs;                  // Incoming trunk without timestamps: generate timestamp
                                                 //  using time or using trunk timestamp
     u_int64_t m_trunkInStartTime;               // First time we received trunk in data

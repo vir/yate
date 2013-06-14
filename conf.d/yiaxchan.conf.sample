@@ -4,7 +4,7 @@
 ; When registering a line to a remote server trunking can be enabled using a 'trunking'
 ;  parameter set in 'user.login' message
 ; The following parameters can be set in 'user.login' to override the defaults:
-;  trunk_timestamps, trunk_sendinterval, trunk_maxlen,
+;  trunk_timestamps, trunk_sendinterval, trunk_maxlen, trunk_efficient_use,
 ;  trunk_nominits_sync_use_ts, trunk_nominits_ts_diff_restart
 ; When setting trunking parameters for a call the order is:
 ;  - init with configured parameters value
@@ -83,6 +83,14 @@
 ; Minimum allowed value is 20
 ; Defaults to 1400
 ;trunk_maxlen=1400
+
+; trunk_efficient_use: boolean: Use the trunk efficiently: don't send trunking data when
+;  there is only 1 call using it
+; This parameter is applied on reload
+; It can be overridden when routing by 'trunkin_efficient_use' for incoming calls
+;  or 'trunkout_efficient_use' for outgoing calls
+; Defaults to no
+;trunk_efficient_use=0
 
 ; trunk_nominits_sync_use_ts: boolean: Configure how to re-build timestamps when
 ;  processing incoming trunked audio without miniframe timestamps

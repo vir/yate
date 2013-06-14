@@ -1545,6 +1545,8 @@ int Engine::engineCleanup()
 #endif
     delete this;
     int mux = Mutex::locks();
+    if (mux < 0)
+	mux = 0;
     unsigned int cnt = plugins.count();
     plugins.clear();
     if (mux || cnt)

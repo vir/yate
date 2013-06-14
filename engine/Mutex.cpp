@@ -611,7 +611,7 @@ int Mutex::count()
 
 int Mutex::locks()
 {
-    return MutexPrivate::s_locks;
+    return s_safety ? MutexPrivate::s_locks : -1;
 }
 
 bool Mutex::efficientTimedLock()
@@ -710,7 +710,7 @@ int Semaphore::count()
 
 int Semaphore::locks()
 {
-    return SemaphorePrivate::s_locks;
+    return s_safety ? SemaphorePrivate::s_locks : -1;
 }
 
 bool Semaphore::efficientTimedLock()

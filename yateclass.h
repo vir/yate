@@ -4514,7 +4514,7 @@ public:
 
     /**
      * Get the number of currently locked mutexes
-     * @return Count of locked mutexes, should be zero at program exit
+     * @return Count of locked mutexes, -1 if unknown (not tracked)
      */
     static int locks();
 
@@ -4649,7 +4649,7 @@ public:
 
     /**
      * Get the number of currently locked (waiting) semaphores
-     * @return Count of locked semaphores, should be zero at program exit
+     * @return Count of locked semaphores, -1 if unknown (not tracked)
      */
     static int locks();
 

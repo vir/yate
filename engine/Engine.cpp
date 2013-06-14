@@ -424,9 +424,13 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",threads=" << Thread::count();
     msg.retValue() << ",workers=" << EnginePrivate::count;
     msg.retValue() << ",mutexes=" << Mutex::count();
-    msg.retValue() << ",locks=" << Mutex::locks();
+    int locks = Mutex::locks();
+    if (locks >= 0)
+	msg.retValue() << ",locks=" << locks;
     msg.retValue() << ",semaphores=" << Semaphore::count();
-    msg.retValue() << ",waiting=" << Semaphore::locks();
+    locks = Semaphore::locks();
+    if (locks >= 0)
+	msg.retValue() << ",waiting=" << locks;
     msg.retValue() << ",acceptcalls=" << lookup(Engine::accept(),Engine::getCallAcceptStates());
     if (msg.getBoolValue("details",true)) {
 	NamedIterator iter(Engine::runParams());

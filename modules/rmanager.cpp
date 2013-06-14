@@ -212,6 +212,10 @@ public:
     bool processChar(unsigned char c);
     bool processLine(const char *line, bool saveLine = true);
     bool autoComplete();
+    void putConnInfo(NamedList& msg) const;
+    void execCommand(const String& str, bool saveOffset);
+    bool pagedCommand(bool up);
+    void endSubnegotiation();
     void errorBeep();
     void clearLine();
     void writeBuffer();
@@ -234,8 +238,12 @@ private:
     bool m_output;
     bool m_colorize;
     bool m_machine;
+    int m_offset;
     int m_threshold;
     Socket* m_socket;
+    unsigned char m_subBuf[64];
+    unsigned char m_subOpt;
+    unsigned char m_subLen;
     unsigned char m_lastch;
     unsigned char m_escmode;
     bool m_echoing;
@@ -247,6 +255,8 @@ private:
     RefPointer<RManagerListener> m_listener;
     unsigned int m_cursorPos;
     unsigned int m_histLen;
+    unsigned int m_width;
+    unsigned int m_height;
 };
 
 class RManager : public Plugin
@@ -413,9 +423,11 @@ Connection::Connection(Socket* sock, const char* addr, RManagerListener* listene
     : Thread("RManager Connection"),
       m_aliases(""),
       m_auth(None), m_debug(false), m_output(false), m_colorize(false), m_machine(false),
-      m_threshold(DebugAll),
-      m_socket(sock), m_lastch(0), m_escmode(0), m_echoing(false), m_beeping(false),
-      m_timeout(0), m_address(addr), m_listener(listener), m_cursorPos(0), m_histLen(DEF_HISTORY)
+      m_offset(-1), m_threshold(DebugAll),
+      m_socket(sock), m_subOpt(0), m_subLen(0),
+      m_lastch(0), m_escmode(0), m_echoing(false), m_beeping(false),
+      m_timeout(0), m_address(addr), m_listener(listener),
+      m_cursorPos(0), m_histLen(DEF_HISTORY), m_width(0), m_height(24)
 {
     s_mutex.lock();
     s_connList.append(this);
@@ -466,8 +478,8 @@ void Connection::run()
     Engine::runParams().replaceParams(hdr);
     if (cfg().getBoolValue("telnet",true)) {
 	m_colorize = cfg().getBoolValue("color",false);
-	// WILL SUPPRESS GO AHEAD, WILL ECHO - and enough BS and blanks to hide them
-	writeStr("\377\373\003\377\373\001\r      \b\b\b\b\b\b");
+	// WILL SUPPRESS GO AHEAD, WILL ECHO, DO NAWS - and enough BS and blanks to hide them
+	writeStr("\377\373\003\377\373\001\377\375\037\r         \b\b\b\b\b\b\b\b\b");
     }
     if (hdr) {
 	writeStr("\r" + hdr + "\r\n");
@@ -563,6 +575,21 @@ bool Connection::processTelnetChar(unsigned char c)
 	c,(c >= ' ') ? "" : "^", (c >= ' ') ? c : c+0x40);
     if (m_lastch == 255) {
 	m_lastch = 0;
+	if (m_subOpt) {
+	    switch (c) {
+		case 240: // SE
+		    m_subBuf[m_subLen] = '\0';
+		    endSubnegotiation();
+		    m_subOpt = 0;
+		    m_subLen = 0;
+		    return false;
+		case 255:
+		    break;
+		default:
+		    Debug("RManager",DebugMild,"Unsupported telnet octet %u (0x%02X) after IAC in SB",c,c);
+		    return false;
+	    }
+	}
 	switch (c) {
 	    case 241: // NOP
 		return false;
@@ -578,6 +605,7 @@ bool Connection::processTelnetChar(unsigned char c)
 	    case 248: // EL
 		c = 0x15;
 		break;
+	    case 250: // SB
 	    case 251: // WILL
 	    case 252: // WON'T
 	    case 253: // DO
@@ -594,6 +622,10 @@ bool Connection::processTelnetChar(unsigned char c)
     else if (m_lastch) {
 	DDebug("RManager",DebugMild,"Command %u param %u",m_lastch,c);
 	switch (m_lastch) {
+	    case 250: // SB
+		m_subOpt = c;
+		m_subLen = 0;
+		break;
 	    case 251: // WILL
 		switch (c) {
 		    case 1: // ECHO
@@ -601,6 +633,7 @@ bool Connection::processTelnetChar(unsigned char c)
 			writeStr("\377\374\001"); // WON'T ECHO
 			break;
 		}
+		break;
 	    case 252: // WON'T
 		break;
 	    case 253: // DO
@@ -637,7 +670,30 @@ bool Connection::processTelnetChar(unsigned char c)
 	m_lastch = c;
 	return false;
     }
+    if (m_subOpt) {
+	if (m_subLen < sizeof(m_subBuf))
+	    m_subBuf[m_subLen++] = c;
+	return false;
+    }
     return processChar(c);
+}
+
+// process Telnet subnegotiation
+void Connection::endSubnegotiation()
+{
+    switch (m_subOpt) {
+	case 31: // NAWS
+	    if (m_subLen != 4)
+		break;
+	    m_width = (((unsigned int)m_subBuf[0]) << 8) | m_subBuf[1];
+	    m_height = (((unsigned int)m_subBuf[2]) << 8) | m_subBuf[3];
+	    Debug("RManager",DebugAll,"New screen size is %u x %u on connection %s",m_width,m_height,m_address.c_str());
+	    return;
+	default:
+	    Debug("RManager",DebugMild,"Unsupported telnet suboption %u (0x%02X)",m_subOpt,m_subOpt);
+	    return;
+    }
+    Debug("RManager",DebugMild,"Invalid content for telnet suboption %u (0x%02X)",m_subOpt,m_subOpt);
 }
 
 // process incoming terminal characters
@@ -886,8 +942,14 @@ bool Connection::processChar(unsigned char c)
 			writeBufferTail(true);
 			return false;
 		    //case '2': // Insert
-		    //case '5': // Page up
-		    //case '6': // Page down
+		    case '5': // Page up
+			if (pagedCommand(true))
+			    return false;
+			break;
+		    case '6': // Page down
+			if (pagedCommand(false))
+			    return false;
+			break;
 		}
 		break;
 	}
@@ -921,6 +983,40 @@ bool Connection::processChar(unsigned char c)
 	}
     }
     return false;
+}
+
+bool Connection::pagedCommand(bool up)
+{
+    if (m_buffer || m_offset < 0)
+	return false;
+    const String* s = static_cast<const String*>(m_history.get());
+    if (!s)
+	return false;
+    if (up) {
+	if (!m_height)
+	    return false;
+	int offs = m_offset - m_height;
+	if (offs < 0)
+	    return false;
+	offs -= m_height;
+	if (offs < 0)
+	    offs = 0;
+	m_offset = offs;
+    }
+    execCommand(*s,true);
+    return true;
+}
+
+// put window size parameters in message
+void Connection::putConnInfo(NamedList& msg) const
+{
+    if (m_address)
+	msg.setParam("cmd_address",m_address);
+    msg.setParam("cmd_machine",String::boolText(m_machine));
+    if (m_width && m_height && !m_machine) {
+	msg.setParam("cmd_width",String(m_width));
+	msg.setParam("cmd_heigth",String(m_height));
+    }
 }
 
 // perform auto-completion of partial line
@@ -1028,8 +1124,10 @@ bool Connection::autoComplete()
 	completeWords(m.retValue(),s_level,partWord);
 	break;
     }
-    if (m_auth >= Admin)
+    if (m_auth >= Admin) {
+	putConnInfo(m);
 	Engine::dispatch(m);
+    }
     if (m.retValue().null())
 	return false;
     if (m.retValue().find('\t') < 0) {
@@ -1085,6 +1183,7 @@ bool Connection::processLine(const char *line, bool saveLine)
 
     line = 0;
     m_buffer.clear();
+    m_offset = -1;
 
     if (str.startSkip("quit"))
     {
@@ -1117,6 +1216,7 @@ bool Connection::processLine(const char *line, bool saveLine)
 		}
 	    }
 	    m.addParam("line",str);
+	    putConnInfo(m);
 	    if ((m_auth >= Admin) && Engine::dispatch(m))
 		writeStr(m.retValue());
 	    else
@@ -1133,8 +1233,10 @@ bool Connection::processLine(const char *line, bool saveLine)
 		    m.retValue() << " " << info->args;
 		m.retValue() << "\r\n";
 	    }
-	    if (m_auth >= Admin)
+	    if (m_auth >= Admin) {
+		putConnInfo(m);
 		Engine::dispatch(m);
+	    }
 	    writeStr(m.retValue());
 	}
 	return false;
@@ -1186,6 +1288,7 @@ bool Connection::processLine(const char *line, bool saveLine)
 	    m.addParam("module",str);
 	    str = ":" + str;
 	}
+	putConnInfo(m);
 	Engine::dispatch(m);
 	str = "%%+status" + str + "\r\n";
 	str << m.retValue() << "%%-status\r\n";
@@ -1263,6 +1366,7 @@ bool Connection::processLine(const char *line, bool saveLine)
 	    m.addParam("id",str); 
 	if (reason)
 	    m.addParam("reason",reason);
+	putConnInfo(m);
 	if (Engine::dispatch(m))
 	    str = (m_machine ? "%%=drop:success:" : "Dropped ") + str + "\r\n";
 	else if (all)
@@ -1282,6 +1386,7 @@ bool Connection::processLine(const char *line, bool saveLine)
 	Message m("call.execute");
 	m.addParam("callto",str.substr(0,pos));
 	m.addParam((target.find('/') > 0) ? "direct" : "target",target);
+	putConnInfo(m);
 
 	if (Engine::dispatch(m)) {
 	    String id(m.getValue("id"));
@@ -1331,6 +1436,7 @@ bool Connection::processLine(const char *line, bool saveLine)
 	    m.addParam("module",str);
 	    if (l)
 		m.addParam("line",l);
+	    putConnInfo(m);
 	    if (Engine::dispatch(m))
 		writeStr(m.retValue());
 	    else
@@ -1371,6 +1477,7 @@ bool Connection::processLine(const char *line, bool saveLine)
 	    m.setParam(ctrl.matchString(2),ctrl.matchString(3).trimBlanks());
 	    ctrl = ctrl.matchString(1).trimBlanks();
 	}
+	putConnInfo(m);
 	if (Engine::dispatch(m)) {
 	    NamedString* opStatus = m.getParam(YSTRING("operation-status"));
 	    String* stringRet = m.getParam(YSTRING("retVal"));
@@ -1498,26 +1605,39 @@ bool Connection::processLine(const char *line, bool saveLine)
 		str = str.substr(sep+3);
 	    }
 	}
-	Message m("engine.command");
-	m.addParam("line",str);
-	if (Engine::dispatch(m)) {
-	    writeStr(m.retValue());
-	    const ObjList* l = YOBJECT(ObjList,m.userData());
-	    if (l)
-		l = l->skipNull();
-	    for (; l; l = l->skipNext()) {
-		const GenObject* o = l->get();
-		const CapturedEvent* ev = YOBJECT(CapturedEvent,o);
-		if (ev)
-		    writeEvent(ev->c_str(),ev->level());
-		else
-		    writeEvent(o->toString(),-1);
-	    }
-	}
-	else
-	    writeStr((m_machine ? "%%=syntax:" : "Cannot understand: ") + str + "\r\n");
+	execCommand(str,saveLine);
     }
     return false;
+}
+
+// execute a command, display output and remember any offset
+void Connection::execCommand(const String& str, bool saveOffset)
+{
+    if (str.null())
+	return;
+    Message m("engine.command");
+    m.addParam("line",str);
+    putConnInfo(m);
+    if (saveOffset && m_offset >= 0)
+	m.setParam("cmd_offset",String(m_offset));
+    if (Engine::dispatch(m)) {
+	writeStr(m.retValue());
+	const ObjList* l = YOBJECT(ObjList,m.userData());
+	if (l)
+	    l = l->skipNull();
+	for (; l; l = l->skipNext()) {
+	    const GenObject* o = l->get();
+	    const CapturedEvent* ev = YOBJECT(CapturedEvent,o);
+	    if (ev)
+		writeEvent(ev->c_str(),ev->level());
+	    else
+		writeEvent(o->toString(),-1);
+	}
+	if (saveOffset)
+	    m_offset = m.getIntValue("cmd_offset",-1);
+    }
+    else
+	writeStr((m_machine ? "%%=syntax:" : "Cannot understand: ") + str + "\r\n");
 }
 
 // dump encoded messages after processing, only in machine mode

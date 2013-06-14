@@ -665,16 +665,23 @@ void IAXEngine::releaseCallNo(u_int16_t lcallno)
 }
 
 IAXTransaction* IAXEngine::startLocalTransaction(IAXTransaction::Type type,
-    const SocketAddr& addr, IAXIEList& ieList)
+    const SocketAddr& addr, IAXIEList& ieList, bool refTrans, bool startTrans)
 {
-    Lock lock(this);
+    Lock lck(this);
     u_int16_t lcn = generateCallNo();
     if (!lcn)
 	return 0;
     IAXTransaction* tr = IAXTransaction::factoryOut(this,type,lcn,addr,ieList);
-    if (tr)
-	m_incompleteTransList.append(tr);
-    else
+    if (tr) {
+	if (!refTrans || tr->ref()) {
+	    m_incompleteTransList.append(tr);
+	    if (startTrans)
+		tr->start();
+	}
+	else
+	    TelEngine::destruct(tr);
+    }
+    if (!tr)
 	releaseCallNo(lcn);
     return tr;
 }

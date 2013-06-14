@@ -120,7 +120,8 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
     m_trunkInStartTime(0),
     m_trunkInTsDelta(0),
     m_trunkInTsDiffRestart(5000),
-    m_trunkInFirstTs(0)
+    m_trunkInFirstTs(0),
+    m_startIEs(0)
 {
     switch (frame->subclass()) {
 	case IAXControl::New:
@@ -193,7 +194,8 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_trunkInStartTime(0),
     m_trunkInTsDelta(0),
     m_trunkInTsDiffRestart(5000),
-    m_trunkInFirstTs(0)
+    m_trunkInFirstTs(0),
+    m_startIEs(0)
 {
     // Init data members
     if (!m_addr.port()) {
@@ -203,56 +205,56 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	m_addr.port(4569);
     }
     init(ieList);
-    IAXControl::Type frametype;
-    IAXIEList* ies = new IAXIEList;
+    m_startIEs = new IAXIEList;
     // Create IE list to send
     switch (type) {
 	case New:
-	    ies->insertVersion();
-	    ies->appendString(IAXInfoElement::USERNAME,m_username);
-	    ies->appendString(IAXInfoElement::CALLING_NUMBER,m_callingNo);
-	    if (!ies->appendIE(ieList,IAXInfoElement::CALLINGTON))
-		ies->appendNumeric(IAXInfoElement::CALLINGTON,m_engine->callerNumType(),1);
-	    if (!ies->appendIE(ieList,IAXInfoElement::CALLINGPRES))
-		ies->appendNumeric(IAXInfoElement::CALLINGPRES,m_engine->callingPres(),1);
-	    if (!ies->appendIE(ieList,IAXInfoElement::CALLINGTNS))
-		ies->appendNumeric(IAXInfoElement::CALLINGTNS,0,2);
-	    ies->appendString(IAXInfoElement::CALLING_NAME,m_callingName);
-	    ies->appendString(IAXInfoElement::CALLED_NUMBER,m_calledNo);
-	    ies->appendString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);
-	    ies->appendNumeric(IAXInfoElement::FORMAT,m_format.format() | m_formatVideo.format(),4);
-	    ies->appendNumeric(IAXInfoElement::CAPABILITY,m_capability,4);
-	    ies->appendString(IAXInfoElement::CODEC_PREFS,String::empty());
+	    m_startIEs->insertVersion();
+	    if (m_username)
+		m_startIEs->appendString(IAXInfoElement::USERNAME,m_username);
+	    m_startIEs->appendString(IAXInfoElement::CALLING_NUMBER,m_callingNo);
+	    if (!m_startIEs->appendIE(ieList,IAXInfoElement::CALLINGTON))
+		m_startIEs->appendNumeric(IAXInfoElement::CALLINGTON,m_engine->callerNumType(),1);
+	    if (!m_startIEs->appendIE(ieList,IAXInfoElement::CALLINGPRES))
+		m_startIEs->appendNumeric(IAXInfoElement::CALLINGPRES,m_engine->callingPres(),1);
+	    if (!m_startIEs->appendIE(ieList,IAXInfoElement::CALLINGTNS))
+		m_startIEs->appendNumeric(IAXInfoElement::CALLINGTNS,0,2);
+	    if (m_callingName)
+		m_startIEs->appendString(IAXInfoElement::CALLING_NAME,m_callingName);
+	    m_startIEs->appendString(IAXInfoElement::CALLED_NUMBER,m_calledNo);
+	    if (m_calledContext)
+		m_startIEs->appendString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);
+	    m_startIEs->appendNumeric(IAXInfoElement::FORMAT,m_format.format() | m_formatVideo.format(),4);
+	    m_startIEs->appendNumeric(IAXInfoElement::CAPABILITY,m_capability,4);
+	    m_startIEs->appendString(IAXInfoElement::CODEC_PREFS,String::empty());
 	    if (m_callToken)
-		ies->appendBinary(IAXInfoElement::CALLTOKEN,0,0);
-	    frametype = IAXControl::New;
+		m_startIEs->appendBinary(IAXInfoElement::CALLTOKEN,0,0);
 	    break;
 	case RegReq:
 	case RegRel:
-	    ies->appendString(IAXInfoElement::USERNAME,m_username);
+	    m_startIEs->appendString(IAXInfoElement::USERNAME,m_username);
 	    if (type == RegReq)
-		ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
+		m_startIEs->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
 	    if (m_callToken)
-		ies->appendBinary(IAXInfoElement::CALLTOKEN,0,0);
-	    frametype = (type == RegReq ? IAXControl::RegReq : IAXControl::RegRel);
+		m_startIEs->appendBinary(IAXInfoElement::CALLTOKEN,0,0);
 	    break;
 	case Poke:
-	    frametype = IAXControl::Poke;
 	    break;
 	default:
 	    Debug(m_engine,DebugStub,"Transaction(%u,%u) outgoing with unsupported type %u [%p]",
 		localCallNo(),remoteCallNo(),m_type,this);
-	    delete ies;
+	    delete m_startIEs;
+	    m_startIEs = 0;
 	    m_type = Incorrect;
 	    return;
     }
     init();
-    postFrameIes(IAXFrame::IAX,frametype,ies);
-    changeState(NewLocalInvite);
 }
 
 IAXTransaction::~IAXTransaction()
 {
+    if (m_startIEs)
+	delete m_startIEs;
     XDebug(m_engine,DebugAll,"IAXTransaction::~IAXTransaction(%u,%u). [%p]",
 	localCallNo(),remoteCallNo(),this);
 }
@@ -275,6 +277,31 @@ IAXTransaction* IAXTransaction::factoryOut(IAXEngine* engine, Type type, u_int16
 	return tr;
     tr->deref();
     return 0;
+}
+
+// Start an outgoing transaction
+void IAXTransaction::start()
+{
+    Lock lck(this);
+    if (!(outgoing() && state() == Unknown && m_startIEs))
+	return;
+    Debug(m_engine,DebugAll,"Transaction(%u) starting [%p]",localCallNo(),this);
+    switch (m_type) {
+#define IAXTRANS_START(transtype,frmtype) \
+    case transtype: postFrameIes(IAXFrame::IAX,frmtype,m_startIEs); break
+	IAXTRANS_START(New,IAXControl::New);
+	IAXTRANS_START(RegReq,IAXControl::RegReq);
+	IAXTRANS_START(RegRel,IAXControl::RegRel);
+	IAXTRANS_START(Poke,IAXControl::Poke);
+#undef IAXTRANS_START
+	default:
+	    Debug(m_engine,DebugStub,"Transaction(%u,%u) outgoing with unsupported type %u [%p]",
+		localCallNo(),remoteCallNo(),m_type,this);
+	    setDestroy();
+	    return;
+    }
+    m_startIEs = 0;
+    changeState(NewLocalInvite);
 }
 
 IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
@@ -593,7 +620,12 @@ unsigned int IAXTransaction::sendMedia(const DataBlock& data, unsigned int tStam
 		if (m_trunkOutSend)
 		    m_trunkFrame->send();
 	    }
+	    // Release lock while sending full frame to avoid deadlock with transaction
+	    //  mutex
+	    // There are places when this mutex is taken after transaction mutex
+	    lck.drop();
 	    postFrame(IAXFrame::Voice,fmt->out(),data.data(),data.length(),ts,true);
+	    lck.acquire(d->m_outMutex);
 	    sent = data.length();
 	}
 	else if (m_trunkFrame) {
@@ -649,6 +681,9 @@ IAXEvent* IAXTransaction::getEvent(const Time& now)
 	    return 0;
 	return keepEvent(terminate(IAXEvent::Terminated,true));
     }
+    // Outgoing waiting to start
+    if (outgoing() && state() == Unknown)
+	return 0;
     // Send ack for received frames
     ackInFrames();
     // Do we have a generated event ?

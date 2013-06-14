@@ -2017,8 +2017,14 @@ public:
 	{ m_destroy = true; }
 
     /**
-     * Process a frame from remote peer
-     * This method is thread safe.
+     * Start an outgoing transaction.
+     * This method is thread safe
+     */
+    void start();
+
+    /**
+     * Process a frame from remote peer.
+     * This method is thread safe
      * @param frame IAX frame belonging to this transaction to process
      * @return 'this' if successful or NULL if the frame is invalid
      */
@@ -2672,6 +2678,8 @@ private:
     u_int32_t m_trunkInTsDelta;                 // Value used to re-build ts: last voice timestamp
     u_int32_t m_trunkInTsDiffRestart;           // Incoming trunk without timestamp: diff between timestamps at which we restart
     u_int32_t m_trunkInFirstTs;                 // Incoming trunk without timestamp: first trunk timestamp
+    // Postponed start
+    IAXIEList* m_startIEs;                      // Postponed start
 };
 
 /**
@@ -3246,10 +3254,13 @@ protected:
      * @param type Transaction type
      * @param addr Remote address to send the request
      * @param ieList First frame IE list
-     * @return IAXTransaction pointer on success.
+     * @param refTrans Return a refferenced transaction pointer
+     * @param startTrans Start transaction
+     * @return IAXTransaction pointer on success
      */
     IAXTransaction* startLocalTransaction(IAXTransaction::Type type,
-	const SocketAddr& addr, IAXIEList& ieList);
+	const SocketAddr& addr, IAXIEList& ieList,
+	bool refTrans = false, bool startTrans = true);
 
 private:
     Socket m_socket;				// Socket

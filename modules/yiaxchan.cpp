@@ -396,6 +396,14 @@ public:
     inline YIAXEngine* getEngine() const
 	{ return m_iaxEngine; }
 
+    // Find a channel. Return a refferenced pointer
+    inline Channel* findChan(Channel* chan) {
+	    if (!chan)
+		return 0;
+	    Lock lck(this);
+	    return channels().find(chan) && chan->ref() ? chan : 0;
+	}
+
     // Update codecs a list of parameters
     // @return False if the result is 0 (no intersection)
     bool updateCodecsFromRoute(u_int32_t& codecs, const NamedList& params, int type);
@@ -536,7 +544,7 @@ protected:
     bool safeRefIncrease();
 private:
     YIAXEngine* m_iaxEngine;            // IAX engine owning the transaction
-    IAXTransaction* m_transaction;      // IAX transaction
+    RefPointer<IAXTransaction> m_transaction; // IAX transaction
     String m_password;                  // Password for client authentication
     bool m_mutedIn;                     // No remote media accepted
     bool m_mutedOut;                    // No local media accepted
@@ -1113,20 +1121,20 @@ bool YIAXEngine::reg(YIAXLine* line, bool regreq)
     if (line->callToken())
 	ieList.appendBinary(IAXInfoElement::CALLTOKEN,0,0);
     // Make it !
+    IAXTransaction::Type t = regreq ? IAXTransaction::RegReq : IAXTransaction::RegRel;
+    IAXTransaction* tr = startLocalTransaction(t,addr,ieList,true,false);
+    if (!tr)
+	return false;
     // Lock lines to protect line transaction pointer
-    // Lock engine to safe ref the transaction
     Lock lck(s_lines);
-    lock();
-    line->m_transaction = startLocalTransaction(
-	regreq ? IAXTransaction::RegReq : IAXTransaction::RegRel,addr,ieList);
-    unlock();
-    if (line->m_transaction) {
-	line->m_transaction->setUserData(line);
-	Debug(&iplugin,DebugAll,"Line(%s) set transaction (%p) lCallNo=%u [%p]",
-	    line->toString().c_str(),(IAXTransaction*)line->m_transaction,
-	    line->m_transaction->localCallNo(),line);
-    }
-    return line->m_transaction != 0;
+    tr->setUserData(line);
+    line->m_transaction = tr;
+    Debug(&iplugin,DebugAll,"Line(%s) set transaction (%p) callno=%u [%p]",
+	line->toString().c_str(),tr,tr->localCallNo(),line);
+    lck.drop();
+    tr->start();
+    TelEngine::destruct(tr);
+    return true;
 }
 
 // Create a new call transaction from target address and message params
@@ -1174,7 +1182,7 @@ IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
     ieList.appendNumeric(IAXInfoElement::CAPABILITY,codecs,4);
     if (params.getBoolValue("calltoken_out",s_callTokenOut))
 	ieList.appendBinary(IAXInfoElement::CALLTOKEN,0,0);
-    return startLocalTransaction(IAXTransaction::New,addr,ieList);
+    return startLocalTransaction(IAXTransaction::New,addr,ieList,true,false);
 }
 
 // Create a POKE transaction
@@ -1253,46 +1261,55 @@ void YIAXEngine::initFormats(NamedList* params)
 // Process all IAX events
 void YIAXEngine::processEvent(IAXEvent* event)
 {
-    YIAXConnection* connection = 0;
-    switch (event->getTransaction()->type()) {
-	case IAXTransaction::New:
-	    connection = static_cast<YIAXConnection*>(event->getTransaction()->getUserData());
-	    if (connection) {
+    IAXTransaction* tr = event ? event->getTransaction() : 0;
+    if (!tr) {
+	if (event)
+	    delete event;
+	return;
+    }
+    if (tr->type() == IAXTransaction::New) {
+	if (tr->getUserData()) {
+	    Channel* chan = static_cast<Channel*>(tr->getUserData());
+	    YIAXConnection* conn = static_cast<YIAXConnection*>(iplugin.findChan(chan));
+	    if (conn) {
 		// We already have a channel for this call
-		connection->handleEvent(event);
+		conn->handleEvent(event);
 		if (event->final()) {
 		    // Final event: disconnect
 		    DDebug(this,DebugAll,"processEvent. Disconnecting (%p): '%s'",
-			connection,connection->id().c_str());
-		    connection->disconnect();
+			conn,conn->id().c_str());
+		    conn->disconnect();
 		}
+		TelEngine::destruct(conn);
 	    }
 	    else {
-		if (event->type() == IAXEvent::New) {
-		    // Incoming request for a new call
-		    if (iplugin.canAccept(true)) {
-			connection = new YIAXConnection(this,event->getTransaction());
-			connection->initChan();
-			event->getTransaction()->setUserData(connection);
-			if (!connection->route(event))
-			    event->getTransaction()->setUserData(0);
-		    }
-		    else {
-			Debug(&iplugin,DebugWarn,"Refusing new IAX call, full or exiting");
-			// Cause code 42: switch congestion
-			event->getTransaction()->sendReject(0,42);
-		    }
-		}
+		Debug(this,DebugNote,"No connection (%p) for transaction (%p) callno=%u",
+		    conn,tr,tr->localCallNo());
+		tr->setDestroy();
 	    }
-	    break;
-	case IAXTransaction::RegReq:
-	case IAXTransaction::RegRel:
-	    if (event->getTransaction()->outgoing())
-		s_lines.handleEvent(event);
-	    else if (event->type() == IAXEvent::New || event->type() == IAXEvent::AuthRep)
-		processRemoteReg(event,(event->type() == IAXEvent::New));
-	    break;
-	default: ;
+	}
+	else if (event->type() == IAXEvent::New) {
+	    // Incoming request for a new call
+	    if (iplugin.canAccept(true)) {
+		YIAXConnection* conn = new YIAXConnection(this,tr);
+		conn->initChan();
+		tr->setUserData(conn);
+		if (!conn->route(event))
+		    tr->setUserData(0);
+	    }
+	    else {
+		Debug(&iplugin,DebugWarn,"Refusing new IAX call, full or exiting");
+		// Cause code 42: switch congestion
+		tr->sendReject(0,42);
+	    }
+	}
+    }
+    else if (tr->type() == IAXTransaction::RegReq ||
+	tr->type() == IAXTransaction::RegRel) {
+	if (tr->outgoing())
+	    s_lines.handleEvent(event);
+	else if (event->type() == IAXEvent::New || event->type() == IAXEvent::AuthRep)
+	    processRemoteReg(event,(event->type() == IAXEvent::New));
     }
     delete event;
 }
@@ -1565,6 +1582,7 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
     conn->initChan();
     tr->setUserData(conn);
     m_iaxEngine->initTransaction(tr,msg,line);
+    tr->start();
     if (conn->connect(ch,msg.getValue("reason"))) {
 	conn->callConnect(msg);
 	msg.setParam("peerid",conn->id());
@@ -1574,6 +1592,7 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
 	tr->setUserData(0);
 	tr->setDestroy();
     }
+    TelEngine::destruct(tr);
     line = 0;
     conn->deref();
     return true;
@@ -1819,6 +1838,7 @@ YIAXConnection::~YIAXConnection()
     setConsumer();
     setSource();
     hangup(0);
+    m_transaction = 0;
     Debug(this,DebugAll,"Destroyed with reason '%s' [%p]",m_reason.safe(),this);
 }
 

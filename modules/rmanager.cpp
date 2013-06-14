@@ -578,7 +578,6 @@ bool Connection::processTelnetChar(unsigned char c)
 	if (m_subOpt) {
 	    switch (c) {
 		case 240: // SE
-		    m_subBuf[m_subLen] = '\0';
 		    endSubnegotiation();
 		    m_subOpt = 0;
 		    m_subLen = 0;

@@ -15,9 +15,19 @@
 ;  is another call using trunking with the same remote ip/port.
 ;  TAKE CARE WHEN SETTING TRUNKING PARAMETERS IN MORE THEN 1 PLACE FOR THE SAME
 ;   REMOTE IP/PORT !!! 
+; When routing a call to iax module a specific listener can be specfied:
+;  1: Its name can be set in 'oconnection_id' parameter.
+;    The name of the listener created from 'general' section is 'iaxengine'
+;  2: Local ip/port can be specified in 'oip_transport_localip' and
+;   'oip_transport_localport'. The port defaults to 4569 if missing.
+;  If a non empty connection id or local address is specified and a valid listener
+;   is not found the call will fail
+
 
 [general]
 ; This section sets global variables of the implementation
+; It also sets the default listener named 'iaxengine'
+; Unless specified all parameters are listener specific
 
 ; port: int: UDP port for incoming connections
 ;port=4569
@@ -28,6 +38,10 @@
 ; force_bind: boolean: Try to use a random port if failed to bind on configured one
 ; Defaults to yes
 ;force_bind=yes
+
+; default: boolean: Specifiy if this is the default transport to use when none specified
+; Defaults to yes (unlike the other listeners)
+;default=yes
 
 ; numtype: string:  Default calling number type for outgoing calls
 ; This parameter is applied on reload
@@ -126,6 +140,7 @@
 ;calltoken_in=no
 
 ; calltoken_out: boolean: Offer call token ip address authentication on outgoing calls
+; This is not a listener specific parameter, it will be applied for all listeners
 ; This parameter is applied on reload and can be overridden from routing
 ; Defaults to yes
 ;calltoken_out=yes
@@ -214,6 +229,7 @@
 ;thread=normal
 
 ; maxchans: int: Maximum number of channels running at once
+; This is not a listener specific parameter, it will be applied for all listeners
 ; A value of 0 specifies that there is no limit enforced.
 ; Defaults to the value set by the maxchans setting from yate.conf
 ;maxchans=
@@ -270,3 +286,29 @@
 
 ; lpc10: bool: LPC 10
 ;lpc10=enable
+
+
+;[listener listener_name]
+; This section configures an extra listener to use
+; 'iaxengine' can't be used as listener name
+; Listed parameters can't use the default value from 'general' section
+; All other parameters from 'general' section who are listener specific can be overriden
+;  for this listener
+
+; enable: boolean: Enable or disable this listener
+; This parameter is applied on reload and defaults to yes
+;enable=yes
+
+; port: int: UDP port for incoming connections
+;port=4569
+
+; addr: ipaddress: IP address to bind to
+;addr=0.0.0.0
+
+; force_bind: boolean: Try to use a random port if failed to bind on configured one
+; Defaults to yes
+;force_bind=yes
+
+; default: boolean: Specifiy if this is the default transport to use when none specified
+; Defaults to no
+;default=no

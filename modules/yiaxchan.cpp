@@ -80,7 +80,6 @@ class IAXURI;
 class YIAXLine : public RefObject, public Mutex
 {
     friend class YIAXLineContainer;
-    friend class YIAXEngine;
 public:
     YIAXLine(const String& name);
     virtual ~YIAXLine();
@@ -96,14 +95,10 @@ public:
 	{ return m_callingNo; }
     inline const String& callingName() const
 	{ return m_callingName; }
-    inline int expire() const
+    inline unsigned int expire() const
 	{ return m_expire; }
-    inline const String& localAddr() const
-	{ return m_localAddr; }
     inline const String& remoteAddr() const
 	{ return m_remoteAddr; }
-    inline int localPort() const
-	{ return m_localPort; }
     inline int remotePort() const
 	{ return m_remotePort; }
     inline const SocketAddr& remote() const
@@ -114,28 +109,46 @@ public:
 	{ return m_trunking; }
     inline const NamedList& trunkInfo() const
 	{ return m_trunkInfo; }
+    inline YIAXEngine* engine() const
+	{ return m_engine; }
+    inline IAXTransaction* transaction() const
+	{ return m_transaction; }
+
+protected:
+    virtual void destroyed() {
+	    if (m_transaction) {
+		m_transaction->setUserData(0);
+		m_transaction = 0;
+	    }
+	    m_engine = 0;
+	    RefObject::destroyed();
+	}
+
 private:
     void setRegistered(bool registered, const char* reason = 0, const char* error = 0);
+    inline void setNextRegFromExpire(unsigned int val1, unsigned int val2)
+	{ m_nextReg = Time::now() + 1000000 * (m_expire * (val1 ? val1 : 1) / (val2 ? val2 : 1)); }
+
     String m_name;
+    int m_oper;                         // Requested operation
     String m_username;                  // Username
     String m_password;                  // Password
     String m_callingNo;                 // Calling number
     String m_callingName;               // Calling name
     bool m_callToken;                   // Advertise CALLTOKEN support
-    int m_expire;                       // Expire time
-    String m_localAddr;
+    unsigned int m_expire;              // Expire time
     String m_remoteAddr;
-    int m_localPort;
     int m_remotePort;
     SocketAddr m_remote;
-    u_int32_t m_nextReg;                // Time to next registration
+    u_int64_t m_nextReg;                // Time to next registration
     u_int64_t m_nextKeepAlive;          // Time to next keep alive signal
     unsigned int m_keepAliveInterval;   // Keep alive interval
     bool m_registered;			// Registered flag. If true the line is registered
-    bool m_register;                    // Operation flag: True - register
     RefPointer<IAXTransaction> m_transaction;
+    RefPointer<YIAXEngine> m_engine;    // The engine to use
     NamedList m_trunkInfo;              // Trunk info parameters
     bool m_trunking;                    // Enable trunking
+    NamedList m_engineToUse;            // Parameters used to identify the engine
 };
 
 /*
@@ -144,80 +157,85 @@ private:
 class YIAXLineContainer : public Mutex
 {
 public:
-    inline YIAXLineContainer() : Mutex(true,"YIAXLineContainer") {}
-    inline ~YIAXLineContainer() {}
-
-    /*
-     * Logout and remove all lines
-     * @param forced Forcedly remove lines synchronously
-     */
-    void clear(bool forced = false);
-
-    /*
-     * Update a line from a message
-     * This method is thread safe 
-     * @param msg Received message
-     * @return True if the successfully updated
-     */
+    enum Operation {
+	Unknown = 0,
+	Create,
+	Login,                           // Login
+	Logout,                          // Logout and remain
+	Delete,                          // Logout and delete after
+    };
+    inline YIAXLineContainer()
+	: Mutex(true,"YIAXLineContainer"),
+	m_lineTransMutex(false,"YIAXLineTransMutex")
+	{}
+    inline bool busy(const YIAXLine* line) {
+	    Lock lck(m_lineTransMutex);
+	    return line && 0 != line->transaction();
+	}
+    // Logout and remove all lines
+    // Process only lines using a specified engine if given
+    void clear(bool final = false, YIAXEngine* eng = 0);
+    // Update a line from a message
     bool updateLine(Message &msg);
-
-    /*
-     * Event handler for a registration.
-     * @param event The event.
-     */
+    // Re-check lines engine
+    void updateEngine();
+    // Event handler for a registration.
     void handleEvent(IAXEvent* event);
-
-    /*
-     * Terminate notification of a Register/Unregister operation
-     * This method is thread safe
-     * @param event The event (result)
-     */
+    // Terminate notification of a Register/Unregister operation
     void regTerminate(IAXEvent* event);
-
-    /*
-     * Process an authentication request for a Register/Unregister operation
-     * This method is thread safe
-     * @param event The event (AuthReq)
-     */
+    // Process an authentication request for a Register/Unregister operation
     void regAuthReq(IAXEvent* event);
-
-    /*
-     * Timer notification
-     * This method is thread safe
-     * @param time Time
-     */
+    // Timer notification
     void evTimer(Time& time);
-
     // Fill parameters with information taken from line
     void fillList(YIAXLine& line, NamedList& dest, SocketAddr& addr);
-
     // Find a line by name
     inline bool findLine(RefPointer<YIAXLine>& line, const String& name) {
 	    Lock lck(this);
 	    line = findLine(name);
 	    return line != 0;
 	}
-    /*
-     * Check if a line exists
-     */
+    // Check if a line exists
     inline bool hasLine(const String& line)
 	{ Lock lock(this); return findLine(line) != 0; }
-
-    /*
-     * Retrieve the lines list
-     */
+    // Retrieve the lines list
     inline ObjList& lines()
 	{ return m_lines;}
 
+    Mutex m_lineTransMutex;
+
 protected:
-    // Clear a line's transaction
-    void clearTransaction(YIAXLine* line, bool abortReg = true);
+    // Set a line's transaction
+    void setTransaction(YIAXLine* line, IAXTransaction* tr = 0,
+	bool abortReg = true);
     // Change a line String parameter. Unregister it if changed
-    bool changeLine(YIAXLine* line, String& dest, const String& src);
-    bool changeLine(YIAXLine* line, int& dest, int src);
-    // Update a line
-    bool updateLine(YIAXLine* line, Message &msg);
-    bool addLine(Message &msg);
+    inline void changeLine(bool& changed, YIAXLine* line, String& dest, const String& src) {
+	    if (!line || dest == src)
+		return;
+	    unregisterLineNonBusy(line);
+	    dest = src;
+	    changed = true;
+	}
+    inline void changeLine(bool& changed, YIAXLine* line, unsigned int& dest, unsigned int src) {
+	    if (!line || dest == src)
+		return;
+	    unregisterLineNonBusy(line);
+	    dest = src;
+	    changed = true;
+	}
+    inline void changeLine(bool& changed, YIAXLine* line, int& dest, int src) {
+	    if (!line || dest == src)
+		return;
+	    unregisterLineNonBusy(line);
+	    dest = src;
+	    changed = true;
+	}
+    // Unregister a non busy registered line. Return true if unregistering
+    inline bool unregisterLineNonBusy(YIAXLine* line) {
+	    if (!line || !line->m_registered || busy(line))
+		return false;
+	    return registerLine(line,false);
+	}
     // Find a line by name
     inline YIAXLine* findLine(const String& name) {
 	    ObjList* o = m_lines.find(name);
@@ -230,152 +248,134 @@ protected:
     // Return referenced pointer
     YIAXLine* findLine(IAXEvent* ev);
     // (Un)register a line
-    void registerLine(YIAXLine* line, bool reg);
+    bool registerLine(YIAXLine* line, bool reg);
 private:
     ObjList m_lines;
 };
 
-/*
- * Thread class for reading data from socket for the specified IAX engine
- */
-class YIAX_API YIAXListener : public Thread
+
+//
+// Engine thread
+//
+class YIAX_API YIAXThread : public Thread, public GenObject
 {
 public:
-    inline YIAXListener(YIAXEngine* engine, const char* name = 0, Priority prio = Normal)
-        : Thread(name,prio), m_engine(engine)
+    enum Operation {
+	Listener,
+	GetEvent,
+	Trunking
+    };
+    inline YIAXThread(YIAXEngine* engine, int oper, Priority prio = Normal)
+        : Thread(lookup(oper,s_operThName),prio), m_oper(oper), m_engine(engine)
         {}
+    ~YIAXThread()
+	{ notify(true); }
+    inline const char* operThName() const
+	{ return lookup(m_oper,s_operThName); }
+    virtual void cleanup()
+	{ notify(true); }
     virtual void run();
-protected:
-    YIAXEngine* m_engine;
-};
+    static const TokenDict s_operThName[];
 
-/*
- * Thread class for reading events for the specified IAX engine
- */
-class YIAX_API YIAXGetEvent : public Thread
-{
-public:
-    inline YIAXGetEvent(YIAXEngine* engine, const char* name = 0, Priority prio = Normal)
-	: Thread(name,prio), m_engine(engine)
-	{}
-    virtual void run();
 protected:
-    YIAXEngine* m_engine;
-};
+    void notify(bool final = false);
 
-/*
- * Thread class for sending trunked mini frames for the specified IAX engine
- */
-class YIAX_API YIAXTrunking : public Thread
-{
-public:
-    inline YIAXTrunking(YIAXEngine* engine, const char* name = 0, Priority prio = Normal)
-	: Thread(name,prio), m_engine(engine)
-	{}
-    virtual void run();
-protected:
+    int m_oper;
     YIAXEngine* m_engine;
 };
 
 /*
  * The IAX engine for this driver
  */
-class YIAXEngine : public IAXEngine
+class YIAXEngine : public IAXEngine, public RefObject
 {
+    friend class YIAXDriver;
+    friend class YIAXThread;
 public:
-    /*
-     * Constructor
-     * @param iface Interface address to use
-     * @param port UDP port to use
-     * @param transListCount Number of entries in the transaction hash table
-     * @param maxFullFrameDataLen Max full frame IE list (buffer) length
-     * @param authRequired Automatically challenge all clients for authentication
-     */
-    YIAXEngine(const char* iface, int port, u_int16_t transListCount,
-	u_int16_t maxFullFrameDataLen, bool authRequired, NamedList* params);
-
+    enum Status {
+	Idle,
+	Listening,
+	Disabled,
+	Removed,
+	Exiting,
+	BindFailed
+    };
+    YIAXEngine(const String& name, const char* iface, int port, const NamedList* params);
     virtual ~YIAXEngine()
 	{}
-
+    inline bool bound() const
+	{ return m_status != BindFailed && m_status != Idle; }
+    inline bool valid() const
+	{ return bound() && !exiting(); }
+    inline const char* statusName()
+	{ return statusName(m_status); }
+    inline void readSocket() {
+	    SocketAddr addr;
+	    IAXEngine::readSocket(addr);
+	}
+    inline bool timeout(const Time& now)
+	{ return m_timeout && m_timeout < now; }
+    void changeStatus(int stat);
+    bool bind(const NamedList& params);
+    // Schedule for termination
+    void setTerminate(int stat);
     // Setup a given transaction from parameters
     void initTransaction(IAXTransaction* tr, const NamedList& params, YIAXLine* line = 0);
-
-    /*
-     * Process media from remote peer.
-     * @param transaction IAXTransaction that owns the call leg
-     * @param data Media data. 
-     * @param tStamp Media timestamp. 
-     * @param type Media type
-     */
+    // Process media from remote peer
     virtual void processMedia(IAXTransaction* transaction, DataBlock& data,
 	u_int32_t tStamp, int type, bool mark);
-
-    /*
-     * Initiate an outgoing registration (release) request.
-     * @param line YIAXLine pointer to use for registration.
-     * @param regreq Registration request flag. If false a registration release will take place.
-     * @return True on success.
-     */
-    bool reg(YIAXLine* line, bool regreq = true);
-
-    /*
-     * Initiate an aoutgoing call.
-     * @param addr Address to poke.
-     * @param params Call parameters.
-     * @return IAXTransaction pointer on success.
-     */
+    // Initiate (un)register transaction
+    inline IAXTransaction* reg(bool regreq, const SocketAddr& addr, IAXIEList& ieList) {
+	    if (regreq)
+		return startLocalTransaction(IAXTransaction::RegReq,addr,ieList,true,false);
+	    return startLocalTransaction(IAXTransaction::RegRel,addr,ieList,true,false);
+	}
+    // Initiate an aoutgoing call.
     IAXTransaction* call(SocketAddr& addr, NamedList& params);
-
-    /*
-     * Initiate a test of existence of a remote IAX peer.
-     * @param addr Address to poke.
-     * @return IAXTransaction pointer on success.
-     */
+    // Initiate a test of existence of a remote IAX peer.
     IAXTransaction* poke(SocketAddr& addr);
-
-    /*
-     * Start thread members
-     * @param listenThreadCount Reading socket thread count.
-     * @param eventThreadCount Reading event thread count.
-     * @param trunkingThreadCount Trunking thread count.
-     */
-    void start(u_int16_t listenThreadCount, u_int16_t eventThreadCount,u_int16_t trunkingThreadCount);
-
-    // Initialize formats from config
-    void initFormats(NamedList* params);
+    // Cancel threads
+    void cancelThreads(unsigned int waitTerminateMs = 100);
+    // Add engine data to message
+    inline void fillMessage(Message& msg, bool addRoute = true) {
+	    msg.setParam("connection_id",toString());
+	    msg.setParam("connection_reliable",String::boolText(false));
+	    if (addRoute) {
+		msg.setParam("route_params","oconnection_id");
+		msg.setParam("oconnection_id",toString());
+	    }
+	}
+    virtual const String& toString() const
+	{ return name(); }
+    static inline const char* statusName(int stat)
+	{ return lookup(stat,s_statusName); }
+    static const TokenDict s_statusName[];
 
 protected:
-
-    /*
-     * Event handler for transaction with a connection.
-     */
+    virtual void destroyed();
+    // Event handler for transaction with a connection
     virtual void processEvent(IAXEvent* event);
-
-    /*
-     * Process a new format received with a full frame
-     * @param trans Transaction that received the new format
-     * @param type Media type
-     * @param format The received format
-     * @return True if accepted
-     */
+    // Process a new format received with a full frame
     virtual bool mediaFormatChanged(IAXTransaction* trans, int type, u_int32_t format);
-
-    /*
-     * Event handler for incoming registration transactions.
-     * @param event The event.
-     * @param first True if this is the first request.
-     *  False if it is a response to an authentication request.
-     */
+    // Event handler for incoming registration transactions
     void processRemoteReg(IAXEvent* event,bool first);
-
-    /*
-     * Send Register/Unregister messages to Engine
-     * Return the message on success
-     */
+    // Send Register/Unregister messages to Engine
+    // Return the message on success
     Message* userreg(IAXTransaction* tr, bool regrel = true);
+    // Create threads
+    void createThreads(const NamedList& params);
+    void createThreads(unsigned int count, int oper, Thread::Priority prio);
 
 private:
-    bool m_threadsCreated;      // True if reading and get events threads were created
+    void threadTerminated(YIAXThread* th);
+
+    bool m_initialized;
+    bool m_default;
+    ObjList m_threads;
+    u_int64_t m_timeout;                 // Timeout: destroy the engine
+    int m_status;                        // Engine status
+    String m_bindAddr;                   // Requested bind addr
+    int m_bindPort;                      // Requested bind port
 };
 
 /*
@@ -384,6 +384,9 @@ private:
 class YIAXDriver : public Driver
 {
 public:
+    enum Relay {
+	EngineStop = Private
+    };
     YIAXDriver();
     virtual ~YIAXDriver();
     virtual void initialize();
@@ -391,11 +394,6 @@ public:
     virtual bool msgExecute(Message& msg, String& dest);
     virtual bool msgRoute(Message& msg);
     virtual bool received(Message& msg, int id);
-
-    // Retrieve the IAX engine
-    inline YIAXEngine* getEngine() const
-	{ return m_iaxEngine; }
-
     // Find a channel. Return a refferenced pointer
     inline Channel* findChan(Channel* chan) {
 	    if (!chan)
@@ -403,35 +401,81 @@ public:
 	    Lock lck(this);
 	    return channels().find(chan) && chan->ref() ? chan : 0;
 	}
-
+    // Find an engine from parameters. Return a refferenced pointer
+    bool findEngine(RefPointer<YIAXEngine>& eng, const NamedList& params,
+	const String& prefix = String::empty(), YIAXLine* line = 0,
+	NamedList* copyParams = 0);
+    // Find an engine by name. Return true if found
+    inline bool findEngine(RefPointer<YIAXEngine>& engine, const String& name) {
+	    if (!name)
+		return false;
+	    Lock lck(m_enginesMutex);
+	    engine = findEngine(name);
+	    return engine != 0;
+	}
     // Update codecs a list of parameters
-    // @return False if the result is 0 (no intersection)
+    // Return false if the result is 0 (no intersection)
     bool updateCodecsFromRoute(u_int32_t& codecs, const NamedList& params, int type);
-
     // Dispatch user.auth
-    // @tr The IAX transaction
-    // @param response True if it is a response.
-    // @param requestAuth True on exit: the caller should request authentication
-    // @param invalidAuth True on exit: authentication response is incorrect
-    // @param billid The billing ID parameter if available
-    // @return False if not authenticated
+    // tr The IAX transaction
+    // response True if it is a response.
+    // requestAuth True on exit: the caller should request authentication
+    // invalidAuth True on exit: authentication response is incorrect
+    // billid The billing ID parameter if available
+    // Return false if not authenticated
     bool userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	bool& invalidAuth, const char* billid = 0);
-
-    bool commandComplete(Message& msg, const String& partLine, const String& partWord);
-    void msgStatus(Message& msg);
+    // Start/stop engine list changes
+    void engineListChanging(bool start);
+    // Setup an engine
+    void setupEngine(const String& name, bool& valid, bool enable, bool def,
+	const NamedList& params, const NamedList* defaults = 0);
+    // Terminate exiting engines
+    void checkEngineTerminate(const Time& now);
 
 protected:
+    virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
+    virtual void msgStatus(Message& msg);
+    void msgStatusAccounts(Message& msg);
+    void msgStatusListeners(Message& msg);
     virtual void genUpdate(Message& msg);
-    YIAXEngine* m_iaxEngine;
-    unsigned int m_failedAuths;
-    int m_port;
-};
+    // Update default engine
+    void updateDefaultEngine();
+    // Terminate an engine. Terminate all if no engine is given
+    void terminateEngine(YIAXEngine* eng, bool final, int reason);
+    // Initialize formats from config
+    void initFormats(const NamedList& params);
+    // Find an engine by name
+    inline YIAXEngine* findEngine(const String& name) {
+	    if (!name)
+		return 0;
+	    for (ObjList* o = m_engines.skipNull(); o; o = o->skipNext()) {
+		YIAXEngine* e = static_cast<YIAXEngine*>(o->get());
+		if (e->name() == name)
+		    return e;
+	    }
+	    return 0;
+	}
+    // Find an engine by local ip/port
+    inline YIAXEngine* findEngine(const String& addr, int port) {
+	    for (ObjList* o = m_engines.skipNull(); o; o = o->skipNext()) {
+		YIAXEngine* e = static_cast<YIAXEngine*>(o->get());
+		if (e->addr().host() == addr && e->addr().port() == port)
+		    return e;
+	    }
+	    return 0;
+	}
 
-static YIAXLineContainer s_lines;	// Lines
-static Thread::Priority s_priority = Thread::Normal;  // Threads priority
-static bool s_callTokenOut = true;      // Send an empty call token on outgoing calls
-static YIAXDriver iplugin;		// Init the driver
+    ObjList m_engines;
+    Mutex m_enginesMutex;
+    YIAXEngine* m_defaultEngine;         // The default engine
+    unsigned int m_haveEngTerminate;     // The number of terminating engines
+    u_int32_t m_format;                  // The default media format
+    u_int32_t m_formatVideo;             // Default video format
+    u_int32_t m_capability;              // The media capability
+    unsigned int m_failedAuths;
+    bool m_init;
+};
 
 /*
  * YIAXRegDataHandler
@@ -439,8 +483,8 @@ static YIAXDriver iplugin;		// Init the driver
 class YIAXRegDataHandler : public MessageHandler
 {
 public:
-    YIAXRegDataHandler()
-	: MessageHandler("user.login",150,iplugin.name())
+    YIAXRegDataHandler(const char* trackName)
+	: MessageHandler("user.login",150,trackName)
 	{ }
     virtual bool received(Message &msg);
 };
@@ -494,9 +538,9 @@ public:
  */
 class YIAXConnection : public Channel
 {
+    friend class YIAXDriver;
 public:
-    YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transaction, Message* msg = 0,
-	NamedList* params = 0);
+    YIAXConnection(IAXTransaction* transaction, Message* msg = 0, NamedList* params = 0);
     virtual ~YIAXConnection();
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason = 0, const Message* msg = 0);
@@ -508,23 +552,20 @@ public:
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
     virtual void disconnected(bool final, const char* reason);
-
-    inline bool disconnect()
-	{ return Channel::disconnect(m_reason,parameters()); }
-
+    bool disconnect(const char* reason = 0);
     inline IAXTransaction* transaction() const
         { return m_transaction; }
-
     inline bool mutedIn() const
 	{ return m_mutedIn; }
-
     inline bool mutedOut() const
 	{ return m_mutedOut; }
-
     void handleEvent(IAXEvent* event);
-
     bool route(IAXEvent* event, bool authenticated = false);
-
+    // Set reason
+    inline void setReason(const char* reason) {
+	    Lock lck(m_mutexChan);
+	    m_reason = reason;
+	}
     // Retrieve the data consumer from IAXFormat media type
     YIAXConsumer* getConsumer(int type);
     // Retrieve the data source from IAXFormat media type
@@ -535,6 +576,7 @@ public:
 protected:
     // location: 0: from peer, else: from protocol
     void hangup(int location, const char* error = 0, const char* reason = 0, bool reject = false);
+    void resetTransaction(NamedList* params = 0, bool reject = false);
     void startMedia(bool in, int type = IAXFormat::Audio);
     void clearMedia(bool in, int type = IAXFormat::Audio);
     void evAuthRep(IAXEvent* event);
@@ -543,7 +585,6 @@ protected:
     void safeDeref();
     bool safeRefIncrease();
 private:
-    YIAXEngine* m_iaxEngine;            // IAX engine owning the transaction
     RefPointer<IAXTransaction> m_transaction; // IAX transaction
     String m_password;                  // Password for client authentication
     bool m_mutedIn;                     // No remote media accepted
@@ -552,6 +593,7 @@ private:
     bool m_video;                       // Video endpoint was used
     String m_reason;                    // Call end reason text
     bool m_hangup;                      // Need to send chan.hangup message
+    Mutex m_mutexChan;
     Mutex m_mutexTrans;                 // Safe m_transaction operations
     Mutex m_mutexRefIncreased;          // Safe ref/deref connection
     bool m_refIncreased;                // If true, the reference counter was increased
@@ -559,10 +601,10 @@ private:
     RefPointer<DataSource> m_sources[IAXFormat::TypeCount]; // Keep all types of sources
 };
 
-/*
- * An IAX URI parser
- *  [iax[2]:][username@]host[:port][/called_number[@called_context]]
- */
+//
+// An IAX URI parser
+//  [iax[2]:][username@]host[:port][/called_number[@called_context]]
+//
 class IAXURI : public String
 {
 public:
@@ -598,11 +640,41 @@ private:
 /*
  * Local data
  */
+static YIAXLineContainer s_lines;        // Lines
+static YIAXDriver iplugin;               // Init the driver
+static bool s_callTokenOut = true;       // Send an empty call token on outgoing calls
+static unsigned int s_extendEngTerminate = 1000; // Extend engine terminate interval (milliseconds)
 static unsigned int s_expires_min = 60;
 static unsigned int s_expires_def = 60;
 static unsigned int s_expires_max = 3600;
+static bool s_authReq = true;
+static unsigned int s_engineStop = 0;
+static const String s_iaxEngineName = "iaxengine";
+// Engine parameters to delete when using defaults
+// They can't be inherited
+static const String s_delEngParams[] = {"enable","default","addr","port","force_bind",""};
 
-static String s_statusCmd = "status";
+const TokenDict YIAXEngine::s_statusName[] = {
+    {"Listening",    Listening},
+    {"Disabled",     Disabled},
+    {"Removed",      Removed},
+    {"Exiting",      Exiting},
+    {"BindFailed",   BindFailed},
+    {"Idle",         Idle},
+    {0,0}
+};
+
+const TokenDict YIAXThread::s_operThName[] = {
+    {"YIAXListener", Listener},
+    {"YIAXGetEvent", GetEvent},
+    {"YIAXTrunking", Trunking},
+    {0,0}
+};
+
+static inline bool isGeneralEngine(const String& name)
+{
+    return name == s_iaxEngineName;
+}
 
 // Retrieve data endpoint name from IAXFormat type
 static inline const String& dataEpName(int type)
@@ -631,111 +703,139 @@ static inline bool getKeyword(const NamedList& list, const String& param,
     return (s != 0);
 }
 
+// Retrieve a configuration section
+static inline const NamedList& safeSect(Configuration& cfg, const String& name)
+{
+    NamedList* sect = cfg.getSection(name);
+    if (sect)
+	return *sect;
+    return NamedList::empty();
+}
 
-/*
- * Class definitions
- */
+// Clear multiple list parameters
+static void clearListParams(NamedList& list, const String* params)
+{
+    if (!params)
+	return;
+    for (; *params; params++)
+	list.clearParam(*params);
+}
 
+// Retrieve bind addr/port parameters
+static inline void getBindAddr(const NamedList& params, String& addr, int& port,
+    bool* force = 0)
+{
+    addr = params.getValue(YSTRING("addr"));
+    port = IAXEngine::getPort(params);
+    if (force)
+	*force = params.getBoolValue("force_bind",true);
+}
+
+
+//
+// YIAXLine
+//
 // Create an idle line
 YIAXLine::YIAXLine(const String& name)
-    : Mutex(true,"IAX:Line"), m_name(name), m_callToken(false),
-      m_expire(60), m_localPort(4569), m_remotePort(4569),
-      m_nextReg(Time::secNow() + 40), m_nextKeepAlive(0),
-      m_keepAliveInterval(0),
-      m_registered(false),
-      m_register(true),
-      m_transaction(0),
-      m_trunkInfo(""),
-      m_trunking(false)
+    : Mutex(true,"IAX:Line"),
+    m_name(name),
+    m_oper(YIAXLineContainer::Create),
+    m_callToken(false),
+    m_expire(60), m_remotePort(4569),
+    m_nextReg(0), m_nextKeepAlive(0),
+    m_keepAliveInterval(0),
+    m_registered(false),
+    m_transaction(0),
+    m_trunkInfo(""),
+    m_trunking(false),
+    m_engineToUse("")
 {
-    DDebug(&iplugin,DebugAll,"YIAXLine(%s) [%p]",m_name.c_str(),this);
+    Debug(&iplugin,DebugAll,"Line(%s) created [%p]",m_name.c_str(),this);
 }
 
 YIAXLine::~YIAXLine()
 {
-    DDebug(&iplugin,DebugAll,"~YIAXLine(%s) [%p]",m_name.c_str(),this);
+    Debug(&iplugin,DebugAll,"Line(%s) destroyed [%p]",m_name.c_str(),this);
 }
 
 // Set the registered status, emits user.notify messages if necessary
 void YIAXLine::setRegistered(bool registered, const char* reason, const char* error)
 {
-    if ((m_registered == registered) && !reason)
+    if (m_registered && registered)
 	return;
     m_registered = registered;
     if (!m_registered) {
 	m_nextKeepAlive = 0;
 	m_remote.clear();
     }
-    if (m_username) {
-	Message* m = new Message("user.notify");
-	m->addParam("account",toString());
-	m->addParam("protocol","iax");
-	m->addParam("username",m_username);
-	m->addParam("registered",String::boolText(registered));
-	m->addParam("reason",reason,false);
-	m->addParam("error",error,false);
-	Engine::enqueue(m);
-    }
+    Message* m = new Message("user.notify");
+    m->addParam("account",toString());
+    m->addParam("protocol","iax");
+    m->addParam("username",m_username);
+    m->addParam("registered",String::boolText(registered));
+    m->addParam("reason",reason,false);
+    m->addParam("error",error,false);
+    Engine::enqueue(m);
 }
 
-// Clear a line's transaction
-void YIAXLineContainer::clearTransaction(YIAXLine* line, bool abortReg)
+
+//
+// YIAXLineContainer
+//
+// Set a line's transaction
+void YIAXLineContainer::setTransaction(YIAXLine* line, IAXTransaction* tr, bool abortReg)
 {
-    if (!(line && line->m_transaction))
+    if (!line)
 	return;
-    lock();
-    DDebug(&iplugin,DebugAll,"Line(%s) clearing transaction (%p) [%p]",
-	line->toString().c_str(),(IAXTransaction*)line->m_transaction,line);
-    RefPointer<IAXTransaction> trans = line->m_transaction;
-    line->m_transaction = 0;
-    if (trans)
-	trans->setUserData(0);
-    unlock();
-    if (abortReg && trans)
-	trans->abortReg();
-    trans = 0;
-}
-
-// Change a line String parameter. Unregister it if changed
-bool YIAXLineContainer::changeLine(YIAXLine* line, String& dest, const String& src)
-{
-    if (!line || dest == src)
-	return false;
-    if (line->m_registered) {
-	line->m_registered = false;
-	line->m_remote.clear();
-	registerLine(line,false);
+    Lock lck(m_lineTransMutex);
+    if (line->transaction() == tr)
+	return;
+    if (line->transaction()) {
+	Debug(&iplugin,DebugAll,"Line(%s) clearing transaction (%p) [%p]",
+	    line->toString().c_str(),line->transaction(),line);
+	RefPointer<IAXTransaction> trans = line->m_transaction;
+	line->m_transaction = 0;
+	if (trans)
+	    trans->setUserData(0);
+	lck.drop();
+	if (abortReg && trans)
+	    trans->abortReg();
+	trans = 0;
     }
-    dest = src;
-    return true;
-}
-
-// Change a line int parameter. Unregister it if changed
-bool YIAXLineContainer::changeLine(YIAXLine* line, int& dest, int src)
-{
-    if (!line || dest == src)
-	return false;
-    if (line->m_registered) {
-	line->m_registered = false;
-	line->m_remote.clear();
-	registerLine(line,false);
-    }
-    dest = src;
-    return true;
+    if (!tr)
+	return;
+    line->m_transaction = tr;
+    tr->setUserData(line);
+    Debug(&iplugin,DebugAll,
+	"Line(%s) set transaction (%p) listener='%s' callno=%u [%p]",
+	line->toString().c_str(),tr,tr->getEngine()->name().c_str(),
+	tr->localCallNo(),line);
 }
 
 // Find and update a line with parameters from message, create if needed
 bool YIAXLineContainer::updateLine(Message& msg)
 {
-    const String& op = msg["operation"];
-    bool login = (op != "logout" && op != "delete");
-    const String& name = msg["account"];
-    DDebug(&iplugin,DebugAll,"Updating line '%s'",name.c_str());
+    const String& name = msg[YSTRING("account")];
+    if (!name)
+	return false;
+    int oper = Unknown;
+    const String& op = msg[YSTRING("operation")];
+    if (op == YSTRING("login"))
+	oper = Login;
+    else if (op == YSTRING("create"))
+	oper = Create;
+    else if (op == YSTRING("logout"))
+	oper = Logout;
+    else if (op == YSTRING("delete"))
+	oper = Delete;
+    else
+	return false;
     Lock lck(this);
+    Debug(&iplugin,DebugAll,"Updating line '%s' oper=%s",name.c_str(),op.c_str());
     RefPointer<YIAXLine> line = findLine(name);
     bool oldLine = true;
     if (!line) {
-	if (!login)
+	if (oper != Login && oper != Create)
 	    return false;
 	line = new YIAXLine(name);
 	m_lines.append((YIAXLine*)line);
@@ -743,8 +843,8 @@ bool YIAXLineContainer::updateLine(Message& msg)
     }
     lck.drop();
     line->lock();
-    if (login) {
-	bool changed = !line->m_register;
+    if (oper == Login || oper == Create) {
+	bool changed = (line->m_oper != oper);
 	String addr = msg.getValue("server",msg.getValue("domain"));
 	int pos = addr.find(":");
 	int port = -1;
@@ -753,40 +853,87 @@ bool YIAXLineContainer::updateLine(Message& msg)
 	    addr = addr.substr(0,pos);
 	}
 	else
-	    port = msg.getIntValue("port");
+	    port = IAXEngine::getPort(msg);
 	if (port > 0)
-	    changed = changeLine(line,line->m_remotePort,port);
+	    changeLine(changed,line,line->m_remotePort,port);
 	line->m_keepAliveInterval = msg.getIntValue("keepalive",25,0);
-	changed = changeLine(line,line->m_remoteAddr,addr) || changed;
-	changed = changeLine(line,line->m_username,msg.getValue("username")) || changed;
-	changed = changeLine(line,line->m_password,msg.getValue("password")) || changed;
-	changed = changeLine(line,line->m_callingNo,msg.getValue("caller")) || changed;
-	changed = changeLine(line,line->m_callingName,msg.getValue("callername")) || changed;
-	int interval = msg.getIntValue("interval");
-	if (interval < 60)
-	    interval = 60;
-	changed = changeLine(line,line->m_expire,interval) || changed;
+	changeLine(changed,line,line->m_remoteAddr,addr);
+	changeLine(changed,line,line->m_username,msg.getValue("username"));
+	changeLine(changed,line,line->m_password,msg.getValue("password"));
+	changeLine(changed,line,line->m_callingNo,msg.getValue("caller"));
+	changeLine(changed,line,line->m_callingName,msg.getValue("callername"));
+	unsigned int interval = msg.getIntValue("interval",60,60,0xffff);
+	changeLine(changed,line,line->m_expire,interval);
 	line->m_callToken = msg.getBoolValue("calltoken",s_callTokenOut);
 	line->m_trunking = msg.getBoolValue("trunking");
 	line->m_trunkInfo.clearParams();
 	line->m_trunkInfo.copySubParams(msg,"trunk_");
-	if (changed || op == "login") {
-	    line->m_nextReg = Time::secNow() + (line->m_expire * 3 / 4);
-	    line->m_nextKeepAlive = 0;
-	    registerLine(line,true);
+	line->m_engineToUse.clearParams();
+	RefPointer<YIAXEngine> engine;
+	iplugin.findEngine(engine,msg,String::empty(),0,&line->m_engineToUse);
+	if (engine != line->engine()) {
+	    if (line->engine()) {
+		// Registering: reset transaction and unregister
+		// Unregistering: let the transaction finish
+		if (line->registered()) {
+		    setTransaction(line);
+		    registerLine(line,false);
+		}
+	    }
+	    line->m_engine = engine;
 	}
+	if (changed || oper == Login)
+	    line->m_oper = Login;
+	else if (line->m_oper != Login && line->m_oper != Create)
+	    line->m_oper = oper;
+	if (engine) {
+	    if (!busy(line) && (changed || line->m_oper == Login))
+		registerLine(line,true);
+	}
+	else if (line->m_oper == Login)
+	    Debug(&iplugin,DebugNote,"No listener to register line '%s'",name.c_str());
     }
-    else if (line->m_register)
-	registerLine(line,false);
+    else {
+	if (line->m_registered)
+	    unregisterLineNonBusy(line);
+	line->m_oper = oper;
+    }
     line->unlock();
-    if (oldLine) {
+    if (oper == Delete) {
+	if (!busy(line))
+	    m_lines.remove(line);
+    }
+    else if (oldLine) {
 	// The line might be removed in regTerminate()
-	Lock lock(this);
+	Lock lck(this);
 	if (!findLine((YIAXLine*)line) && line->ref())
 	    m_lines.append(m_lines.append((YIAXLine*)line));
     }
     line = 0;
     return true;
+}
+
+// Re-check lines engine
+void YIAXLineContainer::updateEngine()
+{
+    lock();
+    ListIterator iter(m_lines);
+    for (GenObject* gen = 0; 0 != (gen = iter.get());) {
+	RefPointer<YIAXLine> line = static_cast<YIAXLine*>(gen);
+	if (!line)
+	    continue;
+	unlock();
+	line->lock();
+	if (!line->engine())
+	    iplugin.findEngine(line->m_engine,line->m_engineToUse);
+	if (line->engine() && line->m_oper == Login && !line->m_registered &&
+	    !line->m_nextReg && !busy(line))
+	    registerLine(line,true);
+	line->unlock();
+	line = 0;
+	lock();
+    }
+    unlock();
 }
 
 // Handle registration related transaction terminations
@@ -797,71 +944,127 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 	event ? event->type() : -1,line,line ? line->toString().c_str() : "");
     if (!line)
 	return;
-    IAXTransaction* trans = event->getTransaction();
+    IAXTransaction* tr = event->getTransaction();
     line->lock();
     String reason;
-    bool ok = false;
-    bool handled = true;
+    bool accepted = false;
+    bool rejected = false;
     switch (event->type()) {
 	case IAXEvent::Accept:
-	    if (line->m_register) {
-		// Honor server registration refresh. Assume default (60) if missing
-		unsigned int interval = 60;
-		if (event->getList().getNumeric(IAXInfoElement::REFRESH,interval) && !interval)
-		    interval = 60;
-		if (line->m_expire != (int)interval) {
-		    DDebug(&iplugin,DebugNote,
-			"Line(%s) changed expire interval from %d to %u [%p]",
-			line->toString().c_str(),line->m_expire,interval,line);
-		    line->m_expire = interval;
-		}
-		// re-register at 75% of the expire time
-		line->m_nextReg = Time::secNow() + (line->expire() * 3 / 4);
-		if (trans->callingNo())
-		    line->m_callingNo = trans->callingNo();
-		if (trans->callingName())
-		    line->m_callingName = trans->callingName();
-	    }
-	    ok = line->m_register;
+	    accepted = true;
 	    break;
 	case IAXEvent::Reject:
-	    // retry at 25% of the expire time
-	    line->m_nextReg = Time::secNow() + (line->expire() / 4);
+	    rejected = true;
 	    event->getList().getString(IAXInfoElement::CAUSE,reason);
 	    break;
 	case IAXEvent::Timeout:
-	    // retry at 50% of the expire time
-	    line->m_nextReg = Time::secNow() + (line->expire() / 2);
 	    reason = "timeout";
 	    break;
 	case IAXEvent::Terminated:
-	    // retry at 50% of the expire time
-	    line->m_nextReg = Time::secNow() + (line->expire() / 2);
 	    reason = "failure";
 	    break;
 	default:
-	    handled = false;
+	    line->unlock();
+	    TelEngine::destruct(line);
+	    return;
     }
-    bool remove = false;
-    if (handled) {
-	const char* what = line->m_register ? "logon" : "logoff";
-	const char* tf = line->m_register ? "to" : "from";
-	if (event->type() == IAXEvent::Accept)
-	    Debug(&iplugin,DebugCall,"IAX line '%s' %s success %s %s:%d",
-		line->toString().c_str(),what,tf,line->m_remoteAddr.c_str(),
-		line->m_remotePort);
-	else
-	    Debug(&iplugin,DebugWarn,"IAX line '%s' %s failure %s %s:%d reason=%s",
-		line->toString().c_str(),what,tf,line->m_remoteAddr.c_str(),
-		line->m_remotePort,reason.safe());
-	clearTransaction(line,false);
-	line->setRegistered(ok,reason,event->type() == IAXEvent::Reject ? "noauth" : 0);
-	if (ok && trans) {
-	    Lock lck(trans);
-	    line->m_remote = trans->remoteAddr();
+    line->m_remote.clear();
+    // Line is going to perform another operation
+    if (line->engine()) {
+	// Engine changed ?
+	if (line->engine() == tr->getEngine()) {
+	    setTransaction(line,0,false);
+	    bool reg = (tr->type() == IAXTransaction::RegReq);
+	    bool notify = true;
+	    // Operation changed ?
+	    if (line->m_oper == Login) {
+		if (reg) {
+		    if (accepted) {
+			// Honor server registration refresh. Assume default (60) if missing
+			unsigned int interval = 60;
+			if (event->getList().getNumeric(IAXInfoElement::REFRESH,interval) && !interval)
+			    interval = 60;
+			if (line->m_expire != interval) {
+			    DDebug(&iplugin,DebugNote,
+				"Line(%s) changed expire interval from %d to %u [%p]",
+				line->toString().c_str(),line->m_expire,interval,line);
+			    line->m_expire = interval;
+			}
+			if (tr->callingNo())
+			    line->m_callingNo = tr->callingNo();
+			if (tr->callingName())
+			    line->m_callingName = tr->callingName();
+			// Re-register at 75% of the expire time
+			line->setNextRegFromExpire(3,4);
+			Lock lck(tr);
+			line->m_remote = tr->remoteAddr();
+		    }
+		    else if (rejected)
+			// retry at 25% of the expire time
+			line->setNextRegFromExpire(1,4);
+		    else
+			// retry at 50% of the expire time
+			line->setNextRegFromExpire(1,2);
+		}
+		else {
+		    notify  = false;
+		    registerLine(line,true);
+		}
+	    }
+	    else if (line->m_oper == Logout || line->m_oper == Delete) {
+		if (reg && accepted) {
+		    line->m_registered = true;
+		    notify = false;
+		    registerLine(line,false);
+		}
+		else
+		    line->m_nextReg = 0;
+	    }
+	    if (notify) {
+		const char* what = (line->m_oper == Login) ? "logon" : "logoff";
+		const char* tf = (line->m_oper == Login) ? "to" : "from";
+		if (accepted)
+		    Debug(&iplugin,DebugCall,"IAX line '%s' %s success %s %s:%d",
+			line->toString().c_str(),what,tf,line->m_remoteAddr.c_str(),
+			line->m_remotePort);
+		else
+		    Debug(&iplugin,DebugWarn,"IAX line '%s' %s failure %s %s:%d reason=%s",
+			line->toString().c_str(),what,tf,line->m_remoteAddr.c_str(),
+			line->m_remotePort,reason.safe());
+		line->setRegistered(reg && accepted,reason,rejected ? "noauth" : 0);
+	    }
 	}
-	remove = !line->m_register;
+	else {
+	    bool process = true;
+	    // Unregister from the old one if registered
+	    if (accepted && tr->type() == IAXTransaction::RegReq) {
+		RefPointer<YIAXEngine> tmp = line->engine();
+		line->m_engine = static_cast<YIAXEngine*>(tr->getEngine());
+		setTransaction(line,0,false);
+		process = !(line->engine() && registerLine(line,false));
+		line->m_engine = tmp;
+		tmp = 0;
+	    }
+	    // Register to the new one
+	    if (process) {
+		setTransaction(line,0,false);
+		if (line->m_oper == Login)
+		    registerLine(line,true);
+	    }
+	}
     }
+    else {
+	// Line has no engine
+	// Unregister from the old one if registered
+	if (accepted && tr->type() == IAXTransaction::RegReq)
+	    line->m_engine = static_cast<YIAXEngine*>(tr->getEngine());
+	setTransaction(line,0,false);
+	if (!(line->engine() && registerLine(line,false)))
+	    line->setRegistered(false,reason,rejected ? "noauth" : 0);
+	line->m_engine = 0;
+	line->m_nextReg = 0;
+    }
+    bool remove = (line->m_oper == Delete && !busy(line));
     line->unlock();
     if (remove) {
 	Lock lock(this);
@@ -876,12 +1079,15 @@ void YIAXLineContainer::regAuthReq(IAXEvent* event)
     YIAXLine* line = findLine(event);
     DDebug(&iplugin,DebugAll,"YIAXLineContainer::regAuthReq() ev=%d line=%p",
 	event ? event->type() : -1,line);
-    if (!line)
-	return;
     IAXTransaction* tr = event->getTransaction();
+    if (!line) {
+	if (tr)
+	    tr->setDestroy();
+	return;
+    }
     line->lock();
     String response;
-    iplugin.getEngine()->getMD5FromChallenge(response,tr->challenge(),line->password());
+    tr->getEngine()->getMD5FromChallenge(response,tr->challenge(),line->password());
     line->unlock();
     tr->sendAuthReply(response);
     TelEngine::destruct(line);
@@ -901,14 +1107,14 @@ void YIAXLineContainer::handleEvent(IAXEvent* event)
 	    regAuthReq(event);
 	    break;
 	default:
-	    iplugin.getEngine()->defaultEventHandler(event);
+	    if (event->getTransaction())
+		event->getTransaction()->getEngine()->defaultEventHandler(event);
     }
 }
 
 // Tick the timer for all lines, send keepalives and reregister
 void YIAXLineContainer::evTimer(Time& time)
 {
-    u_int32_t sec = time.sec();
     lock();
     ListIterator iter(m_lines);
     GenObject* gen = 0; 
@@ -918,20 +1124,21 @@ void YIAXLineContainer::evTimer(Time& time)
 	    continue;
 	unlock();
 	line->lock();
-	if (sec > line->m_nextReg) {
-	    line->m_nextReg += line->expire();
-	    registerLine(line,line->m_register);
-	}
+	if (line->m_nextReg && line->m_nextReg <= time)
+	    registerLine(line,line->m_oper == Login);
 	else if (line->m_registered && line->m_keepAliveInterval &&
 	    time > line->m_nextKeepAlive) {
-	    if (line->m_nextKeepAlive && line->remote().host()) {
+	    if (line->m_nextKeepAlive && line->remote().host() && line->engine() &&
+		line->engine()->valid()) {
 		DDebug(&iplugin,DebugAll,"Line(%s) sending keep alive to %s:%d [%p]",
 		    line->toString().c_str(),line->remote().host().c_str(),
 		    line->remote().port(),(YIAXLine*)line);
-		iplugin.getEngine()->keepAlive(line->remote());
+		line->engine()->keepAlive(line->remote());
 	    }
 	    line->m_nextKeepAlive = time + line->m_keepAliveInterval * 1000000;
 	}
+	else if (line->m_oper == Delete && !busy(line))
+	    m_lines.remove((YIAXLine*)line);
 	line->unlock();
 	line = 0;
 	lock();
@@ -965,12 +1172,13 @@ YIAXLine* YIAXLineContainer::findLine(IAXEvent* ev)
     IAXTransaction* tr = ev->getTransaction();
     if (!tr)
 	return 0;
-    Lock lck(this);
+    Lock2 lck(this,&m_lineTransMutex);
     YIAXLine* line = findLine(static_cast<YIAXLine*>(tr->getUserData()));
     bool ok = line && line->m_transaction == tr && line->ref();
+    if (!ok)
+	tr->setUserData(0);
     lck.drop();
     if (!ok) {
-	tr->setUserData(0);
 	tr->abortReg();
 	line = 0;
     }
@@ -978,72 +1186,173 @@ YIAXLine* YIAXLineContainer::findLine(IAXEvent* ev)
 }
 
 // Initiate line (un)register
-void YIAXLineContainer::registerLine(YIAXLine* line, bool reg)
+bool YIAXLineContainer::registerLine(YIAXLine* line, bool reg)
 {
     if (!line)
-	return;
-    line->m_register = reg;
+	return false;
+    line->m_nextReg = 0;
     line->m_nextKeepAlive = 0;
-    clearTransaction(line);
-    iplugin.getEngine()->reg(line,reg);
+    setTransaction(line);
+    if (!reg)
+	line->m_registered = false;
+    if (!(line->engine() && line->engine()->bound()))
+	return false;
+    // Deny register on exiting engines
+    if (reg && line->engine()->exiting()) {
+	line->m_engine = 0;
+	return false;
+    }
+    SocketAddr addr(AF_INET);
+    addr.host(line->remoteAddr());
+    addr.port(line->remotePort());
+    Debug(&iplugin,DebugAll,"%s line '%s' listener='%s' server=%s:%d [%p]",
+	reg ? "Registering" : "Unregistering",line->toString().c_str(),
+	line->engine()->name().c_str(),addr.host().c_str(),addr.port(),line);
+    // Create IE list
+    IAXIEList ieList;
+    ieList.appendString(IAXInfoElement::USERNAME,line->username());
+    ieList.appendString(IAXInfoElement::PASSWORD,line->password());
+    ieList.appendNumeric(IAXInfoElement::REFRESH,line->expire(),2);
+    if (line->callToken())
+	ieList.appendBinary(IAXInfoElement::CALLTOKEN,0,0);
+    IAXTransaction* tr = line->engine()->reg(reg,addr,ieList);
+    if (!tr)
+	return false;
+    setTransaction(line,tr);
+    tr->start();
+    TelEngine::destruct(tr);
+    return true;
 }
 
 // Unregister all lines
-void YIAXLineContainer::clear(bool forced)
+void YIAXLineContainer::clear(bool final, YIAXEngine* eng)
 {
-    if (forced) {
+    if (final && !eng) {
 	Lock lock(this);
 	m_lines.clear();
 	return;
     }
     lock();
     ListIterator iter(m_lines);
-    GenObject* gen = 0; 
-    while (0 != (gen = iter.get())) {
+    for (GenObject* gen = 0; 0 != (gen = iter.get());) {
 	RefPointer<YIAXLine> line = static_cast<YIAXLine*>(gen);
+	if (!line)
+	    continue;
 	unlock();
-	if (line) {
-	    line->lock();
-	    if (line->m_register)
+	line->lock();
+	if (!eng || eng == line->engine()) {
+	    if (final) {
+		setTransaction(line);
+		line->m_engine = 0;
+		if (line->registered())
+		    line->setRegistered(false,"notransport");
+	    }
+	    else if (line->registered()) {
+		setTransaction(line);
 		registerLine(line,false);
-	    line->unlock();
-	    line = 0;
+	    }
 	}
+	line->unlock();
+	line = 0;
 	lock();
     }
     unlock();
 }
 
-// Run the socket listening thread
-void YIAXListener::run()
+
+//
+// Engine thread
+//
+void YIAXThread::run()
 {
-    DDebug(m_engine,DebugAll,"%s started",currentName());
-    SocketAddr addr;
-    m_engine->readSocket(addr);
+    if (!m_engine)
+	return;
+    DDebug(m_engine,DebugAll,"%s started [%p]",currentName(),this);
+    switch (m_oper) {
+	case Listener:
+	    m_engine->readSocket();
+	    break;
+	case GetEvent:
+	    m_engine->runGetEvents();
+	    break;
+	case Trunking:
+	    m_engine->runProcessTrunkFrames();
+	    break;
+	default:
+	    DDebug(m_engine,DebugStub,"YIAXThread::run() not defined oper %d",m_oper);
+    }
+    notify(false);
 }
 
-// Run the event retreiving thread
-void YIAXGetEvent::run()
+void YIAXThread::notify(bool final)
 {
-    DDebug(m_engine,DebugAll,"%s started",currentName());
-    m_engine->runGetEvents();
+    if (!m_engine)
+	return;
+    if (!final)
+	DDebug(m_engine,DebugAll,"Thread '%s' terminated [%p]",operThName(),this);
+    else
+	Debug(m_engine,DebugWarn,"Thread '%s' abnormally terminated [%p]",
+	   operThName(),this);
+    m_engine->threadTerminated(this);
+    m_engine = 0;
 }
 
-// Run the trunk sending thread
-void YIAXTrunking::run()
+
+//
+// YIAXEngine
+//
+YIAXEngine::YIAXEngine(const String& name, const char* iface, int port,
+    const NamedList* params)
+    : IAXEngine(iface,port,0,0,params,name),
+    m_initialized(true),
+    m_default(false),
+    m_timeout(0),
+    m_status(Idle),
+    m_bindAddr(iface),
+    m_bindPort(port)
 {
-    DDebug(m_engine,DebugAll,"%s started",currentName());
-    m_engine->runProcessTrunkFrames();
+    if (socket().valid())
+	changeStatus(Listening);
+    else
+	changeStatus(BindFailed);
 }
 
-/**
- * YIAXEngine
- */
-YIAXEngine::YIAXEngine(const char* iface, int port, u_int16_t transListCount,
-	u_int16_t maxFullFrameDataLen, bool authRequired, NamedList* params)
-    : IAXEngine(iface,port,transListCount,maxFullFrameDataLen,0,0,authRequired,params),
-      m_threadsCreated(false)
+void YIAXEngine::changeStatus(int stat)
 {
+    if (stat == m_status)
+	return;
+    Debug(this,DebugInfo,"Status changed %s -> %s [%p]",
+	statusName(),statusName(stat),this);
+    m_status = stat;
+}
+
+bool YIAXEngine::bind(const NamedList& params)
+{
+    bool force = false;
+    getBindAddr(params,m_bindAddr,m_bindPort,&force);
+    if (IAXEngine::bind(m_bindAddr,m_bindPort,force)) {
+	changeStatus(Listening);
+	return true;
+    }
+    changeStatus(BindFailed);
+    return false;
+}
+
+// Schedule for termination
+void YIAXEngine::setTerminate(int stat)
+{
+    setExiting();
+    Lock lck(this);
+    changeStatus(stat);
+    RefPointer<IAXTrunkInfo> ti;
+    trunkInfo(ti);
+    unsigned int tout = ti ? overallTout(ti->m_retransInterval,ti->m_retransCount) :
+	overallTout();
+    ti = 0;
+    tout += s_extendEngTerminate;
+    m_timeout = Time::now() + tout * 1000;
+    Debug(this,DebugAll,"Set terminate timeout=%ums status=%s [%p]",
+	tout,statusName(),this);
 }
 
 // Setup a given transaction from parameters
@@ -1093,57 +1402,23 @@ void YIAXEngine::processMedia(IAXTransaction* transaction, DataBlock& data,
 		src->Forward(data,tStamp,flags);
 	    }
 	    else
-		DDebug(this,DebugAll,"processMedia. No media source");
+		DDebug(this,DebugAll,"processMedia. No media source [%p]",this);
 	}
 	else
-	    DDebug(this,DebugAll,"processMedia. Transaction doesn't have a connection");
+	    DDebug(this,DebugAll,
+		"processMedia. Transaction doesn't have a connection [%p]",this);
     }
     else
-	DDebug(this,DebugAll,"processMedia. No transaction");
-}
-
-// Create a new registration transaction for a line
-bool YIAXEngine::reg(YIAXLine* line, bool regreq)
-{
-    if (!line)
-	return false;
-    SocketAddr addr(AF_INET);
-    addr.host(line->remoteAddr());
-    addr.port(line->remotePort());
-    Debug(this,DebugAll,"%s line=%s username=%s server=%s:%d",
-	regreq ? "Registering" : "Unregistering",line->toString().c_str(),
-	line->username().c_str(),addr.host().c_str(),addr.port());
-    // Create IE list
-    IAXIEList ieList;
-    ieList.appendString(IAXInfoElement::USERNAME,line->username());
-    ieList.appendString(IAXInfoElement::PASSWORD,line->password());
-    ieList.appendNumeric(IAXInfoElement::REFRESH,line->expire(),2);
-    if (line->callToken())
-	ieList.appendBinary(IAXInfoElement::CALLTOKEN,0,0);
-    // Make it !
-    IAXTransaction::Type t = regreq ? IAXTransaction::RegReq : IAXTransaction::RegRel;
-    IAXTransaction* tr = startLocalTransaction(t,addr,ieList,true,false);
-    if (!tr)
-	return false;
-    // Lock lines to protect line transaction pointer
-    Lock lck(s_lines);
-    tr->setUserData(line);
-    line->m_transaction = tr;
-    Debug(&iplugin,DebugAll,"Line(%s) set transaction (%p) callno=%u [%p]",
-	line->toString().c_str(),tr,tr->localCallNo(),line);
-    lck.drop();
-    tr->start();
-    TelEngine::destruct(tr);
-    return true;
+	DDebug(this,DebugAll,"processMedia. No transaction [%p]",this);
 }
 
 // Create a new call transaction from target address and message params
 IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
 {
     Debug(this,DebugAll,
-	"Outgoing Call: username=%s host=%s:%d called=%s called context=%s",
+	"Outgoing Call: username=%s host=%s:%d called=%s called context=%s [%p]",
 	params.getValue("username"),addr.host().c_str(),addr.port(),
-	params.getValue("called"),params.getValue("calledname"));
+	params.getValue("called"),params.getValue("calledname"),this);
     // Set format and capabilities
     u_int32_t audioCaps = capability();
     u_int32_t videoCaps = 0;
@@ -1157,7 +1432,7 @@ IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
     u_int32_t codecs = audioCaps | videoCaps;
     u_int32_t fmt = fmtAudio | fmtVideo;
     if (!fmt) {
-	DDebug(this,DebugNote,"Outgoing call failed: No preffered format");
+	DDebug(this,DebugNote,"Outgoing call failed: No preffered format [%p]",this);
 	params.setParam("error","nomedia");
 	return 0;
     }
@@ -1188,74 +1463,42 @@ IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
 // Create a POKE transaction
 IAXTransaction* YIAXEngine::poke(SocketAddr& addr)
 {
-    Debug(this,DebugAll,"Outgoing POKE: Host: %s Port: %d",addr.host().c_str(),addr.port());
+    Debug(this,DebugAll,"Outgoing POKE: Host: %s Port: %d [%p]",
+	addr.host().c_str(),addr.port(),this);
     IAXIEList ieList;
     return startLocalTransaction(IAXTransaction::Poke,addr,ieList);
 }
 
-void YIAXEngine::start(u_int16_t listenThreadCount, u_int16_t eventThreadCount, u_int16_t trunkThreadCount)
+// Cancel threads
+void YIAXEngine::cancelThreads(unsigned int waitTerminateMs)
 {
-    if (m_threadsCreated)
+    Lock lck(this);
+    ObjList* o = m_threads.skipNull();
+    if (!o)
 	return;
-    if (!listenThreadCount)
-	Debug(this,DebugWarn,"YIAXEngine. No reading socket threads(s)!");
-    if (!eventThreadCount)
-	Debug(this,DebugWarn,"YIAXEngine. No reading event threads(s)!");
-    if (!trunkThreadCount)
-	Debug(this,DebugWarn,"YIAXEngine. No trunking threads(s)!");
-    for (; listenThreadCount; listenThreadCount--)
-	(new YIAXListener(this,"YIAX Listener",s_priority))->startup();
-    for (; eventThreadCount; eventThreadCount--)
-	(new YIAXGetEvent(this,"YIAX GetEvent"))->startup();
-    for (; trunkThreadCount; trunkThreadCount--)
-	(new YIAXTrunking(this,"YIAX Trunking",s_priority))->startup();
-    m_threadsCreated = true;
+    for (; o; o = o->skipNext())
+	(static_cast<YIAXThread*>(o->get()))->cancel(false);
+    if (!waitTerminateMs)
+	return;
+    lck.drop();
+    unsigned int intervals = waitTerminateMs / Thread::idleMsec();
+    if (!intervals)
+	intervals++;
+    for (; intervals; intervals--) {
+	Thread::idle(false);
+	if (Thread::check(false))
+	    break;
+	Lock lck(this);
+	if (!m_threads.skipNull())
+	    break;
+    }
 }
 
-// Initialize formats from config
-void YIAXEngine::initFormats(NamedList* params)
+void YIAXEngine::destroyed()
 {
-    NamedList dummy("");
-    if (!params)
-	params = &dummy;
-    u_int32_t codecsAudio = 0;
-    u_int32_t codecsVideo = 0;
-    u_int32_t defAudio = 0;
-    u_int32_t defVideo = 0;
-    bool def = params->getBoolValue("default",true);
-    const TokenDict* dicts[2] = {dict_payloads,dict_payloads_video};
-    for (int i = 0; i < 2; i++) {
-	u_int32_t fallback = 0;
-	bool audio = (i == 0);
-	const char* media = audio ? "audio" : "video";
-	const String& preferred = (*params)[audio ? "preferred" : "preferred_video"];
-	u_int32_t& codecs = audio ? codecsAudio : codecsVideo;
-	u_int32_t& defaultCodec = audio ? defAudio : defVideo;
-	for (const TokenDict* d = dicts[i]; d->token; d++) {
-	    bool defVal = def && DataTranslator::canConvert(d->token);
-	    if (!params->getBoolValue(d->token,defVal))
-		continue;
-	    XDebug(this,DebugAll,"Adding supported %s codec %u: '%s'.",
-		media,d->value,d->token);
-	    codecs |= d->value;
-	    fallback = d->value;
-	    // Set default (desired) codec
-	    if (!defaultCodec && preferred == d->token)
-		defaultCodec = d->value;
-	}
-	// If desired codec is disabled fall back to last in list
-	if (!defaultCodec)
-	    defaultCodec = fallback;
-	if (codecs) {
-	    String tmp;
-	    IAXFormat::formatList(tmp,codecs,dicts[i]);
-	    Debug(&iplugin,DebugAll,"Enabled %s format(s) '%s' default=%s",
-		media,tmp.c_str(),lookup(defaultCodec,dicts[i],""));
-	}
-	else
-	    Debug(&iplugin,audio ? DebugWarn : DebugAll,"No %s format(s) available",media);
-    }
-    setFormats(codecsAudio | codecsVideo,defAudio,defVideo);
+    cancelThreads();
+    Debug(this,DebugAll,"Destroyed [%p]",this);
+    RefObject::destroyed();
 }
 
 // Process all IAX events
@@ -1276,29 +1519,31 @@ void YIAXEngine::processEvent(IAXEvent* event)
 		conn->handleEvent(event);
 		if (event->final()) {
 		    // Final event: disconnect
-		    DDebug(this,DebugAll,"processEvent. Disconnecting (%p): '%s'",
-			conn,conn->id().c_str());
+		    DDebug(this,DebugAll,"processEvent. Disconnecting (%p): '%s' [%p]",
+			conn,conn->id().c_str(),this);
 		    conn->disconnect();
 		}
 		TelEngine::destruct(conn);
 	    }
 	    else {
-		Debug(this,DebugNote,"No connection (%p) for transaction (%p) callno=%u",
-		    conn,tr,tr->localCallNo());
+		Debug(this,DebugNote,
+		    "No connection (%p) for transaction (%p) callno=%u [%p]",
+		    conn,tr,tr->localCallNo(),this);
 		tr->setDestroy();
 	    }
 	}
 	else if (event->type() == IAXEvent::New) {
 	    // Incoming request for a new call
-	    if (iplugin.canAccept(true)) {
-		YIAXConnection* conn = new YIAXConnection(this,tr);
+	    if (iplugin.canAccept(true) && !exiting()) {
+		YIAXConnection* conn = new YIAXConnection(tr);
 		conn->initChan();
 		tr->setUserData(conn);
 		if (!conn->route(event))
 		    tr->setUserData(0);
 	    }
 	    else {
-		Debug(&iplugin,DebugWarn,"Refusing new IAX call, full or exiting");
+		Debug(&iplugin,DebugWarn,"Refusing new IAX call, full or exiting [%p]",
+		    this);
 		// Cause code 42: switch congestion
 		tr->sendReject(0,42);
 	    }
@@ -1319,7 +1564,7 @@ bool YIAXEngine::mediaFormatChanged(IAXTransaction* trans, int type, u_int32_t f
 {
     if (!trans)
 	return false;
-    Debug(this,DebugNote,"Refusing media change for transaction (%p)",trans);
+    Debug(this,DebugNote,"Refusing media change for transaction (%p) [%p]",trans,this);
     // TODO: implement
     return false;
 }
@@ -1328,11 +1573,12 @@ bool YIAXEngine::mediaFormatChanged(IAXTransaction* trans, int type, u_int32_t f
 void YIAXEngine::processRemoteReg(IAXEvent* event, bool first)
 {
     IAXTransaction* tr = event->getTransaction();
-    DDebug(this,DebugAll,"processRemoteReg: %s username: '%s'",
-	tr->type() == IAXTransaction::RegReq?"Register":"Unregister",tr->username().c_str());
+    DDebug(this,DebugAll,"processRemoteReg: %s username: '%s' [%p]",
+	tr->type() == IAXTransaction::RegReq?"Register":"Unregister",
+	tr->username().c_str(),this);
     // Check for automatomatically authentication request if it's the first request
-    if (first && iplugin.getEngine()->authRequired()) {
-	DDebug(this,DebugAll,"processRemoteReg. Requesting authentication");
+    if (first && s_authReq) {
+	DDebug(this,DebugAll,"processRemoteReg. Requesting authentication [%p]",this);
 	tr->sendAuth();
 	return;
     }
@@ -1350,24 +1596,24 @@ void YIAXEngine::processRemoteReg(IAXEvent* event, bool first)
 		if (expires < 1)
 		    expires = s_expires_def;
 		exp = expires;
-		Debug(&iplugin,DebugNote,"Registered user '%s' expires in %u s",
-		    user,exp);
+		Debug(&iplugin,DebugNote,"Registered user '%s' expires in %us [%p]",
+		    user,exp,this);
 	    }
 	    else
-		Debug(&iplugin,DebugNote,"Unregistered user '%s'",user);
+		Debug(&iplugin,DebugNote,"Unregistered user '%s' [%p]",user,this);
 	    tr->sendAccept(&exp);
 	    TelEngine::destruct(msg);
 	}
 	else {
-	    Debug(&iplugin,DebugNote,"%s failed for authenticated user '%s'",
-		regrel ? "Unregister" : "Register",user);
+	    Debug(&iplugin,DebugNote,"%s failed for authenticated user '%s' [%p]",
+		regrel ? "Unregister" : "Register",user,this);
 	    tr->sendReject("not registered");
 	}
 	return;
     }
     // First request: check if we should request auth
     if (first && requestAuth) {
-	DDebug(this,DebugAll,"processRemoteReg. Requesting authentication");
+	DDebug(this,DebugAll,"processRemoteReg. Requesting authentication [%p]",this);
 	tr->sendAuth();
 	return;
     }
@@ -1376,31 +1622,24 @@ void YIAXEngine::processRemoteReg(IAXEvent* event, bool first)
 	reason = IAXTransaction::s_iax_modInvalidAuth;
     if (!reason)
 	reason = "not authenticated";
-    Debug(&iplugin,DebugNote,"User '%s' addr=%s:%d not authenticated reason=%s'",
+    Debug(&iplugin,DebugNote,"User '%s' addr=%s:%d not authenticated reason=%s' [%p]",
 	tr->username().c_str(),tr->remoteAddr().host().c_str(),
-	tr->remoteAddr().port(),reason);
+	tr->remoteAddr().port(),reason,this);
     tr->sendReject(reason);
 }
 
 // Build and dispatch the user.(un)register message
 Message* YIAXEngine::userreg(IAXTransaction* tr, bool regrel)
 {
-    DDebug(this,DebugAll,"YIAXEngine - userreg. %s username: '%s'",
-	regrel ? "Unregistering":"Registering",tr->username().c_str());
+    DDebug(this,DebugAll,"YIAXEngine - userreg. %s username: '%s' [%p]",
+	regrel ? "Unregistering":"Registering",tr->username().c_str(),this);
     Message* msg = new Message(regrel ? "user.unregister" : "user.register");
     msg->addParam("username",tr->username());
     msg->addParam("driver","iax");
     if (!regrel) {
-	String data = "iax/iax2:";
-	data << tr->username() << "@";
-	data << tr->remoteAddr().host() << ":" << tr->remoteAddr().port();
-	const char* called = tr->calledNo();
-	const char* context = tr->calledContext();
-	if (called || context) {
-	    data << "/" << called;
-	    if (context)
-		data << "@" << context;
-	}
+	IAXURI uri(tr->username(),tr->remoteAddr().host(),tr->calledNo(),
+	    tr->calledContext(),tr->remoteAddr().port());
+	String data = "iax/" + uri;
 	msg->addParam("data",data);
 	unsigned int exp = tr->expire();
 	if (!exp)
@@ -1413,11 +1652,59 @@ Message* YIAXEngine::userreg(IAXTransaction* tr, bool regrel)
     }
     msg->addParam("ip_host",tr->remoteAddr().host());
     msg->addParam("ip_port",String(tr->remoteAddr().port()));
+    fillMessage(*msg);
     if (!Engine::dispatch(*msg))
 	TelEngine::destruct(msg);
     return msg;
 }
 
+void YIAXEngine::createThreads(const NamedList& params)
+{
+    unsigned int read = params.getIntValue("read_threads",Engine::clientMode() ? 1 : 3,1);
+    unsigned int event = params.getIntValue("event_threads",Engine::clientMode() ? 1 : 3,1);
+    unsigned int trunking = params.getIntValue("trunk_threads",1,0);
+    Thread::Priority prio = Thread::priority(params.getValue("thread"));
+    createThreads(read,YIAXThread::Listener,prio);
+    createThreads(event,YIAXThread::GetEvent,Thread::Normal);
+    createThreads(trunking,YIAXThread::Trunking,prio);
+}
+
+void YIAXEngine::createThreads(unsigned int count, int oper, Thread::Priority prio)
+{
+    if (!count)
+	return;
+    Lock lck(this);
+    unsigned int n = 0;
+    for (unsigned int i = 0; i < count; i++) {
+	YIAXThread* th = new YIAXThread(this,oper,prio);
+	if (!th->startup())
+	    continue;
+	m_threads.append(th)->setDelete(false);
+	n++;
+    }
+    if (n && oper == YIAXThread::Trunking)
+	m_trunking = -1;
+    if (n == count)
+	Debug(this,DebugAll,"Created %u '%s' threads [%p]",
+	    n,lookup(oper,YIAXThread::s_operThName),this);
+    else
+	Debug(this,DebugNote,"Created %u/%u '%s' threads [%p]",
+	    n,count,lookup(oper,YIAXThread::s_operThName),this);
+}
+
+void YIAXEngine::threadTerminated(YIAXThread* th)
+{
+    if (!th)
+	return;
+    Lock lck(this);
+    if (m_threads.remove(th,false))
+	Debug(this,DebugAll,"Thread (%p) '%s' terminated [%p]",th,th->operThName(),this);
+}
+
+
+//
+// YIAXRegDataHandler
+//
 // Handler for outgoing registration messages
 bool YIAXRegDataHandler::received(Message& msg)
 {
@@ -1431,8 +1718,20 @@ bool YIAXRegDataHandler::received(Message& msg)
     return true;
 }
 
+
+//
+// YIAXDriver
+//
 YIAXDriver::YIAXDriver()
-    : Driver("iax","varchans"), m_failedAuths(0), m_port(4569)
+    : Driver("iax","varchans"),
+    m_enginesMutex(false,"IAXEngineList"),
+    m_defaultEngine(0),
+    m_haveEngTerminate(0),
+    m_format(0),
+    m_formatVideo(0),
+    m_capability(0),
+    m_failedAuths(0),
+    m_init(true)
 {
     Output("Loaded module YIAX");
 }
@@ -1444,7 +1743,7 @@ YIAXDriver::~YIAXDriver()
     channels().clear();
     unlock();
     s_lines.clear(true);
-    delete m_iaxEngine;
+    m_engines.clear();
 }
 
 void YIAXDriver::initialize()
@@ -1452,68 +1751,53 @@ void YIAXDriver::initialize()
     Output("Initializing module YIAX");
     // Load configuration
     Configuration cfg(Engine::configFile("yiaxchan"));
-    NamedList* gen = cfg.getSection("general");
-    NamedList dummy("general");
-    if (!gen)
-	gen = &dummy;
-    s_callTokenOut = gen->getBoolValue("calltoken_out",true);
-    NamedList* registrar = cfg.getSection("registrar");
-    if (!registrar)
-	registrar = &dummy;
-    s_expires_min = registrar->getIntValue("expires_min",60,1);
-    s_expires_max = registrar->getIntValue("expires_max",3600,s_expires_min);
-    s_expires_def = registrar->getIntValue("expires_def",60,s_expires_min,s_expires_max);
+    const NamedList& gen = safeSect(cfg,"general");
+    const NamedList& registrar = safeSect(cfg,"registrar");
+    s_callTokenOut = gen.getBoolValue("calltoken_out",true);
+    maxChans(gen.getIntValue("maxchans",maxChans()));
+    s_expires_min = registrar.getIntValue("expires_min",60,1);
+    s_expires_max = registrar.getIntValue("expires_max",3600,s_expires_min);
+    s_expires_def = registrar.getIntValue("expires_def",60,s_expires_min,s_expires_max);
+    s_authReq = registrar.getBoolValue("auth_required",true);
+    initFormats(safeSect(cfg,"formats"));
     DDebug(this,DebugAll,
 	"Initialized calltoken_out=%s expires_min=%u expires_max=%u expires_def=%u",
 	String::boolText(s_callTokenOut),s_expires_min,s_expires_max,s_expires_def);
-    // Setup driver if this is the first call
-    if (m_iaxEngine) {
-	m_iaxEngine->initialize(*gen);
-	m_iaxEngine->initFormats(cfg.getSection("formats"));
-	maxChans(gen->getIntValue("maxchans",maxChans()));
-	return;
+    if (m_init) {
+	setup();
+	installRelay(Halt);
+	installRelay(Route);
+	installRelay(Progress);
+	installRelay(Status);
+	installRelay(EngineStop,"engine.stop");
+	Engine::install(new YIAXRegDataHandler(name()));
+	m_init = false;
     }
-    setup();
-    installRelay(Halt);
-    installRelay(Route);
-    installRelay(Progress);
-    installRelay(Status);
-    Engine::install(new YIAXRegDataHandler);
-    // Init IAX engine
-    u_int16_t transListCount = 64;
-    u_int16_t maxFullFrameDataLen = 1400;
-    m_port = gen->getIntValue("port",4569);
-    String iface = gen->getValue("addr","0.0.0.0");
-    // set max chans
-    maxChans(gen->getIntValue("maxchans",maxChans()));
-    bool authReq = cfg.getBoolValue("registrar","auth_required",true);
-    m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,
-	maxFullFrameDataLen,authReq,gen);
-    m_iaxEngine->debugChain(this);
-    m_iaxEngine->initFormats(cfg.getSection("formats"));
-    int tos = gen->getIntValue("tos",dict_tos,0);
-    if (tos && !m_iaxEngine->socket().setTOS(tos))
-	Debug(this,DebugWarn,"Could not set IP TOS to 0x%02x",tos);
-    s_priority = Thread::priority(gen->getValue("thread"),s_priority);
-    DDebug(this,DebugInfo,"Default thread priority set to '%s'",Thread::priority(s_priority));
-    int readThreadCount = gen->getIntValue("read_threads",Engine::clientMode() ? 1 : 3);
-    if (readThreadCount < 1)
-	readThreadCount = 1;
-    int eventThreadCount = gen->getIntValue("event_threads",Engine::clientMode() ? 1 : 3);
-    if (eventThreadCount < 1)
-	eventThreadCount = 1;
-    int trunkingThreadCount = gen->getIntValue("trunk_threads",1);
-    if (trunkingThreadCount < 1)
-	trunkingThreadCount = 1;
-    m_iaxEngine->start(readThreadCount,eventThreadCount,trunkingThreadCount);
-}
-
-// Add specific module update parameters
-void YIAXDriver::genUpdate(Message& msg)
-{
-    unsigned int tmp = m_failedAuths;
-    m_failedAuths = 0;
-    msg.setParam("failed_auths",String(tmp));
+    engineListChanging(true);
+    bool upd = false;
+    setupEngine(s_iaxEngineName,upd,true,gen.getBoolValue("default",true),gen);
+    unsigned int n = cfg.sections();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedList* p = cfg.getSection(i);
+	if (!p)
+	    continue;
+	String name = *p;
+	if (!name.startSkip("listener ",false))
+	    continue;
+	name.trimBlanks();
+	if (!name)
+	    continue;
+	if (isGeneralEngine(name)) {
+	    Debug(this,DebugConf,"Ignoring section '%s': '%s' is reserved",p->c_str(),name.c_str());
+	    continue;
+	}
+	bool enable = p->getBoolValue("enable",true);
+	bool def = p->getBoolValue("default");
+	setupEngine(name,upd,enable,def,*p,&gen);
+    }
+    engineListChanging(false);
+    if (upd)
+	s_lines.updateEngine();
 }
 
 // Check if we have a line
@@ -1573,15 +1857,23 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
 	msg.setParam("error","failure");
 	return false;
     }
-    IAXTransaction* tr = m_iaxEngine->call(addr,params);
-    if (!tr) {
-	msg.copyParams(params,"error");
+    RefPointer<YIAXEngine> engine;
+    if (!(findEngine(engine,msg,"o",line) && engine->valid())) {
+	Debug(this,DebugNote,"IAX call failed: no listener");
+	msg.setParam("error","notransport");
+	engine = 0;
 	return false;
     }
-    YIAXConnection* conn = new YIAXConnection(m_iaxEngine,tr,&msg,&params);
+    IAXTransaction* tr = engine->call(addr,params);
+    if (!tr) {
+	msg.copyParams(params,"error");
+	engine = 0;
+	return false;
+    }
+    YIAXConnection* conn = new YIAXConnection(tr,&msg,&params);
     conn->initChan();
     tr->setUserData(conn);
-    m_iaxEngine->initTransaction(tr,msg,line);
+    engine->initTransaction(tr,msg,line);
     tr->start();
     if (conn->connect(ch,msg.getValue("reason"))) {
 	conn->callConnect(msg);
@@ -1594,29 +1886,87 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
     }
     TelEngine::destruct(tr);
     line = 0;
+    engine = 0;
     conn->deref();
     return true;
 }
 
 bool YIAXDriver::received(Message& msg, int id)
 {
-    if (id == Timer)
+    if (id == Timer) {
 	s_lines.evTimer(msg.msgTime());
-    else 
-	if (id == Halt) {
-	    dropAll(msg);
-	    channels().clear();
-	    s_lines.clear();
+	if (m_haveEngTerminate)
+	    checkEngineTerminate(msg.msgTime());
+	return Driver::received(msg,id);
+    }
+    if (id == Status) {
+	String target = msg.getValue("module");
+	if (target && target.startsWith(name(),true) && !target.startsWith(prefix())) {
+	    msgStatus(msg);
+	    return false;
 	}
-    else
-	if (id == Status) {
-	    String target = msg.getValue("module");
-	    if (target && target.startsWith(name(),true) && !target.startsWith(prefix())) {
-		msgStatus(msg);
-		return false;
-	    }
-	}
+	return Driver::received(msg,id);
+    }
+    if (id == EngineStop) {
+	s_engineStop++;
+	if (s_engineStop == 1)
+	    terminateEngine(0,false,YIAXEngine::Exiting);
+	if (m_haveEngTerminate)
+	    checkEngineTerminate(msg.msgTime());
+	if (m_haveEngTerminate)
+	    Debug(this,DebugAll,"Returning true from '%s' handler",msg.c_str());
+	return m_haveEngTerminate != 0;
+    }
+    if (id == Halt) {
+	dropAll(msg);
+	lock();
+	channels().clear();
+	unlock();
+	s_lines.clear(true);
+	terminateEngine(0,true,YIAXEngine::Exiting);
+	return Driver::received(msg,id);
+    }
     return Driver::received(msg,id);
+}
+
+// Find an engine from parameters. Return a refferenced pointer
+bool YIAXDriver::findEngine(RefPointer<YIAXEngine>& eng, const NamedList& params,
+    const String& prefix, YIAXLine* line, NamedList* copyParams)
+{
+    if (copyParams) {
+	if (prefix)
+	    copyParams->copySubParams(params,prefix);
+	else
+	    copyParams->copyParams(params,
+		"connection_id,ip_transport_localip,ip_transport_localport");
+    }
+    Lock lck(m_enginesMutex);
+    const String& engName = params[prefix + "connection_id"];
+    if (engName) {
+	eng = findEngine(engName);
+	if (eng)
+	    return true;
+    }
+    String addr = params[prefix + "ip_transport_localip"];
+    addr.trimBlanks();
+    if (addr) {
+	int port = IAXEngine::getPort(params,prefix + "ip_transport_localport");
+	eng = findEngine(addr,port);
+	if (eng)
+	    return true;
+    }
+    // Done if engine name and/or local ip were given
+    if (engName || addr)
+	return false;
+    // Check for line engine
+    if (line) {
+	Lock lck(line);
+	eng = line->engine();
+	if (eng)
+	    return true;
+    }
+    eng = m_defaultEngine;
+    return eng != 0;
 }
 
 // Extract individual codecs from 'formats'
@@ -1698,15 +2048,136 @@ bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
     return true;
 }
 
+// Start stop engine list changes
+void YIAXDriver::engineListChanging(bool start)
+{
+    m_enginesMutex.lock();
+    if (start)
+	for (ObjList* o = m_engines.skipNull(); o; o = o->skipNext())
+	    (static_cast<YIAXEngine*>(o->get()))->m_initialized = false;
+    else {
+	ListIterator iter(m_engines);
+	for (GenObject* gen = 0; 0 != (gen = iter.get());) {
+	    YIAXEngine* engine = static_cast<YIAXEngine*>(gen);
+	    if (engine->m_initialized)
+		continue;
+	    RefPointer<YIAXEngine> eng = engine;
+	    if (!eng)
+		continue;
+	    m_enginesMutex.unlock();
+	    terminateEngine(eng,false,YIAXEngine::Removed);
+	    eng = 0;
+	    m_enginesMutex.lock();
+	}
+	updateDefaultEngine();
+    }
+    m_enginesMutex.unlock();
+}
+
+// Setup an engine
+void YIAXDriver::setupEngine(const String& name, bool& valid, bool enable, bool def,
+    const NamedList& params, const NamedList* defaults)
+{
+    if (!name)
+	return;
+    Lock lck(m_enginesMutex);
+    NamedList p("");
+    const NamedList* init = &params;
+    if (enable && defaults) {
+	p.copyParams(*defaults);
+	if (!isGeneralEngine(name))
+	    clearListParams(p,s_delEngParams);
+	p.copyParams(params);
+	init = &p;
+    }
+#ifdef XDEBUG
+    String s;
+    init->dump(s,"\r\n");
+    Debug(this,DebugAll,"setupEngine(%s,%u,%u)%s",name.c_str(),enable,def,s.safe());
+#endif
+    YIAXEngine* eng = findEngine(name);
+    bool bound = false;
+    if (eng) {
+	eng->m_initialized = true;
+	eng->m_default = def;
+	if (!enable) {
+	    if (!eng->exiting() && eng->ref()) {
+		lck.drop();
+		terminateEngine(eng,false,YIAXEngine::Disabled);
+		eng->deref();
+	    }
+	    return;
+	}
+	if (eng->exiting()) {
+	    Debug(this,DebugConf,
+		"Ignoring init for listener '%s': scheduled for termination",name.c_str());
+	    return;
+	}
+	if (!eng->bound()) {
+	    bound = eng->bind(params);
+	    if (!bound)
+		return;
+	}
+	eng->initialize(*init);
+    }
+    else if (enable) {
+	String addr;
+	int port = 0;
+	getBindAddr(params,addr,port);
+	// Create the engine
+	eng = new YIAXEngine(name,addr,port,init);
+	eng->m_default = def;
+	bound = eng->bound();
+	m_engines.append(eng);
+	Debug(this,DebugInfo,"Added listener (%p) '%s' status='%s'",
+	    eng,eng->name().c_str(),eng->statusName());
+    }
+    else
+	return;
+    if (bound) {
+	int tos = init->getIntValue("tos",dict_tos,0);
+	if (tos && !eng->socket().setTOS(tos))
+	    Debug(eng,DebugWarn,"Could not set IP TOS to 0x%02x",tos);
+	eng->createThreads(*init);
+	valid = true;
+    }
+    // Init engine parameters from module
+    eng->setFormats(m_capability,m_format,m_formatVideo);
+}
+
+// Terminate exiting engines
+void YIAXDriver::checkEngineTerminate(const Time& now)
+{
+    m_enginesMutex.lock();
+    if (!m_haveEngTerminate) {
+	m_enginesMutex.unlock();
+	return;
+    }
+    ListIterator iter(m_engines);
+    for (GenObject* gen = 0; 0 != (gen = iter.get());) {
+	YIAXEngine* engine = static_cast<YIAXEngine*>(gen);
+	if (!engine->exiting())
+	    continue;
+	RefPointer<YIAXEngine> eng = engine;
+	if (!eng)
+	    continue;
+	m_enginesMutex.unlock();
+	if (eng->timeout(now) || !eng->haveTransactions())
+	    terminateEngine(eng,true,eng->m_status);
+	eng = 0;
+	m_enginesMutex.lock();
+    }
+    m_enginesMutex.unlock();
+}
+
 bool YIAXDriver::commandComplete(Message& msg, const String& partLine, const String& partWord)
 {
-    String cmd = s_statusCmd + " " + name();
-    String overviewCmd = s_statusCmd + " overview " + name();
-    if (partLine == cmd || partLine == overviewCmd)
+    if (partLine == ("status " + name()) ||
+	partLine == ("status overview " + name())) {
 	itemComplete(msg.retValue(),"accounts",partWord);
-    else 
-    	return Driver::commandComplete(msg,partLine,partWord);
-    return false;
+	itemComplete(msg.retValue(),"listeners",partWord);
+    }
+    return Driver::commandComplete(msg,partLine,partWord);
 }
 
 void YIAXDriver::msgStatus(Message& msg)
@@ -1717,38 +2188,228 @@ void YIAXDriver::msgStatus(Message& msg)
 	if (str.null())
 	    break;
 	if (str.startSkip("accounts")) {
-	    msg.retValue().clear();
-	    msg.retValue() << "module=" << name();
-	    msg.retValue() << ",protocol=IAX";
-	    msg.retValue() << ",format=Username|Status;";
-	    unsigned int n = 0;
-	    String det;
-	    bool details = msg.getBoolValue("details",true);
-	    s_lines.lock();
-	    for (ObjList* o = s_lines.lines().skipNull(); o; o = o->skipNext()) {
-		n++;
-		if (!details)
-		    continue;
-		YIAXLine* line = static_cast<YIAXLine*>(o->get());
-		Lock lckLine(line);
-		det.append(line->toString(),",") << "=";
-		det.append(line->username()) << "|";
-		det << (line->registered() ? "online" : "offline");
-	    }
-	    s_lines.unlock();
-	    msg.retValue() << "accounts=" << n;
-	    msg.retValue().append(det,";"); 
-	    msg.retValue() << "\r\n";
+	    msgStatusAccounts(msg);
+	    return;
+	}
+	if (str.startSkip("listeners")) {
+	    msgStatusListeners(msg);
 	    return;
 	}
     }
     Driver::msgStatus(msg);
 }
 
+void YIAXDriver::msgStatusAccounts(Message& msg)
+{
+    msg.retValue().clear();
+    msg.retValue() << "module=" << name();
+    msg.retValue() << ",protocol=IAX";
+    msg.retValue() << ",format=Username|Status;";
+    unsigned int n = 0;
+    String det;
+    bool details = msg.getBoolValue("details",true);
+    s_lines.lock();
+    for (ObjList* o = s_lines.lines().skipNull(); o; o = o->skipNext()) {
+	n++;
+	if (!details)
+	    continue;
+	YIAXLine* line = static_cast<YIAXLine*>(o->get());
+	Lock lckLine(line);
+	det.append(line->toString(),",") << "=";
+	det.append(line->username()) << "|";
+	det << (line->registered() ? "online" : "offline");
+    }
+    s_lines.unlock();
+    msg.retValue() << "accounts=" << n;
+    msg.retValue().append(det,";"); 
+    msg.retValue() << "\r\n";
+}
 
-/**
- * IAXConsumer
- */
+void YIAXDriver::msgStatusListeners(Message& msg)
+{
+    msg.retValue().clear();
+    msg.retValue() << "module=" << name();
+    msg.retValue() << ",protocol=IAX";
+    msg.retValue() << ",format=Address|Status|Transactions;";
+    unsigned int n = 0;
+    String det;
+    bool details = msg.getBoolValue("details",true);
+    String def;
+    m_enginesMutex.lock();
+    ListIterator iter(m_engines);
+    for (GenObject* gen = 0; 0 != (gen = iter.get());) {
+	RefPointer<YIAXEngine> e = static_cast<YIAXEngine*>(gen);
+	if (!e)
+	    continue;
+	n++;
+	if (e == m_defaultEngine)
+	    def = e->name();
+	if (!details)
+	    continue;
+	det.append(e->toString(),",") << "=";
+	if (e->bound())
+	    det << e->addr().host() << ":" << e->addr().port();
+	else
+	    det << e->m_bindAddr << ":" << e->m_bindPort;
+	det << "|" << e->statusName();
+	m_enginesMutex.unlock();
+	det << "|" << e->transactionCount();
+	m_enginesMutex.lock();
+    }
+    m_enginesMutex.unlock();
+    msg.retValue() << "listeners=" << n << ",default=" << def;
+    msg.retValue().append(det,";"); 
+    msg.retValue() << "\r\n";
+}
+
+// Add specific module update parameters
+void YIAXDriver::genUpdate(Message& msg)
+{
+    unsigned int tmp = m_failedAuths;
+    m_failedAuths = 0;
+    msg.setParam("failed_auths",String(tmp));
+}
+
+// Update default engine
+void YIAXDriver::updateDefaultEngine()
+{
+    YIAXEngine* def = 0;
+    for (ObjList* o = m_engines.skipNull(); o; o = o->skipNext()) {
+	YIAXEngine* eng = static_cast<YIAXEngine*>(o->get());
+	if (!eng->valid())
+	    continue;
+	if (eng->m_default && !def) {
+	    def = eng;
+	    break;
+	}
+    }
+    m_defaultEngine = def;
+    if (s_engineStop)
+	return;
+    if (m_defaultEngine)
+	Debug(this,DebugInfo,"Default listener is '%s'",def->name().c_str());
+    else
+	Debug(this,DebugNote,"No default listener set");
+}
+
+// Terminate an engine
+void YIAXDriver::terminateEngine(YIAXEngine* eng, bool final, int reason)
+{
+    XDebug(this,DebugAll,"terminateEngine(%p,%u,%d)",eng,final,reason);
+    if (!eng) {
+	m_enginesMutex.lock();
+	ListIterator iter(m_engines);
+	for (GenObject* gen = 0; 0 != (gen = iter.get());) {
+	    RefPointer<YIAXEngine> e = static_cast<YIAXEngine*>(gen);
+	    if (!e)
+		continue;
+	    m_enginesMutex.unlock();
+	    terminateEngine(e,final,reason);
+	    e = 0;
+	    m_enginesMutex.lock();
+	}
+	m_enginesMutex.unlock();
+	return;
+    }
+    // Already set to terminate ?
+    if (!final && eng->exiting())
+	return;
+    if (!eng->exiting()) {
+	eng->setTerminate(reason);
+	// Unregister all users registered using this engine
+	Message* m = new Message("user.unregister");
+	m->addParam("module",name());
+	m->addParam("connection_id",eng->toString());
+	Engine::enqueue(m);
+    }
+    // Drop all calls using the engine
+    lock();
+    ListIterator iter(channels());
+    for (GenObject* gen = 0; 0 != (gen = iter.get());) {
+	RefPointer<YIAXConnection> c = static_cast<YIAXConnection*>(gen);
+	if (!c)
+	    continue;
+	unlock();
+	c->m_mutexTrans.lock();
+	if (c->m_transaction && c->m_transaction->getEngine() == eng) {
+	    c->disconnect("notransport");
+	    if (final)
+		c->resetTransaction();
+	}
+	c->m_mutexTrans.unlock();
+	c = 0;
+	lock();
+    }
+    unlock();
+    // Unregister all lines using the engine
+    s_lines.clear(final,eng);
+    Lock lck(m_enginesMutex);
+    // Remove the engine from list
+    if (final && m_engines.remove(eng,false)) {
+	Debug(this,DebugInfo,"Removed listener (%p) '%s' status='%s'",
+	    eng,eng->name().c_str(),eng->statusName());
+	if (eng == m_defaultEngine)
+	    updateDefaultEngine();
+	TelEngine::destruct(eng);
+    }
+    // Update engine terminate count
+    unsigned int n = 0;
+    for (ObjList* o = m_engines.skipNull(); o; o = o->skipNext())
+	if ((static_cast<YIAXEngine*>(o->get()))->exiting())
+	    n++;
+    m_haveEngTerminate = n;
+}
+
+// Initialize formats from config
+void YIAXDriver::initFormats(const NamedList& params)
+{
+    Lock lck(m_enginesMutex);
+    u_int32_t codecsAudio = 0;
+    u_int32_t codecsVideo = 0;
+    u_int32_t defAudio = 0;
+    u_int32_t defVideo = 0;
+    bool def = params.getBoolValue("default",true);
+    const TokenDict* dicts[2] = {dict_payloads,dict_payloads_video};
+    for (int i = 0; i < 2; i++) {
+	u_int32_t fallback = 0;
+	bool audio = (i == 0);
+	const char* media = audio ? "audio" : "video";
+	const String& preferred = params[audio ? "preferred" : "preferred_video"];
+	u_int32_t& codecs = audio ? codecsAudio : codecsVideo;
+	u_int32_t& defaultCodec = audio ? defAudio : defVideo;
+	for (const TokenDict* d = dicts[i]; d->token; d++) {
+	    bool defVal = def && DataTranslator::canConvert(d->token);
+	    if (!params.getBoolValue(d->token,defVal))
+		continue;
+	    XDebug(this,DebugAll,"Adding supported %s codec %u: '%s'.",
+		media,d->value,d->token);
+	    codecs |= d->value;
+	    fallback = d->value;
+	    // Set default (desired) codec
+	    if (!defaultCodec && preferred == d->token)
+		defaultCodec = d->value;
+	}
+	// If desired codec is disabled fall back to last in list
+	if (!defaultCodec)
+	    defaultCodec = fallback;
+	if (codecs) {
+	    String tmp;
+	    IAXFormat::formatList(tmp,codecs,dicts[i]);
+	    Debug(this,DebugAll,"Enabled %s format(s) '%s' default=%s",
+		media,tmp.c_str(),lookup(defaultCodec,dicts[i],""));
+	}
+	else
+	    Debug(this,audio ? DebugWarn : DebugAll,"No %s format(s) available",media);
+    }
+    m_format = defAudio;
+    m_formatVideo = defVideo;
+    m_capability = codecsAudio | codecsVideo;
+}
+
+
+//
+// IAXConsumer
+//
 YIAXConsumer::YIAXConsumer(YIAXConnection* conn, u_int32_t format,
     const char* formatText, int type)
     : DataConsumer(formatText),
@@ -1777,9 +2438,9 @@ unsigned long YIAXConsumer::Consume(const DataBlock& data, unsigned long tStamp,
     return sent;
 }
 
-/**
- * YIAXSource
- */
+//
+// YIAXSource
+//
 YIAXSource::YIAXSource(YIAXConnection* conn, u_int32_t format, const char* formatText, int type) 
     : DataSource(formatText),
     YIAXData(conn,format,type)
@@ -1802,15 +2463,15 @@ unsigned long YIAXSource::Forward(const DataBlock& data, unsigned long tStamp, u
     return DataSource::Forward(data,tStamp,flags);
 }
 
-/**
- * YIAXConnection
- */
-YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* tr, Message* msg,
-    NamedList* params)
+//
+// YIAXConnection
+//
+YIAXConnection::YIAXConnection(IAXTransaction* tr, Message* msg, NamedList* params)
     : Channel(&iplugin,0,tr->outgoing()),
-      m_iaxEngine(iaxEngine), m_transaction(tr), m_mutedIn(false), m_mutedOut(false),
+      m_transaction(tr), m_mutedIn(false), m_mutedOut(false),
       m_audio(false), m_video(false),
       m_hangup(true),
+      m_mutexChan(true,"YIAXConnection"),
       m_mutexTrans(true,"YIAXConnection::trans"),
       m_mutexRefIncreased(true,"YIAXConnection::refIncreased"),
       m_refIncreased(false),
@@ -1848,19 +2509,20 @@ void YIAXConnection::callAccept(Message& msg)
     DDebug(this,DebugCall,"callAccept [%p]",this);
     m_mutexTrans.lock();
     if (m_transaction) {
-	u_int32_t codecs = iplugin.getEngine()->capability();
+	YIAXEngine* eng = static_cast<YIAXEngine*>(m_transaction->getEngine());
+	u_int32_t codecs = eng->capability();
 	if (msg.getValue("formats")) {
 	    u_int32_t ca = IAXFormat::mask(codecs,IAXFormat::Audio);
 	    iplugin.updateCodecsFromRoute(ca,msg,IAXFormat::Audio);
-	    iplugin.getEngine()->acceptFormatAndCapability(m_transaction,&ca);
+	    eng->acceptFormatAndCapability(m_transaction,&ca);
 	}
 	u_int32_t cv = IAXFormat::mask(codecs,IAXFormat::Video);
 	iplugin.updateCodecsFromRoute(cv,msg,IAXFormat::Video);
-	iplugin.getEngine()->acceptFormatAndCapability(m_transaction,&cv,IAXFormat::Video);
+	eng->acceptFormatAndCapability(m_transaction,&cv,IAXFormat::Video);
 	u_int32_t ci = IAXFormat::mask(codecs,IAXFormat::Image);
 	iplugin.updateCodecsFromRoute(ci,msg,IAXFormat::Image);
-	iplugin.getEngine()->acceptFormatAndCapability(m_transaction,&ci,IAXFormat::Image);
-	(static_cast<YIAXEngine*>(m_transaction->getEngine()))->initTransaction(m_transaction,msg);
+	eng->acceptFormatAndCapability(m_transaction,&ci,IAXFormat::Image);
+	eng->initTransaction(m_transaction,msg);
 	m_transaction->sendAccept();
     }
     m_mutexTrans.unlock();
@@ -1966,6 +2628,16 @@ void YIAXConnection::disconnected(bool final, const char* reason)
     safeDeref();
 }
 
+bool YIAXConnection::disconnect(const char* reason)
+{
+    Lock lck(m_mutexChan);
+    if (!m_reason)
+	m_reason = reason;
+    String res = m_reason;
+    lck.drop();
+    return Channel::disconnect(res,parameters());
+}
+
 bool YIAXConnection::callPrerouted(Message& msg, bool handled)
 {
     // check if the caller did abort the call while prerouting
@@ -2059,12 +2731,12 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 		event->getTransaction()->localCallNo(),event->getTransaction()->remoteCallNo(),
 		event->frameType(),event->subclass(),this);
 	    if (event->final())
-		m_reason = "offline";
+		setReason("offline");
 	    break;
 	case IAXEvent::Busy:
 	    DDebug(this,DebugCall,"BUSY [%p]",this);
 	    if (event->final())
-		m_reason = "busy";
+		setReason("busy");
 	    break;
 	case IAXEvent::AuthRep:
 	    evAuthRep(event);
@@ -2073,7 +2745,11 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    evAuthReq(event);
 	    break;
 	default:
-	    iplugin.getEngine()->defaultEventHandler(event);
+	    if (m_transaction) {
+		Lock lck(m_mutexTrans);
+		if (m_transaction)
+		    m_transaction->getEngine()->defaultEventHandler(event);
+	    }
 	    if (!m_transaction)
 		event->setFinal();
     }
@@ -2085,6 +2761,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 
 void YIAXConnection::hangup(int location, const char* error, const char* reason, bool reject)
 {
+    Lock lck(m_mutexChan);
     if (!m_hangup)
 	return;
     m_hangup = false;
@@ -2100,43 +2777,53 @@ void YIAXConnection::hangup(int location, const char* error, const char* reason,
     Message* m = message("chan.hangup");
     m->setParam("status","hangup");
     m->setParam("reason",m_reason);
-    m_mutexTrans.lock();
-    if (m_transaction) {
+    Debug(this,DebugCall,"Hangup location=%s reason=%s [%p]",loc,m_reason.safe(),this);
+    lck.drop();
+    resetTransaction(m,reject);
+    Engine::enqueue(m);
+}
+
+void YIAXConnection::resetTransaction(NamedList* params, bool reject)
+{
+    Lock lckChan(m_mutexChan);
+    String reason = m_reason;
+    lckChan.drop();
+    Lock lck(m_mutexTrans);
+    if (!m_transaction)
+	return;
+    if (params) {
 	IAXMediaData* d = m_audio ? m_transaction->getData(IAXFormat::Audio) : 0;
 	if (d) {
 	    String tmp;
 	    d->print(tmp);
-	    m->addParam("iax_stats",tmp);
+	    params->addParam("iax_stats",tmp);
 	}
 	d = m_video ? m_transaction->getData(IAXFormat::Video) : 0;
 	if (d) {
 	    String tmp;
 	    d->print(tmp);
-	    m->addParam("iax_stats_video",tmp);
+	    params->addParam("iax_stats_video",tmp);
 	}
-	u_int8_t code = 0;
-	if (m_reason) {
-	    int val = IAXInfoElement::causeCode(m_reason);
-	    if (val)
-		code = val;
-	    else
-		code = m_reason.toInteger(0,0,0,127);
-	}
-	if (reject)
-	    m_transaction->sendReject(reason,code);
-	else
-	    m_transaction->sendHangup(reason,code);
-	m_transaction->setUserData(0);
-        m_transaction = 0;
     }
-    m_mutexTrans.unlock();
-    Engine::enqueue(m);
-    Debug(this,DebugCall,"Hangup location=%s reason=%s [%p]",loc,m_reason.safe(),this);
+    u_int8_t code = 0;
+    if (reason) {
+	int val = IAXInfoElement::causeCode(reason);
+	if (val)
+	    code = val;
+	else
+	    code = reason.toInteger(0,0,0,127);
+    }
+    if (reject)
+	m_transaction->sendReject(reason,code);
+    else
+	m_transaction->sendHangup(reason,code);
+    m_transaction->setUserData(0);
+    m_transaction = 0;
 }
 
 bool YIAXConnection::route(IAXEvent* ev, bool authenticated)
 {
-    Lock lock(&m_mutexTrans);
+    Lock lck(&m_mutexTrans);
     if (!m_transaction)
 	return false;
     if (m_routeCount >= 2)
@@ -2150,7 +2837,7 @@ bool YIAXConnection::route(IAXEvent* ev, bool authenticated)
     }
     else {
 	DDebug(this,DebugAll,"Route pass 1: No username [%p]",this);
-	if (!iplugin.getEngine()->acceptFormatAndCapability(m_transaction)) {
+	if (!m_transaction->getEngine()->acceptFormatAndCapability(m_transaction)) {
 	    hangup(0,"nomedia",0,true);
 	    return false;
 	}
@@ -2185,6 +2872,8 @@ bool YIAXConnection::route(IAXEvent* ev, bool authenticated)
 	m->addParam("media_video",String::boolText(true));
 	m->addParam("formats_video",fmtsVideo);
     }
+    (static_cast<YIAXEngine*>(m_transaction->getEngine()))->fillMessage(*m,false);
+    lck.drop();
     return startRouter(m);
 }
 
@@ -2304,8 +2993,10 @@ void YIAXConnection::evAuthReq(IAXEvent* event)
 {
     DDebug(this,DebugAll,"AUTHREQ [%p]",this);
     String response;
-    if (m_iaxEngine && m_transaction) {
-	m_iaxEngine->getMD5FromChallenge(response,m_transaction->challenge(),m_password);
+    Lock lck(m_mutexTrans);
+    if (m_transaction) {
+	m_transaction->getEngine()->getMD5FromChallenge(response,
+	    m_transaction->challenge(),m_password);
 	m_transaction->sendAuthReply(response);
     }
 }
@@ -2332,7 +3023,10 @@ bool YIAXConnection::safeRefIncrease()
     return ok;
 }
 
-// IAX URI constructor from components
+
+//
+// IAXURI
+//
 IAXURI::IAXURI(const char* user, const char* host, const char* calledNo, const char* calledContext, int port)
     : m_username(user),
       m_host(host),
@@ -2342,7 +3036,7 @@ IAXURI::IAXURI(const char* user, const char* host, const char* calledNo, const c
       m_parsed(true)
 
 {
-    *this << "iax:";
+    *this << "iax2:";
     if (m_username)
 	*this << m_username << "@";
     *this << m_host;

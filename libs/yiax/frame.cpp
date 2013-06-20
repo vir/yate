@@ -94,7 +94,7 @@ const TokenDict IAXInfoElement::s_causeName[] = {
     {"congestion",                    34}, // No circuit/channel available
     {"channel-congestion",            34},
     {"net-out-of-order",              38}, // Network out of order
-    {"noconn",                        41},
+    {"noconn",                        38},
     {"temporary-failure",             41}, // Temporary failure
     {"congestion",                    42}, // Switching equipment congestion
     {"switch-congestion",             42},
@@ -524,7 +524,8 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
     m_invalidIEList = i == 0xFFFF;
     if (!m_invalidIEList)
 	return true;
-    Debug(DebugWarn,"IAXIEList::createFromFrame. Frame(%u,%u) with invalid IE [%p]",frame->type(),frame->subclass(),frame);
+    Debug(DebugWarn,"IAXIEList::createFromFrame. Frame(%u,%u) with invalid IE [%p]",
+	frame->type(),frame->subclass(),frame);
     return false;
 }
 

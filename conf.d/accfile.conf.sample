@@ -57,6 +57,11 @@
 ;   server: Registrar address or domain. A port can be specified here (e.g. 1.2.3.4:7999)
 ;   port: Registrar port if not specified in 'server' parameter
 ;     If not set the port defaults to 4569
+;   connection_id: The name of the iax listener to use for registration
+;   ip_transport_localip: This parameter is used in conjuction ip_transport_localport
+;     to identify the listener to use for registration and outgoing calls
+;   ip_transport_localport: Local port. This parameter is used to identify the listener
+;     to use for registration and outgoing calls
 ;   trunking: Enable trunking for outgoing calls sent on this line
 ;   The following parameters can also be set (see yiaxchan.conf.sample for more info):
 ;   trunk_timestamps: Configure how trunked audio data is sent, enable it for

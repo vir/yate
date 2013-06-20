@@ -2576,9 +2576,10 @@ protected:
     /**
      * Generate a Reject event after internally rejecting a transaction
      * @param reason The reason of rejecting
+     * @param code Error code
      * @return A valid IAXEvent
      */
-    IAXEvent* internalReject(String& reason);
+    IAXEvent* internalReject(String& reason, u_int8_t code);
 
     /**
      * Event terminated feedback
@@ -2838,22 +2839,26 @@ public:
      * Constructor
      * @param iface Address of the interface to use, default all (0.0.0.0)
      * @param port UDP port to run the protocol on
-     * @param transListCount Number of entries in the transaction hash table
-     * @param maxFullFrameDataLen Max full frame IE list (buffer) length
      * @param format Default media format
      * @param capab Media capabilities of this engine
-     * @param authRequired Automatically challenge all clients for authentication
      * @param params Optional extra parameter list
+     * @param name Engine name
      */
-    IAXEngine(const char* iface, int port, u_int16_t transListCount,
-	u_int16_t maxFullFrameDataLen, u_int32_t format, u_int32_t capab,
-	bool authRequired, NamedList* params = 0);
+    IAXEngine(const char* iface, int port, u_int32_t format, u_int32_t capab,
+	const NamedList* params = 0, const char* name = "iaxengine");
 
     /**
      * Destructor
      * Closes all transactions belonging to this engine and flush all queues
      */
     virtual ~IAXEngine();
+
+    /**
+     * Retrieve the engine name
+     * @return Engine name
+     */
+    inline const String& name() const
+	{ return m_name; }
 
     /**
      * Retrieve the default caller number type
@@ -2913,13 +2918,6 @@ public:
      * @return True if at least one event was processed
      */
     bool process();
-
-    /**
-     * Check if a transaction should automatically request authentication
-     * @return True to automatically request authentication
-     */
-    inline bool authRequired() const
-        { return m_authRequired; }
 
     /**
      * Get the timeout interval sent challenge
@@ -3017,6 +3015,13 @@ public:
     void removeTransaction(IAXTransaction* transaction);
 
     /**
+     * Check if there are any transactions in the engine
+     * This method is thread safe
+     * @return True if the engine holds at least 1 transaction
+     */
+    bool haveTransactions();
+
+    /**
      * Return the transactions count
      * This method is thread safe
      * @return Transactions count
@@ -3064,6 +3069,18 @@ public:
      * @param event The event to handle
      */
     virtual void defaultEventHandler(IAXEvent* event);
+
+    /**
+     * Check if the engine is exiting
+     * @return True if the engine is exiting
+     */
+    inline bool exiting() const
+	{ return m_exiting; }
+
+    /**
+     * Set the exiting flag
+     */
+    virtual void setExiting();
 
     /**
      * Enable trunking for the given transaction. Allocate a trunk meta frame if needed.
@@ -3130,6 +3147,13 @@ public:
 	{ return m_socket; }
 
     /**
+     * Retrieve the socket address on wgich we are bound
+     * @return Local address we are bound on
+     */
+    inline const SocketAddr& addr() const
+	{ return m_addr; }
+
+    /**
      * Send engine formats
      * @param caps Capabilities
      * @param fmtAudio Default audio format
@@ -3140,6 +3164,15 @@ public:
 	    m_formatVideo = fmtVideo;
 	    m_capability = caps;
 	}
+
+    /**
+     * Retrieve a port parameter
+     * @param params Parameters list
+     * @param param Parameter to retrieve
+     * @return The port (default, 4569, if the parameter is missing or invalid)
+     */
+    static inline int getPort(const NamedList& params, const String& param = "port")
+	{ return params.getIntValue(param,4569); }
 
     /**
      * Get the MD5 data from a challenge and a password
@@ -3211,7 +3244,8 @@ public:
      * @param nRetrans The number of retransmissions
      * @return The overall timeout
      */
-    static unsigned int overallTout(unsigned int interval, unsigned int nRetrans);
+    static unsigned int overallTout(unsigned int interval = IAX2_RETRANS_INTERVAL_DEF,
+	unsigned int nRetrans = IAX2_RETRANS_COUNT_DEF);
 
 protected:
     /**
@@ -3262,14 +3296,27 @@ protected:
 	const SocketAddr& addr, IAXIEList& ieList,
 	bool refTrans = false, bool startTrans = true);
 
+    /**
+     * Bind the socket. Terminate it before trying
+     * @param iface Address of the interface to use, default all (0.0.0.0)
+     * @param port UDP port to run the protocol on
+     * @param force Force binding if failed on required port
+     * @return True on success
+     */
+    bool bind(const char* iface, int port, bool force);
+
+    int m_trunking;                             // Trunking capability: negative: ok, otherwise: not enabled
+
 private:
+    String m_name;                              // Engine name
     Socket m_socket;				// Socket
+    SocketAddr m_addr;                          // Address we are bound on
     ObjList** m_transList;			// Full transactions
     ObjList m_incompleteTransList;		// Incomplete transactions (no remote call number)
     bool m_lUsedCallNo[IAX2_MAX_CALLNO + 1];	// Used local call numnmbers flags
     int m_lastGetEvIndex;			// getEvent: keep last array entry
+    bool m_exiting;                             // Exiting flag
     // Parameters
-    bool m_authRequired;			// Automatically request authentication
     int m_maxFullFrameDataLen;			// Max full frame data (IE list) length
     u_int16_t m_startLocalCallNo;		// Start index of local call number allocation
     u_int16_t m_transListCount;			// m_transList count

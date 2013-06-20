@@ -882,6 +882,8 @@ bool IAXTransaction::sendReject(const char* cause, u_int8_t code)
     switch (type()) {
 	case New:
 	    frametype = IAXControl::Reject;
+	    if (TelEngine::null(cause))
+		cause = 0;
 	    break;
 	case RegReq:
 	case RegRel:
@@ -896,10 +898,10 @@ bool IAXTransaction::sendReject(const char* cause, u_int8_t code)
 	default:
 	    return false;
     }
-    Debug(m_engine,DebugAll,"Transaction(%u,%u). Reject cause='%s' [%p]",
-	localCallNo(),remoteCallNo(),cause,this);
+    Debug(m_engine,DebugAll,"Transaction(%u,%u). Reject cause='%s' code=%u [%p]",
+	localCallNo(),remoteCallNo(),cause,code,this);
     IAXIEList* ies = new IAXIEList;
-    if (!TelEngine::null(cause))
+    if (cause)
 	ies->appendString(IAXInfoElement::CAUSE,cause);
     if (code)
 	ies->appendNumeric(IAXInfoElement::CAUSECODE,code,1);
@@ -1531,7 +1533,8 @@ IAXEvent* IAXTransaction::processAuthReq(IAXEvent* event)
     if (bAuthMethod && bChallenge)
 	return event;
     delete event;
-    return internalReject(s_iax_modNoAuthMethod);
+    // Code 47: noresource
+    return internalReject(s_iax_modNoAuthMethod,47);
 }
 
 IAXEvent* IAXTransaction::processAccept(IAXEvent* event)
@@ -1549,7 +1552,8 @@ IAXEvent* IAXTransaction::processAccept(IAXEvent* event)
     if (m_format.format() || m_formatVideo.format())
 	return event;
     delete event;
-    return internalReject(s_iax_modNoMediaFormat);
+    // Code 58: nomedia
+    return internalReject(s_iax_modNoMediaFormat,58);
 }
 
 IAXEvent* IAXTransaction::processAuthRep(IAXEvent* event)
@@ -1646,7 +1650,8 @@ IAXEvent* IAXTransaction::getEventStartTrans(IAXFullFrame* frame, bool& delFrame
 		break;
 	    ev = createEvent(IAXEvent::New,false,frame,NewRemoteInvite);
 	    if (!ev->getList().getIE(IAXInfoElement::USERNAME))
-		return internalReject(s_iax_modNoUsername);
+		// Code 96: missing-mandatory-ie
+		return internalReject(s_iax_modNoUsername,96);
 	    init(ev->getList());
 	    return ev;
 	case Poke:
@@ -2033,7 +2038,8 @@ IAXTransaction* IAXTransaction::processMediaFrame(const IAXFullFrame* frame, int
 	Debug(m_engine,DebugNote,
 	    "IAXTransaction(%u,%u). Received %s frame with unknown format=0x%x [%p]",
 	    localCallNo(),remoteCallNo(),IAXFrame::typeText(frame->type()),recvFmt,this);
-	m_pendingEvent = internalReject(s_iax_modNoMediaFormat);
+	// Code 58: nomedia
+	m_pendingEvent = internalReject(s_iax_modNoMediaFormat,58);
 	return 0;
     }
     // We might have an incoming media format received with an Accept frame
@@ -2049,7 +2055,8 @@ IAXTransaction* IAXTransaction::processMediaFrame(const IAXFullFrame* frame, int
 	    DDebug(m_engine,DebugAll,
 		"IAXTransaction(%u,%u). Format change rejected media=%s current=%u [%p]",
 		localCallNo(),remoteCallNo(),fmt->typeName(),fmt->format(),this);
-	    m_pendingEvent = internalReject(s_iax_modNoMediaFormat);
+	    // Code 58: nomedia
+	    m_pendingEvent = internalReject(s_iax_modNoMediaFormat,58);
 	    return 0;
         }
     }
@@ -2076,11 +2083,12 @@ IAXTransaction* IAXTransaction::retransmitOnVNAK(u_int16_t seqNo)
     return 0;
 }
 
-IAXEvent* IAXTransaction::internalReject(String& reason)
+IAXEvent* IAXTransaction::internalReject(String& reason, u_int8_t code)
 {
-    Debug(m_engine,DebugAll,"Transaction(%u,%u). Internal reject: '%s' [%p]",
-	localCallNo(),remoteCallNo(),reason.c_str(),this);
-    sendReject(reason);
+    Debug(m_engine,DebugAll,
+	"Transaction(%u,%u). Internal reject cause='%s' code=%u [%p]",
+	localCallNo(),remoteCallNo(),reason.c_str(),code,this);
+    sendReject(reason,code);
     IAXEvent* event = new IAXEvent(IAXEvent::Reject,true,true,this,IAXFrame::IAX,IAXControl::Reject);
     event->getList().appendString(IAXInfoElement::CAUSE,reason);
     m_localReqEnd = true;
@@ -2130,6 +2138,8 @@ void IAXTransaction::postFrame(IAXFrameOut* frame)
 
 void IAXTransaction::receivedVoiceMiniBeforeFull()
 {
+    if (state() == Terminated || state() == Terminating)
+	return;
     if (m_reqVoiceVNAK > 15)
 	return;
     m_reqVoiceVNAK++;

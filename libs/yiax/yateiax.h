@@ -2579,7 +2579,7 @@ protected:
      * @param code Error code
      * @return A valid IAXEvent
      */
-    IAXEvent* internalReject(String& reason, u_int8_t code);
+    IAXEvent* internalReject(const char* reason, u_int8_t code);
 
     /**
      * Event terminated feedback
@@ -2604,12 +2604,18 @@ private:
     void receivedVoiceMiniBeforeFull();
     void resetTrunk();
     void init();
+    void setPendingEvent(IAXEvent* ev = 0);
     inline void restartTrunkIn(u_int64_t now, u_int32_t ts) {
 	    m_trunkInStartTime = now;
 	    u_int64_t dt = (now - m_lastVoiceFrameIn) / 1000;
 	    m_trunkInTsDelta = m_lastVoiceFrameInTs + (u_int32_t)dt;
 	    m_trunkInFirstTs = ts;
 	}
+    // Process accept format and caps
+    bool processAcceptFmt(IAXIEList* list);
+    // Process queued ACCEPT. Reject with given reason/code if not found
+    // Reject with 'nomedia' if found and format is not acceptable
+    IAXEvent* checkAcceptRecv(const char* reason, u_int8_t code);
 
     // Params
     bool m_localInitTrans;			// True: local initiated transaction
@@ -2617,6 +2623,7 @@ private:
     Type m_type;				// Transaction type
     State m_state;				// Transaction state
     bool m_destroy;                             // Destroy flag
+    bool m_accepted;                            // ACCEPT received and processed
     u_int64_t m_timeStamp;			// Transaction creation timestamp
     u_int64_t m_timeout;			// Transaction timeout in Terminating state
     SocketAddr m_addr;				// Socket

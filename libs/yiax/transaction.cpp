@@ -55,6 +55,8 @@ String IAXTransaction::s_iax_modNoMediaFormat("Unsupported or missing media form
 String IAXTransaction::s_iax_modInvalidAuth("Invalid authentication request, response or challenge");
 String IAXTransaction::s_iax_modNoUsername("Username is missing");
 
+static const String s_voiceBeforeAccept = "Received full Voice before Accept";
+
 unsigned char IAXTransaction::m_maxInFrames = 100;
 
 static inline bool canUpdLastAckSeq(u_int32_t seq, u_int32_t last)
@@ -82,6 +84,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
     m_type(Incorrect),
     m_state(Unknown),
     m_destroy(false),
+    m_accepted(false),
     m_timeStamp(Time::msecNow() - 1),
     m_timeout(0),
     m_addr(addr),
@@ -156,6 +159,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_type(type),
     m_state(Unknown),
     m_destroy(false),
+    m_accepted(false),
     m_timeStamp(Time::msecNow() - 1),
     m_timeout(0),
     m_addr(addr),
@@ -255,6 +259,7 @@ IAXTransaction::~IAXTransaction()
 {
     if (m_startIEs)
 	delete m_startIEs;
+    setPendingEvent();
     XDebug(m_engine,DebugAll,"IAXTransaction::~IAXTransaction(%u,%u). [%p]",
 	localCallNo(),remoteCallNo(),this);
 }
@@ -342,7 +347,21 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 	if (state() == Terminating)
 	    return 0;
 	int t = IAXFormat::Audio;
-	if (frame->type() == IAXFrame::Video)
+	if (frame->type() == IAXFrame::Voice) {
+	    if (outgoing()) {
+		if (!m_accepted) {
+		    // Code 101: wrong-state-message
+		    IAXEvent* e = checkAcceptRecv(s_voiceBeforeAccept,101);
+		    if (e) {
+			setPendingEvent(e);
+			return 0;
+		    }
+		}
+	    }
+	    else if (!m_accepted)
+		setPendingEvent(internalReject(s_voiceBeforeAccept,101));
+	}
+	else
 	    t = IAXFormat::Video;
 	if (!processMediaFrame(full,t))
 	    return 0;
@@ -672,7 +691,6 @@ IAXEvent* IAXTransaction::getEvent(const Time& now)
     IAXEvent* ev = 0;
     GenObject* obj;
     bool delFrame;
-
     Lock lock(this);
     if (state() == Terminated)
 	return 0;
@@ -832,6 +850,7 @@ bool IAXTransaction::sendAccept(unsigned int* expires)
 	(type() == RegReq && state() == NewRemoteInvite) ||
 	((type() == RegReq || type() == RegRel) && state() == NewRemoteInvite_RepRecv)))
 	return false;
+    m_accepted = true;
     if (type() == New) {
 	IAXIEList* ies = new IAXIEList;
 	ies->appendNumeric(IAXInfoElement::FORMAT,m_format.format() | m_formatVideo.format(),4);
@@ -1543,13 +1562,10 @@ IAXEvent* IAXTransaction::processAccept(IAXEvent* event)
 	return event;
     Debug(m_engine,DebugAll,"Transaction(%u,%u). Accept received [%p]",
 	localCallNo(),remoteCallNo(),this);
-    u_int32_t fmt = 0;
-    event->getList().getNumeric(IAXInfoElement::FORMAT,fmt);
-    m_format.set(&fmt,0,0);
-    m_formatVideo.set(&fmt,0,0);
-    m_engine->acceptFormatAndCapability(this,0,IAXFormat::Audio);
-    m_engine->acceptFormatAndCapability(this,0,IAXFormat::Video);
-    if (m_format.format() || m_formatVideo.format())
+    if (m_accepted)
+	return event;
+    m_accepted = true;
+    if (processAcceptFmt(&event->getList()))
 	return event;
     delete event;
     // Code 58: nomedia
@@ -2039,7 +2055,7 @@ IAXTransaction* IAXTransaction::processMediaFrame(const IAXFullFrame* frame, int
 	    "IAXTransaction(%u,%u). Received %s frame with unknown format=0x%x [%p]",
 	    localCallNo(),remoteCallNo(),IAXFrame::typeText(frame->type()),recvFmt,this);
 	// Code 58: nomedia
-	m_pendingEvent = internalReject(s_iax_modNoMediaFormat,58);
+	setPendingEvent(internalReject(s_iax_modNoMediaFormat,58));
 	return 0;
     }
     // We might have an incoming media format received with an Accept frame
@@ -2056,7 +2072,7 @@ IAXTransaction* IAXTransaction::processMediaFrame(const IAXFullFrame* frame, int
 		"IAXTransaction(%u,%u). Format change rejected media=%s current=%u [%p]",
 		localCallNo(),remoteCallNo(),fmt->typeName(),fmt->format(),this);
 	    // Code 58: nomedia
-	    m_pendingEvent = internalReject(s_iax_modNoMediaFormat,58);
+	    setPendingEvent(internalReject(s_iax_modNoMediaFormat,58));
 	    return 0;
         }
     }
@@ -2083,14 +2099,16 @@ IAXTransaction* IAXTransaction::retransmitOnVNAK(u_int16_t seqNo)
     return 0;
 }
 
-IAXEvent* IAXTransaction::internalReject(String& reason, u_int8_t code)
+IAXEvent* IAXTransaction::internalReject(const char* reason, u_int8_t code)
 {
     Debug(m_engine,DebugAll,
 	"Transaction(%u,%u). Internal reject cause='%s' code=%u [%p]",
-	localCallNo(),remoteCallNo(),reason.c_str(),code,this);
+	localCallNo(),remoteCallNo(),reason,code,this);
     sendReject(reason,code);
     IAXEvent* event = new IAXEvent(IAXEvent::Reject,true,true,this,IAXFrame::IAX,IAXControl::Reject);
     event->getList().appendString(IAXInfoElement::CAUSE,reason);
+    if (code)
+	event->getList().appendNumeric(IAXInfoElement::CAUSECODE,code,1);
     m_localReqEnd = true;
     return event;
 }
@@ -2160,6 +2178,13 @@ void IAXTransaction::resetTrunk()
     TelEngine::destruct(m_trunkFrame);
 }
 
+void IAXTransaction::setPendingEvent(IAXEvent* ev)
+{
+    if (m_pendingEvent)
+	delete m_pendingEvent;
+    m_pendingEvent = ev;
+}
+
 void IAXTransaction::init()
 {
     Debug(m_engine,DebugAll,"Transaction %s call=%u type=%s remote=%s:%d [%p]",
@@ -2175,6 +2200,42 @@ void IAXTransaction::init()
     m_retransInterval = ti->m_retransInterval;
     m_pingInterval = ti->m_pingInterval;
     ti = 0;
+}
+
+// Process accept format and caps
+bool IAXTransaction::processAcceptFmt(IAXIEList* list)
+{
+    Debug(m_engine,DebugAll,"Transaction(%u,%u). Processing Accept format [%p]",
+	localCallNo(),remoteCallNo(),this);
+    if (!list)
+	return false;
+    u_int32_t fmt = 0;
+    list->getNumeric(IAXInfoElement::FORMAT,fmt);
+    m_format.set(&fmt,0,0);
+    m_formatVideo.set(&fmt,0,0);
+    m_engine->acceptFormatAndCapability(this,0,IAXFormat::Audio);
+    m_engine->acceptFormatAndCapability(this,0,IAXFormat::Video);
+    return m_format.format() || m_formatVideo.format();
+}
+
+// Process queued ACCEPT. Reject with given reason/code if not found
+// Reject with 'nomedia' if found and format is not acceptable
+IAXEvent* IAXTransaction::checkAcceptRecv(const char* reason, u_int8_t code)
+{
+    IAXFullFrame* f = 0;
+    for (ObjList* o = m_inFrames.skipNull(); o; o = o->skipNext()) {
+	f = static_cast<IAXFullFrame*>(o->get());
+	if (f->type() == IAXFrame::IAX && f->subclass() == IAXControl::Accept)
+	    break;
+	f = 0;
+    }
+    if (!f)
+	return internalReject(reason,code);
+    m_accepted = true;
+    if (processAcceptFmt(f->ieList()))
+	return 0;
+    // Code 58: nomedia
+    return internalReject(s_iax_modNoMediaFormat,58);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

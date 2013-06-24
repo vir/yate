@@ -2126,6 +2126,7 @@ void YIAXDriver::setupEngine(const String& name, bool& valid, bool enable, bool 
 	getBindAddr(params,addr,port);
 	// Create the engine
 	eng = new YIAXEngine(name,addr,port,init);
+	eng->debugChain(this);
 	eng->m_default = def;
 	bound = eng->bound();
 	m_engines.append(eng);

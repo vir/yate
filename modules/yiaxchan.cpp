@@ -2480,15 +2480,22 @@ YIAXConnection::YIAXConnection(IAXTransaction* tr, Message* msg, NamedList* para
     Debug(this,DebugAll,"%s call. Transaction (%p) callno=%u [%p]",
 	isOutgoing() ? "Outgoing" : "Incoming",tr,tr->localCallNo(),this);
     setMaxcall(msg);
-    Message* m = message("chan.startup",msg);
-    m->setParam("direction",status());
     if (tr)
 	m_address << tr->remoteAddr().host() << ":" << tr->remoteAddr().port();
     if (msg)
 	m_targetid = msg->getValue("id");
+    Message* m = message("chan.startup",msg);
+    m->addParam("username",tr->username(),false);
     if (params) {
+	// outgoing call
 	m_password = params->getValue("password");
 	m->copyParams(*params,"caller,callername,called,billid,callto,username");
+    }
+    else {
+	// incoming call
+	m->addParam("called",tr->calledNo(),false);
+	m->addParam("caller",tr->callingNo(),false);
+	m->addParam("callername",tr->callingName(),false);
     }
     Engine::enqueue(m);
 }

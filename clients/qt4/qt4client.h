@@ -1100,7 +1100,7 @@ protected:
     bool m_maximized;
     bool m_mainWindow;                   // Main window flag: close app when this window is closed
     QString m_widget;                    // The widget with window's content
-    bool m_moving;                       // Flag used to move the window on mouse move event
+    int m_moving;                        // Flag used to move the window on mouse move event
     QPoint m_movePos;                    // Old position used when moving the window
 };
 

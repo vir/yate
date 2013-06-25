@@ -693,8 +693,10 @@ public:
         G726AAL2 = (1 << 11),
         G722   = (1 << 12),
         AMR    = (1 << 13),
+        // NOTE: GSM Half Rate is not defined in RFC5456
+        GSM_HR    = (1 << 31),
         AudioMask = G723_1 | GSM | ULAW | ALAW | G726 | ADPCM | SLIN | LPC10 | G729 | SPEEX |
-            ILBC | G726AAL2 | G722 | AMR,
+            ILBC | G726AAL2 | G722 | AMR | GSM_HR,
         JPEG   = (1 << 16),
         PNG    = (1 << 17),
         ImageMask = JPEG | PNG,

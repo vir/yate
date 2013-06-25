@@ -854,6 +854,7 @@ const TokenDict IAXFormat::s_formats[] = {
     {"G.726 AAL2",   G726AAL2},
     {"G.722",        G722},
     {"AMR",          AMR},
+    {"GSM_HR",       GSM_HR},
     {"JPEG",         JPEG},
     {"PNG",          PNG},
     {"H261",         H261},
@@ -913,11 +914,10 @@ u_int32_t IAXFormat::encode(const String& formats, const TokenDict* dict, char s
     if (!dict)
 	return 0;
     u_int32_t mask = 0;
-    ObjList* list = formats.split(',',false);
+    ObjList* list = formats.split(sep,false);
     for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
 	int fmt = lookup(o->get()->toString(),dict);
-	if (fmt > 0)
-	    mask |= fmt;
+	mask |= fmt;
     }
     TelEngine::destruct(list);
     return mask;

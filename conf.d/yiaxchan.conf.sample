@@ -284,6 +284,9 @@
 ; gsm: bool: European GSM 06.10
 ;gsm=enable
 
+; gsmhr: bool: European GSM 06.20 (GSM Half Rate)
+;gsmhr=enable
+
 ; lpc10: bool: LPC 10
 ;lpc10=enable
 

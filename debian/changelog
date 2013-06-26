@@ -1,3 +1,9 @@
+yate (4.3.1~vir2013062601) UNRELEASED; urgency=low
+
+  * Merged upstream changes
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 26 Jun 2013 16:34:03 +0400
+
 yate (4.3.1~vir2013051401) UNRELEASED; urgency=low
 
   * Merged upstream changes

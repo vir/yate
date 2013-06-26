@@ -3613,6 +3613,18 @@ public:
     virtual void engineStart(Message& msg);
 
     /**
+     * Show incoming call notification for a given channel
+     * @param chan The channel
+     */
+    virtual void showInCallNotification(ClientChannel* chan);
+
+    /**
+     * Close incoming call notification for a given id
+     * @param id The notification id to close
+     */
+    virtual void closeInCallNotification(const String& id);
+
+    /**
      * Build an account id from protocol, username, host
      * @param accId Destination string
      * @param proto Account protocol

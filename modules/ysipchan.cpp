@@ -611,6 +611,8 @@ public:
 	{ return m_prack; }
     inline bool info() const
 	{ return m_info; }
+    inline bool foreignAuth() const
+	{ return m_foreignAuth; }
 private:
     static bool copyAuthParams(NamedList* dest, const NamedList& src, bool ok = true);
     YateSIPEndPoint* m_ep;
@@ -1006,13 +1008,16 @@ public:
     YateSIPGenerate(SIPMessage* m);
     virtual ~YateSIPGenerate();
     bool process(SIPEvent* ev);
-    bool busy() const
+    inline bool busy() const
 	{ return m_tr != 0; }
-    int code() const
+    inline int code() const
 	{ return m_code; }
+    inline const SIPMessage* answer() const
+	{ return m_msg; }
 private:
     void clearTransaction();
     SIPTransaction* m_tr;
+    RefPointer<SIPMessage> m_msg;
     int m_code;
 };
 
@@ -1540,6 +1545,11 @@ static const char* s_rejectHeaders[] = {
     "cseq",
     "max-forwards",
     "content-length",
+    0
+};
+
+// List of authentication headers we normally don't handle generically
+static const char* s_authHeaders[] = {
     "www-authenticate",
     "proxy-authenticate",
     "authorization",
@@ -1557,7 +1567,7 @@ static bool matchAny(const String& name, const char** strs)
 }
 
 // Copy headers from SIP message to Yate message
-static void copySipHeaders(NamedList& msg, const SIPMessage& sip, bool filter = true)
+static void copySipHeaders(NamedList& msg, const SIPMessage& sip, bool filter = true, bool auth = false)
 {
     const ObjList* l = sip.header.skipNull();
     for (; l; l = l->skipNext()) {
@@ -1568,15 +1578,11 @@ static void copySipHeaders(NamedList& msg, const SIPMessage& sip, bool filter = 
 	    continue;
 	if (filter && matchAny(name,s_filterHeaders))
 	    continue;
-	String tmp(*t);
-	const ObjList* p = t->params().skipNull();
-	for (; p; p = p->skipNext()) {
-	    NamedString* s = static_cast<NamedString*>(p->get());
-	    tmp << ";" << s->name();
-	    if (!s->null())
-		tmp << "=" << *s;
-	}
-	msg.addParam("sip_"+name,tmp);
+	if (!auth && matchAny(name,s_authHeaders))
+	    continue;
+	String tmp;
+	t->buildLine(tmp,false);
+	msg.addParam("sip_" + name,tmp);
     }
 }
 
@@ -1731,6 +1737,93 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
     }
     if (rfc3323)
 	sip.addHeader("Privacy",rfc3323);
+}
+
+// Copy body from SIP message to Yate message
+static void copySipBody(NamedList& msg, const SIPMessage& sip)
+{
+    if (!sip.body)
+	return;
+    // add the body if it's a string one
+    MimeStringBody* strBody = YOBJECT(MimeStringBody,sip.body);
+    if (strBody) {
+	msg.addParam("xsip_type",strBody->getType());
+	msg.addParam("xsip_body",strBody->text());
+    }
+    else {
+	MimeLinesBody* txtBody = YOBJECT(MimeLinesBody,sip.body);
+	if (txtBody) {
+	    String bodyText((const char*)txtBody->getBody().data(),txtBody->getBody().length());
+	    msg.addParam("xsip_type",txtBody->getType());
+	    msg.addParam("xsip_body",bodyText);
+	}
+	else {
+	    const DataBlock& binBody = sip.body->getBody();
+	    String bodyText;
+	    int enc = s_defEncoding;
+	    switch (enc) {
+		case SipHandler::BodyRaw:
+		    bodyText.assign((const char*)binBody.data(),binBody.length());
+		    break;
+		case SipHandler::BodyHex:
+		    bodyText.hexify(binBody.data(),binBody.length());
+		    break;
+		case SipHandler::BodyHexS:
+		    bodyText.hexify(binBody.data(),binBody.length(),' ');
+		    break;
+		default:
+		    enc = SipHandler::BodyBase64;
+		    {
+			Base64 b64(binBody.data(),binBody.length(),false);
+			b64.encode(bodyText);
+			b64.clear(false);
+		    }
+	    }
+	    msg.addParam("xsip_type",sip.body->getType());
+	    msg.addParam("xsip_body_encoding",lookup(enc,SipHandler::s_bodyEnc));
+	    msg.addParam("xsip_body",bodyText);
+	}
+    }
+}
+
+// Copy body from Yate message to SIP message
+static void copySipBody(SIPMessage& sip, const NamedList& msg)
+{
+    const String& type = msg[YSTRING("xsip_type")];
+    const String& body = msg[YSTRING("xsip_body")];
+    if (type && body) {
+	const String& bodyEnc = msg[YSTRING("xsip_body_encoding")];
+	if (bodyEnc.null())
+	    sip.setBody(new MimeStringBody(type,body.c_str(),body.length()));
+	else {
+	    DataBlock binBody;
+	    bool ok = false;
+	    switch (bodyEnc.toInteger(SipHandler::s_bodyEnc)) {
+		case SipHandler::BodyRaw:
+		    binBody.append(body);
+		    ok = true;
+		    break;
+		case SipHandler::BodyHex:
+		    ok = binBody.unHexify(body,body.length());
+		    break;
+		case SipHandler::BodyHexS:
+		    ok = binBody.unHexify(body,body.length(),' ');
+		    break;
+		case SipHandler::BodyBase64:
+		    {
+			Base64 b64;
+			b64 << body;
+			ok = b64.decode(binBody);
+		    }
+		    break;
+	    }
+
+	    if (ok)
+		sip.setBody(new MimeBinaryBody(type,(const char*)binBody.data(),binBody.length()));
+	    else
+		Debug(&plugin,DebugWarn,"Invalid xsip_body_encoding '%s'",bodyEnc.c_str());
+	}
+    }
 }
 
 // Check if the given body have the given type
@@ -3890,6 +3983,12 @@ void YateSIPEngine::initialize(NamedList* params)
     m_reqTransCount = params->getIntValue("sip_req_trans_count",4,2,10,false);
     m_rspTransCount = params->getIntValue("sip_rsp_trans_count",5,2,10,false);
     m_autoChangeParty = params->getBoolValue("autochangeparty");
+    int64_t t1 = params->getIntValue("t1",500,100,5000,false);
+    int64_t t2 = params->getIntValue("t4",5000,1000,25000,false);
+    if (t2 < 3 * t1)
+	t2 = 3 * t1;
+    m_t1 = 1000 * t1;
+    m_t4 = 1000 * t2;
     DDebug(this,DebugAll,"Initialized sip_req_trans_count=%d sip_rsp_trans_count=%d",
 	m_reqTransCount,m_rspTransCount);
 }
@@ -4734,12 +4833,15 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     String raddr;
     int rport = 0;
     message->getParty()->getAddr(raddr,rport,false);
-    bool nat = isNatBetween(addr.getHost(),raddr);
-    if (!nat) {
-	int port = addr.getPort();
-	if (!port)
-	    port = 5060;
-	nat = (rport != port) && msg.getBoolValue(YSTRING("nat_port_support"),true);
+    bool nat = false;
+    if (addr.getProtocol().startsWith("sip")) {
+	nat = isNatBetween(addr.getHost(),raddr);
+	if (!nat) {
+	    int port = addr.getPort();
+	    if (!port)
+		port = (addr.getProtocol() == YSTRING("sips")) ? 5061 : 5060;
+	    nat = (rport != port) && msg.getBoolValue(YSTRING("nat_port_support"),true);
+	}
     }
     bool natChanged = false;
     if (msg.getBoolValue(YSTRING("nat_support"),s_auto_nat && nat)) {
@@ -4787,6 +4889,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	if (trans)
 	    trans->fillMessage(msg,true);
     }
+    copySipHeaders(msg,*message,true,static_cast<const YateSIPEngine*>(t->getEngine())->foreignAuth());
     SIPMessage* r = 0;
     // Always OK deregistration attempts
     if (Engine::dispatch(msg) || dereg) {
@@ -4933,48 +5036,17 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     // establish the dialog here so user code will have the dialog tag handy
     t->setDialogTag();
     m.addParam("xsip_dlgtag",t->getDialogTag());
-    copySipHeaders(m,*message,false);
+    copySipHeaders(m,*message,false,static_cast<const YateSIPEngine*>(t->getEngine())->foreignAuth());
 
     doDecodeIsupBody(&plugin,m,message->body);
-    // add the body if it's a string one
-    MimeStringBody* strBody = YOBJECT(MimeStringBody,message->body);
-    if (strBody) {
-	m.addParam("xsip_type",strBody->getType());
-	m.addParam("xsip_body",strBody->text());
-    }
-    else {
-	MimeLinesBody* txtBody = YOBJECT(MimeLinesBody,message->body);
-	if (txtBody) {
-	    String bodyText((const char*)txtBody->getBody().data(),txtBody->getBody().length());
-	    m.addParam("xsip_type",txtBody->getType());
-	    m.addParam("xsip_body",bodyText);
-	}
-	else if (message->body) {
-	    const DataBlock& binBody = message->body->getBody();
-	    String bodyText;
-	    int enc = s_defEncoding;
-	    switch (enc) {
-		case SipHandler::BodyRaw:
-		    bodyText.assign((const char*)binBody.data(),binBody.length());
-		    break;
-		case SipHandler::BodyHex:
-		    bodyText.hexify(binBody.data(),binBody.length());
-		    break;
-		case SipHandler::BodyHexS:
-		    bodyText.hexify(binBody.data(),binBody.length(),' ');
-		    break;
-		default:
-		    enc = SipHandler::BodyBase64;
-		    {
-			Base64 b64(binBody.data(),binBody.length(),false);
-			b64.encode(bodyText);
-			b64.clear(false);
-		    }
-	    }
-	    m.addParam("xsip_type",message->body->getType());
-	    m.addParam("xsip_body_encoding",lookup(enc,SipHandler::s_bodyEnc));
-	    m.addParam("xsip_body",bodyText);
-	}
+    copySipBody(m,*message);
+    // attempt to find out if the handler modified the body
+    unsigned int bodyHash = YSTRING_INIT_HASH;
+    unsigned int bodyLen = 0;
+    const String* body = m.getParam(YSTRING("xsip_body"));
+    if (body) {
+	bodyHash = body->hash();
+	bodyLen = body->length();
     }
 
     int code = 0;
@@ -4992,6 +5064,9 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     if ((code >= 200) && (code < 700)) {
 	SIPMessage* resp = new SIPMessage(message,code);
 	copySipHeaders(*resp,m);
+	body = m.getParam(YSTRING("xsip_body"));
+	if (body && (body->hash() != bodyHash || body->length() != bodyLen))
+	    copySipBody(*resp,m);
 	t->setResponse(resp);
 	resp->deref();
 	return true;
@@ -5224,7 +5299,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("sip_to",ev->getMessage()->getHeaderValue("To"));
     m->addParam("sip_callid",m_callid);
     m->addParam("device",ev->getMessage()->getHeaderValue("User-Agent"));
-    copySipHeaders(*m,*ev->getMessage());
+    copySipHeaders(*m,*ev->getMessage(),true,static_cast<const YateSIPEngine*>(tr->getEngine())->foreignAuth());
 
     const char* reason = 0;
     hl = m_tr->initialMessage()->getHeader("Referred-By");
@@ -5840,7 +5915,8 @@ void YateSIPConnection::mediaChanged(const SDPMedia& media)
 bool YateSIPConnection::process(SIPEvent* ev)
 {
     const SIPMessage* msg = ev->getMessage();
-    int code = ev->getTransaction()->getResponseCode();
+    SIPTransaction* tr = ev->getTransaction();
+    int code = tr->getResponseCode();
     DDebug(this,DebugInfo,"YateSIPConnection::process(%p) %s %s code=%d [%p]",
 	ev,ev->isActive() ? "active" : "inactive",
 	SIPTransaction::stateName(ev->getState()),code,this);
@@ -5854,19 +5930,19 @@ bool YateSIPConnection::process(SIPEvent* ev)
 #endif
 
     // Change party
-    if (ev->getTransaction()->getEngine()->autoChangeParty() && ev->isActive() &&
+    if (tr->getEngine()->autoChangeParty() && ev->isActive() &&
 	msg && !msg->isOutgoing())
 	setPartyChanged(msg->getParty(),this);
 
     Lock mylock(driver());
-    if (ev->getTransaction() == m_tr2) {
+    if (tr == m_tr2) {
 	mylock.drop();
 	return processTransaction2(ev,msg,code);
     }
 
     bool updateTags = true;
     SIPDialog oldDlg(m_dialog);
-    m_dialog = *ev->getTransaction()->recentMessage();
+    m_dialog = *tr->recentMessage();
     mylock.drop();
 
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300) && (code <= 699)) {
@@ -5886,7 +5962,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    if (ok)
 		parameters().copyParams(tmp);
 	}
-	copySipHeaders(parameters(),*msg);
+	copySipHeaders(parameters(),*msg,true,static_cast<const YateSIPEngine*>(tr->getEngine())->foreignAuth());
 	if (code < 400) {
 	    // this is a redirect, it should provide a Contact and possibly a Diversion
 	    const MimeHeaderLine* hl = msg->getHeader("Contact");
@@ -5918,7 +5994,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 			parameters().addParam("divert_screen",tmp);
 		}
 	    }
-	    else
+	    else if (code != 387)
 		Debug(this,DebugMild,"Received %d redirect without Contact [%p]",code,this);
 	}
 	paramMutex().unlock();
@@ -7728,11 +7804,12 @@ bool YateSIPGenerate::process(SIPEvent* ev)
 	clearTransaction();
 	return false;
     }
-    const SIPMessage* msg = ev->getMessage();
+    SIPMessage* msg = ev->getMessage();
     if (!(msg && msg->isAnswer()))
 	return false;
     if (ev->getState() != SIPTransaction::Process)
 	return false;
+    m_msg = msg;
     clearTransaction();
     Debug(&plugin,DebugAll,"YateSIPGenerate got answer %d [%p]",
 	m_code,this);
@@ -7832,43 +7909,14 @@ bool SipHandler::received(Message &msg)
     }
     sip->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*sip,msg,"sip_");
-    const String& type = msg[YSTRING("xsip_type")];
-    const String& body = msg[YSTRING("xsip_body")];
-    if (type && body) {
-	const String& bodyEnc = msg[YSTRING("xsip_body_encoding")];
-	if (bodyEnc.null())
-	    sip->setBody(new MimeStringBody(type,body.c_str(),body.length()));
-	else {
-	    DataBlock binBody;
-	    bool ok = false;
-	    switch (bodyEnc.toInteger(s_bodyEnc)) {
-		case BodyRaw:
-		    binBody.append(body);
-		    ok = true;
-		    break;
-		case BodyHex:
-		    ok = binBody.unHexify(body,body.length());
-		    break;
-		case BodyHexS:
-		    ok = binBody.unHexify(body,body.length(),' ');
-		    break;
-		case BodyBase64:
-		    {
-			Base64 b64;
-			b64 << body;
-			ok = b64.decode(binBody);
-		    }
-		    break;
-	    }
-
-	    if (ok)
-		sip->setBody(new MimeBinaryBody(type,(const char*)binBody.data(),binBody.length()));
-	    else
-		Debug(&plugin,DebugWarn,"Invalid xsip_body_encoding '%s'",bodyEnc.c_str());
-	}
-    }
-    sip->complete(plugin.ep()->engine(),msg.getValue(YSTRING("user")),domain,0,
+    copySipBody(*sip,msg);
+    const char* user = msg.getValue(YSTRING("user"));
+    sip->complete(plugin.ep()->engine(),user,domain,0,
 	msg.getIntValue(YSTRING("xsip_flags"),-1));
+    user = msg.getValue(YSTRING("authname"),user);
+    const char* pass = msg.getValue(YSTRING("password"));
+    if (user && pass)
+	sip->setAutoAuth(user,pass);
     if (!msg.getBoolValue(YSTRING("wait"))) {
 	// no answer requested - start transaction and forget
 	plugin.ep()->engine()->addMessage(sip);
@@ -7878,8 +7926,15 @@ bool SipHandler::received(Message &msg)
     YateSIPGenerate gen(sip);
     while (gen.busy())
 	Thread::idle();
-    if (gen.code())
+    if (gen.code()) {
 	msg.setParam("code",String(gen.code()));
+	msg.clearParam("sip",'_');
+	msg.clearParam("xsip",'_');
+	if (gen.answer()) {
+	    copySipHeaders(msg,*gen.answer(),true,plugin.ep()->engine()->foreignAuth());
+	    copySipBody(msg,*gen.answer());
+	}
+    }
     else
 	msg.clearParam("code");
     return true;

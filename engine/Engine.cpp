@@ -424,9 +424,13 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",threads=" << Thread::count();
     msg.retValue() << ",workers=" << EnginePrivate::count;
     msg.retValue() << ",mutexes=" << Mutex::count();
-    msg.retValue() << ",locks=" << Mutex::locks();
+    int locks = Mutex::locks();
+    if (locks >= 0)
+	msg.retValue() << ",locks=" << locks;
     msg.retValue() << ",semaphores=" << Semaphore::count();
-    msg.retValue() << ",waiting=" << Semaphore::locks();
+    locks = Semaphore::locks();
+    if (locks >= 0)
+	msg.retValue() << ",waiting=" << locks;
     msg.retValue() << ",acceptcalls=" << lookup(Engine::accept(),Engine::getCallAcceptStates());
     if (msg.getBoolValue("details",true)) {
 	NamedIterator iter(Engine::runParams());
@@ -1541,6 +1545,8 @@ int Engine::engineCleanup()
 #endif
     delete this;
     int mux = Mutex::locks();
+    if (mux < 0)
+	mux = 0;
     unsigned int cnt = plugins.count();
     plugins.clear();
     if (mux || cnt)
@@ -1940,8 +1946,8 @@ static void usage(bool client, FILE* f)
 "Usage: yate [options] [commands ...]\n"
 "   -h, --help     Display help message (this one) and exit\n"
 "   -V, --version  Display program version and exit\n"
-"   -v             Verbose debugging (you can use more than once)\n"
-"   -q             Quieter debugging (you can use more than once)\n"
+"   -v             Verbose logging (you can use more than once)\n"
+"   -q             Quieter logging (you can use more than once)\n"
 "%s"
 "   -p filename    Write PID to file\n"
 "   -l filename    Log to file\n"
@@ -1963,7 +1969,7 @@ static void usage(bool client, FILE* f)
 "   -D[options]    Special debugging options\n"
 "     a            Abort if bugs are encountered\n"
 "     m            Attempt to debug mutex deadlocks\n"
-"     d            Disable locking debugging and safety features\n"
+"     d            Enable locking debugging and safety features\n"
 #ifdef RTLD_GLOBAL
 "     l            Try to keep module symbols local\n"
 #endif
@@ -2195,7 +2201,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 				    }
 				    break;
 				case 'd':
-				    Lockable::disableSafety();
+				    Lockable::enableSafety();
 				    break;
 #ifdef RTLD_GLOBAL
 				case 'l':

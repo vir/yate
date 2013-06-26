@@ -316,6 +316,9 @@ Yate::Output(true);
 /* Uncomment next line to get debugging messages */
 // Yate::Debug(true);
 
+/* Set tracking name for all installed handlers */
+Yate::SetLocal("trackparam","overlapped.php");
+
 /* Install filtered handlers for the DTMF and wave EOF messages */
 Yate::Install("chan.dtmf",95,"targetid",$ourcallid);
 Yate::Install("chan.notify",95,"targetid",$ourcallid);

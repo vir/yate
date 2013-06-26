@@ -29,18 +29,18 @@
 
 using namespace TelEngine;
 
-inline void setStringFromInteger(String& dest, u_int32_t value, u_int8_t length)
+static inline void setStringFromInteger(String& dest, u_int32_t value, u_int8_t length)
 {
     char tmp[11];
     switch (length) {
 	case 1:
-	    sprintf(tmp,"%0#4x",(u_int8_t)value);
+	    sprintf(tmp,"0x%02x",(u_int8_t)value);
 	    break;
 	case 2:
-	    sprintf(tmp,"%0#6x",(u_int16_t)value);
+	    sprintf(tmp,"0x%04x",(u_int16_t)value);
 	    break;
 	default:
-	    sprintf(tmp,"%0#10x",value);
+	    sprintf(tmp,"0x%08x",value);
 	    break;
     }
     dest = tmp;
@@ -50,32 +50,129 @@ inline void setStringFromInteger(String& dest, u_int32_t value, u_int8_t length)
 class IAXTrunkFrameTrans : public GenObject
 {
 public:
-    inline IAXTrunkFrameTrans(IAXTransaction* tr, u_int32_t frameTs)
-	: m_tr(tr), m_frameTs(frameTs), m_trunkIndex(0)
+    inline IAXTrunkFrameTrans(u_int16_t callNo)
+	: m_callNo(callNo)
 	{}
-    ~IAXTrunkFrameTrans()
-	{ TelEngine::destruct(m_tr); }
-    static IAXTrunkFrameTrans* find(ObjList& list, u_int16_t rCallNo);
-    IAXTransaction* m_tr;
-    u_int32_t m_frameTs;
-    unsigned int m_trunkIndex;
+    static IAXTrunkFrameTrans* get(ObjList& list, u_int16_t rCallNo);
+    u_int16_t m_callNo;
+    ObjList m_blocks;
 };
 
-IAXTrunkFrameTrans* IAXTrunkFrameTrans::find(ObjList& list, u_int16_t rCallNo)
+IAXTrunkFrameTrans* IAXTrunkFrameTrans::get(ObjList& list, u_int16_t callNo)
 {
     for (ObjList* o = list.skipNull(); o; o = o->skipNext()) {
 	IAXTrunkFrameTrans* t = static_cast<IAXTrunkFrameTrans*>(o->get());
-	if (t->m_tr->remoteCallNo() == rCallNo)
+	if (t->m_callNo == callNo)
 	    return t;
     }
-    return 0;
+    IAXTrunkFrameTrans* t = new IAXTrunkFrameTrans(callNo);
+    list.append(t);
+    return t;
 }
 
 
 /*
  * IAXInfoElement
  */
-TokenDict IAXInfoElement::s_ieData[] = {
+const TokenDict IAXInfoElement::s_causeName[] = {
+    {"unallocated",                    1}, // Unallocated (unassigned) number
+    {"noroute-to-network",             2}, // No route to specified transit network
+    {"noroute",                        3}, // No route to destination
+    {"channel-unacceptable",           6}, // Channel unacceptable
+    {"call-delivered",                 7}, // Call awarded and being delivered in an established channel
+    {"normal-clearing",               16}, // Normal Clearing
+    {"busy",                          17}, // User busy
+    {"noresponse",                    18}, // No user responding
+    {"noanswer",                      19}, // No answer from user (user alerted)
+    {"rejected",                      21}, // Call Rejected
+    {"moved",                         22}, // Number changed
+    {"out-of-order",                  27}, // Destination out of order
+    {"invalid-number",                28}, // Invalid number format
+    {"facility-rejected",             29}, // Facility rejected
+    {"status-enquiry-rsp",            30}, // Response to STATUS ENQUIRY
+    {"normal",                        31}, // Normal, unspecified
+    {"congestion",                    34}, // No circuit/channel available
+    {"channel-congestion",            34},
+    {"net-out-of-order",              38}, // Network out of order
+    {"noconn",                        38},
+    {"temporary-failure",             41}, // Temporary failure
+    {"congestion",                    42}, // Switching equipment congestion
+    {"switch-congestion",             42},
+    {"access-info-discarded",         43}, // Access information discarded
+    {"channel-unavailable",           44}, // Requested channel not available
+    {"preempted",                     45}, // Preempted
+    {"noresource",                    47}, // Resource unavailable, unspecified
+    {"facility-not-subscribed",       50}, // Requested facility not subscribed
+    {"barred-out",                    52}, // Outgoing call barred
+    {"barred-in",                     54}, // Incoming call barred
+    {"bearer-cap-not-auth",           57}, // Bearer capability not authorized
+    {"bearer-cap-not-available",      58}, // Bearer capability not presently available
+    {"nomedia",                       58},
+    {"service-unavailable",           63}, // Service or option not available
+    {"bearer-cap-not-implemented",    65}, // Bearer capability not implemented
+    {"channel-type-not-implemented",  66}, // Channel type not implemented
+    {"facility-not-implemented",      69}, // Requested facility not implemented
+    {"restrict-bearer-cap-avail",     70}, // Only restricted digital information bearer capability is available
+    {"service-not-implemented",       79}, // Service or option not implemented, unspecified
+    {"invalid-callref",               81}, // Invalid call reference value
+    {"unknown-channel",               82}, // Identified channel does not exist
+    {"unknown-callid",                83}, // A suspended call exists, but this call identity does not
+    {"duplicate-callid",              84}, // Call identity in use
+    {"no-call-suspended",             85}, // No call suspended
+    {"suspended-call-cleared",        86}, // Call having the requested call identity has been cleared
+    {"incompatible-dest",             88}, // Incompatible destination
+    {"invalid-transit-net",           91}, // Invalid transit network selection
+    {"invalid-message",               95}, // Invalid message, unspecified
+    {"missing-mandatory-ie",          96}, // Mandatory information element is missing
+    {"unknown-message",               97}, // Message type non-existent or not implemented
+    {"wrong-message",                 98}, // Message not compatible with call state, non-existent or not implemented
+    {"unknown-ie",                    99}, // Information element non-existent or not implemented
+    {"invalid-ie",                   100}, // Invalid information element contents
+    {"wrong-state-message",          101}, // Message not compatible with call state
+    {"timeout",                      102}, // Recovery on timer expiry
+    {"mandatory-ie-len",             103}, // Mandatory information element length error
+    {"protocol-error",               111}, // Protocol error, unspecified
+    {"interworking",                 127}, // Interworking, unspecified
+    {0,0}
+};
+
+const TokenDict IAXInfoElement::s_typeOfNumber[] = {
+    {"unknown",          0x00},      // Unknown
+    {"international",    0x10},      // International number
+    {"national",         0x20},      // National number
+    {"net-specific",     0x30},      // Network specific number
+    {"subscriber",       0x40},      // Subscriber number
+    {"abbreviated",      0x60},      // Abbreviated number
+    {"reserved",         0x70},      // Reserved for extension
+    {0,0}
+};
+
+const TokenDict IAXInfoElement::s_presentation[] = {
+    {"allowed",          0x00},      // Presentation allowed
+    {"restricted",       0x20},      // Presentation restricted
+    {"unavailable",      0x40},      // Number not available due to interworking
+    // Aliases for presentation=...
+    {"yes",              0x00},
+    {"true",             0x00},
+    {"no",               0x20},
+    {"false",            0x20},
+    {0,0}
+};
+
+const TokenDict IAXInfoElement::s_screening[] = {
+    {"user-provided",        0x00},  // User-provided, not screened
+    {"user-provided-passed", 0x01},  // User-provided, verified and passed
+    {"user-provided-failed", 0x02},  // User-provided, verified and failed
+    {"network-provided",     0x03},  // Network provided
+    // Aliases for screening=...
+    {"yes",                  0x01},  // User-provided, verified and passed
+    {"true",                 0x01},
+    {"no",                   0x00},  // User-provided, not screened
+    {"false",                0x00},
+    {0,0}
+};
+
+const TokenDict IAXInfoElement::s_ieData[] = {
     {"CALLED_NUMBER",     CALLED_NUMBER},
     {"CALLING_NUMBER",    CALLING_NUMBER},
     {"CALLING_ANI",       CALLING_ANI},
@@ -128,6 +225,8 @@ TokenDict IAXInfoElement::s_ieData[] = {
     {"RR_DROPPED",        RR_DROPPED},
     {"RR_OOO",            RR_OOO},
     {"CALLTOKEN",         CALLTOKEN},
+    {"CAPABILITY2",       CAPABILITY2},
+    {"FORMAT2",           FORMAT2},
     {0,0}
 };
 
@@ -340,6 +439,12 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
 		appendBinary((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
 		i += data[i] + 1;
 		break;
+	    case IAXInfoElement::CAPABILITY2:
+	    case IAXInfoElement::FORMAT2:
+		// Binary: 1 byte version + array of bytes (media format flags)
+		appendBinary((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
+		i += data[i] + 1;
+		break;
 	    // 4 bytes
 	    case IAXInfoElement::CAPABILITY:
 	    case IAXInfoElement::FORMAT:
@@ -419,7 +524,8 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
     m_invalidIEList = i == 0xFFFF;
     if (!m_invalidIEList)
 	return true;
-    Debug(DebugWarn,"IAXIEList::createFromFrame. Frame(%u,%u) with invalid IE [%p]",frame->type(),frame->subclass(),frame);
+    Debug(DebugWarn,"IAXIEList::createFromFrame. Frame(%u,%u) with invalid IE [%p]",
+	frame->type(),frame->subclass(),frame);
     return false;
 }
 
@@ -433,6 +539,52 @@ void IAXIEList::toBuffer(DataBlock& buf)
 	ie->toBuffer(data);
 	buf.append(data);
     }
+}
+
+static inline void addNumericName(String& buf, IAXInfoElement* ie, const TokenDict* dict,
+    const char* prefix = " (", const char* suffix = ")")
+{
+    int val = (static_cast<IAXInfoElementNumeric*>(ie))->data();
+    const char* s = lookup(val,dict);
+    if (s)
+	buf << prefix << s << suffix;
+}
+
+static inline void addCallingPres(String& buf, IAXInfoElement* ie)
+{
+    int val = (static_cast<IAXInfoElementNumeric*>(ie))->data();
+    const char* pres = lookup(val & 0xf0,IAXInfoElement::s_presentation);
+    const char* screen = lookup(val & 0x0f,IAXInfoElement::s_screening);
+    if (!(pres || screen))
+	return;
+    buf << " (";
+    if (pres)
+	buf << pres;
+    if (screen)
+	buf << (pres ? "," : "") << screen;
+    buf << ")";
+}
+
+static inline void addValPadded0(String& buf, unsigned int val, const char* prefix)
+{
+    buf << prefix;
+    if (val < 10)
+	buf << "0";
+    buf << val;
+}
+
+static void addDateTime(String& buf, IAXInfoElement* ie)
+{
+    u_int32_t val = (static_cast<IAXInfoElementNumeric*>(ie))->data();
+    unsigned int y,mon,d,h,min,s;
+    IAXEngine::decodeDateTime(val,y,mon,d,h,min,s);
+    buf << " (" << y;
+    addValPadded0(buf,mon,".");
+    addValPadded0(buf,d,".");
+    addValPadded0(buf,h," ");
+    addValPadded0(buf,min,":");
+    addValPadded0(buf,s,":");
+    buf << ")";
 }
 
 void IAXIEList::toString(String& dest, const char* indent)
@@ -514,8 +666,9 @@ void IAXIEList::toString(String& dest, const char* indent)
 		dest << " (" << tmp << ')';
 		}
 		break;
-	    case IAXInfoElement::DATETIME:		//TODO: print more data
+	    case IAXInfoElement::DATETIME:
 		ie->toString(dest);
+		addDateTime(dest,ie);
 		break;
 	    case IAXInfoElement::SAMPLINGRATE:
 		dest << (unsigned int)((static_cast<IAXInfoElementNumeric*>(ie))->data()) << " Hz";
@@ -555,11 +708,20 @@ void IAXIEList::toString(String& dest, const char* indent)
 		break;
 	    // 1 byte
 	    case IAXInfoElement::IAX_UNKNOWN:
-	    case IAXInfoElement::CALLINGPRES:		//TODO: print more data
-	    case IAXInfoElement::CALLINGTON:		//TODO: print more data
-	    case IAXInfoElement::CAUSECODE:		//TODO: print more data
 	    case IAXInfoElement::ENCRYPTION:		//TODO: print more data
 		ie->toString(dest);
+		break;
+	    case IAXInfoElement::CALLINGPRES:
+		ie->toString(dest);
+		addCallingPres(dest,ie);
+		break;
+	    case IAXInfoElement::CALLINGTON:
+		ie->toString(dest);
+		addNumericName(dest,ie,IAXInfoElement::s_typeOfNumber);
+		break;
+	    case IAXInfoElement::CAUSECODE:
+		ie->toString(dest);
+		addNumericName(dest,ie,IAXInfoElement::s_causeName);
 		break;
 	    case IAXInfoElement::MSGCOUNT:
 		{
@@ -576,12 +738,15 @@ void IAXIEList::toString(String& dest, const char* indent)
     }
 }
 
-IAXInfoElement* IAXIEList::getIE(IAXInfoElement::Type type)
+IAXInfoElement* IAXIEList::getIE(IAXInfoElement::Type type, bool remove)
 {
-    for (ObjList* l = m_list.skipNull(); l; l = l->next()) {
+    for (ObjList* l = m_list.skipNull(); l; l = l->skipNext()) {
 	IAXInfoElement* ie = static_cast<IAXInfoElement*>(l->get());
-	if (ie && ie->type() == type)
-	    return ie;
+	if (ie->type() != type)
+	    continue;
+	if (remove)
+	    l->remove(false);
+	return ie;
     }
     return 0;
 }
@@ -640,6 +805,37 @@ void IAXAuthMethod::authList(String& dest, u_int16_t auth, char sep)
     }
 }
 
+
+/*
+ * IAXFormatDesc
+ */
+// Set the format
+void IAXFormatDesc::setFormat(u_int32_t fmt, int type)
+{
+    m_format = IAXFormat::mask(fmt,type);
+    if (!m_format) {
+	m_multiplier = 1;
+	return;
+    }
+    if (type == IAXFormat::Audio) {
+	switch (m_format) {
+	    case IAXFormat::G722:
+		// 16kHz samplig rate
+		m_multiplier = 16;
+		break;
+	    default:
+		// Assume 8kHz sampling rate
+		m_multiplier = 8;
+	}
+    }
+    else if (type == IAXFormat::Video)
+	// Assume 90kHz sampling rate for video
+	m_multiplier = 90;
+    else
+	m_multiplier = 1;
+}
+
+
 /*
  * IAXFormat
  */
@@ -658,6 +854,7 @@ const TokenDict IAXFormat::s_formats[] = {
     {"G.726 AAL2",   G726AAL2},
     {"G.722",        G722},
     {"AMR",          AMR},
+    {"GSM_HR",       GSM_HR},
     {"JPEG",         JPEG},
     {"PNG",          PNG},
     {"H261",         H261},
@@ -680,11 +877,11 @@ const String IAXFormat::s_typesList[IAXFormat::TypeCount] = { "audio", "video", 
 void IAXFormat::set(u_int32_t* fmt, u_int32_t* fmtIn, u_int32_t* fmtOut)
 {
     if (fmt)
-	m_format = mask(*fmt,m_type);
+	m_format.setFormat(*fmt,m_type);
     if (fmtIn)
-	m_formatIn = mask(*fmtIn,m_type);
+	m_formatIn.setFormat(*fmtIn,m_type);
     if (fmtOut)
-	m_formatOut = mask(*fmtOut,m_type);
+	m_formatOut.setFormat(*fmtOut,m_type);
 }
 
 void IAXFormat::formatList(String& dest, u_int32_t formats, const TokenDict* dict,
@@ -717,11 +914,10 @@ u_int32_t IAXFormat::encode(const String& formats, const TokenDict* dict, char s
     if (!dict)
 	return 0;
     u_int32_t mask = 0;
-    ObjList* list = formats.split(',',false);
+    ObjList* list = formats.split(sep,false);
     for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
 	int fmt = lookup(o->get()->toString(),dict);
-	if (fmt > 0)
-	    mask |= fmt;
+	mask |= fmt;
     }
     TelEngine::destruct(list);
     return mask;
@@ -820,15 +1016,21 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 	}
 	u_int32_t sc = 0;
 	bool mark = false;
-	if (buf[10] != IAXFrame::Video)
-	    sc = IAXFrame::unpackSubclass(buf[11]);
+	unsigned char type = buf[10];
+	if (type != IAXFrame::Video) {
+	    // Hack: Control StopSounds is sent with subclass 255
+	    if (type != IAXFrame::Control || buf[11] != 255)
+		sc = IAXFrame::unpackSubclass(buf[11]);
+	    else
+		sc = IAXFullFrame::StopSounds;
+	}
 	else {
 	    mark = 0 != (buf[11] & 0x40);
 	    // Clear the mark flag
 	    sc = IAXFrame::unpackSubclass(buf[11] & 0xbf);
 	}
 	u_int32_t ts = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
-	return new IAXFullFrame((IAXFrame::Type)buf[10],sc,scn,dcn,buf[8],buf[9],ts,retrans,buf+12,len-12,mark);
+	return new IAXFullFrame((IAXFrame::Type)type,sc,scn,dcn,buf[8],buf[9],ts,retrans,buf+12,len-12,mark);
     }
     // Meta frame ?
     if (scn == 0) {
@@ -878,57 +1080,38 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 	    u_int32_t ts = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
 	    buf += 8;
 	    len -= 8;
-	    u_int64_t timeMs = Time::msecNow();
+	    Time now;
 	    ObjList list;
 	    while (len >= 4) {
 		u_int16_t dlen = (buf[2] << 8) | buf[3];
 		if ((unsigned int)(dlen + 4) > len)
-		    return 0;
+		    break;
 		scn = (buf[0] << 8) | buf[1];
 		bool retrans = false;
 		if (scn & 0x8000) {
 		    retrans = true;
 		    scn &= 0x7fff;
 		}
-		IAXTrunkFrameTrans* t = IAXTrunkFrameTrans::find(list,scn);
-		if (!t) {
-		    IAXTransaction* tr = engine->findTransaction(*addr,scn);
-		    if (tr) {
-			u_int32_t frameTs = 0;
-			if (tr->updateTrunkRecvTs(frameTs,ts,timeMs)) {
-			    t = new IAXTrunkFrameTrans(tr,frameTs);
-			    list.append(t);
-			}
-			else
-			    TelEngine::destruct(tr);
-		    }
-		}
-		else
-		    // Adjust timestamp: there are more packets for the same transaction
-		    t->m_frameTs++;
-		if (t) {
-		    IAXFrame* frame = new IAXFrame(IAXFrame::Voice,scn,t->m_frameTs,retrans,buf+4,dlen);
-		    if (!t->m_tr->processFrame(frame))
-			frame->deref();
-		}
+		IAXTrunkFrameTrans* t = IAXTrunkFrameTrans::get(list,scn);
+		t->m_blocks.append(new DataBlock((void*)(buf+4),dlen));
 		dlen += 4;
 		buf += dlen;
 		len -= dlen;
+	    }
+	    for (ObjList* o = list.skipNull(); o; o = o->skipNext()) {
+		IAXTrunkFrameTrans* t = static_cast<IAXTrunkFrameTrans*>(o->get());
+		IAXTransaction* tr = engine->findTransaction(*addr,t->m_callNo);
+		if (!tr)
+		    continue;
+		tr->processMiniNoTs(ts,t->m_blocks,now);
+		TelEngine::destruct(tr);
+		
 	    }
 	}
 	return 0;
     }
     // Mini frame
     return new IAXFrame(IAXFrame::Voice,scn,dcn,false,buf+4,len-4);
-}
-
-// Build a miniframe buffer
-void IAXFrame::buildMiniFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t tStamp,
-    void* data, unsigned int len)
-{
-    unsigned char header[4] = {sCallNo >> 8,sCallNo & 0xff,tStamp >> 8,tStamp & 0xff};
-    dest.assign(header,4);
-    dest.append(data,len);
 }
 
 // Build a video meta frame buffer
@@ -1002,6 +1185,8 @@ TokenDict IAXFullFrame::s_controlTypes[] = {
         {"HOLD",        Hold},
         {"UNHOLD",      Unhold},
         {"VIDUPDATE",   VidUpdate},
+        {"SRCUPDATE",   SrcUpdate},
+        {"STOPSOUNDS",  StopSounds},
         {0,0}
 	};
 
@@ -1218,102 +1403,213 @@ void IAXFullFrame::setDataHeader()
     m_data.assign(header,sizeof(header));
 }
 
+
 /*
- * IAXFrameOut
- */
-void IAXFrameOut::setRetrans()
+* IAXTrunkInfo
+*/
+// Init all data from parameters
+void IAXTrunkInfo::init(const NamedList& params, const String& prefix,
+    const IAXTrunkInfo* def)
 {
-    if (!m_retrans) {
-	m_retrans = true;
-	((unsigned char*)m_data.data())[2] |= 0x80;
+    m_retransCount = params.getIntValue(prefix + "retrans_count",
+	def ? def->m_retransCount : IAX2_RETRANS_COUNT_DEF,
+	IAX2_RETRANS_COUNT_MIN,IAX2_RETRANS_COUNT_MAX);
+    m_retransInterval = params.getIntValue(prefix + "retrans_interval",
+	def ? def->m_retransInterval : IAX2_RETRANS_INTERVAL_DEF,
+	IAX2_RETRANS_INTERVAL_MIN,IAX2_RETRANS_INTERVAL_MAX);
+    m_pingInterval = params.getIntValue(prefix + "ping_interval",
+	def ? def->m_pingInterval : IAX2_PING_INTERVAL_DEF,
+	IAX2_PING_INTERVAL_MIN);
+}
+
+// Init from parameters
+void IAXTrunkInfo::initTrunking(const NamedList& params, const String& prefix,
+    const IAXTrunkInfo* def, bool out, bool in)
+{
+    if (out) {
+	m_timestamps = params.getBoolValue(prefix + "timestamps",
+	    !def || def->m_timestamps);
+	m_sendInterval = params.getIntValue(prefix + "sendinterval",
+	    def ? def->m_sendInterval : IAX2_TRUNKFRAME_SEND_DEF,IAX2_TRUNKFRAME_SEND_MIN);
+	m_maxLen = params.getIntValue(prefix + "maxlen",
+	    def ? def->m_maxLen : IAX2_TRUNKFRAME_LEN_DEF,IAX2_TRUNKFRAME_LEN_MIN);
+	m_efficientUse = params.getBoolValue(prefix + "efficient_use",
+	    def && def->m_efficientUse);
+    }
+    if (in) {
+	m_trunkInSyncUsingTs = params.getBoolValue(prefix + "nominits_sync_use_ts",
+	    !def || def->m_trunkInSyncUsingTs);
+	m_trunkInTsDiffRestart = params.getIntValue(prefix + "nominits_ts_diff_restart",
+	    def ? m_trunkInTsDiffRestart : 5000,1000);
     }
 }
 
-void IAXFrameOut::transmitted()
+// Update trunking from parameters. Don't change values not present in list
+void IAXTrunkInfo::updateTrunking(const NamedList& params, const String& prefix,
+    bool out, bool in)
 {
-    if (m_retransCount) {
-	m_retransCount--;
-	m_retransTimeInterval *= 2;
-	m_nextTransTime += m_retransTimeInterval;
-   }
+    if (out) {
+	m_timestamps = params.getBoolValue(prefix + "timestamps",m_timestamps);
+	m_sendInterval = params.getIntValue(prefix + "sendinterval",
+	    m_sendInterval,IAX2_TRUNKFRAME_SEND_MIN);
+	m_maxLen = params.getIntValue(prefix + "maxlen",m_maxLen,IAX2_TRUNKFRAME_LEN_MIN);
+	m_efficientUse = params.getBoolValue(prefix + "efficient_use",m_efficientUse);
+    }
+    if (in) {
+	m_trunkInSyncUsingTs = params.getBoolValue(prefix + "nominits_sync_use_ts",
+	    m_trunkInSyncUsingTs);
+	m_trunkInTsDiffRestart = params.getIntValue(prefix + "nominits_ts_diff_restart",
+	    m_trunkInTsDiffRestart,1000);
+    }
 }
 
-void IAXFrameOut::adjustAuthTimeout(u_int64_t nextTransTime)
+// Dump info
+void IAXTrunkInfo::dump(String& buf, const char* sep, bool out, bool in, bool other)
 {
-    if (!(type() == IAXFrame::IAX && (subclass() == IAXControl::AuthReq || subclass() ==IAXControl::RegAuth)))
-	return;
-    m_retransCount = 1;
-    m_nextTransTime = nextTransTime;
+    if (out) {
+	buf.append("timestamps=",sep) << String::boolText(m_timestamps);
+	buf << sep << "sendinterval=" << m_sendInterval;
+	buf << sep << "maxlen=" << m_maxLen;
+	buf << sep << "efficient_use=" << String::boolText(m_efficientUse);
+    }
+    if (in) {
+	buf.append("nominits_sync_use_ts=",sep) << String::boolText(m_trunkInSyncUsingTs);
+	buf << sep << "nominits_ts_diff_restart=" << m_trunkInTsDiffRestart;
+    }
+    if (other) {
+	buf.append("retrans_count=",sep) << m_retransCount;
+	buf << sep << "retrans_interval=" << m_retransInterval;
+	buf << sep << "ping_interval=" << m_pingInterval;
+    }
 }
+
 
 /*
 * IAXMetaTrunkFrame
 */
-#define IAX2_METATRUNK_HEADERLENGTH 8
-#define IAX2_MINIFRAME_HEADERLENGTH 6
-
-IAXMetaTrunkFrame::IAXMetaTrunkFrame(IAXEngine* engine, const SocketAddr& addr)
-    : Mutex(true,"IAXMetaTrunkFrame"),
-      m_data(0), m_dataAddIdx(IAX2_METATRUNK_HEADERLENGTH), m_engine(engine), m_addr(addr)
+IAXMetaTrunkFrame::IAXMetaTrunkFrame(IAXEngine* engine, const SocketAddr& addr,
+    bool timestamps, unsigned int maxLen, unsigned int sendInterval)
+    : Mutex(false,"IAXMetaTrunkFrame"),
+    m_calls(0), m_data(0), m_dataAddIdx(IAX2_TRUNKFRAME_HEADERLENGTH),
+    m_timeStamp(0), m_send(0), m_lastSentTs(0),
+    m_sendInterval(sendInterval),
+    m_engine(engine), m_addr(addr),
+    m_trunkTimestamps(timestamps), m_maxLen(maxLen), m_maxDataLen(0),
+    m_miniHdrLen(timestamps ? 6 : 4)
 {
-    m_data = new u_int8_t[m_engine->maxFullFrameDataLen()];
+    // Make sure we don't receive invalid values
+    if (m_maxLen < IAX2_TRUNKFRAME_LEN_MIN)
+	m_maxLen = IAX2_TRUNKFRAME_LEN_MIN;
+    m_data = new u_int8_t[m_maxLen];
+    // Audio data length can't be greater the remaining space
+    // Also make sure we can put it in 2 bytes
+    m_maxDataLen = m_maxLen - IAX2_TRUNKFRAME_HEADERLENGTH - m_miniHdrLen;
+    if (m_maxDataLen > 0xffff)
+	m_maxDataLen = 0xffff;
     // Meta indicator
     *(u_int16_t*)m_data = 0;
     // Meta command & Command data (use timestamps)
     m_data[2] = 1;
-    m_data[3] = 1;
-    // Frame timestamp
-    setTimestamp((u_int32_t)Time::msecNow());
+    m_data[3] = m_trunkTimestamps ? 1 : 0;
+    XDebug(m_engine,DebugAll,"Trunk frame '%s:%d' created [%p]",
+	m_addr.host().c_str(),m_addr.port(),this);
 }
 
 IAXMetaTrunkFrame::~IAXMetaTrunkFrame()
-{ 
-    m_engine->removeTrunkFrame(this);
-    delete[] m_data; 
+{
+    if (!m_calls)
+	XDebug(m_engine,DebugAll,"Trunk frame '%s:%d' destroyed [%p]",
+	    m_addr.host().c_str(),m_addr.port(),this);
+    else
+	Debug(m_engine,DebugMild,"Trunk frame '%s:%d' destroyed with %u calls [%p]",
+	    m_addr.host().c_str(),m_addr.port(),m_calls,this);
+    delete[] m_data;
 }
 
-void IAXMetaTrunkFrame::setTimestamp(u_int32_t tStamp)
+unsigned int IAXMetaTrunkFrame::add(u_int16_t sCallNo, const DataBlock& data, u_int32_t tStamp)
 {
-    m_timestamp = tStamp;
-    m_data[4] = (u_int8_t)(tStamp >> 24);
-    m_data[5] = (u_int8_t)(tStamp >> 16);
-    m_data[6] = (u_int8_t)(tStamp >> 8);
-    m_data[7] = (u_int8_t)tStamp;
-}
-
-bool IAXMetaTrunkFrame::add(u_int16_t sCallNo, const DataBlock& data, u_int32_t tStamp)
-{
-    Lock lock(this);
-    bool b = true;
     // Do we have data ?
     if (!data.length())
-	return b;
+	return 0;
+    // Avoid buffer overflow
+    if (data.length() > m_maxDataLen) {
+	Debug(m_engine,DebugGoOn,
+	    "Trunk frame '%s:%d' can't add %u bytes (max=%u) for call %u [%p]",
+	    m_addr.host().c_str(),m_addr.port(),data.length(),m_maxDataLen,sCallNo,this);
+	return 0;
+    }
+    Lock lck(this);
+    if (!m_timeStamp)
+	setTimestamp(Time::now());
     // If no more room, send it
-    if (m_dataAddIdx + data.length() + IAX2_MINIFRAME_HEADERLENGTH > m_engine->maxFullFrameDataLen())
-	b = send((u_int32_t)Time::msecNow());
-    // Is the first mini frame ?
-    if (m_dataAddIdx == IAX2_METATRUNK_HEADERLENGTH)
-	m_timestamp = (u_int32_t)Time::msecNow();
+    if (m_dataAddIdx + data.length() + m_miniHdrLen > m_maxLen)
+	doSend();
+    XDebug(m_engine,DebugAll,"Trunk frame '%s:%d' adding %u payload bytes call=%u [%p]",
+	m_addr.host().c_str(),m_addr.port(),data.length(),sCallNo,this);
     // Add the mini frame
-    m_data[m_dataAddIdx++] = (u_int8_t)(data.length() >> 8);
-    m_data[m_dataAddIdx++] = (u_int8_t)data.length();
-    m_data[m_dataAddIdx++] = (u_int8_t)(sCallNo >> 8);
-    m_data[m_dataAddIdx++] = (u_int8_t)sCallNo;
-    m_data[m_dataAddIdx++] = (u_int8_t)(tStamp >> 8);
-    m_data[m_dataAddIdx++] = (u_int8_t)tStamp;
+    if (m_trunkTimestamps) {
+	// data length + call no + timestamp
+	m_data[m_dataAddIdx++] = (u_int8_t)(data.length() >> 8);
+	m_data[m_dataAddIdx++] = (u_int8_t)data.length();
+	m_data[m_dataAddIdx++] = (u_int8_t)(sCallNo >> 8);
+	m_data[m_dataAddIdx++] = (u_int8_t)sCallNo;
+	m_data[m_dataAddIdx++] = (u_int8_t)(tStamp >> 8);
+	m_data[m_dataAddIdx++] = (u_int8_t)tStamp;
+    }
+    else {
+	// call no + data length
+	m_data[m_dataAddIdx++] = (u_int8_t)(sCallNo >> 8);
+	m_data[m_dataAddIdx++] = (u_int8_t)sCallNo;
+	m_data[m_dataAddIdx++] = (u_int8_t)(data.length() >> 8);
+	m_data[m_dataAddIdx++] = (u_int8_t)data.length();
+    }
     memcpy(m_data + m_dataAddIdx,data.data(),data.length());
     m_dataAddIdx += data.length();
-    return b;
+    return data.length();
 }
 
-bool IAXMetaTrunkFrame::send(u_int32_t tStamp)
+// Send this frame to remote peer
+bool IAXMetaTrunkFrame::doSend(const Time& now, bool onTime)
 {
-    Lock lock(this);
-    setTimestamp(tStamp);
+#define IAX2_TRUNKDATA_DELTA 160
+    bool dontSend = (m_dataAddIdx <= IAX2_TRUNKFRAME_HEADERLENGTH);
+    u_int64_t ellapsed = (now - m_timeStamp) / 1000;
+    if (ellapsed <= 0xffffffff) {
+	// Sent on time: set timestamp from send interval
+	// Sent on buffer full: set timestamp from ellapsed time
+	u_int32_t ts = 0;
+	if (onTime) {
+	    setSendTime(now);
+	    ts = m_lastSentTs + m_sendInterval;
+	    if (ts != ellapsed) {
+		// Adjust timestamp
+		if (ts > ellapsed) {
+		    if ((ts - ellapsed) >= IAX2_TRUNKDATA_DELTA)
+			ts = (u_int32_t)ellapsed;
+	        }
+		else if ((ellapsed - ts) >= IAX2_TRUNKDATA_DELTA)
+		    ts = (u_int32_t)ellapsed;
+	    }
+	}
+	else
+	    ts = (u_int32_t)ellapsed;
+	if (ts > m_lastSentTs || dontSend)
+	    m_lastSentTs = ts;
+	else
+	    m_lastSentTs++;
+    }
+    else {
+	// Timestamp wraparound: reset
+	setTimestamp(now);
+	m_lastSentTs = 0;
+    }
+    if (dontSend)
+	return false;
+    XDebug(m_engine,DebugAll,"Trunk frame '%s:%d' sending %u tStamp=%u calls=%u [%p]",
+	m_addr.host().c_str(),m_addr.port(),m_dataAddIdx,m_lastSentTs,m_calls,this);
+    setTimestamp(m_lastSentTs);
     bool b = m_engine->writeSocket(m_data,m_dataAddIdx,m_addr);
-    // Reset index & timestamp
-    m_dataAddIdx = IAX2_METATRUNK_HEADERLENGTH;
-    m_timestamp = 0;
+    m_dataAddIdx = IAX2_TRUNKFRAME_HEADERLENGTH;
     return b;
 }
 

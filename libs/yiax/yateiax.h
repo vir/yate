@@ -47,19 +47,53 @@
  */
 namespace TelEngine {
 
-class IAXInfoElement;
-class IAXInfoElementString;
-class IAXInfoElementNumeric;
-class IAXInfoElementBinary;
-class IAXFrame;
-class IAXFullFrame;
-class IAXFrameOut;
-class IAXEvent;
-class IAXEngine;
+class IAXInfoElement;                    // A single IAX2 Information Element
+class IAXInfoElementString;              // A single IAX2 text Information Element
+class IAXInfoElementNumeric;             // A single IAX2 numeric Information Element
+class IAXInfoElementBinary;              // A single IAX2 numeric Information Element
+class IAXIEList;                         // Information Element container
+class IAXAuthMethod;                     // Wrapper class for authentication methods values
+class IAXFormatDesc;                     // IAX format description
+class IAXFormat;                         // Wrapper class for formats
+class IAXControl;                        // Wrapper class for subclasses of frames of type IAX
+class IAXFrame;                          // This class holds an IAX frame
+class IAXFullFrame;                      // This class holds an IAX full frame
+class IAXFrameOut;                       // This class holds an outgoing IAX full frame
+class IAXTrunkInfo;                      // Trunk info
+class IAXMetaTrunkFrame;                 // Meta trunk frame
+class IAXMediaData;                      // IAX2 transaction media data
+class IAXTransaction;                    // An IAX2 transaction
+class IAXEvent;                          // Event class
+class IAXEngine;                         // IAX engine
 
 #define IAX_PROTOCOL_VERSION         0x0002           // Protocol version
 #define IAX2_MAX_CALLNO              32767            // Max call number value
 #define IAX2_MAX_TRANSINFRAMELIST    127              // Max transaction incoming frame list
+
+// Trunk frame header length
+#define IAX2_TRUNKFRAME_HEADERLENGTH 8
+// Trunk frame length
+#define IAX2_TRUNKFRAME_LEN_MIN 20                    // 16 bytes: meta header + miniframe with timestamps header
+#define IAX2_TRUNKFRAME_LEN_DEF 1400
+// Trunk frame send interval in milliseconds
+#define IAX2_TRUNKFRAME_SEND_MIN 5
+#define IAX2_TRUNKFRAME_SEND_DEF 20
+
+// Frame retransmission
+#define IAX2_RETRANS_COUNT_MIN 1
+#define IAX2_RETRANS_COUNT_MAX 10
+#define IAX2_RETRANS_COUNT_DEF 4
+#define IAX2_RETRANS_INTERVAL_MIN 200
+#define IAX2_RETRANS_INTERVAL_MAX 5000
+#define IAX2_RETRANS_INTERVAL_DEF 500
+
+// Ping
+#define IAX2_PING_INTERVAL_MIN 10000
+#define IAX2_PING_INTERVAL_DEF 20000
+
+// Sent challenge timeout
+#define IAX2_CHALLENGETOUT_MIN 5000
+#define IAX2_CHALLENGETOUT_DEF 30000
 
 /**
  * This class holds a single Information Element with no data
@@ -265,7 +299,7 @@ private:
  * This class holds a single Information Element with 1, 2 or 4 byte(s) length data
  * @short A single IAX2 numeric Information Element
  */
-class IAXInfoElementNumeric : public IAXInfoElement
+class YIAX_API IAXInfoElementNumeric : public IAXInfoElement
 {
 public:
     /**
@@ -659,8 +693,10 @@ public:
         G726AAL2 = (1 << 11),
         G722   = (1 << 12),
         AMR    = (1 << 13),
+        // NOTE: GSM Half Rate is not defined in RFC5456
+        GSM_HR    = (1 << 31),
         AudioMask = G723_1 | GSM | ULAW | ALAW | G726 | ADPCM | SLIN | LPC10 | G729 | SPEEX |
-            ILBC | G726AAL2 | G722 | AMR,
+            ILBC | G726AAL2 | G722 | AMR | GSM_HR,
         JPEG   = (1 << 16),
         PNG    = (1 << 17),
         ImageMask = JPEG | PNG,
@@ -1018,12 +1054,16 @@ public:
      * Build a miniframe buffer
      * @param dest Destination buffer
      * @param sCallNo Source call number
-     * @param tStamp Frame timestamp
+     * @param ts Frame timestamp
      * @param data Data
      * @param len Data length
      */
-    static void buildMiniFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t tStamp,
-	void* data, unsigned int len);
+    static inline void buildMiniFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t ts,
+	void* data, unsigned int len) {
+	    unsigned char header[4] = {sCallNo >> 8,sCallNo & 0xff,ts >> 8,ts & 0xff};
+	    dest.assign(header,4);
+	    dest.append(data,len);
+	}
 
     /**
      * Build a video meta frame buffer
@@ -1196,6 +1236,22 @@ public:
 	{ return m_subclass; }
 
     /**
+     * Check if this frame is used to request authentication
+     * @return True if this frame is used to request authentication (like RegReq or RegAuth)
+     */
+    inline bool isAuthReq() const {
+	    return type() == IAXFrame::IAX &&
+		(subclass() == IAXControl::AuthReq || subclass() == IAXControl::RegAuth);
+	}
+
+    /**
+     * Check if this frame is an INVAL one
+     * @return True if this frame is INVAL
+     */
+    inline bool isInval() const
+	{ return type() == IAXFrame::IAX && subclass() == IAXControl::Inval; }
+
+    /**
      * Get a pointer to this frame if it is a full frame
      * @return A pointer to this frame
      */
@@ -1282,16 +1338,19 @@ public:
      * @param buf IE buffer
      * @param len IE buffer length
      * @param retransCount Retransmission counter
-     * @param retransInterval Time interval to the next retransmission
+     * @param retransIntervalMs Time interval to the next retransmission
      * @param ackOnly Acknoledge only flag. If true, the frame only expects an ACK
      * @param mark Mark flag
      */
     inline IAXFrameOut(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
-                       unsigned char oSeqNo, unsigned char iSeqNo, u_int32_t tStamp, const unsigned char* buf, unsigned int len,
-                       u_int16_t retransCount, u_int32_t retransInterval, bool ackOnly, bool mark = false)
+                       unsigned char oSeqNo, unsigned char iSeqNo, u_int32_t tStamp,
+		       const unsigned char* buf, unsigned int len,
+                       u_int16_t retransCount, u_int32_t retransIntervalMs,
+		       bool ackOnly, bool mark = false)
         : IAXFullFrame(type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,buf,len,mark),
-          m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount), m_retransTimeInterval(retransInterval),
-	  m_nextTransTime(Time::msecNow() + m_retransTimeInterval)
+          m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount),
+          m_retransTimeInterval(retransIntervalMs * 1000),
+	  m_nextTransTime(Time::now() + m_retransTimeInterval)
 	{}
 
     /**
@@ -1306,17 +1365,19 @@ public:
      * @param ieList List of frame IEs
      * @param maxlen Max frame data length
      * @param retransCount Retransmission counter
-     * @param retransInterval Time interval to the next retransmission
+     * @param retransIntervalMs Time interval to the next retransmission
      * @param ackOnly Acknoledge only flag. If true, the frame only expects an ACK
      * @param mark Mark flag
      */
     inline IAXFrameOut(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
                        unsigned char oSeqNo, unsigned char iSeqNo, u_int32_t tStamp,
 		       IAXIEList* ieList, u_int16_t maxlen,
-                       u_int16_t retransCount, u_int32_t retransInterval, bool ackOnly, bool mark = false)
+                       u_int16_t retransCount, u_int32_t retransIntervalMs, bool ackOnly,
+		       bool mark = false)
         : IAXFullFrame(type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,ieList,maxlen,mark),
-          m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount), m_retransTimeInterval(retransInterval),
-	  m_nextTransTime(Time::msecNow() + m_retransTimeInterval)
+          m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount),
+          m_retransTimeInterval(retransIntervalMs * 1000),
+	  m_nextTransTime(Time::now() + m_retransTimeInterval)
 	{}
 
     /**
@@ -1326,11 +1387,11 @@ public:
 	{}
 
     /**
-     * Get the timeout (retransmission counter) of this frame
-     * @return True if the retransmission counter is 0
+     * Get the retransmission counter of this frame
+     * @return The retransmission counter is 0
      */
-    inline bool timeout() const
-        { return m_retransCount == 0; }
+    inline unsigned int retransCount() const
+        { return m_retransCount; }
 
     /**
      * Ask the frame if it's time for retransmit
@@ -1338,17 +1399,28 @@ public:
      * @return True if it's time to retransmit
      */
     inline bool timeForRetrans(u_int64_t time) const
-        { return time > m_nextTransTime; }
+        { return time >= m_nextTransTime; }
 
     /**
      * Set the retransmission flag of this frame
      */
-    void setRetrans();
+    inline void setRetrans() {
+	    if (m_retrans)
+		return;
+	    m_retrans = true;
+	    ((unsigned char*)m_data.data())[2] |= 0x80;
+	}
 
     /**
      * Update the retransmission counter and the time to next retransmission
      */
-    void transmitted();
+    inline void transmitted() {
+	    if (!m_retransCount)
+		return;
+	    m_retransCount--;
+	    m_retransTimeInterval *= 2;
+	    m_nextTransTime += m_retransTimeInterval;
+	}
 
     /**
      * Get the acknoledged flag of this frame
@@ -1371,10 +1443,23 @@ public:
 	{ return m_ackOnly; }
 
     /**
-     * Increase the timeout for acknoledged authentication frames sent and set the counter to 1
-     * @param nextTransTime Next transmission time
+     * Check if absolute timeout can be set
+     * @return True if absolute timeout can be set
      */
-    void adjustAuthTimeout(u_int64_t nextTransTime);
+    inline bool canSetTimeout()
+	{ return m_retransTimeInterval != 0; }
+
+    /**
+     * Set absolute timeout. Reset retransmission counter
+     * @param tout Timeout time
+     */
+    inline void setTimeout(u_int64_t tout) {
+	    if (!m_retransTimeInterval)
+		return;
+	    m_retransTimeInterval = 0;
+	    m_retransCount = 0;
+	    m_nextTransTime = tout;
+	}
 
 private:
     bool m_ack;				// Acknoledge flag
@@ -1382,6 +1467,80 @@ private:
     u_int16_t m_retransCount;		// Retransmission counter
     u_int32_t m_retransTimeInterval;	// Retransmission interval
     u_int64_t m_nextTransTime;		// Next transmission time
+};
+
+/**
+ * This class holds trunk description
+ * @short Trunk info
+ */
+class YIAX_API IAXTrunkInfo : public RefObject
+{
+public:
+    /**
+     * Constructor
+     */
+    inline IAXTrunkInfo()
+	: m_timestamps(true), m_sendInterval(IAX2_TRUNKFRAME_SEND_DEF),
+	m_maxLen(IAX2_TRUNKFRAME_LEN_DEF),
+	m_efficientUse(false), m_trunkInSyncUsingTs(true),
+	m_trunkInTsDiffRestart(5000),
+	m_retransCount(IAX2_RETRANS_COUNT_DEF),
+	m_retransInterval(IAX2_RETRANS_INTERVAL_DEF),
+	m_pingInterval(IAX2_PING_INTERVAL_DEF)
+	{}
+
+    /**
+     * Init non trunking related data
+     * @param params Parameter list
+     * @param prefix Parameter prefix
+     * @param def Optional defaults
+     */
+    void init(const NamedList& params, const String& prefix = String::empty(),
+	const IAXTrunkInfo* def = 0);
+
+    /**
+     * Init trunking from parameters
+     * @param params Parameter list
+     * @param prefix Parameter prefix
+     * @param def Optional defaults
+     * @param out True to init outgoing trunk data
+     * @param in True to init incoming trunk data
+     */
+    void initTrunking(const NamedList& params, const String& prefix = String::empty(),
+	const IAXTrunkInfo* def = 0, bool out = true, bool in = true);
+
+    /**
+     * Update trunking from parameters. Don't change values not present in list
+     * @param params Parameter list
+     * @param prefix Parameter prefix
+     * @param out True to update outgoing trunk data
+     * @param in True to update incoming trunk data
+     */
+    void updateTrunking(const NamedList& params, const String& prefix = String::empty(),
+	bool out = true, bool in = true);
+
+    /**
+     * Dump info
+     * @param buf Destination buffer
+     * @param sep Parameters separator
+     * @param out True to dump outgoing trunking info
+     * @param in True to dump incoming trunking info
+     * @param other True to dump non trunking info
+     */
+    void dump(String& buf, const char* sep = " ", bool out = true, bool in = true,
+	bool other = true);
+
+    bool m_timestamps;                   // Trunk type: with(out) timestamps
+    unsigned int m_sendInterval;         // Send interval
+    unsigned int m_maxLen;               // Max frame length
+    bool m_efficientUse;                 // Outgoing trunking: use or not the trunk based on calls using it
+    bool m_trunkInSyncUsingTs;           // Incoming trunk without timestamps: use trunk
+                                         //  time or trunk timestamp to re-build frame ts
+    u_int32_t m_trunkInTsDiffRestart;    // Incoming trunk without timestamp: diff between
+                                         //  timestamps at which we restart
+    unsigned int m_retransCount;         // Frame retransmission counter
+    unsigned int m_retransInterval;      // Frame retransmission interval in milliseconds
+    unsigned int m_pingInterval;         // Ping interval in milliseconds
 };
 
 /**
@@ -1395,8 +1554,12 @@ public:
      * Constructor. Constructs an outgoing meta trunk frame
      * @param engine The engine that owns this frame
      * @param addr Remote peer address
+     * @param timestamps True if miniframes have timestamps, false if not
+     * @param maxLen Maximum frame length
+     * @param sendInterval Trunk send interval in milliseconds
      */
-    IAXMetaTrunkFrame(IAXEngine* engine, const SocketAddr& addr);
+    IAXMetaTrunkFrame(IAXEngine* engine, const SocketAddr& addr, bool timestamps,
+	unsigned int maxLen, unsigned int sendInterval);
 
     /**
      * Destructor
@@ -1411,40 +1574,111 @@ public:
 	{ return m_addr; }
 
     /**
-     * Get the timestamp of this frame
-     * @return The timestamp of this frame
+     * Retrieve the number of calls using this trunk
+     * @return The number of calls using this trunk
      */
-    inline u_int32_t timestamp()
-	{ return m_timestamp; }
+    inline unsigned int calls() const
+	{ return m_calls; }
 
     /**
-     * Set the timestamp of this frame
-     * @param tStamp Timestamp value to set
+     * Change the number of calls using this trunk
+     * @param add True to add a call, false to remove it
      */
-    void setTimestamp(u_int32_t tStamp);
+    inline void changeCalls(bool add) {
+	    Lock lck(this);
+	    if (add)
+		m_calls++;
+	    else if (m_calls)
+		m_calls--;
+	}
+
+    /**
+     * Check if the frame is adding mini frames timestamps
+     * @return True if the frame is adding mini frames timestamps
+     */
+    inline bool trunkTimestamps() const
+	{ return m_trunkTimestamps; }
+
+    /**
+     * Retrieve the send interval
+     * @return Send interval in milliseconds
+     */
+    inline unsigned int sendInterval() const
+	{ return m_sendInterval; }
+
+    /**
+     * Retrieve the frame maximum length
+     * @return Frame maximum length
+     */
+    inline unsigned int maxLen() const
+	{ return m_maxLen; }
 
     /**
      * Add a mini frame. If no room, send before adding
      * @param sCallNo Sorce call number
      * @param data Mini frame data
      * @param tStamp Mini frame timestamp
-     * @return False if the frame was sent and the write operation failed
+     * @return The number of data bytes added to trunk, 0 on failure
      */
-    bool add(u_int16_t sCallNo, const DataBlock& data, u_int32_t tStamp);
+    unsigned int add(u_int16_t sCallNo, const DataBlock& data, u_int32_t tStamp);
 
     /**
-     * Send this frame to remote peer
-     * @param tStamp Frame timestamp
+     * Send this frame to remote peer if the time arrived
+     * @param now Current time
      * @return The result of the write operation
      */
-    bool send(u_int32_t tStamp = Time::msecNow());
+    inline bool timerTick(const Time& now = Time()) {
+	    if (m_dataAddIdx == IAX2_TRUNKFRAME_HEADERLENGTH || !m_send)
+		return false;
+	    Lock lck(this);
+	    return (now > m_send) && doSend(now,true);
+	}
+
+    /**
+     * Send this frame to remote peer if there is any data in buffer
+     * @return The result of the write operation
+     */
+    inline bool send() {
+	    if (m_dataAddIdx == IAX2_TRUNKFRAME_HEADERLENGTH)
+		return false;
+	    Lock lck(this);
+	    return m_dataAddIdx != IAX2_TRUNKFRAME_HEADERLENGTH && doSend();
+	}
 
 private:
+    IAXMetaTrunkFrame() {}      // No default constructor
+    // Send this frame to remote peer
+    bool doSend(const Time& now = Time(), bool onTime = false);
+    // Set timestamp and next time to send
+    inline void setTimestamp(u_int64_t now) {
+	    m_timeStamp = now;
+	    m_send = now + (u_int64_t)m_sendInterval * 1000;
+	}
+    // Set next time to send
+    inline void setSendTime(u_int64_t now)
+	{ m_send = now + (u_int64_t)m_sendInterval * 1000; }
+
+    // Set the timestamp of this frame
+    inline void setTimestamp(u_int32_t tStamp) {
+            m_data[4] = (u_int8_t)(tStamp >> 24);
+	    m_data[5] = (u_int8_t)(tStamp >> 16);
+	    m_data[6] = (u_int8_t)(tStamp >> 8);
+	    m_data[7] = (u_int8_t)tStamp;
+	}
+
+    unsigned int m_calls;       // The number of calls using it
     u_int8_t* m_data;		// Data buffer
     u_int16_t m_dataAddIdx;	// Current add index
-    u_int32_t m_timestamp;	// Frame timestamp
+    u_int64_t m_timeStamp;      // First time data was added
+    u_int64_t m_send;           // Time to send
+    u_int32_t m_lastSentTs;     // Last sent timestamp
+    unsigned int m_sendInterval;// Send interval in milliseconds
     IAXEngine* m_engine;	// The engine that owns this frame
     SocketAddr m_addr;		// Remote peer address
+    bool m_trunkTimestamps;     // Trunk type: with(out) timestamps
+    unsigned int m_maxLen;      // Max frame length
+    unsigned int m_maxDataLen;  // Max frame data length
+    unsigned char m_miniHdrLen; // Miniframe header length
 };
 
 /**
@@ -1602,6 +1836,13 @@ public:
      */
     inline State state() const
         { return m_state; }
+
+    /**
+     * Retrieve the transaction state name
+     * @return Transaction state name
+     */
+    inline const char* stateName()
+	{ return stateName(state()); }
 
     /**
      * Get the timestamp of this transaction
@@ -1772,8 +2013,20 @@ public:
 	{ return m_authdata; }
 
     /**
-     * Process a frame from remote peer
-     * This method is thread safe.
+     * Set the destroy flag
+     */
+    inline void setDestroy()
+	{ m_destroy = true; }
+
+    /**
+     * Start an outgoing transaction.
+     * This method is thread safe
+     */
+    void start();
+
+    /**
+     * Process a frame from remote peer.
+     * This method is thread safe
      * @param frame IAX frame belonging to this transaction to process
      * @return 'this' if successful or NULL if the frame is invalid
      */
@@ -1806,10 +2059,10 @@ public:
     /**
      * Get an IAX event from the queue
      * This method is thread safe.
-     * @param time The time this method was called
+     * @param now Current time
      * @return Pointer to an IAXEvent or 0 if none available
      */
-    IAXEvent* getEvent(u_int64_t time);
+    IAXEvent* getEvent(const Time& now = Time());
 
     /**
      * Get the maximum allowed number of full frames in the incoming frame list
@@ -1927,9 +2180,10 @@ public:
     /**
      * Enable trunking for this transaction
      * @param trunkFrame Pointer to IAXMetaTrunkFrame used to send trunked media
+     * @param efficientUse Use or not the trunk based on calls using it
      * @return False trunking is already enabled for this transactio or trunkFrame is 0
      */
-    bool enableTrunking(IAXMetaTrunkFrame* trunkFrame);
+    bool enableTrunking(IAXMetaTrunkFrame* trunkFrame, bool efficientUse);
 
     /**
      * Process a received call token
@@ -1939,13 +2193,12 @@ public:
     void processCallToken(const DataBlock& callToken);
 
     /**
-     * Update transaction incoming trunk data (used for trunk without timestamps)
-     * @param frameTs Address of variable to be set with frame timestamp
+     * Process incoming audio miniframes from trunk without timestamps
      * @param ts Trunk frame timestamp
-     * @param currentTimeMs Current time
-     * @return True if accepted
+     * @param blocks Received blocks
+     * @param now Current time
      */
-    bool updateTrunkRecvTs(u_int32_t& frameTs, u_int32_t ts, u_int64_t currentTimeMs);
+    void processMiniNoTs(u_int32_t ts, ObjList& blocks, const Time& now = Time());
 
     /**
      * Print transaction data on stdin
@@ -1964,9 +2217,22 @@ public:
 	{ return lookup(type,s_typeName); }
 
     /**
+     * Retrieve transaction state name
+     * @param state Transaction state
+     * @return Requested state name
+     */
+    static inline const char* stateName(int state)
+	{ return lookup(state,s_stateName); }
+
+    /**
      * Transaction type name
      */
     static const TokenDict s_typeName[];
+
+    /**
+     * Transaction state name
+     */
+    static const TokenDict s_stateName[];
 
     /**
      * Standard message sent if unsupported/unknown/none authentication methosd was received
@@ -2061,9 +2327,9 @@ protected:
      * @param evType IAXEvent type to generate
      * @param local If true it is a locally generated event
      * @param frame Frame to build event from
-     * @return Pointer to a valid IAXEvent
+     * @return Pointer to a valid IAXEvent if evType if non 0, 0 otherwise
      */
-    IAXEvent* waitForTerminate(u_int8_t evType, bool local, IAXFullFrame* frame);
+    IAXEvent* waitForTerminate(u_int8_t evType = 0, bool local = true, IAXFullFrame* frame = 0);
 
     /**
      * Constructs an IAXFrameOut frame, send it to remote peer and put it in the transmission list
@@ -2244,11 +2510,6 @@ protected:
     void sendAck(const IAXFullFrame* frame);
 
     /**
-     * Send an INVAL frame
-     */
-    void sendInval();
-
-    /**
      * Send an VNAK frame
      */
     void sendVNAK();
@@ -2300,13 +2561,6 @@ protected:
     IAXEvent* remoteRejectCall(IAXFullFrame* frame, bool& delFrame);
 
     /**
-     * Terminate the transaction if state is Terminating on a remote request
-     * @param time Current time
-     * @return A valid IAXEvent or 0
-     */
-    IAXEvent* getEventTerminating(u_int64_t time);
-
-    /**
      * Process received media full frames
      * @param frame Received frame
      * @param type Media type
@@ -2322,17 +2576,12 @@ protected:
     IAXTransaction* retransmitOnVNAK(u_int16_t seqNo);
 
     /**
-     * Generate an Accept event after internally accepting a transaction
-     * @return A valid IAXEvent
-     */
-    IAXEvent* internalAccept();
-
-    /**
      * Generate a Reject event after internally rejecting a transaction
      * @param reason The reason of rejecting
+     * @param code Error code
      * @return A valid IAXEvent
      */
-    IAXEvent* internalReject(String& reason);
+    IAXEvent* internalReject(const char* reason, u_int8_t code);
 
     /**
      * Event terminated feedback
@@ -2354,14 +2603,31 @@ protected:
 private:
     void adjustTStamp(u_int32_t& tStamp);
     void postFrame(IAXFrameOut* frame);
+    void receivedVoiceMiniBeforeFull();
+    void resetTrunk();
+    void init();
+    void setPendingEvent(IAXEvent* ev = 0);
+    inline void restartTrunkIn(u_int64_t now, u_int32_t ts) {
+	    m_trunkInStartTime = now;
+	    u_int64_t dt = (now - m_lastVoiceFrameIn) / 1000;
+	    m_trunkInTsDelta = m_lastVoiceFrameInTs + (u_int32_t)dt;
+	    m_trunkInFirstTs = ts;
+	}
+    // Process accept format and caps
+    bool processAcceptFmt(IAXIEList* list);
+    // Process queued ACCEPT. Reject with given reason/code if not found
+    // Reject with 'nomedia' if found and format is not acceptable
+    IAXEvent* checkAcceptRecv(const char* reason, u_int8_t code);
 
     // Params
     bool m_localInitTrans;			// True: local initiated transaction
     bool m_localReqEnd;				// Local client requested terminate
     Type m_type;				// Transaction type
     State m_state;				// Transaction state
+    bool m_destroy;                             // Destroy flag
+    bool m_accepted;                            // ACCEPT received and processed
     u_int64_t m_timeStamp;			// Transaction creation timestamp
-    u_int32_t m_timeout;			// Transaction timeout (in seconds) on remote termination request
+    u_int64_t m_timeout;			// Transaction timeout in Terminating state
     SocketAddr m_addr;				// Socket
     u_int16_t m_lCallNo;			// Local peer call id
     u_int16_t m_rCallNo;			// Remote peer call id
@@ -2377,8 +2643,8 @@ private:
     IAXEvent* m_currentEvent;			// Pointer to last generated event or 0
     // Outgoing frames management
     ObjList m_outFrames;			// Transaction & protocol control outgoing frames
-    u_int16_t m_retransCount;			// Retransmission counter. 0 --> Timeout
-    u_int32_t m_retransInterval;		// Frame retransmission interval
+    unsigned int m_retransCount;		// Retransmission counter. 0 --> Timeout
+    unsigned int m_retransInterval;		// Frame retransmission interval
     // Incoming frames management
     ObjList m_inFrames;				// Transaction & protocol control incoming frames
     static unsigned char m_maxInFrames;		// Max frames number allowed in m_inFrames
@@ -2408,11 +2674,22 @@ private:
                                                 //  overrun (incoming data with rate greater then expected)
     unsigned int m_adjustTsOutUnderrun;         // Value used to adjust outgoing data timestamp on data
                                                 //  underrun (incoming data with rate less then expected)
+    u_int64_t m_lastVoiceFrameIn;               // Time we received the last voice frame
+    u_int32_t m_lastVoiceFrameInTs;             // Timestamp in the last received voice frame
+    int m_reqVoiceVNAK;                         // Send VNAK if not received full voice frame
     // Meta trunking
     IAXMetaTrunkFrame* m_trunkFrame;		// Reference to a trunk frame if trunking is enabled for this transaction
-    int64_t m_trunkInOffsetTimeMs;		// Offset between transaction start and trunk start
-    u_int32_t m_trunkInLastTs;                  // Last received trunk timestamp
-    bool m_warnTrunkInTimestamp;                // Warn incoming trunk invalid timestamp
+    bool m_trunkFrameCallsSet;                  // Trunk frame calls increased
+    bool m_trunkOutEfficientUse;                // Use or not the trunk frame based on calls using it
+    bool m_trunkOutSend;                        // Currently using the trunk frame
+    bool m_trunkInSyncUsingTs;                  // Incoming trunk without timestamps: generate timestamp
+                                                //  using time or using trunk timestamp
+    u_int64_t m_trunkInStartTime;               // First time we received trunk in data
+    u_int32_t m_trunkInTsDelta;                 // Value used to re-build ts: last voice timestamp
+    u_int32_t m_trunkInTsDiffRestart;           // Incoming trunk without timestamp: diff between timestamps at which we restart
+    u_int32_t m_trunkInFirstTs;                 // Incoming trunk without timestamp: first trunk timestamp
+    // Postponed start
+    IAXIEList* m_startIEs;                      // Postponed start
 };
 
 /**
@@ -2428,7 +2705,8 @@ public:
      * Event type as enumeration
      */
     enum Type {
-        Invalid = 0,		// Invalid frame received
+	DontSet = 0,            // Used internal
+        Invalid,		// Invalid frame received
 	Terminated,		// Transaction terminated
         Timeout,		// Transaction timeout
 	NotImplemented,		// Feature not implemented
@@ -2570,28 +2848,26 @@ public:
      * Constructor
      * @param iface Address of the interface to use, default all (0.0.0.0)
      * @param port UDP port to run the protocol on
-     * @param transListCount Number of entries in the transaction hash table
-     * @param retransCount Retransmission counter for each transaction belonging to this engine
-     * @param retransInterval Retransmission interval default value in miliseconds
-     * @param authTimeout Timeout (in seconds) of acknoledged auth frames sent
-     * @param transTimeout Timeout (in seconds) on remote request of transactions belonging to this engine
-     * @param maxFullFrameDataLen Max full frame IE list (buffer) length
      * @param format Default media format
      * @param capab Media capabilities of this engine
-     * @param trunkSendInterval Send trunk meta frame interval
-     * @param authRequired Automatically challenge all clients for authentication
      * @param params Optional extra parameter list
+     * @param name Engine name
      */
-    IAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
-	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
-	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval, bool authRequired,
-	NamedList* params = 0);
+    IAXEngine(const char* iface, int port, u_int32_t format, u_int32_t capab,
+	const NamedList* params = 0, const char* name = "iaxengine");
 
     /**
      * Destructor
      * Closes all transactions belonging to this engine and flush all queues
      */
     virtual ~IAXEngine();
+
+    /**
+     * Retrieve the engine name
+     * @return Engine name
+     */
+    inline const String& name() const
+	{ return m_name; }
 
     /**
      * Retrieve the default caller number type
@@ -2653,39 +2929,11 @@ public:
     bool process();
 
     /**
-     * Get default frame retransmission counter
-     * @return Frame retransmission counter
+     * Get the timeout interval sent challenge
+     * @return Sent challenge timeout interval
      */
-    inline u_int16_t retransCount() const
-        { return m_retransCount; }
-
-    /**
-     * Get default frame retransmission starting interval
-     * @return Frame retransmission starting interval
-     */
-    inline u_int16_t retransInterval() const
-        { return m_retransInterval; }
-
-    /**
-     * Check if a transaction should automatically request authentication
-     * @return True to automatically request authentication
-     */
-    inline bool authRequired() const
-        { return m_authRequired; }
-
-    /**
-     * Get the timeout (in seconds) of acknoledged auth frames sent
-     * @return Auth timeout in seconds
-     */
-    inline u_int16_t authTimeout() const
-        { return m_authTimeout; }
-
-    /**
-     * Get the timeout (in seconds) of transactions belonging to this engine
-     * @return Timeout (in seconds) of transactions belonging to this engine
-     */
-    inline u_int32_t transactionTimeout() const
-        { return m_transTimeout; }
+    inline unsigned int challengeTout() const
+        { return m_challengeTout; }
 
     /**
      * Get the maximum allowed frame length
@@ -2776,6 +3024,13 @@ public:
     void removeTransaction(IAXTransaction* transaction);
 
     /**
+     * Check if there are any transactions in the engine
+     * This method is thread safe
+     * @return True if the engine holds at least 1 transaction
+     */
+    bool haveTransactions();
+
+    /**
      * Return the transactions count
      * This method is thread safe
      * @return Transactions count
@@ -2825,16 +3080,61 @@ public:
     virtual void defaultEventHandler(IAXEvent* event);
 
     /**
-     * Enable trunking for the given transaction. Allocate a trunk meta frame if needded
-     * @param trans Transaction to enable trunking for
+     * Check if the engine is exiting
+     * @return True if the engine is exiting
      */
-    void enableTrunking(IAXTransaction* trans);
+    inline bool exiting() const
+	{ return m_exiting; }
 
     /**
-     * Remove a trunk meta frame from the queue and deref it
-     * @param metaFrame The trunk meta frame to remove
+     * Set the exiting flag
      */
-    void removeTrunkFrame(IAXMetaTrunkFrame* metaFrame);
+    virtual void setExiting();
+
+    /**
+     * Enable trunking for the given transaction. Allocate a trunk meta frame if needed.
+     * Trunk data is ignored if a trunk object for transaction remote address already exists
+     * @param trans Transaction to enable trunking for
+     * @param params Trunk parameters list, may be 0
+     * @param prefix Trunk parameters name prefix
+     */
+    void enableTrunking(IAXTransaction* trans, const NamedList* params,
+	const String& prefix = String::empty());
+
+    /**
+     * Enable trunking for the given transaction. Allocate a trunk meta frame if needed.
+     * Trunk data is ignored if a trunk object for transaction remote address already exists
+     * @param trans Transaction to enable trunking for
+     * @param data Trunk info to use
+     */
+    void enableTrunking(IAXTransaction* trans, IAXTrunkInfo& data);
+
+    /**
+     * Init incoming trunking data for a given transaction
+     * @param trans Transaction to init
+     * @param params Trunk parameters list, may be 0
+     * @param prefix Trunk parameters name prefix
+     */
+    void initTrunkIn(IAXTransaction* trans, const NamedList* params,
+	const String& prefix = String::empty());
+
+    /**
+     * Init incoming trunking data for a given transaction
+     * @param trans Transaction to init
+     * @param data Trunk info to use
+     */
+    void initTrunkIn(IAXTransaction* trans, IAXTrunkInfo& data);
+
+    /**
+     * Retrieve the default trunk info data
+     * @param info Destination to be set with trunk info pointer
+     * @return True if destination pointr is valid
+     */
+    inline bool trunkInfo(RefPointer<IAXTrunkInfo>& info) {
+	    Lock lck(m_trunkInfoMutex);
+	    info = m_trunkInfoDef;
+	    return info != 0;
+	}
 
     /**
      * Send an INVAL frame
@@ -2842,17 +3142,6 @@ public:
      * @param addr The address from where the call request was received
      */
     void sendInval(IAXFullFrame* frame, const SocketAddr& addr);
-
-    /**
-     * Send a trunk frame
-     * @param metaFrame The trunk meta frame to sent
-     */
-    inline void sendTrunkFrame(IAXMetaTrunkFrame* metaFrame) {
-	    if (!metaFrame)
-		return;
-	    Lock lck(m_mutexTrunk);
-	    metaFrame->send();
-	}
 
     /**
      * Keep calling processTrunkFrames to send trunked media data
@@ -2867,6 +3156,13 @@ public:
 	{ return m_socket; }
 
     /**
+     * Retrieve the socket address on wgich we are bound
+     * @return Local address we are bound on
+     */
+    inline const SocketAddr& addr() const
+	{ return m_addr; }
+
+    /**
      * Send engine formats
      * @param caps Capabilities
      * @param fmtAudio Default audio format
@@ -2877,6 +3173,15 @@ public:
 	    m_formatVideo = fmtVideo;
 	    m_capability = caps;
 	}
+
+    /**
+     * Retrieve a port parameter
+     * @param params Parameters list
+     * @param param Parameter to retrieve
+     * @return The port (default, 4569, if the parameter is missing or invalid)
+     */
+    static inline int getPort(const NamedList& params, const String& param = "port")
+	{ return params.getIntValue(param,4569); }
 
     /**
      * Get the MD5 data from a challenge and a password
@@ -2942,13 +3247,22 @@ public:
     static void decodeDateTime(u_int32_t dt, unsigned int& year, unsigned int& month,
 	unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec);
 
+    /**
+     * Calculate overall timeout from interval and retransmission counter
+     * @param interval The first retransmisssion interval
+     * @param nRetrans The number of retransmissions
+     * @return The overall timeout
+     */
+    static unsigned int overallTout(unsigned int interval = IAX2_RETRANS_INTERVAL_DEF,
+	unsigned int nRetrans = IAX2_RETRANS_COUNT_DEF);
+
 protected:
     /**
      * Process all trunk meta frames in the queue
      * @param time Time of the call
      * @return True if at least one frame was sent
      */
-    bool processTrunkFrames(u_int32_t time = Time::msecNow());
+    bool processTrunkFrames(const Time& time = Time());
 
     /**
      * Default event for connection transactions handler. This method may be overriden to perform custom
@@ -2961,10 +3275,10 @@ protected:
     /**
      * Get an IAX event from the queue.
      * This method is thread safe.
-     * @param time Time of the call
+     * @param now Current time
      * @return Pointer to an IAXEvent or 0 if none is available
      */
-    IAXEvent* getEvent(u_int64_t time);
+    IAXEvent* getEvent(const Time& now = Time());
 
     /**
      * Generate call number. Update used call numbers list
@@ -2983,27 +3297,39 @@ protected:
      * @param type Transaction type
      * @param addr Remote address to send the request
      * @param ieList First frame IE list
-     * @param trunking Enable/disable trunking for this transaction
-     * @return IAXTransaction pointer on success.
+     * @param refTrans Return a refferenced transaction pointer
+     * @param startTrans Start transaction
+     * @return IAXTransaction pointer on success
      */
-    IAXTransaction* startLocalTransaction(IAXTransaction::Type type, const SocketAddr& addr, IAXIEList& ieList, bool trunking = false);
+    IAXTransaction* startLocalTransaction(IAXTransaction::Type type,
+	const SocketAddr& addr, IAXIEList& ieList,
+	bool refTrans = false, bool startTrans = true);
+
+    /**
+     * Bind the socket. Terminate it before trying
+     * @param iface Address of the interface to use, default all (0.0.0.0)
+     * @param port UDP port to run the protocol on
+     * @param force Force binding if failed on required port
+     * @return True on success
+     */
+    bool bind(const char* iface, int port, bool force);
+
+    int m_trunking;                             // Trunking capability: negative: ok, otherwise: not enabled
 
 private:
+    String m_name;                              // Engine name
     Socket m_socket;				// Socket
+    SocketAddr m_addr;                          // Address we are bound on
     ObjList** m_transList;			// Full transactions
     ObjList m_incompleteTransList;		// Incomplete transactions (no remote call number)
     bool m_lUsedCallNo[IAX2_MAX_CALLNO + 1];	// Used local call numnmbers flags
     int m_lastGetEvIndex;			// getEvent: keep last array entry
+    bool m_exiting;                             // Exiting flag
     // Parameters
-    bool m_authRequired;			// Automatically request authentication
     int m_maxFullFrameDataLen;			// Max full frame data (IE list) length
     u_int16_t m_startLocalCallNo;		// Start index of local call number allocation
     u_int16_t m_transListCount;			// m_transList count
-    u_int16_t m_retransCount;			// Retransmission counter for each transaction belonging to this engine
-    u_int16_t m_retransInterval;		// Retransmission interval default value in miliseconds
-    u_int16_t m_authTimeout;			// Timeout (in seconds) of acknoledged auth frames sent
-    u_int32_t m_transTimeout;			// Timeout (in seconds) on remote request of transactions
-    						//  belonging to this engine
+    unsigned int m_challengeTout;		// Sent challenge timeout interval
     bool m_callToken;                           // Call token required on incoming calls
     String m_callTokenSecret;                   // Secret used to generate call tokens
     int m_callTokenAge;                         // Max allowed call token age
@@ -3024,7 +3350,8 @@ private:
     // Trunking
     Mutex m_mutexTrunk;				// Mutex for trunk operations
     ObjList m_trunkList;			// Trunk frames list
-    u_int32_t m_trunkSendInterval;		// Trunk frame send interval
+    Mutex m_trunkInfoMutex;                     // Trunk info mutex
+    RefPointer<IAXTrunkInfo> m_trunkInfoDef;    // Defaults for trunk data
 };
 
 }

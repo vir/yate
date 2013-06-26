@@ -1270,14 +1270,15 @@ void AsnTag::encode(Class clas, Type type, unsigned int code, DataBlock& data)
     }
     else {
 	u_int8_t last = clas | type | 31;
-	data.append(&last,sizeof(last));
+	DataBlock coding;
+ 	coding.append(&last,sizeof(last));
 	int size = sizeof(unsigned int);
 	bool start = false;
 	while (size > 1) {
 	    u_int8_t msb = (code >> ((size - 1) * 8));
 	    if (start) {
 		msb |= 0x80;
-		data.append(&msb,sizeof(msb));
+		coding.append(&msb,sizeof(msb));
 	    }
 	    else {
 		if (msb == 0) {
@@ -1287,18 +1288,19 @@ void AsnTag::encode(Class clas, Type type, unsigned int code, DataBlock& data)
 		else {
 		    start = true;
 		    msb |= 0x80;
-		    data.append(&msb,sizeof(msb));
+		    coding.append(&msb,sizeof(msb));
 		}
 	    }
 	    size--;
 	}
 	last = code;
-	data.append(&last,sizeof(last));
+	coding.append(&last,sizeof(last));
+	data.insert(coding);
     }
 #ifdef XDEBUG
     String str;
     str.hexify(data.data(),data.length(),' ');
-    XDebug(s_libName.c_str(),DebugAll,"AsnTag::encode(clas=0x%x, type=0x%x, code=%u) tag=%s",clas,type,code,str.c_str());
+    Debug(s_libName.c_str(),DebugAll,"AsnTag::encode(clas=0x%x, type=0x%x, code=%u) tag=%s",clas,type,code,str.c_str());
 #endif
 }
 

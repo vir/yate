@@ -36,10 +36,10 @@ Display a short help message and exit
 Display program version and exit
 .TP
 .B \-v
-Verbose debugging (you can use more than once)
+Verbose logging (you can use more than once)
 .TP
 .B \-q
-Quieter debugging (you can use more than once)
+Quieter logging (you can use more than once)
 .TP
 .B \-d
 Daemonify, suppress output unless logged
@@ -100,7 +100,7 @@ Abort (coredumps if allowed) if bugs are encountered
 Attempt to debug mutex deadlocks by setting a maximum 10s limit, if repeated halves the limit
 .TP
 .B \-Dd
-Disable some locking debugging and safety features, improves performance instead
+Enable some locking debugging and safety features, degrades performance
 .TP
 .B \-Dl
 Attempt to load modules without having their symbols globally visible

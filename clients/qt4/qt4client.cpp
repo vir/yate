@@ -405,6 +405,16 @@ ObjList UIBuffer::s_uiCache;
 
 // Values used to configure window title bar and border
 static TokenDict s_windowFlags[] = {
+    // Window type
+    {"popup",              Qt::Popup},
+    {"tool",               Qt::Tool},
+    {"subwindow",          Qt::SubWindow},
+#ifdef _WINDOWS
+    {"notificationtype",   Qt::Tool},
+#else
+    {"notificationtype",   Qt::SubWindow},
+#endif
+    // Window flags
     {"title",              Qt::WindowTitleHint},
     {"sysmenu",            Qt::WindowSystemMenuHint},
     {"maximize",           Qt::WindowMaximizeButtonHint},
@@ -957,7 +967,7 @@ UIBuffer* UIBuffer::find(const String& name)
  */
 QtWindow::QtWindow()
     : m_x(0), m_y(0), m_width(0), m_height(0),
-    m_maximized(false), m_mainWindow(false), m_moving(false)
+    m_maximized(false), m_mainWindow(false), m_moving(0)
 {
 }
 
@@ -965,7 +975,7 @@ QtWindow::QtWindow(const char* name, const char* description, const char* alias,
     : QWidget(parent, Qt::Window),
     Window(alias ? alias : name), m_description(description), m_oldId(name),
     m_x(0), m_y(0), m_width(0), m_height(0),
-    m_maximized(false), m_mainWindow(false), m_moving(false)
+    m_maximized(false), m_mainWindow(false), m_moving(0)
 {
     setObjectName(QtClient::setUtf8(m_id));
 }
@@ -2672,6 +2682,9 @@ void QtWindow::setVisible(bool visible)
     // Override position for notification windows
     if (visible && isShownNormal() &&
 	QtClient::getBoolProperty(wndWidget(),"_yate_notificationwindow")) {
+	// Don't move
+	m_moving = -1;
+#ifndef Q_WS_MAC
 	// Detect unavailable screen space position and move the window in the apropriate position
 	// bottom/right/none: move it in the right/bottom corner.
 	// top: move it in the right/top corner.
@@ -2685,6 +2698,9 @@ void QtWindow::setVisible(bool visible)
 	    else
 		QtClient::moveWindow(this,QtClient::CornerBottomLeft);
 	}
+#else
+	QtClient::moveWindow(this,QtClient::CornerTopRight);
+#endif
     }
     if (visible && isMinimized())
 	showNormal();
@@ -3209,23 +3225,23 @@ void QtWindow::doInit()
 // Mouse button pressed notification
 void QtWindow::mousePressEvent(QMouseEvent* event)
 {
-    if (Qt::LeftButton == event->button() && isShownNormal()) {
+    if (m_moving >= 0 && Qt::LeftButton == event->button() && isShownNormal()) {
 	m_movePos = event->globalPos();
-	m_moving = true;
+	m_moving = 1;
     }
 }
 
 // Mouse button release notification
 void QtWindow::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (Qt::LeftButton == event->button())
-	m_moving = false;
+    if (m_moving >= 0 && Qt::LeftButton == event->button())
+	m_moving = 0;
 }
 
 // Move the window if the moving flag is set
 void QtWindow::mouseMoveEvent(QMouseEvent* event)
 {
-    if (!m_moving || Qt::LeftButton != event->buttons() || !isShownNormal())
+    if (m_moving <= 0 || Qt::LeftButton != event->buttons() || !isShownNormal())
 	return;
     int cx = event->globalPos().x() - m_movePos.x();
     int cy = event->globalPos().y() - m_movePos.y();

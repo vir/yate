@@ -124,6 +124,7 @@
 ;info=enable
 
 ; fork: bool: Follow first forked 2xx answer on early dialogs
+; This parameter is applied on reload
 ;fork=enable
 
 ; progress: bool: Send an "183 Session Progress" just after successfull routing
@@ -141,7 +142,21 @@
 
 ; lazy100: bool: Do not generate an initial "100 Trying" for non-INVITE
 ;  transactions unless a retransmission arrives before having a final answer
+; This parameter is applied on reload
 ;lazy100=no
+
+; t1: int: Value of SIP T1 timer in milliseconds
+; This is the RTT Estimate and several other SIP timers are derived from it
+; Valid values are between 100 and 5000, outside range uses the default of 500
+; This parameter is applied on reload
+;t1=500
+
+; t4: int: Value of SIP T4 timer in milliseconds
+; This is the maximum message lifetime, several other SIP timers are derived from it
+; It is enforced to be at least 3 * T1
+; Valid values are between 1000 and 25000, outside range uses the default of 5000
+; This parameter is applied on reload
+;t4=5000
 
 ; check_allow_info: bool: Check 'Allow' header in INVITE and OK for INFO support
 ; If enabled and INFO is not supported the 'info' dtmf method will be disabled
@@ -217,6 +232,7 @@
 ;preventive_bye=enable
 
 ; auth_foreign: bool: Attempt to authenticate nonces not generated locally
+; This parameter is applied on reload
 ;auth_foreign=disable
 
 ; body_encoding: keyword: Encoding used for received generic binary bodies

@@ -701,6 +701,7 @@ static const String s_wndChatContact = "chatcontact";   // Chat contact edit/add
 static const String s_wndMucInvite = "mucinvite";       // MUC invite
 static const String s_wndAcountList = "accountlist";    // Accounts list
 static const String s_wndFileTransfer = "fileprogress"; // File transfer
+static const String s_wndNotification = "notification"; // Notifications
 // Some UI widgets
 static const String s_mainwindowTabs = "mainwindowTabs";
 static const String s_channelList = "channels";
@@ -8971,7 +8972,8 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
     if (notif == ClientChannel::Destroyed) {
 	if (!Client::valid())
 	    return false;
-	String id = msg.getValue(YSTRING("id"));
+	const String& id = msg[YSTRING("id")];
+	closeInCallNotification(id);
 	int slave = ClientChannel::lookupSlaveType(msg.getValue("channel_slave_type"));
 	if (slave) {
 	    bool conf = (slave == ClientChannel::SlaveConference);
@@ -9104,6 +9106,7 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    if (outgoing) {
 		if (noticed)
 		    Client::self()->ringer(true,false);
+		closeInCallNotification(CHANUPD_ID);
 	    }
 	    else {
 		Client::self()->ringer(true,false);
@@ -9127,6 +9130,7 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    if (outgoing) {
 		if (noticed)
 		    Client::self()->ringer(true,false);
+		closeInCallNotification(CHANUPD_ID);
 	    }
 	    else {
 		Client::self()->ringer(true,false);
@@ -9140,6 +9144,7 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    // Stop incoming ringer
 	    Client::self()->ringer(true,false);
 	    buildStatus(status,"Call noticed",CHANUPD_ADDR,CHANUPD_ID);
+	    closeInCallNotification(CHANUPD_ID);
 	    break;
 	case ClientChannel::Progressing:
 	    buildStatus(status,"Call progressing",CHANUPD_ADDR,CHANUPD_ID);
@@ -9159,6 +9164,7 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    if (outgoing) {
 		addTrayIcon(YSTRING("incomingcall"));
 		Client::self()->setUrgent(s_wndMain,true,Client::self()->getWindow(s_wndMain));
+		showInCallNotification(chan);
 	    }
 	    p.addParam("active:answer",String::boolText(outgoing));
 	    p.addParam("party",chan ? chan->party() : "");
@@ -9180,8 +9186,10 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    buildStatus(status,"Calling target",0,0);
 	    break;
 	case ClientChannel::Answered:
-	    if (outgoing)
+	    if (outgoing) {
 		removeTrayIcon(YSTRING("incomingcall"));
+		closeInCallNotification(CHANUPD_ID);
+	    }
 	    buildStatus(status,"Call answered",CHANUPD_ADDR,CHANUPD_ID);
 	    // Stop incoming ringer
 	    Client::self()->ringer(true,false);
@@ -9772,6 +9780,41 @@ void DefaultLogic::engineStart(Message& msg)
 	Client::self()->getBoolOpt(Client::OptAddAccountOnStartup)) {
 	// Start add account wizard
 	s_accWizard->start();
+    }
+}
+
+// Show incoming call notification for a given channel
+void DefaultLogic::showInCallNotification(ClientChannel* chan)
+{
+    if (!(chan && Client::valid()))
+	return;
+    Window* w = Client::self()->getWindow(s_wndNotification);
+    if (!w)
+	return;
+    Client::self()->setVisible(s_wndNotification,false);
+    NamedList p("");
+    p.addParam("context",chan->id());
+    p.addParam("property:answeraction:_yate_identity","answer:" + chan->id());
+    p.addParam("property:hangupaction:_yate_identity","hangup:" + chan->id());
+    String text = "Incoming call";
+    if (chan->party())
+	text << " from " << chan->party();
+    p.addParam("text",text);
+    Client::self()->setParams(&p,w);
+    Client::self()->setVisible(s_wndNotification);
+}
+
+// Close incoming call notification for a given id
+void DefaultLogic::closeInCallNotification(const String& id)
+{
+    if (!(id && Client::valid()))
+	return;
+    Window* w = Client::self()->getWindow(s_wndNotification);
+    if (w && w->context() == id) {
+	NamedList p("");
+	p.addParam("context","");
+	Client::self()->setParams(&p,w);
+	Client::self()->closeWindow(s_wndNotification);
     }
 }
 

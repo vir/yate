@@ -4433,11 +4433,12 @@ public:
     static void startUsingNow();
 
     /**
-     * Disable some safety and sanity check features.
-     * This provides a performance improvement but makes the code less safe and
-     *  more difficult to debug locking issues.
+     * Enable some safety and sanity check features.
+     * This provides a safer code and easier locking debugging at the price of performance penalty.
+     * This method must be called early and not changed after initialization
+     * @param safe True to enable locking safety measures, false to disable
      */
-    static void disableSafety();
+    static void enableSafety(bool safe = true);
 };
 
 /**
@@ -4513,7 +4514,7 @@ public:
 
     /**
      * Get the number of currently locked mutexes
-     * @return Count of locked mutexes, should be zero at program exit
+     * @return Count of locked mutexes, -1 if unknown (not tracked)
      */
     static int locks();
 
@@ -4648,7 +4649,7 @@ public:
 
     /**
      * Get the number of currently locked (waiting) semaphores
-     * @return Count of locked semaphores, should be zero at program exit
+     * @return Count of locked semaphores, -1 if unknown (not tracked)
      */
     static int locks();
 

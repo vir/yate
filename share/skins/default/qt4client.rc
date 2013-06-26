@@ -163,3 +163,8 @@ description=archive.ui
 [busy]
 enabled=no
 description=busy.ui
+
+[notification]
+enabled=yes
+save=false
+description=notification.ui

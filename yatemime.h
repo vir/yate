@@ -84,8 +84,9 @@ public:
     /**
      * Build a string line from this MIME header without adding a line separator
      * @param line Destination string
+     * @param header True to add the header in front of line text
      */
-    virtual void buildLine(String& line) const;
+    virtual void buildLine(String& line, bool header = true) const;
 
     /**
      * Assignement operator. Set the header's value
@@ -223,8 +224,10 @@ public:
     /**
      * Build a string line from this MIME header without adding a line separator
      * @param line Destination string
+     * @param header True to add the header in front of line text
      */
-    virtual void buildLine(String& line) const;
+    virtual void buildLine(String& line, bool header = true) const;
+
 private:
     void operator=(const MimeAuthLine&); // no assignment
 };

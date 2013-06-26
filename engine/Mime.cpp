@@ -104,9 +104,11 @@ MimeHeaderLine* MimeHeaderLine::clone(const char* newName) const
     return new MimeHeaderLine(*this,newName);
 }
 
-void MimeHeaderLine::buildLine(String& line) const
+void MimeHeaderLine::buildLine(String& line, bool header) const
 {
-    line << name() << ": " << *this;
+    if (header)
+	line << name() << ": ";
+    line << *this;
     const ObjList* p = &m_params;
     for (; p; p = p->next()) {
 	NamedString* s = static_cast<NamedString*>(p->get());
@@ -326,9 +328,11 @@ MimeHeaderLine* MimeAuthLine::clone(const char* newName) const
     return new MimeAuthLine(*this,newName);
 }
 
-void MimeAuthLine::buildLine(String& line) const
+void MimeAuthLine::buildLine(String& line, bool header) const
 {
-    line << name() << ": " << *this;
+    if (header)
+	line << name() << ": ";
+    line << *this;
     const ObjList* p = &m_params;
     for (bool first = true; p; p = p->next()) {
 	NamedString* s = static_cast<NamedString*>(p->get());

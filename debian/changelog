@@ -1,4 +1,4 @@
-yate (4.3.1~svn5529) UNRELEASED; urgency=low
+yate (4.3.1~svn5556) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -524,8 +524,44 @@ yate (4.3.1~svn5529) UNRELEASED; urgency=low
     Send missing required parameters in New and RegRej.  + Merge remote-
     tracking branch 'trunk' into upstream  + Added some missing frame
     and IEs names to decoder.
+  * Updated to SVN revision 5556: + Merge remote-tracking branch 'trunk'
+    into upstream  + Fixed IAX uri regexp: proto can be iax or iax2.  +
+    Allow MIME lines to build only the content part of the line without
+    header.  + Copy SIP authentication headers to Yate messages when
+    foreign auth is enabled.  + Added settings for the SIP T1 and T4
+    timers.  + Changed configuration example for RTP monitoring.  +
+    Implemented sending of trunk without miniframes timestamp. Fixed
+    timestamp handling when processing trunk without miniframes
+    timestamps. Check for thread termination when parsing lists tp
+    process transactions and trunks.  + Fixed bug: don't reject incoming
+    calls with missing USERNAME IE, reject incoming (un)register
+    requests with missing USERNAME IE. Improved debug.  + Made
+    configurable ping interval, frame retransmission counter and
+    interval.  + Send INVAL for all unmatched full frames except for
+    INVAL.  + Fixed transaction timeout when waiting for terminate.
+    improved debug.  + Made sent challenge timeout interval
+    configurable. Improved debug.  + Invert the action of -Dd command
+    line option, favor performance by default.  + Allow trunking
+    parameters set in 'user.login' to override configured. Allow
+    trunking out to be enabled in 'user.login'.  + Bug fix: when
+    encoding a long ASN.1 tag, insert it at the beginning of the
+    payload, not at the end.  + Added option to use efficient trunking:
+    a transaction can now send trunking data only if the number of calls
+    using the trunk is greater then 1.  + Don't include them in Engine
+    status if not counted.  + Return -1 to the Mutex or Semaphore count
+    if they are not counted (started without -Dd).  + Fixed race
+    condition when (re)setting connection transaction pointer.  +
+    Removed a spurious warning at shutdown.  + Added support for Telnet
+    window size and paged output.  + Removed a potential buffer
+    overflow, the Telnet options are binary anyway.  + Added support for
+    multiple iax listeners.  + Fixed bug: avoid rejecting a call when a
+    full Voice frame is received before processing Accept.  + Populate
+    more parameters in the IAX chan.startup message.  + Chain iax engine
+    debug enabler in module.  + Added support to negotiate gsm half rate
+    on iax.  + Added more window flags to set from ui. Don't move
+    notification windows.  + Added incoming call notification window.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 06 Jun 2013 02:19:21 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 26 Jun 2013 16:31:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

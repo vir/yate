@@ -348,7 +348,7 @@ debian/tmp/usr/share/yate/skins/default/waiting_32.gif
 debian/tmp/etc/yate/yate-qt4.conf
 debian/tmp/usr/lib/yate/qt4/updater.yate
 
-debian/tmp/etc/yate/fileinfo.conf.sample
+debian/tmp/etc/yate/fileinfo.conf
 debian/tmp/usr/lib/yate/modules/fileinfo.cpp
 
 

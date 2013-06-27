@@ -349,7 +349,7 @@ debian/tmp/etc/yate/yate-qt4.conf
 debian/tmp/usr/lib/yate/qt4/updater.yate
 
 debian/tmp/etc/yate/fileinfo.conf
-debian/tmp/usr/lib/yate/modules/fileinfo.cpp
+debian/tmp/usr/lib/yate/fileinfo.yate
 
 
 

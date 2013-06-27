@@ -1,3 +1,9 @@
+yate (4.3.1~vir2013062701) UNRELEASED; urgency=low
+
+  * Fix build
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Thu, 27 Jun 2013 10:44:30 +0400
+
 yate (4.3.1~vir2013062601) UNRELEASED; urgency=low
 
   * Merged upstream changes

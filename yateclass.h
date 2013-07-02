@@ -2965,7 +2965,7 @@ public:
     GenObject* operator[](const String& str) const;
 
     /**
-     * Get the item in the list that holds an object
+     * Get the item in the list that holds an object.
      * The item is searched sequentially in the lists, not using it's String hash
      * @param obj Pointer to the object to search for
      * @return Pointer to the found item or NULL
@@ -4167,6 +4167,20 @@ public:
      * @return Reference to a static empty named list
      */
     static const NamedList& empty();
+
+    /**
+     * Get the parameters list
+     * @return Pointer to the parameters list
+     */
+    inline ObjList* paramList()
+	{ return &m_params; }
+
+    /**
+     * Get the parameters list
+     * @return Pointer to the parameters list
+     */
+    inline const ObjList* paramList() const
+	{ return &m_params; }
 
 private:
     NamedList(); // no default constructor please

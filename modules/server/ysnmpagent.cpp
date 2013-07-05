@@ -430,13 +430,15 @@ public:
     AsnValue makeQuery(const String& query, unsigned int& index, AsnMib* mib = 0);
 
     // send in form of a SNMP trap a notification
-    int sendNotification(String& notif, String& value, unsigned int index = 0);
+    bool sendNotification(const String& notif, const String* value = 0,
+	unsigned int index = 0, const NamedList* extra = 0);
     // build trap network destination
     SocketAddr buildDestination(const String& ip, const String& port);
     // build a variable bindings list of mandatory OIDs for a trap
     Snmp::VarBindList* addTrapOIDs(const String& notifOID);
     // build SNMPv2 and SNMPv3 traps
-    Snmp::SNMPv2_Trap_PDU buildTrapPDU(const String& name, const String& value, unsigned int index = 0);
+    Snmp::SNMPv2_Trap_PDU buildTrapPDU(const String& name, const String* value = 0,
+	unsigned int index = 0);
     int buildTrapMsgV3(Snmp::SNMPv3Message& msg, DataBlock pduData);
 
     // set a value from a varbind
@@ -444,7 +446,7 @@ public:
     // generate a engineID
     OctetString genEngineId(const int format, String& info);
     // verify if a trap is disabled
-    bool trapDisabled(String& name);
+    bool trapDisabled(const String& name);
 
     // verify if a query is in the Yate tree
     bool queryIsSupported(const String& query, AsnMib* mib = 0);
@@ -480,7 +482,7 @@ private:
     // SNMP v3 users
     SnmpUser* m_trapUser;
     ObjList m_users;
-    
+
     // AES and DES ciphers
     Cipher* m_cipherAES;
     Cipher* m_cipherDES;
@@ -874,18 +876,26 @@ void SnmpMsgQueue::sendMsg(SnmpMessage* msg)
 bool TrapHandler::received(Message& msg)
 {
     unsigned int index = msg.getIntValue("index",0);
-    int count = msg.getIntValue("count",0);
-    for (int i = 0; i < count; i++) {
+    const String& single = msg[YSTRING("notify")];
+    if (single)
+        return __plugin.sendNotification(single,msg.getParam(YSTRING("value")),index,&msg);
+    bool ok = false;
+    int count = msg.getIntValue("count",-1);
+    for (int i = 0; ; i++) {
+	if (count >= 0 && i >= count)
+	    break;
 	String param = "notify.";
 	param << i;
-	String paramValue = "value.";
-	paramValue << i;
-        String notif = msg.getValue(param,"");
-        String value = msg.getValue(paramValue,"");
-        if (!notif.null())
-            __plugin.sendNotification(notif,value,index);
+        const String& notif = msg[param];
+        if (!notif.null()) {
+	    String paramValue = "value.";
+	    paramValue << i;
+            ok = __plugin.sendNotification(notif,msg.getParam(paramValue),index) || ok;
+        }
+        else if (count < 0)
+	    break;
     }
-    return true;
+    return ok;
 }
 
 /**
@@ -897,21 +907,21 @@ SnmpUser::SnmpUser(NamedList* cfg)
     if (cfg) {
 	m_name = *cfg;
 	m_authPassword = cfg->getValue("auth_password","");
-    
+
     	String proto = cfg->getValue("auth_protocol","MD5");
 	m_authProto = (proto == "MD5" ? MD5_AUTH : SHA1_AUTH);
 
 	m_privPassword = cfg->getValue("priv_password","");
-	
+
 	proto = cfg->getValue("priv_protocol","DES");
 	m_privProto = (proto == "DES" ? DES_ENCRYPT : AES_ENCRYPT);
 
 	// get the user's privilege level
 	String access = cfg->getValue("access","readonly");
 	m_accessLevel = lookup(access,s_access);
-	
+
 	if (needsAuth())
-	    generateAuthInfo();    
+	    generateAuthInfo();
     }
 }
 
@@ -2277,7 +2287,7 @@ int SnmpAgent::generateReport(Snmp::SNMPv3Message& msg, const int& secRes, SnmpV
 {
     DDebug(&__plugin,DebugInfo,"::generateReport() - %s",lookup(secRes,s_errors,"unknown cause"));
     if (!m_mibTree)
-	return MESSAGE_DROP;	
+	return MESSAGE_DROP;
     if (!msg.m_msgGlobalData)
   	return MESSAGE_DROP;  
     // reset the message flags
@@ -2451,9 +2461,10 @@ Snmp::VarBindList* SnmpAgent::addTrapOIDs(const String& notifOID)
 }
 
 // build a trap PDU for SNMPv2
-Snmp::SNMPv2_Trap_PDU SnmpAgent::buildTrapPDU(const String& name, const String& value, unsigned int index)
+Snmp::SNMPv2_Trap_PDU SnmpAgent::buildTrapPDU(const String& name, const String* value, unsigned int index)
 {
-    DDebug(&__plugin,DebugAll,"::buildTrapPDU(notif='%s', value='%s', index='%u')",name.c_str(),value.c_str(),index);
+    DDebug(&__plugin,DebugAll,"::buildTrapPDU(notif='%s', value='%s', index='%u')",
+	name.c_str(),TelEngine::c_str(value),index);
     Snmp::SNMPv2_Trap_PDU trapPDU;;
     Snmp::PDU* pdu = trapPDU.m_SNMPv2_Trap_PDU;
     if (!(m_mibTree && pdu))
@@ -2467,7 +2478,7 @@ Snmp::SNMPv2_Trap_PDU SnmpAgent::buildTrapPDU(const String& name, const String& 
     AsnMib* notifMib = m_mibTree->find(name);
     if (!notifMib) {
 	DDebug(&__plugin,DebugInfo,"::buildTrapPDU(notif='%s', value='%s') - no such notification exists",
-		    name.c_str(),value.c_str());
+		    name.c_str(),TelEngine::c_str(value));
 	return trapPDU;
     }
 
@@ -2475,21 +2486,23 @@ Snmp::SNMPv2_Trap_PDU SnmpAgent::buildTrapPDU(const String& name, const String& 
     notifMib->setIndex(index);
     String oid = notifMib->getOID();
     TelEngine::destruct(pdu->m_variable_bindings);
-    pdu->m_variable_bindings = addTrapOIDs(notifMib->toString());
+    pdu->m_variable_bindings = addTrapOIDs(index ? oid : notifMib->toString());
     if (!pdu->m_variable_bindings) {
 	Debug(&__plugin,DebugInfo,"::buildTrapPDU() - could not set sysUpTime and/or trapOID");
 	return trapPDU;
     }
 
-    // add the trap OID with its value
-    Snmp::VarBind* trapVal = new Snmp::VarBind();
-    trapVal->m_name->m_ObjectName = oid;
-    String typeStr = notifMib->getType();
-    int type = lookup(typeStr,s_types,0);
-    AsnValue* v = new AsnValue(value,type);
-    assignValue(trapVal,v);
-    pdu->m_variable_bindings->m_list.append(trapVal);
-    TelEngine::destruct(v);
+    // add the trap OID with index and its value if requested
+    if (value) {
+	Snmp::VarBind* trapVal = new Snmp::VarBind();
+	trapVal->m_name->m_ObjectName = oid;
+	String typeStr = notifMib->getType();
+	int type = lookup(typeStr,s_types,0);
+	AsnValue* v = new AsnValue(value,type);
+	assignValue(trapVal,v);
+	pdu->m_variable_bindings->m_list.append(trapVal);
+	TelEngine::destruct(v);
+    }
     // return the trapPDU
     return trapPDU;
 }
@@ -2544,7 +2557,7 @@ int SnmpAgent::buildTrapMsgV3(Snmp::SNMPv3Message& msg, DataBlock d)
 }
 
 // check to see if a trap is disabled
-bool SnmpAgent::trapDisabled(String& name)
+bool SnmpAgent::trapDisabled(const String& name)
 {
     if (!m_mibTree)
 	return true;
@@ -2576,41 +2589,78 @@ bool SnmpAgent::trapDisabled(String& name)
 }
 
 // send a trap from a received notification
-int SnmpAgent::sendNotification(String& name, String& value, unsigned int index)
+bool SnmpAgent::sendNotification(const String& name, const String* value, unsigned int index, const NamedList* extra)
 {
     if (!m_enabledTraps)
-	return -1;
+	return false;
     // check to see if the trap is enabled
     if (trapDisabled(name) || (m_traps && m_traps->count() && m_traps->find(name)))
-	return -1;
+	return false;
     // check to see if trap handling has beed configured
     NamedList* params = s_cfg.getSection("traps");
     if (!params) {
 	Debug(&__plugin,DebugMild,"::sendNotification('%s', '%s') -"
-	      " traps have not been configured",name.c_str(),value.c_str());
-	return -1;
+	      " traps have not been configured",name.c_str(),TelEngine::c_str(value));
+	return false;
     }
-    DDebug(&__plugin,DebugAll,"::sendNotification('%s', '%s')",name.c_str(),value.c_str());
+    DDebug(&__plugin,DebugAll,"::sendNotification('%s', '%s')",name.c_str(),TelEngine::c_str(value));
 
     // check to see that the right version for SNMP traps are configured
     String protoStr = params->getValue("proto_version","SNMPv2c");
     int proto = lookup(protoStr,s_proto,0);
     if (proto < SNMP_VERSION_2C) {
 	Debug(&__plugin,DebugStub,"::sendNotification() STUB : TRAPS FOR SNMPv1 NOT IMPLEMENTED");
-	return -1;
+	return false;
     }
     else {
 	if (proto == SNMP_VERSION_2S) {
 	    Debug(&__plugin,DebugStub,"::sendNotification() - SNMPv2S not supported");
-	    return -1;
+	    return false;
 	}
     }
 
     // build a trap pdu
     Snmp::SNMPv2_Trap_PDU trapPDU = buildTrapPDU(name,value,index);
-    if (trapPDU.m_SNMPv2_Trap_PDU->m_variable_bindings->m_list.count() < 3) {
+    if (trapPDU.m_SNMPv2_Trap_PDU->m_variable_bindings->m_list.count() < 2) {
 	Debug(&__plugin,DebugWarn,"::sendNotification() - trap PDU incorrectly built - aborting the send of the notification");
-	return -1;
+	return false;
+    }
+
+    // populate extra variables
+    if (extra) {
+	Snmp::PDU* pdu = trapPDU.m_SNMPv2_Trap_PDU;
+	int count = extra->getIntValue("count",-1);
+	for (int i = 0; ; i++) {
+	    // if count is set iterate up to it
+	    if (count >= 0 && i >= count)
+		break;
+	    String extraName = "notify.";
+	    extraName << i;
+	    const String& xName = (*extra)[extraName];
+	    if (xName.null()) {
+		// if count not set stop at first missing name
+		if (count < 0)
+		    break;
+		else
+		    continue;
+	    }
+	    String extraVal = "value.";
+	    extraVal << i;
+	    const String& xVal = (*extra)[extraVal];
+	    AsnMib* notifMib = m_mibTree->find(xName);
+	    if (!notifMib) {
+		DDebug(&__plugin,DebugInfo,"::sendNotification(notif.%d='%s', value.%d='%s') - no such notification exists",
+		    i,xName.c_str(),i,xVal.c_str());
+		continue;
+	    }
+	    Snmp::VarBind* trapVar = new Snmp::VarBind();
+	    trapVar->m_name->m_ObjectName = notifMib->getOID();
+	    int type = lookup(notifMib->getType(),s_types,0);
+	    AsnValue* v = new AsnValue(&xVal,type);
+	    assignValue(trapVar,v);
+	    pdu->m_variable_bindings->m_list.append(trapVar);
+	    TelEngine::destruct(v);
+	}
     }
 
     // build pdus
@@ -2634,7 +2684,7 @@ int SnmpAgent::sendNotification(String& name, String& value, unsigned int index)
     else if (proto == SNMP_VERSION_3) {
 	Snmp::SNMPv3Message msg;
 	if (buildTrapMsgV3(msg,d) == -1)
-	    return -1;
+	    return false;
 	msg.encode(data);
     }
 
@@ -2647,7 +2697,7 @@ int SnmpAgent::sendNotification(String& name, String& value, unsigned int index)
     if (m_msgQueue)
 	m_msgQueue->sendMsg(msgContainer);
     TelEngine::destruct(msgContainer);
-    return 0;
+    return true;
 }
 
 // obtain from the openssl module a cipher for encryption
@@ -2661,7 +2711,7 @@ Cipher* SnmpAgent::getCipher(int cryptoType)
 	return m_cipherAES;
     if (cryptoType == SnmpUser::DES_ENCRYPT && m_cipherDES)
 	return m_cipherDES;
-	
+
     Cipher* ret = 0;
     Message msg("engine.cipher");
     if (cryptoType == SnmpUser::AES_ENCRYPT)
@@ -2679,7 +2729,7 @@ Cipher* SnmpAgent::getCipher(int cryptoType)
 	if (cryptoType == SnmpUser::DES_ENCRYPT)
 	    m_cipherDES = ret;
     }
-    return ret;        
+    return ret;
 }
 
 // get the value from a variable binding

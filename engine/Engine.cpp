@@ -1472,8 +1472,11 @@ int Engine::run()
 
 	// Create worker thread if we didn't hear about any of them in a while
 	if (s_makeworker && (EnginePrivate::count < s_maxworkers)) {
-	    Debug(EnginePrivate::count ? DebugMild : DebugInfo,
-		"Creating new message dispatching thread (%d running)",EnginePrivate::count);
+	    if (EnginePrivate::count)
+		Alarm("engine","performance",(EnginePrivate::count > 4) ? DebugMild : DebugWarn,
+		    "Creating new message dispatching thread (%d running)",EnginePrivate::count);
+	    else
+		Debug(DebugInfo,"Creating first message dispatching thread");
 	    EnginePrivate *prv = new EnginePrivate;
 	    prv->startup();
 	}

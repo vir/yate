@@ -248,7 +248,7 @@ bool SocketAddr::host(const String& name)
 			s_mutex.unlock();
 		    }
 		    else
-			Debug(DebugGoOn,"Resolver was busy, failing '%s'",name.c_str());
+			Alarm("engine","socket",DebugWarn,"Resolver was busy, failing '%s'",name.c_str());
 		}
 		if (a != INADDR_NONE) {
 		    ((struct sockaddr_in*)m_address)->sin_addr.s_addr = a;
@@ -1634,7 +1634,7 @@ bool Socket::select(bool* readok, bool* writeok, bool* except, struct timeval* t
     if (tmp >= (SOCKET)FD_SETSIZE) {
 	if (localFail) {
 	    localFail = false;
-	    Debug(DebugGoOn,"Socket::select: handle %d larger than compiled in maximum %d",
+	    Alarm("engine","socket",DebugGoOn,"Socket::select: handle %d larger than compiled in maximum %d",
 		tmp,FD_SETSIZE);
 	}
 	return false;

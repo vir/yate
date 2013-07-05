@@ -132,7 +132,7 @@ static const char* const s_levels[11] = {
     "ALL",
 };
 
-static const char* dbg_level(int level)
+static const char* dbg_level(int& level)
 {
     if (level < DebugMin)
 	level = DebugMin;
@@ -157,6 +157,7 @@ static void dbg_colorize_func(const char* buf, int level)
 
 static void (*s_output)(const char*,int) = dbg_stderr_func;
 static void (*s_intout)(const char*,int) = 0;
+static void (*s_alarms)(const char*,int,const char*,const char*) = 0;
 
 static Mutex out_mux(false,"DebugOutput");
 static Mutex ind_mux(false,"DebugIndent");
@@ -180,7 +181,7 @@ static void common_output(int level,char* buf)
 	level = DebugMax;
     int n = ::strlen(buf);
     if (n && (buf[n-1] == '\n'))
-	    n--;
+	n--;
     // serialize the output strings
     out_mux.lock();
     // TODO: detect reentrant calls from foreign threads and main thread
@@ -198,13 +199,17 @@ static void common_output(int level,char* buf)
 	s_output(buf,level);
     if (s_intout)
 	s_intout(buf,level);
+    buf[n] = '\0';
     s_thr = 0;
     out_mux.unlock();
 }
 
-static void dbg_output(int level,const char* prefix, const char* format, va_list ap)
+static void dbg_output(int level,const char* prefix, const char* format, va_list ap,
+    const char* alarmComp = 0, const char* alarmInfo = 0)
 {
-    if (!(s_output || s_intout))
+    bool out = (s_output || s_intout) && (prefix || format);
+    bool alarm = alarmComp && format && s_alarms;
+    if (!(out || alarm))
 	return;
     char buf[OUT_BUFFER_SIZE];
     unsigned int n = Debugger::formatTime(buf,s_fmtstamp);
@@ -219,11 +224,19 @@ static void dbg_output(int level,const char* prefix, const char* format, va_list
 	::strncpy(buf+n,prefix,l);
     n = ::strlen(buf);
     l = sizeof(buf)-n-2;
+    char* msg = buf+n;
     if (format) {
-	::vsnprintf(buf+n,l,format,ap);
+	::vsnprintf(msg,l,format,ap);
 	buf[OUT_BUFFER_SIZE - 2] = 0;
     }
-    common_output(level,buf);
+    if (out)
+	common_output(level,buf);
+    if (alarm) {
+	out_mux.lock();
+	if (s_alarms)
+	    s_alarms(msg,level,alarmComp,alarmInfo);
+	out_mux.unlock();
+    }
 }
 
 void Output(const char* format, ...)
@@ -244,7 +257,7 @@ void Debug(int level, const char* format, ...)
 {
     if (!s_debugging)
 	return;
-    if (level > s_debug)
+    if (level > s_debug || level < DebugMin)
 	return;
     if (reentered())
 	return;
@@ -266,7 +279,7 @@ void Debug(const char* facility, int level, const char* format, ...)
 {
     if (!s_debugging)
 	return;
-    if (level > s_debug)
+    if (level > s_debug || level < DebugMin)
 	return;
     if (reentered())
 	return;
@@ -290,7 +303,7 @@ void Debug(const DebugEnabler* local, int level, const char* format, ...)
 	return;
     const char* facility = 0;
     if (!local) {
-	if (level > s_debug)
+	if (level > s_debug || level < DebugMin)
 	    return;
     }
     else {
@@ -311,6 +324,78 @@ void Debug(const DebugEnabler* local, int level, const char* format, ...)
     va_start(va,format);
     ind_mux.lock();
     dbg_output(level,buf,format,va);
+    ind_mux.unlock();
+    va_end(va);
+    if (s_abort && (level == DebugFail))
+	abort();
+}
+
+void Alarm(const char* component, int level, const char* format, ...)
+{
+    if (!format || level < DebugMin || reentered())
+	return;
+    if (TelEngine::null(component))
+	component = "unknown";
+    char buf[64];
+    ::snprintf(buf,sizeof(buf),"<%s:%s> ",component,dbg_level(level));
+    va_list va;
+    va_start(va,format);
+    ind_mux.lock();
+    dbg_output(level,buf,format,va,component);
+    ind_mux.unlock();
+    va_end(va);
+    if (s_abort && (level == DebugFail))
+	abort();
+}
+
+void Alarm(const DebugEnabler* component, int level, const char* format, ...)
+{
+    if (!format || level < DebugMin || reentered())
+	return;
+    const char* name = (component && !TelEngine::null(component->debugName()))
+	? component->debugName() : "unknown";
+    char buf[64];
+    ::snprintf(buf,sizeof(buf),"<%s:%s> ",name,dbg_level(level));
+    va_list va;
+    va_start(va,format);
+    ind_mux.lock();
+    dbg_output(level,buf,format,va,name);
+    ind_mux.unlock();
+    va_end(va);
+    if (s_abort && (level == DebugFail))
+	abort();
+}
+
+void Alarm(const char* component, const char* info, int level, const char* format, ...)
+{
+    if (!format || level < DebugMin || reentered())
+	return;
+    if (TelEngine::null(component))
+	component = "unknown";
+    char buf[64];
+    ::snprintf(buf,sizeof(buf),"<%s:%s> ",component,dbg_level(level));
+    va_list va;
+    va_start(va,format);
+    ind_mux.lock();
+    dbg_output(level,buf,format,va,component,info);
+    ind_mux.unlock();
+    va_end(va);
+    if (s_abort && (level == DebugFail))
+	abort();
+}
+
+void Alarm(const DebugEnabler* component, const char* info, int level, const char* format, ...)
+{
+    if (!format || level < DebugMin || reentered())
+	return;
+    const char* name = (component && !TelEngine::null(component->debugName()))
+	? component->debugName() : "unknown";
+    char buf[64];
+    ::snprintf(buf,sizeof(buf),"<%s:%s> ",name,dbg_level(level));
+    va_list va;
+    va_start(va,format);
+    ind_mux.lock();
+    dbg_output(level,buf,format,va,name,info);
     ind_mux.unlock();
     va_end(va);
     if (s_abort && (level == DebugFail))
@@ -357,6 +442,12 @@ const char* debugColor(int level)
 	return "\033[0;40;37m\033[K"; // light gray on black
     return s_colors[level];
 }
+
+const char* debugLevelName(int level)
+{
+    return (level < DebugMin) ? "" : dbg_level(level);
+}
+
 
 int DebugEnabler::debugLevel(int level)
 {
@@ -469,6 +560,13 @@ void Debugger::setIntOut(void (*outFunc)(const char*,int))
 {
     out_mux.lock();
     s_intout = outFunc;
+    out_mux.unlock();
+}
+
+void Debugger::setAlarmHook(void (*alarmFunc)(const char*,int,const char*,const char*))
+{
+    out_mux.lock();
+    s_alarms = alarmFunc;
     out_mux.unlock();
 }
 

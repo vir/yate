@@ -211,6 +211,7 @@ public:
 	: JsObject("Engine",mtx,true),
 	  m_worker(0), m_debugName("javascript")
 	{
+	    debugName(m_debugName);
 	    debugChain(&__plugin);
 	    MKDEBUG(Fail);
 	    MKDEBUG(Test);
@@ -225,6 +226,7 @@ public:
 	    MKDEBUG(All);
 	    params().addParam(new ExpFunction("output"));
 	    params().addParam(new ExpFunction("debug"));
+	    params().addParam(new ExpFunction("alarm"));
 	    params().addParam(new ExpFunction("sleep"));
 	    params().addParam(new ExpFunction("usleep"));
 	    params().addParam(new ExpFunction("yield"));
@@ -604,6 +606,45 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    else if (level < limit)
 		level = limit;
 	    Debug(this,level,"%s",str.c_str());
+	}
+    }
+    else if (oper.name() == YSTRING("alarm")) {
+	if (oper.number() < 2)
+	    return false;
+	int level = -1;
+	String info;
+	String str;
+	for (long int i = oper.number(); i; i--) {
+	    ExpOperation* op = popValue(stack,context);
+	    if (!op)
+		continue;
+	    if (i == 1) {
+		if (level < 0) {
+		    if (op->isInteger())
+			level = op->number();
+		    else
+			return false;
+		}
+		else
+		    info = *op;
+	    }
+	    else if ((i == 2) && oper.number() > 2 && op->isInteger())
+		level = op->number();
+	    else if (*op) {
+		if (str)
+		    str = *op + " " + str;
+		else
+		    str = *op;
+	    }
+	    TelEngine::destruct(op);
+	}
+	if (str && level >= 0) {
+	    int limit = s_allowAbort ? DebugFail : DebugGoOn;
+	    if (level > DebugAll)
+		level = DebugAll;
+	    else if (level < limit)
+		level = limit;
+	    Alarm(this,info,level,"%s",str.c_str());
 	}
     }
     else if (oper.name() == YSTRING("sleep")) {

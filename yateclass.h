@@ -269,6 +269,13 @@ YATE_API bool debugAt(int level);
 YATE_API const char* debugColor(int level);
 
 /**
+ * Get the name of a debugging or alarm level
+ * @param level The debug level
+ * @return Short C string describing the level
+ */
+YATE_API const char* debugLevelName(int level);
+
+/**
  * Holds a local debugging level that can be modified separately from the
  *  global debugging
  * @short A holder for a debug level
@@ -489,6 +496,40 @@ YATE_API void Debug(const char* facility, int level, const char* format, ...) FO
 YATE_API void Debug(const DebugEnabler* local, int level, const char* format, ...) FORMAT_CHECK(3);
 
 /**
+ * Outputs a debug string and emits an alarm if a callback is installed
+ * @param component Component that emits the alarm
+ * @param level The level of the alarm
+ * @param format A printf() style format string
+ */
+YATE_API void Alarm(const char* component, int level, const char* format, ...) FORMAT_CHECK(3);
+
+/**
+ * Outputs a debug string and emits an alarm if a callback is installed
+ * @param component Pointer to a DebugEnabler holding component name and debugging settings
+ * @param level The level of the alarm
+ * @param format A printf() style format string
+ */
+YATE_API void Alarm(const DebugEnabler* component, int level, const char* format, ...) FORMAT_CHECK(3);
+
+/**
+ * Outputs a debug string and emits an alarm if a callback is installed
+ * @param component Component that emits the alarm
+ * @param info Extra alarm information
+ * @param level The level of the alarm
+ * @param format A printf() style format string
+ */
+YATE_API void Alarm(const char* component, const char* info, int level, const char* format, ...) FORMAT_CHECK(4);
+
+/**
+ * Outputs a debug string and emits an alarm if a callback is installed
+ * @param component Pointer to a DebugEnabler holding component name and debugging settings
+ * @param info Extra alarm information
+ * @param level The level of the alarm
+ * @param format A printf() style format string
+ */
+YATE_API void Alarm(const DebugEnabler* component, const char* info, int level, const char* format, ...) FORMAT_CHECK(4);
+
+/**
  * Outputs a string to the debug console with formatting
  * @param format A printf() style format string
  */
@@ -547,6 +588,12 @@ public:
      * @param outFunc Pointer to the output function, NULL to disable
      */
     static void setIntOut(void (*outFunc)(const char*,int) = 0);
+
+    /**
+     * Set the alarm hook callback
+     * @param alarmFunc Pointer to the alarm callback function, NULL to disable
+     */
+    static void setAlarmHook(void (*alarmFunc)(const char*,int,const char*,const char*) = 0);
 
     /**
      * Enable or disable the debug output

@@ -920,6 +920,7 @@ private:
 
 static int s_yateRun = 0;
 static int s_yateRunAlarm = 0;
+static int s_alarmThreshold = DebugNote;
 static String s_nodeState = "";
 static double s_qosHysteresisFactor = 2.0;
 
@@ -1575,6 +1576,39 @@ static void cutNewLine(String& line) {
     if (line.endsWith("\r"))
 	line = line.substr(0,line.length() - 1);
 }
+
+// callback for engine alarm hook
+static void alarmCallback(const char* message, int level, const char* component, const char* info)
+{
+    if (TelEngine::null(component) || TelEngine::null(message))
+	return;
+    const char* lvl = debugLevelName(level);
+    if (TelEngine::null(lvl))
+	return;
+    Message* msg = new Message("module.update");
+    msg->addParam("module",__plugin.name());
+    msg->addParam("level",String(level));
+    msg->addParam("from",component,false);
+    msg->addParam("text",message,false);
+    msg->addParam("info",info,false);
+    Engine::enqueue(msg);
+    if ((s_alarmThreshold >= DebugFail) && (level <= s_alarmThreshold)) {
+	msg = new Message("monitor.notify",0,true);
+	msg->addParam("notify","genericAlarm");
+	msg->addParam("notify.0","alarmSource");
+	msg->addParam("value.0",component);
+	msg->addParam("notify.1","alarmLevel");
+	msg->addParam("value.1",lvl);
+	msg->addParam("notify.2","alarmText");
+	msg->addParam("value.2",message);
+	if (!TelEngine::null(info)) {
+	    msg->addParam("notify.3","alarmInfo");
+	    msg->addParam("value.3",info);
+	}
+	Engine::enqueue(msg);
+    }
+}
+
 
 /**
   * MsgUpdateHandler
@@ -3478,6 +3512,8 @@ Monitor::~Monitor()
 {
     Output("Unloaded module Monitoring");
 
+    Debugger::setAlarmHook();
+
     TelEngine::destruct(m_moduleInfo);
     TelEngine::destruct(m_engineInfo);
     TelEngine::destruct(m_activeCallsCache);
@@ -3534,6 +3570,7 @@ void Monitor::initialize()
 	setup();
 	installRelay(Halt);
 	installRelay(Timer);
+	Debugger::setAlarmHook(alarmCallback);
 
 	s_nodeState = "active";
     }
@@ -3619,6 +3656,14 @@ void Monitor::readConfig(const Configuration& cfg)
 {
     // get the threshold for yate restart alarm
     s_yateRunAlarm = cfg.getIntValue("general","restart_alarm",1);
+    int level = cfg.getIntValue("general","alarm_threshold",DebugNote);
+    if (level < DebugFail)
+	level = -1;
+    else if (level < DebugConf)
+	level = DebugConf;
+    else if (level > DebugAll)
+	level = DebugAll;
+    s_alarmThreshold = level;
 
     // read configs for database monitoring (they type=database, the name of the section is the database account)
     for (unsigned int i = 0; i < cfg.sections(); i++) {

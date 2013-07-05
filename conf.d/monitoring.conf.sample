@@ -2,12 +2,17 @@
 
 [general]
 
-; restart_alarm=
-; after how many Yate restarts should the monitor send an alarm.
-; default is 1
+; restart_alarm: int: After how many Yate restarts should the monitor send an alarm.
+; Default value is 1
 ;restart_alarm=1
 
-; time (in seconds) for specifying for how long cached data should be kept or with which the cache time is increased on each access
+; alarm_threshold: int: Ignore generic alarms with level higher (less important) than this limit
+; Valid values are between 3 (CONF) and 10 (ALL), negative to disable forwarding alarms
+; Default value is 8 (NOTE)
+;alarm_threshold=8
+
+; cache: int: Time (in seconds) for specifying for how long cached data should be kept
+;  or with which the cache time is increased on each access
 ;cache=1
 
 

@@ -434,7 +434,7 @@ public:
     // build trap network destination
     SocketAddr buildDestination(const String& ip, const String& port);
     // build a variable bindings list of mandatory OIDs for a trap
-    Snmp::VarBindList* addTrapOIDs(String& notifOID);
+    Snmp::VarBindList* addTrapOIDs(const String& notifOID);
     // build SNMPv2 and SNMPv3 traps
     Snmp::SNMPv2_Trap_PDU buildTrapPDU(const String& name, const String& value, unsigned int index = 0);
     int buildTrapMsgV3(Snmp::SNMPv3Message& msg, DataBlock pduData);
@@ -2419,7 +2419,7 @@ SocketAddr SnmpAgent::buildDestination(const String& ip, const String& port)
 }
 
 // build a Variable Binding list containing the mandatory OIDs for a trap
-Snmp::VarBindList* SnmpAgent::addTrapOIDs(String& notifOID)
+Snmp::VarBindList* SnmpAgent::addTrapOIDs(const String& notifOID)
 {
     if (!m_mibTree)
 	return 0;
@@ -2443,7 +2443,7 @@ Snmp::VarBindList* SnmpAgent::addTrapOIDs(String& notifOID)
     AsnValue trOID(notifOID,AsnValue::OBJECT_ID);
     assignValue(trapOID,&trOID);
 
-    Snmp::VarBindList* list = new Snmp::VarBindList();    
+    Snmp::VarBindList* list = new Snmp::VarBindList();
     list->m_list.append(sysUpTime);
     list->m_list.append(trapOID);
 
@@ -2475,7 +2475,7 @@ Snmp::SNMPv2_Trap_PDU SnmpAgent::buildTrapPDU(const String& name, const String& 
     notifMib->setIndex(index);
     String oid = notifMib->getOID();
     TelEngine::destruct(pdu->m_variable_bindings);
-    pdu->m_variable_bindings = addTrapOIDs(oid);
+    pdu->m_variable_bindings = addTrapOIDs(notifMib->toString());
     if (!pdu->m_variable_bindings) {
 	Debug(&__plugin,DebugInfo,"::buildTrapPDU() - could not set sysUpTime and/or trapOID");
 	return trapPDU;
@@ -2592,10 +2592,6 @@ int SnmpAgent::sendNotification(String& name, String& value, unsigned int index)
     }
     DDebug(&__plugin,DebugAll,"::sendNotification('%s', '%s')",name.c_str(),value.c_str());
 
-    // build a new SNMP message wrapper
-    SnmpMessage* msgContainer = new SnmpMessage();
-    msgContainer->setPeer(s_remote);
-
     // check to see that the right version for SNMP traps are configured
     String protoStr = params->getValue("proto_version","SNMPv2c");
     int proto = lookup(protoStr,s_proto,0);
@@ -2641,6 +2637,10 @@ int SnmpAgent::sendNotification(String& name, String& value, unsigned int index)
 	    return -1;
 	msg.encode(data);
     }
+
+    // build a new SNMP message wrapper
+    SnmpMessage* msgContainer = new SnmpMessage();
+    msgContainer->setPeer(s_remote);
 
     // send the data of the message
     msgContainer->setData(data);

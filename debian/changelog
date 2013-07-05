@@ -1,4 +1,4 @@
-yate (4.3.1~svn5557) UNRELEASED; urgency=low
+yate (4.3.1~svn5565) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -563,8 +563,18 @@ yate (4.3.1~svn5557) UNRELEASED; urgency=low
   * Updated to SVN revision 5557: + New files packaging  + Fix conf file
     name  + Fix new module name  + Added methods to obtain the
     parameters list from a NamedList.
+  * Updated to SVN revision 5565: + Fixed a memory leak that occured
+    when failing to send a misconfigured trap.  + Fixed the OID included
+    in traps to no longer held a .0 suffix.  + Added a generic Alarm()
+    function that can be hooked by a module.  + More flexible handling
+    of the monitor.notify message parameters.  + Support for sending
+    traps with an arbitrary number of variables.  + Added MIB entries
+    for Generic Alarms.  + Added support for hooking into Alarm() and
+    sending SNMP genericAlarm traps.  + Send Alarm from several places
+    instead of just Debug.  + Added Engine.alarm() method in Javascript.
+    + Fixed comparation in new worker thread alarm level.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 03 Jul 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 06 Jul 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

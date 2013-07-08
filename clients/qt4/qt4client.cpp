@@ -390,6 +390,7 @@ static const String s_propsSave = "_yate_save_props"; // Save properties propert
 static const String s_propColWidths = "_yate_col_widths"; // Column widths
 static const String s_propSorting = "_yate_sorting";  // Table/List sorting
 static const String s_propSizes = "_yate_sizes";      // Size int array
+static const String s_propShowWndWhenActive = "_yate_showwnd_onactive"; // Show another window when a window become active
 static String s_propHHeader = "dynamicHHeader";       // Tables: show/hide the horizontal header
 static String s_propAction = "dynamicAction";         // Prefix for properties that would trigger some action
 static String s_propWindowFlags = "_yate_windowflags"; // Window flags
@@ -775,6 +776,17 @@ static QList<int> buildIntList(const String& buf, int len = 0)
     }
     TelEngine::destruct(list);
     return ret;
+}
+
+// Retrieve an object's property
+// Check platform dependent value
+static inline bool getPropPlatform(QObject* obj, const String& name, String& val)
+{
+    if (!(obj && name))
+	return false;
+    if (QtClient::getProperty(obj,name,val))
+	return true;
+    return QtClient::getProperty(obj,name + "_os" + PLATFORM_LOWERCASE_NAME,val);
 }
 
 
@@ -2272,6 +2284,9 @@ bool QtWindow::event(QEvent* ev)
     else if (ev->type() == QEvent::WindowActivate) {
 	m_active = true;
 	Client::self()->toggle(this,s_activeChg,true);
+	String wName;
+	if (getPropPlatform(wndWidget(),s_propShowWndWhenActive,wName) && wName)
+	    Client::setVisible(wName);
     }
     else if (ev->type() == QEvent::ApplicationDeactivate) {
 	if (m_active) {

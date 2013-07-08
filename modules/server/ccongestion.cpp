@@ -64,7 +64,6 @@ private:
 };
 
 static CongestionModule s_module;
-static const String s_target = "engine";
 static const char* s_mutexName = "CCongestion";
 
 
@@ -85,17 +84,21 @@ public:
 bool CpuNotify::received(Message& msg)
 {
     int count = msg.getIntValue("count",0);
-    NamedList params("");
-    String param = "notify.";
-    String paramValue = "value.";
+    String monitor;
+    String newVal;
+    const String param = "notify.";
+    const String paramValue = "value.";
     for (int i = 0; i < count; i++) {
-	String notif = msg.getValue(param + String(i),"");
-        String value = msg.getValue(paramValue + String(i),"");
-	if (notif == "target" && value != s_target)
+	const String& notif = msg[param + String(i)];
+	const String& value = msg[paramValue + String(i)];
+	if (notif == YSTRING("target") && value != YSTRING("engine"))
 	    return false;
-        params.addParam(notif,value);
+	if (notif == YSTRING("monitor"))
+	    monitor = value;
+	else if (notif == YSTRING("new"))
+	    newVal = value;
     }
-    s_module.updateMonitor(params.getValue("monitor"),params.getValue("new"));
+    s_module.updateMonitor(monitor,newVal);
     s_module.updateEngine();
     return false;
 }
@@ -136,7 +139,7 @@ void CongestionModule::initialize()
 	    m->addParam("targetid","cpuload");
 	    m->addParam("component","cpuload");
 	    m->addParam("operation",ns->name());
-	    m->addParam("engine",*ns);
+	    m->addParam("cpu.engine",*ns);
 	    Engine::enqueue(m);
 	}
     }

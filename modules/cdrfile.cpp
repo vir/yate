@@ -110,7 +110,7 @@ void CdrFileHandler::init(const char *fname, bool tabsep, bool combined, const c
     if (fname) {
 	m_file = ::open(fname,O_WRONLY|O_CREAT|O_APPEND|O_LARGEFILE,0640);
 	if (m_file < 0)
-	    Debug(DebugWarn,"Failed to open or create '%s': %s (%d)",
+	    Alarm("cdrfile","system",DebugWarn,"Failed to open or create '%s': %s (%d)",
 		fname,::strerror(errno),errno);
     }
 }

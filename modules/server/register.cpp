@@ -293,7 +293,7 @@ static bool copyParams(Message &msg, Array *a, const String& resultName)
 		m->retValue() = *s;
 	    else
 		m->setParam(*name,*s);
-	}	
+	}
 	if (j>1) {
 	    if (m->retValue().null()) {
 		Debug(&module,DebugWarn,"Skipping void route #%d",j);
@@ -402,7 +402,7 @@ void AAAHandler::initQuery()
 void AAAHandler::chkConfig()
 {
     if (m_query && m_account.null())
-	Debug(&module,DebugMild,"Missing database account for '%s'",name().c_str());
+	Alarm(&module,"config",DebugMild,"Missing database account for '%s'",name().c_str());
 }
 
 // little helper function to make code cleaner

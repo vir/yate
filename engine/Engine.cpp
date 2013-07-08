@@ -469,7 +469,10 @@ bool EngineEventHandler::received(Message &msg)
     else {
 	// build a full text with timestamp and sender
 	char tstamp[30];
-	Debugger::formatTime(tstamp);
+	Debugger::Formatting fmt = Debugger::getFormatting();
+	if (Debugger::None == fmt)
+	    fmt = Debugger::Relative;
+	Debugger::formatTime(tstamp,fmt);
 	ev = new CapturedEvent(level,tstamp);
 	*ev << "<" << *type << "> " << *text;
 	msg.setParam("fulltext",*ev);

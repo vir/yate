@@ -281,17 +281,17 @@ void CpuUpdater::setCpu(Cpu* cpu)
 // This method appends a target from chan.control message
 bool CpuUpdater::update(Message& msg)
 {
-    String mon = msg.getValue("operation","");
+    const String& mon = msg[YSTRING("operation")];
     NamedString* inc = 0;
     for (unsigned int i = 0;i < msg.count();i++) {
 	NamedString* ns = msg.getParam(i);
 	if (!ns->name().startsWith("cpu.") || ns->name().length() <= 4)
 	    continue;
 	inc = new NamedString(ns->name().substr(4),*ns);
+	break;
     }
     if (!inc) {
 	DDebug(&s_module,DebugNote,"No target parameter for monitor %s",mon.c_str());
-	TelEngine::destruct(inc);
 	return TelEngine::controlReturn(&msg,true);
     }
     Lock lock(this);

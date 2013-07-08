@@ -1690,7 +1690,7 @@ bool SubMessageHandler::received(Message& msg)
 		    n,nc,ellapsedMs(start));
 	    }
 	    else
-		Debug(&__plugin,DebugMild,"Failed to load users");
+		Alarm(&__plugin,"database",DebugMild,"Failed to load users");
 	}
 	__plugin.m_genericUsers.load();
 	return false;

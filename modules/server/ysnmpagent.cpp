@@ -105,7 +105,7 @@ public:
 	{}
     virtual bool init() = 0;
     virtual void run() = 0;
-    virtual void sendMessage(DataBlock& data, SocketAddr& to) = 0;
+    virtual bool sendMessage(DataBlock& data, SocketAddr& to) = 0;
     virtual void cleanup() = 0;
 
 protected:
@@ -128,7 +128,7 @@ public:
     virtual void run();
     virtual void cleanup();
     virtual void addMsg(unsigned char* msg, int len, SocketAddr& fromAddr);
-    virtual void sendMsg(SnmpMessage* msg);
+    virtual bool sendMsg(SnmpMessage* msg);
     void setSocket(SnmpSocketListener* socket);
 
 protected:
@@ -179,11 +179,11 @@ public:
     };
     // Constructor
     SnmpUser(NamedList* cfg);
-    
+
     // Destructor
     inline ~SnmpUser()
     {}
-    
+
     inline const String& toString() const
 	{ return m_name; }
 
@@ -204,8 +204,8 @@ public:
     inline const DataBlock& authKey()
 	{ return m_authKey; }
     inline const DataBlock& privKey()
-	{ return m_privKey; }		
-    
+	{ return m_privKey; }
+
 private:
     String m_name;
     String m_authPassword;
@@ -213,12 +213,12 @@ private:
     int m_authProto;
     int m_privProto;
     int m_accessLevel;
-    
+
     DataBlock m_authKey;
     DataBlock m_k1;
     DataBlock m_k2;
     DataBlock m_privKey;
-    
+
     static TokenDict s_access[];
     // generate encryption key
     DataBlock generateAuthKey(String pass = "");
@@ -286,7 +286,7 @@ public:
 
     // set the SNMPv3 user for this message
     inline void setUser(SnmpUser* user)
-    {   
+    {
 	m_user = user;
 	if (m_user) {
 	    m_authFlag = m_user->needsAuth();
@@ -475,8 +475,6 @@ private:
     u_int64_t m_salt;
 
     TrapHandler* m_trapHandler;
-
-    bool m_enabledTraps;
     ObjList* m_traps;
 
     // SNMP v3 users
@@ -498,7 +496,7 @@ public:
     ~SnmpUdpListener();
     virtual bool init();
     virtual void run();
-    virtual void sendMessage(DataBlock& data, SocketAddr& to);
+    virtual bool sendMessage(DataBlock& data, SocketAddr& to);
     virtual void cleanup();
 };
 
@@ -597,6 +595,7 @@ TokenDict SnmpUser::s_access[] = {
 
 static Configuration s_cfg;
 static Configuration s_saveCfg;
+static bool s_enabledTraps = false;
 static u_int8_t s_zero = 0;
 
 static u_int32_t s_pen = 34501;
@@ -664,12 +663,12 @@ bool SnmpUdpListener::init()
     SocketAddr addr;
 
     if (!addr.assign(AF_INET) || !addr.host(m_addr) || !addr.port(m_port)) {
-	Debug(&__plugin,DebugWarn,"Could not assign values to socket address for SNMP UDP Listener");
+	Alarm(&__plugin,"socket",DebugWarn,"Could not assign values to socket address for SNMP UDP Listener");
 	return false;
     }
 
     if (!m_socket.create(addr.family(),SOCK_DGRAM)) {
-	Debug(&__plugin,DebugWarn,"Could not create socket for SNMP UDP Listener error %d",
+	Alarm(&__plugin,"socket",DebugWarn,"Could not create socket for SNMP UDP Listener error %d",
 	    m_socket.error());
 	return false;
     }
@@ -677,12 +676,12 @@ bool SnmpUdpListener::init()
     m_socket.setReuse();
 
     if (!m_socket.bind(addr)) {
-	Debug(&__plugin,DebugWarn,"Could not bind SNMP UDP Listener, error %d %s",
+	Alarm(&__plugin,"socket",DebugWarn,"Could not bind SNMP UDP Listener, error %d %s",
 	    m_socket.error(),strerror(m_socket.error()));
 	return false;
     }
     if (!m_socket.setBlocking(false)) {
-	Debug(&__plugin,DebugWarn,"Could not set nonblocking SNMP UDP Listener, error %d %s",
+	Alarm(&__plugin,"socket",DebugWarn,"Could not set nonblocking SNMP UDP Listener, error %d %s",
 	    m_socket.error(),strerror(m_socket.error()));
 	return false;
     }
@@ -735,7 +734,7 @@ void SnmpUdpListener::run()
     }
 }
 
-void SnmpUdpListener::sendMessage(DataBlock& d, SocketAddr& to)
+bool SnmpUdpListener::sendMessage(DataBlock& d, SocketAddr& to)
 {
     DDebug(&__plugin,DebugAll,"SnmpUdpListener::sendMessage() of length '%d' to '%s:%d'",d.length(),to.host().c_str(),to.port());
 
@@ -751,15 +750,17 @@ void SnmpUdpListener::sendMessage(DataBlock& d, SocketAddr& to)
 	int w = m_socket.sendTo(d.data(),len,to);
 	if (w < 0) {
 	    if (!m_socket.canRetry()) {
-		Debug(&__plugin,DebugWarn,"SnmpUdpListener::sendMessage() - could not send message");
+		// we are shooting ourselves in the foot!
+		s_enabledTraps = false;
+		Alarm(&__plugin,"socket",DebugWarn,"Could not send message, SNMP disabled!");
 		cancel();
-		return ;
+		return false;
 	    }
 	}
 	else
 	    len -= w;
     }
-    return;
+    return true;
 }
 
 void SnmpUdpListener::cleanup()
@@ -860,14 +861,13 @@ void SnmpMsgQueue::addMsg(unsigned char* msg, int len, SocketAddr& fromAddr)
     m_queueMutex.unlock();
 }
 
-void SnmpMsgQueue::sendMsg(SnmpMessage* msg)
+bool SnmpMsgQueue::sendMsg(SnmpMessage* msg)
 {
     DDebug(&__plugin,DebugAll,"SnmpMsgQueue::sendMsg([%p])",msg);
     if (!msg)
-	return;
+	return false;
     DataBlock content = msg->data();
-    if (m_socket && content.length() > 0)
-	m_socket->sendMessage(content,msg->peer());
+    return m_socket && (content.length() > 0) && m_socket->sendMessage(content,msg->peer());
 }
 
 /**
@@ -1482,7 +1482,7 @@ SnmpAgent::SnmpAgent()
 	m_engineBoots(0),m_startTime(0), m_silentDrops(0),
 	m_salt(0), 
 	m_trapHandler(0),
-	m_enabledTraps(true), m_traps(0),
+	m_traps(0),
 	m_trapUser(0),
 	m_cipherAES(0),
 	m_cipherDES(0)
@@ -1564,12 +1564,12 @@ void SnmpAgent::initialize()
     m_engineId = genEngineId(engineFormat,engineInfo);
 
     // read configuration for traps
-    m_enabledTraps = s_cfg.getBoolValue("traps","enable_traps",true);
+    s_enabledTraps = s_cfg.getBoolValue("traps","enable_traps",true);
     String remoteIP = s_cfg.getValue("traps","remote_ip","localhost");
     String remotePort = s_cfg.getValue("traps","remote_port","162");
     s_remote = buildDestination(remoteIP,remotePort);
     if (!s_remote.valid())
-	m_enabledTraps = false;
+	s_enabledTraps = false;
     // initiate the user for sending SNMPv3 traps
     String trapUser = s_cfg.getValue("traps","trap_user","");
     TelEngine::destruct(m_trapUser);
@@ -1595,7 +1595,7 @@ void SnmpAgent::initialize()
 	// if there is no engineBoots value saved, it must be set to ENGINE_BOOTS_MAX
 	m_engineBoots = s_saveCfg.getIntValue("snmp_v3","engine_boots",ENGINE_BOOTS_MAX);
 	if (m_engineBoots == ENGINE_BOOTS_MAX)
-	    Debug(this,DebugWarn,"snmpEngineBoots reached maximum value, snmpEngineID must be reconfigured");
+	    Alarm(this,"config",DebugWarn,"snmpEngineBoots reached maximum value, snmpEngineID must be reconfigured");
 	else
 	    m_engineBoots++;
 	s_saveCfg.setValue("snmp_v3","engine_boots",(int)m_engineBoots);
@@ -2591,7 +2591,7 @@ bool SnmpAgent::trapDisabled(const String& name)
 // send a trap from a received notification
 bool SnmpAgent::sendNotification(const String& name, const String* value, unsigned int index, const NamedList* extra)
 {
-    if (!m_enabledTraps)
+    if (!(s_enabledTraps && m_msgQueue))
 	return false;
     // check to see if the trap is enabled
     if (trapDisabled(name) || (m_traps && m_traps->count() && m_traps->find(name)))
@@ -2694,10 +2694,9 @@ bool SnmpAgent::sendNotification(const String& name, const String* value, unsign
 
     // send the data of the message
     msgContainer->setData(data);
-    if (m_msgQueue)
-	m_msgQueue->sendMsg(msgContainer);
+    bool ok = m_msgQueue && m_msgQueue->sendMsg(msgContainer);
     TelEngine::destruct(msgContainer);
-    return true;
+    return ok;
 }
 
 // obtain from the openssl module a cipher for encryption

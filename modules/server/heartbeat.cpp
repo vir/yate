@@ -304,7 +304,7 @@ void HBeatPlugin::initialize()
 	    Debug("heartbeat",DebugMild,"Could not enable broadcast on socket, error: %d",m_socket.error());
 #endif
 	if (!(m_socket.connect(addr) && m_socket.setBlocking())) {
-	    Debug("heartbeat",DebugWarn,"Could not set up socket, error: %d",m_socket.error());
+	    Alarm("heartbeat","config",DebugWarn,"Could not set up socket, error: %d",m_socket.error());
 	    m_socket.terminate();
 	    return;
 	}

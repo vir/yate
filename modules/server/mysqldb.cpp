@@ -552,13 +552,13 @@ bool MyAcct::initDb()
 
     int initCons = initConns();
     if (!initCons) {
-	Debug(&module,DebugWarn,"Could not initiate any connections for account '%s', trying again in %d seconds",
+	Alarm(&module,"database",DebugWarn,"Could not initiate any connections for account '%s', trying again in %d seconds",
 	    c_str(),m_retryTime);
 	module.startInitThread();
 	return true;
     }
     if (initCons != m_poolSize) {
-	Debug(&module,DebugMild,"Could initiate only %d of %d connections for account '%s', trying again in %d seconds",
+	Alarm(&module,"database",DebugMild,"Could initiate only %d of %d connections for account '%s', trying again in %d seconds",
 	    initCons,m_poolSize,c_str(),m_retryTime);
 	module.startInitThread();
     }

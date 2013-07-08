@@ -374,7 +374,7 @@ protected:
     // Print socket read error to output
     void printReadError();
     // Print socket write error to output
-    void printWriteError(int res, unsigned int len);
+    void printWriteError(int res, unsigned int len, bool alarm = false);
     // Set m_protoAddr from local/remote ip/port or reset it
     void setProtoAddr(bool set);
 
@@ -417,6 +417,7 @@ public:
 protected:
     bool m_default;
     bool m_forceBind;
+    bool m_errored;
     int m_bufferReq;
 };
 
@@ -2485,7 +2486,7 @@ Socket* YateSIPListener::initSocket(int proto, const String& name, SocketAddr& l
     }
     String s;
     Thread::errorString(s,sock->error());
-    Debug(&plugin,DebugWarn,"Listener(%s,'%s') %s. %d: '%s'",
+    Alarm(&plugin,"socket",DebugWarn,"Listener(%s,'%s') %s. %d: '%s'",
 	type,name.c_str(),reason.c_str(),sock->error(),s.c_str());
     if (!m_bindInterval)
 	m_bindInterval = s_bindRetryMs;
@@ -2747,7 +2748,7 @@ void YateSIPTransport::printReadError()
 }
 
 // Print socket write error to output
-void YateSIPTransport::printWriteError(int res, unsigned int len)
+void YateSIPTransport::printWriteError(int res, unsigned int len, bool alarm)
 {
     if (res == (int)len) {
 	XDebug(&plugin,DebugAll,"Transport(%s) sent %u bytes [%p]",
@@ -2762,7 +2763,10 @@ void YateSIPTransport::printWriteError(int res, unsigned int len)
         return;
     m_reason = "Socket send error:";
     addSockError(m_reason,*m_sock);
-    Debug(&plugin,DebugWarn,"Transport(%s) %s [%p]",m_id.c_str(),m_reason.c_str(),this);
+    if (alarm)
+	Alarm(&plugin,"socket",DebugWarn,"Transport(%s) %s [%p]",m_id.c_str(),m_reason.c_str(),this);
+    else
+	Debug(&plugin,DebugWarn,"Transport(%s) %s [%p]",m_id.c_str(),m_reason.c_str(),this);
 }
 
 // Set m_protoAddr from local/remote ip/port or reset it
@@ -2781,7 +2785,7 @@ void YateSIPTransport::setProtoAddr(bool set)
 
 YateSIPUDPTransport::YateSIPUDPTransport(const String& id)
     : YateSIPTransport(Udp,id,0,Idle),
-    m_default(false), m_forceBind(true), m_bufferReq(0)
+    m_default(false), m_forceBind(true), m_errored(false), m_bufferReq(0)
 {
 }
 
@@ -2811,7 +2815,11 @@ void YateSIPUDPTransport::send(const void* data, unsigned int len, const SocketA
     if (!m_sock)
 	return;
     int sent = m_sock->sendTo(data,len,addr);
-    printWriteError(sent,len);
+    bool err = (sent < 0);
+    printWriteError(sent,len,err && !m_errored);
+    if (m_errored && !err)
+	Alarm(&plugin,"socket",DebugNote,"Transport(%s) error cleared [%p]",m_id.c_str(),this);
+    m_errored = err;
 }
 
 // Process data (read/send).
@@ -3592,7 +3600,7 @@ void YateSIPTCPListener::init(const NamedList& params, bool first)
 	m_sslContextChanged = first || m_sslContextChanged || (sslContext != m_sslContext);
 	m_sslContext = sslContext;
 	if (!m_sslContext)
-	    Debug(&plugin,DebugConf,"Listener(%s,'%s') ssl context is empty [%p]",
+	    Alarm(&plugin,"config",DebugConf,"Listener(%s,'%s') ssl context is empty [%p]",
 		protoName(),c_str(),this);
     }
     m_backlog = params.getIntValue("backlog",5,0);
@@ -3677,9 +3685,8 @@ void YateSIPTCPListener::run()
 		TelEngine::destruct(trans);
 	}
 	else {
-	    if (tls())
-		Debug(&plugin,DebugWarn,"Listener(%s,'%s') failed to start SSL [%p]",
-		    protoName(),c_str(),this);
+	    Debug(&plugin,DebugWarn,"Listener(%s,'%s') failed to start SSL [%p]",
+		protoName(),c_str(),this);
 	    delete sock;
 	}
     }
@@ -3695,7 +3702,7 @@ void YateSIPTCPListener::cleanup(bool final)
 	if (!m_socket)
 	    DDebug(&plugin,DebugInfo,"Listener(%s,'%s') terminated [%p]",protoName(),c_str(),this);
 	else
-	    Debug(&plugin,DebugWarn,"Listener(%s,'%s') abnormally terminated [%p]",protoName(),c_str(),this);
+	    Alarm(&plugin,"system",DebugWarn,"Listener(%s,'%s') abnormally terminated [%p]",protoName(),c_str(),this);
     }
     m_mutex.lock();
     const char* reason = 0;
@@ -4509,7 +4516,7 @@ bool YateSIPEndPoint::setupListener(int proto, const String& name, bool enabled,
 	DDebug(&plugin,DebugAll,"Added listener %p '%s'",listener,listener->toString().c_str());
 	return true;
     }
-    Debug(&plugin,DebugWarn,"Failed to start listener thread type=%s name='%s'",
+    Alarm(&plugin,"config",DebugWarn,"Failed to start listener thread type=%s name='%s'",
 	ProtocolHolder::lookupProtoName(proto),name.c_str());
     return false;
 }

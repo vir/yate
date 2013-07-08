@@ -42,6 +42,9 @@
   <property name="_yate_notificationwindow" stdset="0" >
    <bool>true</bool>
   </property>
+  <property name="_yate_showwnd_onactive_osapple" stdset="0" >
+   <string>mainwindow</string>
+  </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
     <number>0</number>

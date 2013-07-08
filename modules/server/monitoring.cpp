@@ -1658,7 +1658,7 @@ bool EngineStartHandler::received(Message& msg)
 	    __plugin.sendTrap(notif,String(s_yateRun));
     }
     int lastsignal = Engine::runParams().getIntValue(YSTRING("lastsignal"),0);
-    if (lastsignal >= 0) {
+    if (lastsignal > 0) {
 	String notif = lookup(EngineInfo::ENGINE_UNEX_RESTART,s_engineQuery,"");
 	if (!notif.null())
 	    __plugin.sendTrap(notif,String(lastsignal));

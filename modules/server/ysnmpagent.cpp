@@ -2566,6 +2566,8 @@ bool SnmpAgent::trapDisabled(const String& name)
 	DDebug(&__plugin,DebugInfo,"Notification '%s' does not exist",name.c_str());
 	return true;
     }
+    if (m_traps && m_traps->find(name))
+	return true;
     String trapOid;
     String oid = mib->toString();
     String disabledTraps = s_cfg.getValue("traps","disable_traps","");
@@ -2594,7 +2596,7 @@ bool SnmpAgent::sendNotification(const String& name, const String* value, unsign
     if (!(s_enabledTraps && m_msgQueue))
 	return false;
     // check to see if the trap is enabled
-    if (trapDisabled(name) || (m_traps && m_traps->count() && m_traps->find(name)))
+    if (trapDisabled(name))
 	return false;
     // check to see if trap handling has beed configured
     NamedList* params = s_cfg.getSection("traps");
@@ -2630,6 +2632,8 @@ bool SnmpAgent::sendNotification(const String& name, const String* value, unsign
     if (extra) {
 	Snmp::PDU* pdu = trapPDU.m_SNMPv2_Trap_PDU;
 	int count = extra->getIntValue("count",-1);
+	bool anyDisabled = false;
+	bool allDisabled = true;
 	for (int i = 0; ; i++) {
 	    // if count is set iterate up to it
 	    if (count >= 0 && i >= count)
@@ -2644,6 +2648,11 @@ bool SnmpAgent::sendNotification(const String& name, const String* value, unsign
 		else
 		    continue;
 	    }
+	    if (trapDisabled(xName)) {
+		anyDisabled = true;
+		continue;
+	    }
+	    allDisabled = false;
 	    String extraVal = "value.";
 	    extraVal << i;
 	    const String& xVal = (*extra)[extraVal];
@@ -2661,6 +2670,8 @@ bool SnmpAgent::sendNotification(const String& name, const String* value, unsign
 	    pdu->m_variable_bindings->m_list.append(trapVar);
 	    TelEngine::destruct(v);
 	}
+	if (anyDisabled && allDisabled)
+	    return false;
     }
 
     // build pdus

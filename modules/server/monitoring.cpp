@@ -894,6 +894,7 @@ private:
     AuthHandler* m_authHandler;
     RegisterHandler* m_registerHandler;
     bool m_init;
+    bool m_newTraps;
     // list of monitored SIP gateways and timed out gateways
     ObjList* m_sipMonitoredGws;
     ObjList m_timedOutGws;
@@ -3488,6 +3489,7 @@ Monitor::Monitor()
 	m_authHandler(0),
 	m_registerHandler(0),
 	m_init(false),
+	m_newTraps(false),
 	m_sipMonitoredGws(0),
 	m_trunkMon(false),
 	m_linksetMon(false),
@@ -3664,6 +3666,7 @@ void Monitor::readConfig(const Configuration& cfg)
     else if (level > DebugAll)
 	level = DebugAll;
     s_alarmThreshold = level;
+    m_newTraps = !cfg.getBoolValue("general","old_trap_style");
 
     // read configs for database monitoring (they type=database, the name of the section is the database account)
     for (unsigned int i = 0; i < cfg.sections(); i++) {
@@ -3943,10 +3946,12 @@ void Monitor::sendTrap(const String& trap, const String& value, unsigned int ind
 {
     DDebug(&__plugin,DebugAll,"Monitor::sendtrap(trap='%s',value='%s',index='%d') [%p]",trap.c_str(),value.c_str(),index,this);
     Message* msg = new Message("monitor.notify",0,true);
+    if (m_newTraps)
+	msg->addParam("notify","specificAlarm");
     msg->addParam("notify.0",trap);
     msg->addParam("value.0",value);
-    msg->addParam("index",String(index));
-    msg->addParam("count","1");
+    if (index)
+	msg->addParam("index",String(index));
     Engine::enqueue(msg);
 }
 
@@ -3954,6 +3959,8 @@ void Monitor::sendTrap(const String& trap, const String& value, unsigned int ind
 void Monitor::sendTraps(const NamedList& traps)
 {
     Message* msg = new Message("monitor.notify",0,true);
+    if (m_newTraps)
+	msg->addParam("notify","specificAlarm");
     msg->copyParams(traps);
     Engine::enqueue(msg);
 }

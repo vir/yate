@@ -15,6 +15,11 @@
 ;  or with which the cache time is increased on each access
 ;cache=1
 
+; old_trap_style: bool: Use old (pre-Rev. 5574) style traps
+; If enabled traps are sent in individual trap messages vith value bound to trap
+; By default all variables are added to the specificAlarm trap OID
+;old_trap_style=false
+
 
 [database]
 ; enable or disable database monitoring. Default is false

@@ -1,4 +1,4 @@
-yate (4.3.1~svn5565) UNRELEASED; urgency=low
+yate (4.3.1~svn5574) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -573,8 +573,23 @@ yate (4.3.1~svn5565) UNRELEASED; urgency=low
     sending SNMP genericAlarm traps.  + Send Alarm from several places
     instead of just Debug.  + Added Engine.alarm() method in Javascript.
     + Fixed comparation in new worker thread alarm level.
+  * Updated to SVN revision 5574: + Sent the unexpectedRestart trap only
+    if the child was terminated by a signal.  + Make sure captured
+    events have some form of timestamp.  + Disable trap sending on SNMP
+    service shutdown caused by socket error.  + Send alarms from the
+    SNMP module.  + This allows sending SNMP traps when parts of the
+    service become non-operational.  + Use Alarm() in places that could
+    prevent normal operation.  + Added property used to show another
+    window when a window is activated.  + Show main window when incoming
+    call notification window become active (MacOS only).  + Simplified
+    logic and cleaned up code.  + Synchronized parameters CPU modules,
+    fixes a bug introduced by Rev. 5396  + Don't send the trap if all
+    its parameters were disabled.  + Check for disabled traps when
+    placed in a specific alarm too.  + Edited the MIB so genericAlarm
+    and specificAlarm use the NOTIFICATION-TYPE macro.  + Moved all trap
+    variables to a common specificAlarm trap OID.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 06 Jul 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 09 Jul 2013 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

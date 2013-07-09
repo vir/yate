@@ -72,7 +72,7 @@
 ; Defaults to 2.0
 ; hysteresis_factor=2.0
 
-;[192.168.168.185]
+;[192.x.y.z]
 ; this section is an example on how to configure a routing direction to be monitor for ASR/NER values and call statistics
 ; name of this section is the routing direction name. It should match the value of the route param from the call.cdr message
 
@@ -151,7 +151,7 @@
 ; i.e. rtp_directions=192.x.y.z,127.0.0.1
 ;rtp_directions=
 
-; interval in secconds at which collected data should be reset. Defaults to 3600 seconds.
+; interval in seconds at which collected data should be reset. Defaults to 3600 seconds.
 ;reset_interval=3600
 
 

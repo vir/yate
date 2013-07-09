@@ -3380,56 +3380,49 @@ void CallMonitor::sendAlarmFrom(CallRouteQoS* route)
 bool CallMonitor::received(Message& msg)
 {
     DDebug(__plugin.name(),DebugAll,"CdrHandler::received()");
-    String operation = msg.getValue("operation","");
-    if (operation != "finalize")
+
+    if (m_routeParam.null())
 	return false;
-
-    if (m_routeParam.null() || !msg.getParam(m_routeParam))
-	return false;
-
-    String status = msg.getValue("status","");
-    int code = -1;
-    if (status == "answered")
-	code = CallRouteQoS::ANSWERED;
-    if (status == "ringing" || status == "accepted")
-	code = CallRouteQoS::DELIVERED;
-
-    String direction = msg.getValue("direction","");
-    if (msg.getBoolValue("cdrwrite",true)) {
-	if (direction == "incoming")
-	    m_inCalls++;
-	else if (direction == "outgoing")
-	    m_outCalls++;
-    }
-
-    String reason = msg.getValue("reason","");
-    int type = lookup(reason,s_endReasons,CallRouteQoS::HANGUP);
-    int reasonEnd = CallRouteQoS::HANGUP;
-    if (type == CallRouteQoS::HANGUP && code == CallRouteQoS::DELIVERED && direction == "outgoing")
-	type = CallRouteQoS::CANCELLED;
-    if (type <=  CallRouteQoS::NO_ANSWER) {
-	if (direction == "outgoing")
-	   reasonEnd = type;
-    }
-    else
- 	reasonEnd = type;
-
-    String routeStr = msg.getValue(m_routeParam,"");
+    String routeStr = msg.getValue(m_routeParam);
     if (routeStr.null())
 	return false;
-    if ( m_routeParam == "address") {
-	int pos = routeStr.find(":");
-	if (pos > -1)
+    if (m_routeParam == YSTRING("address")) {
+	int pos = routeStr.rfind(':');
+	if (pos < 0)
+	    pos = routeStr.rfind('/');
+	if (pos > 0)
 	    routeStr = routeStr.substr(0,pos);
     }
-    m_routesMtx.lock();
-    CallRouteQoS* route = static_cast<CallRouteQoS*>(m_routes[routeStr]);
-    if (!route) {
-	m_routesMtx.unlock();
-	return false;
+
+    const String& status = msg[YSTRING("status")];
+    int code = -1;
+    if (status == YSTRING("answered"))
+	code = CallRouteQoS::ANSWERED;
+    else if (status == YSTRING("ringing") || status == YSTRING("accepted"))
+	code = CallRouteQoS::DELIVERED;
+
+    const String& direction = msg[YSTRING("direction")];
+    bool outgoing = false;
+    if (msg.getBoolValue("cdrwrite",true)) {
+	if (direction == YSTRING("incoming"))
+	    m_inCalls++;
+	else if (direction == YSTRING("outgoing")) {
+	    outgoing = true;
+	    m_outCalls++;
+	}
     }
 
-    route->update(code,reasonEnd);
+    const String& reason = msg[YSTRING("reason")];
+    int type = lookup(reason,s_endReasons,CallRouteQoS::HANGUP);
+    if (type == CallRouteQoS::HANGUP && code == CallRouteQoS::DELIVERED && outgoing)
+	type = CallRouteQoS::CANCELLED;
+    else if (type <= CallRouteQoS::NO_ANSWER && !outgoing)
+	type = CallRouteQoS::HANGUP;
+
+    m_routesMtx.lock();
+    CallRouteQoS* route = static_cast<CallRouteQoS*>(m_routes[routeStr]);
+    if (route)
+	route->update(code,type);
     m_routesMtx.unlock();
     return false;
 }

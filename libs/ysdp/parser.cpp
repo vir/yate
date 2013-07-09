@@ -247,9 +247,13 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 		const char* forced = m_hacks.getValue("ilbc_forced");
 		if (forced)
 		    payload = forced;
-		else if ((mode == 20) || (ptime == 20))
+		else if (mode == 20)
 		    payload = "ilbc20";
-		else if ((mode == 30) || (ptime == 30))
+		else if (mode == 30)
+		    payload = "ilbc30";
+		else if ((ptime % 30) && !(ptime % 20))
+		    payload = "ilbc20";
+		else if ((ptime % 20) && !(ptime % 30))
 		    payload = "ilbc30";
 		else
 		    payload = m_hacks.getValue(YSTRING("ilbc_default"),"ilbc30");

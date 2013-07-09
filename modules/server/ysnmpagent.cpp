@@ -384,8 +384,8 @@ public:
 	u_int32_t time = Time::secNow() - m_startTime;
 	if (time >= ENGINE_TIME_MAX) {
 	    m_engineBoots++;
-	    m_startTime = Time::secNow();
-	    time = Time::secNow() - m_startTime;
+	    m_startTime += time;
+	    time = 0;
 	}
 	return time;
     }
@@ -2440,7 +2440,7 @@ Snmp::VarBindList* SnmpAgent::addTrapOIDs(const String& notifOID)
 	return 0;
     Snmp::VarBind* sysUpTime = new Snmp::VarBind();
     sysUpTime->m_name->m_ObjectName = mib->getOID();
-    u_int32_t sysTime = (Time::secNow() - m_startTime) * 100; // measured hundreths of a second
+    u_int32_t sysTime = (u_int32_t)((Time::msecNow() / 10) - (100 * (uint64_t)m_startTime)); // measured hundreths of a second
     AsnValue val(String(sysTime),AsnValue::TIMETICKS);
     assignValue(sysUpTime,&val);
 

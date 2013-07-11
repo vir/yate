@@ -513,6 +513,18 @@ void JsArray::push(ExpOperation* item)
     setLength(pos + 1);
 }
 
+bool JsArray::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsArray::runAssign() '%s'='%s' (%s) in '%s' [%p]",
+	oper.name().c_str(),oper.c_str(),oper.typeOf(),toString().c_str(),this);
+    if (!JsObject::runAssign(stack,oper,context))
+	return false;
+    int idx = oper.toString().toInteger(-1) + 1;
+    if (idx && idx > m_length)
+	setLength(idx);
+    return true;
+}
+
 bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(DebugAll,"JsArray::runNative() '%s' in '%s' [%p]",

@@ -2185,6 +2185,16 @@ public:
      */
     virtual JsObject* copy(Mutex* mtx) const;
 
+    /**
+     * Try to assign a value to a single field if object is not frozen and update array length.
+     * Reimplemented from JsObject
+     * @param stack Evaluation stack in use
+     * @param oper Field to assign to, contains the field name and new value
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if assignment succeeded
+     */
+    virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
 protected:
     /*
      * Constructor for an empty array

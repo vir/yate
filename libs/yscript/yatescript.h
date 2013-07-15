@@ -1817,6 +1817,14 @@ public:
     JsObject(const char* name = "Object", Mutex* mtx = 0, bool frozen = false);
 
     /**
+     * Constructor for an empty object
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Full name of the object
+     * @param frozen True if the object is to be frozen from creation
+     */
+    JsObject(Mutex* mtx, const char* name, bool frozen = false);
+
+    /**
      * Destructor
      */
     virtual ~JsObject();
@@ -2022,14 +2030,6 @@ public:
 
 protected:
     /**
-     * Constructor for an empty object
-     * @param mtx Pointer to the mutex that serializes this object
-     * @param name Full name of the object
-     * @param frozen True if the object is to be frozen from creation
-     */
-    JsObject(Mutex* mtx, const char* name, bool frozen = false);
-
-    /**
      * Try to evaluate a single native method
      * @param stack Evaluation stack in use, parameters are popped off this stack
      *  and results are pushed back on stack
@@ -2166,6 +2166,16 @@ public:
     JsArray(Mutex* mtx = 0);
 
     /**
+     * Constructor for an empty array
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Full name of the object
+     * @param frozen True if the object is to be frozen from creation
+     */
+    inline JsArray(Mutex* mtx, const char* name, bool frozen = false)
+	: JsObject(mtx,name,frozen), m_length(0)
+	{ }
+
+    /**
      * Retrieve the length of the array
      * @return Number of numerically indexed objects in array
      */
@@ -2196,16 +2206,6 @@ public:
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
 protected:
-    /*
-     * Constructor for an empty array
-     * @param mtx Pointer to the mutex that serializes this object
-     * @param name Full name of the object
-     * @param frozen True if the object is to be frozen from creation
-     */
-    inline JsArray(Mutex* mtx, const char* name, bool frozen = false)
-	: JsObject(mtx,name,frozen), m_length(0)
-	{ }
-
     /**
      * Clone and rename method
      * @param name Name of the cloned object

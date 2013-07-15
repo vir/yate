@@ -220,6 +220,8 @@ private:
 	long int retIndex, JsFunction* func, ObjList& args,
 	JsObject* thisObj, JsObject* scopeObj) const;
     void resolveObjectParams(JsObject* obj, ObjList& stack, GenObject* context) const;
+    void resolveObjectParams(JsObject* object, ObjList& stack, GenObject* context, JsContext* ctxt,
+	    JsObject* objProto, JsArray* arrayProto) const;
     inline JsFunction* getGlobalFunction(const String& name) const
 	{ return YOBJECT(JsFunction,m_globals[name]); }
     long int m_label;
@@ -1875,7 +1877,7 @@ JsObject* JsCode::parseArray(ParsePoint& expr, bool constOnly)
     if (skipComments(expr) != '[')
 	return 0;
     expr++;
-    JsArray* jsa = new JsArray;
+    JsArray* jsa = new JsArray(0,"[Array]");
     for (bool first = true; ; first = false) {
 	if (skipComments(expr) == ']') {
 	    expr++;
@@ -1908,7 +1910,7 @@ JsObject* JsCode::parseObject(ParsePoint& expr, bool constOnly)
     if (skipComments(expr) != '{')
 	return 0;
     expr++;
-    JsObject* jso = new JsObject;
+    JsObject* jso = new JsObject(0,"[Object]");
     for (bool first = true; ; first = false) {
 	if (skipComments(expr) == '}') {
 	    expr++;
@@ -2392,26 +2394,22 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
     return true;
 }
 
-void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* context) const
+void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* context, JsContext* ctxt, JsObject* objProto, JsArray* arrayProto) const
 {
-    if (!(object && context))
-	return;
-    ScriptRun* sr = static_cast<ScriptRun*>(context);
-    JsContext* ctx = YOBJECT(JsContext,sr->context());
-    if (!ctx)
-	return;
+    DDebug(this,DebugAll,"JsCode::resolveObjectParams(%p,%p,%p,%p,%p,%p)",
+	object,&stack,context,ctxt,objProto,arrayProto);
     for (unsigned int i = 0;i < object->params().length();i++) {
 	String* param = object->params().getParam(i);
 	JsObject* tmpObj = YOBJECT(JsObject,param);
 	if (tmpObj) {
-	    resolveObjectParams(tmpObj,stack,context);
+	    resolveObjectParams(tmpObj,stack,context,ctxt,objProto,arrayProto);
 	    continue;
 	}
 	ExpOperation* op = YOBJECT(ExpOperation,param);
 	if (!op || op->opcode() != OpcField)
 	    continue;
 	String name = *op;
-	JsObject* jsobj = YOBJECT(JsObject,ctx->resolve(stack,name,context));
+	JsObject* jsobj = YOBJECT(JsObject,ctxt->resolve(stack,name,context));
 	if (!jsobj)
 	    continue;
 	NamedString* ns = jsobj->getField(stack,name,context);
@@ -2425,6 +2423,35 @@ void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* co
 	    temp = new NamedString(op->name(),*ns);
 	object->params().setParam(temp);
     }
+    JsArray* arr = YOBJECT(JsArray,object);
+    if (arr) {
+	if (arrayProto && arrayProto->ref())
+	    object->params().addParam(new ExpWrapper(arrayProto,JsObject::protoName()));
+    }
+    else if (objProto && objProto->ref())
+	object->params().addParam(new ExpWrapper(objProto,JsObject::protoName()));
+}
+
+void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* context) const
+{
+    if (!(object && context))
+	return;
+    ScriptRun* sr = static_cast<ScriptRun*>(context);
+    JsContext* ctx = YOBJECT(JsContext,sr->context());
+    if (!ctx)
+	return;
+    JsObject* objProto = 0;
+    JsFunction* objCtr = YOBJECT(JsFunction,ctx->params().getParam(YSTRING("Object")));
+    if (objCtr)
+	objProto = YOBJECT(JsObject,objCtr->params().getParam(YSTRING("prototype")));
+
+    JsArray* arrayProto = 0;
+    objCtr = YOBJECT(JsFunction,ctx->params().getParam(YSTRING("Array")));
+    if (objCtr)
+	arrayProto = YOBJECT(JsArray,objCtr->params().getParam(YSTRING("prototype")));
+
+
+    resolveObjectParams(object,stack,context,ctx,objProto,arrayProto);
 }
 
 bool JsCode::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context) const

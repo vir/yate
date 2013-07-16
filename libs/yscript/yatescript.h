@@ -2205,6 +2205,15 @@ public:
      */
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
+    /**
+     * Try to evaluate a single field
+     * @param stack Evaluation stack in use, field value must be pushed on it
+     * @param oper Field to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
 protected:
     /**
      * Clone and rename method
@@ -2225,17 +2234,11 @@ protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
     /**
-     * Synchronize the "length" parameter to the internally stored length
-     */
-    inline void setLength()
-	{ params().setParam("length",String((int)m_length)); }
-
-    /**
      * Set the internal length and the "length" parameter to a specific value
      * @param len Length of array to set
      */
     inline void setLength(long len)
-	{ m_length = len; params().setParam("length",String((int)len)); }
+	{ m_length = len; }
 
 private:
     bool runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context);

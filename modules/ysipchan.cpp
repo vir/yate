@@ -5797,16 +5797,17 @@ void YateSIPConnection::updateTarget(const SIPMessage* msg)
     if (!msg)
 	return;
     const MimeHeaderLine* co = msg->getHeader("Contact");
-    if (!co)
-	return;
-    // (re)INVITE had a Contact: header - change remote URI
-    m_uri = *co;
-    m_uri.parse();
-    m_dialog.remoteURI = m_uri;
+    if (co) {
+	// (re)INVITE had a Contact: header - change remote URI
+	m_uri = *co;
+	m_uri.parse();
+	m_dialog.remoteURI = m_uri;
+    }
     SIPParty* party = msg->getParty();
     if (party) {
 	party->getAddr(m_host,m_port,false);
 	setParty(party);
+	m_address = m_host + ":" + String(m_port);
     }
 }
 
@@ -6309,6 +6310,35 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 
 	    Message msg("call.update");
 	    complete(msg);
+	    if (s_update_target) {
+		bool addrChg = false;
+		SIPParty* party = t->initialMessage()->getParty();
+		if (party) {
+		    String host;
+		    int port;
+		    party->getAddr(host,port,false);
+		    String addr;
+		    addr << host << ":" << port;
+		    if (addr != m_address) {
+			msg.setParam("address",addr);
+			msg.addParam("address_old",m_address);
+			addrChg = true;
+		    }
+		}
+		msg.addParam("address_changed",String::boolText(addrChg));
+		bool contactChg = false;
+		const MimeHeaderLine* co = t->initialMessage()->getHeader("Contact");
+		if (co) {
+		    URI uri(*co);
+		    uri.parse();
+		    if (uri != m_uri) {
+			msg.addParam("contact",uri);
+			msg.addParam("contact_old",m_uri);
+			contactChg = true;
+		    }
+		}
+		msg.addParam("contact_changed",String::boolText(contactChg));
+	    }
 	    msg.addParam("operation","request");
 	    copySipHeaders(msg,*t->initialMessage());
 	    msg.addParam("rtp_forward","yes");
@@ -6337,7 +6367,6 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 		t->ref();
 		t->setUserData(this);
 		m_tr2 = t;
-		updateTarget(t->initialMessage());
 	    }
 	    return;
 	}
@@ -6372,7 +6401,11 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	m_mediaStatus = MediaMissing;
 	// let RTP guess again the local interface or use the enforced address
 	setRtpLocalAddr(m_rtpLocalAddr);
+	addr = m_address;
+	String uri = m_uri;
 	updateTarget(t->initialMessage());
+	bool addrChg = (addr != m_address);
+	bool contactChg = (uri != m_uri);
 
 	SIPMessage* m = new SIPMessage(t->initialMessage(), 200);
 	MimeSdpBody* sdpNew = createRtpSDP(true);
@@ -6382,6 +6415,14 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	Message* msg = message("call.update");
 	msg->addParam("operation","notify");
 	msg->addParam("mandatory","false");
+	if (addrChg)
+	    msg->addParam("address_old",addr);
+	msg->addParam("address_changed",String::boolText(addrChg));
+	if (contactChg) {
+	    msg->addParam("contact",m_uri);
+	    msg->addParam("contact_old",uri);
+	}
+	msg->addParam("contact_changed",String::boolText(contactChg));
 	msg->addParam("audio_changed",String::boolText(audioChg));
 	msg->addParam("mute",String::boolText(MediaStarted != m_mediaStatus));
 	putMedia(*msg);
@@ -6886,7 +6927,9 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	if (m_rtpForward != rtpSave)
 	    Debug(this,DebugInfo,"RTP forwarding changed: %s -> %s",
 		String::boolText(rtpSave),String::boolText(m_rtpForward));
-	SIPMessage* m = new SIPMessage(m_tr2->initialMessage(), 200);
+	const SIPMessage* m1 = m_tr2->initialMessage();
+	updateTarget(m1);
+	SIPMessage* m = new SIPMessage(m1,200);
 	m->setBody(sdp);
 	m_tr2->setResponse(m);
 	detachTransaction2();

@@ -1,4 +1,4 @@
-yate (4.3.1~svn5581) UNRELEASED; urgency=low
+yate (4.3.1~svn5584) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -599,8 +599,17 @@ yate (4.3.1~svn5581) UNRELEASED; urgency=low
     assigning values through the array subscript operator.
   * Updated to SVN revision 5581: + Fixed constructors for constant
     objects and arrays, avoid enumeration of prototype methods.
+  * Updated to SVN revision 5584: + Windows: avoid evaluating debug
+    macro parameters when the debug message is not compiled.  + Delay
+    updating channel parameters until the reINVITE is accepted.  + Add
+    change information for address and contact in the call.update
+    message.  + Copy a SIP remote party change to the "address"
+    parameter.  + Properly handle assignments to the Array.length
+    property: if set to a value smaller than the previous length value,
+    destroy all objects found at indexes greater than length.  + Bug
+    fix: don't allow enumeration of the length property in Array.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 16 Jul 2013 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 17 Jul 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

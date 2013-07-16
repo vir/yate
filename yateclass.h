@@ -446,7 +446,7 @@ void NDebug(const DebugEnabler* local, int level, const char* format, ...);
 #define DDebug Debug
 #else
 #ifdef _WINDOWS
-#define DDebug
+#define DDebug do { break; } while
 #else
 #define DDebug(arg...)
 #endif
@@ -456,7 +456,7 @@ void NDebug(const DebugEnabler* local, int level, const char* format, ...);
 #define XDebug Debug
 #else
 #ifdef _WINDOWS
-#define XDebug
+#define XDebug do { break; } while
 #else
 #define XDebug(arg...)
 #endif
@@ -466,7 +466,7 @@ void NDebug(const DebugEnabler* local, int level, const char* format, ...);
 #define NDebug Debug
 #else
 #ifdef _WINDOWS
-#define NDebug
+#define NDebug do { break; } while
 #else
 #define NDebug(arg...)
 #endif

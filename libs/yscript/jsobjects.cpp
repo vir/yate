@@ -575,11 +575,11 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	if (!last)
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
 	else {
-	    NamedPointer* np = (NamedPointer*)last->getObject(YATOM("NamedPointer"));
-	    if (!np)
+	    ExpWrapper* w = YOBJECT(ExpWrapper,last);
+	    if (!w)
 		ExpEvaluator::pushOne(stack,new ExpOperation(*last));
 	    else
-		ExpEvaluator::pushOne(stack,new ExpWrapper(np->userData(),0));
+		ExpEvaluator::pushOne(stack,w->clone(w->name()));
 	}
 	// clear last
 	params().clearParam(last);

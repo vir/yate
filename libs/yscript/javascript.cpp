@@ -1877,7 +1877,7 @@ JsObject* JsCode::parseArray(ParsePoint& expr, bool constOnly)
     if (skipComments(expr) != '[')
 	return 0;
     expr++;
-    JsArray* jsa = new JsArray(0,"[Array]");
+    JsArray* jsa = new JsArray(0,"[object Array]");
     for (bool first = true; ; first = false) {
 	if (skipComments(expr) == ']') {
 	    expr++;
@@ -1910,7 +1910,7 @@ JsObject* JsCode::parseObject(ParsePoint& expr, bool constOnly)
     if (skipComments(expr) != '{')
 	return 0;
     expr++;
-    JsObject* jso = new JsObject(0,"[Object]");
+    JsObject* jso = new JsObject(0,"[object Object]");
     for (bool first = true; ; first = false) {
 	if (skipComments(expr) == '}') {
 	    expr++;

@@ -49,10 +49,10 @@ public:
     virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
     GenObject* resolve(ObjList& stack, String& name, GenObject* context);
-private:
-    GenObject* resolveTop(ObjList& stack, const String& name, GenObject* context);
     bool runStringFunction(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context);
     bool runStringField(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context);
+private:
+    GenObject* resolveTop(ObjList& stack, const String& name, GenObject* context);
 };
 
 class JsNull : public JsObject
@@ -1877,7 +1877,7 @@ JsObject* JsCode::parseArray(ParsePoint& expr, bool constOnly)
     if (skipComments(expr) != '[')
 	return 0;
     expr++;
-    JsArray* jsa = new JsArray(0,"[Array]");
+    JsArray* jsa = new JsArray(0,"[object Array]");
     for (bool first = true; ; first = false) {
 	if (skipComments(expr) == ']') {
 	    expr++;
@@ -1910,7 +1910,7 @@ JsObject* JsCode::parseObject(ParsePoint& expr, bool constOnly)
     if (skipComments(expr) != '{')
 	return 0;
     expr++;
-    JsObject* jso = new JsObject(0,"[Object]");
+    JsObject* jso = new JsObject(0,"[object Object]");
     for (bool first = true; ; first = false) {
 	if (skipComments(expr) == '}') {
 	    expr++;
@@ -2060,11 +2060,23 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    return gotError("Expecting field names",oper.lineNumber());
 		}
 		if (op1->opcode() != OpcField) {
+		    // try to obtain an object on which to run the field
 		    ScriptContext* ctx = YOBJECT(ScriptContext,op1);
 		    if (ctx && ctx->runField(stack,*op2,context)) {
 			TelEngine::destruct(op1);
 			TelEngine::destruct(op2);
 			break;
+		    }
+		    else {
+			// op1 is not an object, it's a string
+			JsContext* jsCtx = 0;
+			if (sr)
+			    jsCtx = static_cast<JsContext*>(sr->context());
+			if (jsCtx && jsCtx->runStringField(op1,op2->name(),stack,*op2,context)) {
+			    TelEngine::destruct(op1);
+			    TelEngine::destruct(op2);
+			    break;
+			}
 		    }
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);

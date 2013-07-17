@@ -1,4 +1,4 @@
-yate (4.3.1~svn5584) UNRELEASED; urgency=low
+yate (4.3.1~svn5586) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -608,8 +608,13 @@ yate (4.3.1~svn5584) UNRELEASED; urgency=low
     property: if set to a value smaller than the previous length value,
     destroy all objects found at indexes greater than length.  + Bug
     fix: don't allow enumeration of the length property in Array.
+  * Updated to SVN revision 5586: + Bug fix: don't allow enumeration of
+    the length property in Array.  + Also, when building constant
+    objects or array, set their name according to internal convention.
+    + Fix Array.pop() implementation in order to properly return
+    objects.  + Resolve fields on expressions/non-objects also.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 17 Jul 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 18 Jul 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

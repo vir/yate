@@ -507,10 +507,14 @@ SIPTransaction::Processed SIPTransaction::processMessage(SIPMessage* message, co
 	const NamedString* ns = message->getParam("To","tag");
 	if (m_tag.null()) {
 	    if (ns) {
-		// establish the dialog
-		m_tag = *ns;
-		DDebug(getEngine(),DebugInfo,"SIPTransaction found dialog tag '%s' [%p]",
-		    m_tag.c_str(),this);
+		if (message->code > 100) {
+		    // establish the dialog
+		    m_tag = *ns;
+		    DDebug(getEngine(),DebugInfo,"SIPTransaction found dialog tag '%s' [%p]",
+			m_tag.c_str(),this);
+		}
+		else
+		    Debug(getEngine(),DebugMild,"Received To tag in 100 answer! (sender bug)");
 	    }
 	}
 	else if (!ns) {

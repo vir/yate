@@ -1,3 +1,10 @@
+yate (4.3.1~vir2013072201) UNRELEASED; urgency=low
+
+  * Merged upstream changes, most notably SNMP traps-related.
+  * Added lazyrec.yate module for those who want to give it a try.
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Mon, 22 Jul 2013 18:13:09 +0400
+
 yate (4.3.1~vir2013062702) UNRELEASED; urgency=low
 
   * Fix build (again)

@@ -228,7 +228,7 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority
     ::pthread_attr_destroy(&attr);
 #endif
     if (e) {
-	Debug(DebugGoOn,"Error %d while creating pthread in '%s' [%p]",e,name,p);
+	Alarm("engine","system",DebugGoOn,"Error %d while creating pthread in '%s' [%p]",e,name,p);
 	p->m_thread = 0;
 	p->destroy();
 	return 0;
@@ -405,10 +405,10 @@ void ThreadPrivate::cleanup()
 	    m_thread->m_private = 0;
 	    m_thread->cleanup();
 	    if (m_thread->locked())
-		Debug(DebugFail,"Thread '%s' destroyed with mutex locks (%d held) [%p]",m_name,m_thread->locks(),m_thread);
+		Alarm("engine","bug",DebugFail,"Thread '%s' destroyed with mutex locks (%d held) [%p]",m_name,m_thread->locks(),m_thread);
 	}
 	else {
-	    Debug(DebugFail,"ThreadPrivate::cleanup() %p '%s' mismatching %p [%p]",m_thread,m_name,m_thread->m_private,this);
+	    Alarm("engine","bug",DebugFail,"ThreadPrivate::cleanup() %p '%s' mismatching %p [%p]",m_thread,m_name,m_thread->m_private,this);
 	    m_thread = 0;
 	}
     }
@@ -643,7 +643,7 @@ void Thread::exit()
     DDebug(DebugAll,"Thread::exit()");
     ThreadPrivate* t = ThreadPrivate::current();
     if (t && t->m_thread && t->m_thread->locked())
-	Debug(DebugFail,"Thread::exit() in '%s' with mutex locks (%d held) [%p]",
+	Alarm("engine","bug",DebugFail,"Thread::exit() in '%s' with mutex locks (%d held) [%p]",
 	    t->m_name,t->m_thread->locks(),t->m_thread);
 #ifdef _WINDOWS
     if (t) {

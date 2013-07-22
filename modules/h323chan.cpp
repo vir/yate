@@ -960,7 +960,7 @@ BOOL YateGatekeeperServer::Init()
 	if (AddListener(new H323GatekeeperListener(m_endpoint,*this,name,trans)))
 	    Debug(&hplugin,DebugAll,"Started Gk listener on %s:%d",addr,port);
 	else
-	    Debug(&hplugin,DebugGoOn,"Can't start the Gk listener for address: %s",addr);
+	    Alarm(&hplugin,"config",DebugGoOn,"Can't start the Gk listener for address: %s",addr);
     }
     i = s_cfg.getIntValue("gk","ttl",600);
     if (i > 0) {
@@ -1093,7 +1093,7 @@ bool YateH323EndPoint::Init(bool reg, const NamedList* params)
     else if (m_client && reg && !m_registered)
 	internalGkNotify(false,"Gatekeeper busy");
     if (!ok)
-	Debug(&hplugin,DebugNote,"Endpoint(%s) failed to init%s [%p]",safe(),
+	Alarm(&hplugin,"config",DebugWarn,"Endpoint(%s) failed to init%s [%p]",safe(),
 	    started ? "" : ": gatekeeper busy",this);
     return ok;
 }
@@ -1607,7 +1607,7 @@ bool YateH323EndPoint::checkListener(const NamedList* params, bool& changed)
 	return true;
     }
     if (retries)
-	Debug(&hplugin,DebugGoOn,"Endpoint(%s) unable to start H323 Listener on %s [%p]",
+	Alarm(&hplugin,"config",DebugGoOn,"Endpoint(%s) unable to start H323 Listener on %s [%p]",
 	    safe(),(const char*)addr.AsString(),this);
     String reason = "Cannot listen on ";
     reason << m_listenAddr << ":" << m_listenPort;

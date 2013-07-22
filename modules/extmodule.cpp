@@ -975,7 +975,7 @@ bool ExtModReceiver::received(Message &msg, int id)
 	lock();
 	ok = (m_waiting.find(&h) != 0);
 	if (ok && tout && (Time::now() > tout)) {
-	    Debug(DebugWarn,"Message %p '%s' did not return in %d msec [%p]",
+	    Alarm("extmodule","performance",DebugWarn,"Message %p '%s' did not return in %d msec [%p]",
 		&msg,msg.c_str(),m_timeout,this);
 	    m_waiting.remove(&h,false);
 	    ok = false;
@@ -1761,7 +1761,7 @@ bool ExtListener::init(const NamedList& sect)
     else if (role == "channel")
 	m_role = ExtModReceiver::RoleChannel;
     else if (role) {
-	Debug(DebugWarn,"Unknown role '%s' of listener '%s'",role.c_str(),m_name.c_str());
+	Debug(DebugConf,"Unknown role '%s' of listener '%s'",role.c_str(),m_name.c_str());
 	return false;
     }
     String type(sect.getValue("type"));
@@ -1782,7 +1782,7 @@ bool ExtListener::init(const NamedList& sect)
 	    return false;
     }
     else {
-	Debug(DebugWarn,"Unknown type '%s' of listener '%s'",type.c_str(),m_name.c_str());
+	Debug(DebugConf,"Unknown type '%s' of listener '%s'",type.c_str(),m_name.c_str());
 	return false;
     }
     if (!m_socket.create(addr.family(),SOCK_STREAM)) {
@@ -1810,7 +1810,7 @@ void ExtListener::run()
 	if (!skt) {
 	    if (m_socket.canRetry())
 		continue;
-	    Debug(DebugWarn,"Error on accept(), shutting down ExtListener '%s'",m_name.c_str());
+	    Alarm("extmodule","socket",DebugWarn,"Error on accept(), shutting down ExtListener '%s'",m_name.c_str());
 	    break;
 	}
 	String tmp = addr.host();
@@ -1836,7 +1836,7 @@ ExtListener* ExtListener::build(const char* name, const NamedList& sect)
 	return 0;
     ExtListener* ext = new ExtListener(name);
     if (!ext->init(sect)) {
-	Debug(DebugGoOn,"Could not start listener '%s'",name);
+	Alarm("extmodule","config",DebugWarn,"Could not start listener '%s'",name);
 	delete ext;
 	ext = 0;
     }

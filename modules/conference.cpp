@@ -924,7 +924,7 @@ unsigned long ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	maxLock = 500000;
     // make sure looping back conferences is not fatal
     if (!m_room->lock(maxLock)) {
-	Debug(&__plugin,DebugWarn,"Failed to lock room '%s' - data loopback?%s [%p]",
+	Alarm(&__plugin,"bug",DebugWarn,"Failed to lock room '%s' - data loopback?%s [%p]",
 	    m_room->toString().c_str(),(autoMute ? " Channel muted!" : ""),this);
 	// mute the channel to avoid getting back here
 	if (autoMute)

@@ -1817,6 +1817,14 @@ public:
     JsObject(const char* name = "Object", Mutex* mtx = 0, bool frozen = false);
 
     /**
+     * Constructor for an empty object
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Full name of the object
+     * @param frozen True if the object is to be frozen from creation
+     */
+    JsObject(Mutex* mtx, const char* name, bool frozen = false);
+
+    /**
      * Destructor
      */
     virtual ~JsObject();
@@ -2022,14 +2030,6 @@ public:
 
 protected:
     /**
-     * Constructor for an empty object
-     * @param mtx Pointer to the mutex that serializes this object
-     * @param name Full name of the object
-     * @param frozen True if the object is to be frozen from creation
-     */
-    JsObject(Mutex* mtx, const char* name, bool frozen = false);
-
-    /**
      * Try to evaluate a single native method
      * @param stack Evaluation stack in use, parameters are popped off this stack
      *  and results are pushed back on stack
@@ -2166,6 +2166,16 @@ public:
     JsArray(Mutex* mtx = 0);
 
     /**
+     * Constructor for an empty array
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Full name of the object
+     * @param frozen True if the object is to be frozen from creation
+     */
+    inline JsArray(Mutex* mtx, const char* name, bool frozen = false)
+	: JsObject(mtx,name,frozen), m_length(0)
+	{ }
+
+    /**
      * Retrieve the length of the array
      * @return Number of numerically indexed objects in array
      */
@@ -2185,17 +2195,26 @@ public:
      */
     virtual JsObject* copy(Mutex* mtx) const;
 
-protected:
-    /*
-     * Constructor for an empty array
-     * @param mtx Pointer to the mutex that serializes this object
-     * @param name Full name of the object
-     * @param frozen True if the object is to be frozen from creation
+    /**
+     * Try to assign a value to a single field if object is not frozen and update array length.
+     * Reimplemented from JsObject
+     * @param stack Evaluation stack in use
+     * @param oper Field to assign to, contains the field name and new value
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if assignment succeeded
      */
-    inline JsArray(Mutex* mtx, const char* name, bool frozen = false)
-	: JsObject(mtx,name,frozen), m_length(0)
-	{ }
+    virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
+    /**
+     * Try to evaluate a single field
+     * @param stack Evaluation stack in use, field value must be pushed on it
+     * @param oper Field to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+protected:
     /**
      * Clone and rename method
      * @param name Name of the cloned object
@@ -2215,17 +2234,11 @@ protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
     /**
-     * Synchronize the "length" parameter to the internally stored length
-     */
-    inline void setLength()
-	{ params().setParam("length",String((int)m_length)); }
-
-    /**
      * Set the internal length and the "length" parameter to a specific value
      * @param len Length of array to set
      */
     inline void setLength(long len)
-	{ m_length = len; params().setParam("length",String((int)len)); }
+	{ m_length = len; }
 
 private:
     bool runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context);

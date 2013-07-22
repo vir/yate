@@ -874,7 +874,8 @@ public:
     // handle MGCP & SIP status notifications
     void checkNotifs(Message& msg, unsigned int type);
     // build a notification message
-    void sendTrap(const String& trap, const String& value, unsigned int index = 0);
+    void sendTrap(const String& trap, const String& value, unsigned int index = 0,
+	const char* text = 0);
     // send multiple notifications at once
     void sendTraps(const NamedList& traps);
     // handle a monitor.query message
@@ -894,6 +895,7 @@ private:
     AuthHandler* m_authHandler;
     RegisterHandler* m_registerHandler;
     bool m_init;
+    bool m_newTraps;
     // list of monitored SIP gateways and timed out gateways
     ObjList* m_sipMonitoredGws;
     ObjList m_timedOutGws;
@@ -920,6 +922,7 @@ private:
 
 static int s_yateRun = 0;
 static int s_yateRunAlarm = 0;
+static int s_alarmThreshold = DebugNote;
 static String s_nodeState = "";
 static double s_qosHysteresisFactor = 2.0;
 
@@ -1576,6 +1579,39 @@ static void cutNewLine(String& line) {
 	line = line.substr(0,line.length() - 1);
 }
 
+// callback for engine alarm hook
+static void alarmCallback(const char* message, int level, const char* component, const char* info)
+{
+    if (TelEngine::null(component) || TelEngine::null(message))
+	return;
+    const char* lvl = debugLevelName(level);
+    if (TelEngine::null(lvl))
+	return;
+    Message* msg = new Message("module.update");
+    msg->addParam("module",__plugin.name());
+    msg->addParam("level",String(level));
+    msg->addParam("from",component,false);
+    msg->addParam("text",message,false);
+    msg->addParam("info",info,false);
+    Engine::enqueue(msg);
+    if ((s_alarmThreshold >= DebugFail) && (level <= s_alarmThreshold)) {
+	msg = new Message("monitor.notify",0,true);
+	msg->addParam("notify","genericAlarm");
+	msg->addParam("notify.0","alarmSource");
+	msg->addParam("value.0",component);
+	msg->addParam("notify.1","alarmLevel");
+	msg->addParam("value.1",lvl);
+	msg->addParam("notify.2","alarmText");
+	msg->addParam("value.2",message);
+	if (!TelEngine::null(info)) {
+	    msg->addParam("notify.3","alarmInfo");
+	    msg->addParam("value.3",info);
+	}
+	Engine::enqueue(msg);
+    }
+}
+
+
 /**
   * MsgUpdateHandler
   */
@@ -1624,7 +1660,7 @@ bool EngineStartHandler::received(Message& msg)
 	    __plugin.sendTrap(notif,String(s_yateRun));
     }
     int lastsignal = Engine::runParams().getIntValue(YSTRING("lastsignal"),0);
-    if (lastsignal >= 0) {
+    if (lastsignal > 0) {
 	String notif = lookup(EngineInfo::ENGINE_UNEX_RESTART,s_engineQuery,"");
 	if (!notif.null())
 	    __plugin.sendTrap(notif,String(lastsignal));
@@ -3344,56 +3380,49 @@ void CallMonitor::sendAlarmFrom(CallRouteQoS* route)
 bool CallMonitor::received(Message& msg)
 {
     DDebug(__plugin.name(),DebugAll,"CdrHandler::received()");
-    String operation = msg.getValue("operation","");
-    if (operation != "finalize")
+
+    if (m_routeParam.null())
 	return false;
-
-    if (m_routeParam.null() || !msg.getParam(m_routeParam))
-	return false;
-
-    String status = msg.getValue("status","");
-    int code = -1;
-    if (status == "answered")
-	code = CallRouteQoS::ANSWERED;
-    if (status == "ringing" || status == "accepted")
-	code = CallRouteQoS::DELIVERED;
-
-    String direction = msg.getValue("direction","");
-    if (msg.getBoolValue("cdrwrite",true)) {
-	if (direction == "incoming")
-	    m_inCalls++;
-	else if (direction == "outgoing")
-	    m_outCalls++;
-    }
-
-    String reason = msg.getValue("reason","");
-    int type = lookup(reason,s_endReasons,CallRouteQoS::HANGUP);
-    int reasonEnd = CallRouteQoS::HANGUP;
-    if (type == CallRouteQoS::HANGUP && code == CallRouteQoS::DELIVERED && direction == "outgoing")
-	type = CallRouteQoS::CANCELLED;
-    if (type <=  CallRouteQoS::NO_ANSWER) {
-	if (direction == "outgoing")
-	   reasonEnd = type;
-    }
-    else
- 	reasonEnd = type;
-
-    String routeStr = msg.getValue(m_routeParam,"");
+    String routeStr = msg.getValue(m_routeParam);
     if (routeStr.null())
 	return false;
-    if ( m_routeParam == "address") {
-	int pos = routeStr.find(":");
-	if (pos > -1)
+    if (m_routeParam == YSTRING("address")) {
+	int pos = routeStr.rfind(':');
+	if (pos < 0)
+	    pos = routeStr.rfind('/');
+	if (pos > 0)
 	    routeStr = routeStr.substr(0,pos);
     }
-    m_routesMtx.lock();
-    CallRouteQoS* route = static_cast<CallRouteQoS*>(m_routes[routeStr]);
-    if (!route) {
-	m_routesMtx.unlock();
-	return false;
+
+    const String& status = msg[YSTRING("status")];
+    int code = -1;
+    if (status == YSTRING("answered"))
+	code = CallRouteQoS::ANSWERED;
+    else if (status == YSTRING("ringing") || status == YSTRING("accepted"))
+	code = CallRouteQoS::DELIVERED;
+
+    const String& direction = msg[YSTRING("direction")];
+    bool outgoing = false;
+    if (msg.getBoolValue("cdrwrite",true)) {
+	if (direction == YSTRING("incoming"))
+	    m_inCalls++;
+	else if (direction == YSTRING("outgoing")) {
+	    outgoing = true;
+	    m_outCalls++;
+	}
     }
 
-    route->update(code,reasonEnd);
+    const String& reason = msg[YSTRING("reason")];
+    int type = lookup(reason,s_endReasons,CallRouteQoS::HANGUP);
+    if (type == CallRouteQoS::HANGUP && code == CallRouteQoS::DELIVERED && outgoing)
+	type = CallRouteQoS::CANCELLED;
+    else if (type <= CallRouteQoS::NO_ANSWER && !outgoing)
+	type = CallRouteQoS::HANGUP;
+
+    m_routesMtx.lock();
+    CallRouteQoS* route = static_cast<CallRouteQoS*>(m_routes[routeStr]);
+    if (route)
+	route->update(code,type);
     m_routesMtx.unlock();
     return false;
 }
@@ -3454,6 +3483,7 @@ Monitor::Monitor()
 	m_authHandler(0),
 	m_registerHandler(0),
 	m_init(false),
+	m_newTraps(false),
 	m_sipMonitoredGws(0),
 	m_trunkMon(false),
 	m_linksetMon(false),
@@ -3477,6 +3507,8 @@ Monitor::Monitor()
 Monitor::~Monitor()
 {
     Output("Unloaded module Monitoring");
+
+    Debugger::setAlarmHook();
 
     TelEngine::destruct(m_moduleInfo);
     TelEngine::destruct(m_engineInfo);
@@ -3534,6 +3566,7 @@ void Monitor::initialize()
 	setup();
 	installRelay(Halt);
 	installRelay(Timer);
+	Debugger::setAlarmHook(alarmCallback);
 
 	s_nodeState = "active";
     }
@@ -3619,6 +3652,15 @@ void Monitor::readConfig(const Configuration& cfg)
 {
     // get the threshold for yate restart alarm
     s_yateRunAlarm = cfg.getIntValue("general","restart_alarm",1);
+    int level = cfg.getIntValue("general","alarm_threshold",DebugNote);
+    if (level < DebugFail)
+	level = -1;
+    else if (level < DebugConf)
+	level = DebugConf;
+    else if (level > DebugAll)
+	level = DebugAll;
+    s_alarmThreshold = level;
+    m_newTraps = !cfg.getBoolValue("general","old_trap_style");
 
     // read configs for database monitoring (they type=database, the name of the section is the database account)
     for (unsigned int i = 0; i < cfg.sections(); i++) {
@@ -3750,43 +3792,41 @@ void Monitor::update(Message& msg)
 // build SS7 notifications
 void Monitor::sendSigNotifs(Message& msg)
 {
-    String type = msg.getValue("type","");
-    if (type.null())
+    const String& type = msg[YSTRING("type")];
+    const String& name = msg[YSTRING("from")];
+    if (type.null() || name.null())
 	return;
     // get the type of the notification
     int t = lookup(type,s_sigTypes,0);
-    String name = msg.getValue("from");
     DDebug(this,DebugInfo,"Monitor::sendSigNotifs() - send notification from '%s'",name.c_str());
-    bool up = false;
+    bool up = msg.getBoolValue(YSTRING("operational"));
+    const char* text = msg.getValue(YSTRING("text"));
     String notif;
     // build trap information
     switch (t) {
 	case ISDN:
-	    up = msg.getBoolValue("operational");
 	    if (m_isdnMon)
-		sendTrap(lookup((up ? IsdnQ921Up : IsdnQ921Down),s_sigNotifs),name);
+		sendTrap(lookup((up ? IsdnQ921Up : IsdnQ921Down),s_sigNotifs),name,0,text);
 	    if (!up && m_linkInfo)
-		    m_linkInfo->updateAlarmCounter(name);
+		m_linkInfo->updateAlarmCounter(name);
 	    break;
 	case SS7_MTP3:
-	    up = msg.getBoolValue("operational",false);
 	    if (m_linksetMon) {
-		sendTrap(lookup((up ? LinksetUp : LinksetDown),s_sigNotifs),name);
+		sendTrap(lookup((up ? LinksetUp : LinksetDown),s_sigNotifs),name,0,text);
 		if (!up && m_linksetInfo)
 		    m_linksetInfo->updateAlarmCounter(name);
 	    }
 	    notif = msg.getValue("link","");
 	    if (m_linkMon && !notif.null()) {
-		up = msg.getBoolValue("linkup",false);
+		up = msg.getBoolValue(YSTRING("linkup"),false);
 		sendTrap(lookup(( up ? LinkUp : LinkDown),s_sigNotifs),notif);
 		if (!up && m_linkInfo)
 		    m_linkInfo->updateAlarmCounter(name);
 	    }
 	    break;
 	case TRUNK:
-	    up = msg.getBoolValue("operational",true);
 	    if (m_trunkMon)
-		sendTrap(lookup(( up ? TrunkUp : TrunkDown),s_sigNotifs),name);
+		sendTrap(lookup(( up ? TrunkUp : TrunkDown),s_sigNotifs),name,0,text);
 	    if (!up && m_trunkInfo)
 		m_trunkInfo->updateAlarmCounter(name);
 	    break;
@@ -3894,14 +3934,20 @@ String Monitor::getTransactionsInfo(const String& query, const int who)
 }
 
 // build a notification message. Increase the alarm counters if the notification was an alarm
-void Monitor::sendTrap(const String& trap, const String& value, unsigned int index)
+void Monitor::sendTrap(const String& trap, const String& value, unsigned int index, const char* text)
 {
     DDebug(&__plugin,DebugAll,"Monitor::sendtrap(trap='%s',value='%s',index='%d') [%p]",trap.c_str(),value.c_str(),index,this);
     Message* msg = new Message("monitor.notify",0,true);
+    if (m_newTraps)
+	msg->addParam("notify","specificAlarm");
     msg->addParam("notify.0",trap);
     msg->addParam("value.0",value);
-    msg->addParam("index",String(index));
-    msg->addParam("count","1");
+    if (text && m_newTraps) {
+	msg->addParam("notify.1","alarmText");
+	msg->addParam("value.1",text);
+    }
+    if (index)
+	msg->addParam("index",String(index));
     Engine::enqueue(msg);
 }
 
@@ -3909,6 +3955,8 @@ void Monitor::sendTrap(const String& trap, const String& value, unsigned int ind
 void Monitor::sendTraps(const NamedList& traps)
 {
     Message* msg = new Message("monitor.notify",0,true);
+    if (m_newTraps)
+	msg->addParam("notify","specificAlarm");
     msg->copyParams(traps);
     Engine::enqueue(msg);
 }

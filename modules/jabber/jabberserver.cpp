@@ -3862,7 +3862,7 @@ bool JBMessageHandler::received(Message& msg)
 TcpListener::~TcpListener()
 {
     if (m_socket.valid() && !Engine::exiting())
-	Debug(&__plugin,DebugWarn,"Listener(%s) '%s:%d' abnormally terminated [%p]",
+	Alarm(&__plugin,"system",DebugWarn,"Listener(%s) '%s:%d' abnormally terminated [%p]",
 	    c_str(),m_address.safe(),m_port,this);
     terminateSocket();
     __plugin.listener(this,false);

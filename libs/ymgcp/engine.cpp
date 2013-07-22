@@ -195,7 +195,7 @@ void MGCPEngine::initialize(const NamedList& params)
 	}
 
 	if (!m_socket.bind(m_address)) {
-	    Debug(this,DebugWarn,"Failed to bind socket to %s:%d. Error: %d: %s",
+	    Alarm(this,"socket",DebugWarn,"Failed to bind socket to %s:%d. Error: %d: %s",
 		m_address.host().safe(),m_address.port(),
 		m_socket.error(),::strerror(m_socket.error()));
 	    m_socket.terminate();
@@ -626,7 +626,7 @@ bool MGCPEngine::sendData(const String& msg, const SocketAddr& address)
     if (len != Socket::socketError())
 	return true;
     if (!m_socket.canRetry())
-	Debug(this,DebugWarn,"Socket write error: %d: %s",
+	Alarm(this,"socket",DebugWarn,"Socket write error: %d: %s",
 	    m_socket.error(),::strerror(m_socket.error()));
     else
 	DDebug(this,DebugMild,"Socket temporary unavailable: %d: %s",

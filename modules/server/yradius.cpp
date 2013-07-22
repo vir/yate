@@ -1016,7 +1016,7 @@ int RadiusClient::makeRequest(int port, unsigned char request, unsigned char* re
     // we have the data ready, send it and wait for an answer
     for (int r = m_retries; r > 0; r--) {
 	if (socket()->sendTo(radpckt.data(),radpckt.length(),sockAddr) == Socket::socketError()) {
-	    Debug(&__plugin,DebugGoOn,"Packet sending error %d to %s:%d",
+	    Alarm(&__plugin,"socket",DebugGoOn,"Packet sending error %d to %s:%d",
 		socket()->error(),sockAddr.host().c_str(),sockAddr.port());
 		return UnknownErr;
 	}
@@ -1683,11 +1683,11 @@ void RadiusModule::initialize()
 
     // we only have UDP support
     if (!s_localSock.create(PF_INET,SOCK_DGRAM,IPPROTO_IP)) {
-	Debug(this,DebugGoOn,"Error creating socket. Radius functions unavailable");
+	Alarm(this,"socket",DebugGoOn,"Error creating socket. Radius functions unavailable");
 	return;
     }
     if (!s_localSock.bind(s_localAddr)) {
-	Debug(this,DebugWarn,"Error %d binding to %s:%d. Radius functions unavailable",
+	Alarm(this,"socket",DebugWarn,"Error %d binding to %s:%d. Radius functions unavailable",
 	    s_localSock.error(),s_localAddr.host().c_str(),s_localAddr.port());
 	return;
     }

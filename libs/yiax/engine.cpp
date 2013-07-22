@@ -441,7 +441,7 @@ bool IAXEngine::writeSocket(const void* buf, int len, const SocketAddr& addr,
 	if (!m_socket.canRetry()) {
 	    String tmp;
 	    Thread::errorString(tmp,m_socket.error());
-	    Debug(this,DebugWarn,"Socket write error: %s (%d) [%p]",
+	    Alarm(this,"socket",DebugWarn,"Socket write error: %s (%d) [%p]",
 		tmp.c_str(),m_socket.error(),this);
 	}
 #ifdef DEBUG
@@ -691,14 +691,14 @@ bool IAXEngine::bind(const char* iface, int port, bool force)
     if (!m_socket.create(AF_INET,SOCK_DGRAM)) {
 	String tmp;
 	Thread::errorString(tmp,m_socket.error());
-	Debug(this,DebugWarn,"Failed to create socket. %d: '%s' [%p]",
+	Alarm(this,"socket",DebugWarn,"Failed to create socket. %d: '%s' [%p]",
 	    m_socket.error(),tmp.c_str(),this);
 	return false;
     }
     if (!m_socket.setBlocking(false)) {
 	String tmp;
 	Thread::errorString(tmp,m_socket.error());
-	Debug(this,DebugWarn,
+	Alarm(this,"socket",DebugWarn,
 	    "Failed to set socket non blocking operation mode. %d: '%s' [%p]",
 	    m_socket.error(),tmp.c_str(),this);
 	m_socket.terminate();
@@ -711,14 +711,14 @@ bool IAXEngine::bind(const char* iface, int port, bool force)
     if (!ok) {
 	String tmp;
 	Thread::errorString(tmp,m_socket.error());
-	Debug(this,DebugWarn,"Failed to bind socket on '%s:%d'%s. %d: '%s' [%p]",
+	Alarm(this,"socket",DebugWarn,"Failed to bind socket on '%s:%d'%s. %d: '%s' [%p]",
 	    c_safe(iface),port,force ? " - trying a random port" : "",
 	    m_socket.error(),tmp.c_str(),this);
 	if (force) {
 	    addr.port(0);
 	    ok = m_socket.bind(addr);
 	    if (!ok)
-		Debug(this,DebugWarn,"Failed to bind on any port for iface='%s' [%p]",
+		Alarm(this,"socket",DebugWarn,"Failed to bind on any port for iface='%s' [%p]",
 		    iface,this);
 	    else {
 		ok = m_socket.getSockName(addr);

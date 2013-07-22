@@ -513,6 +513,39 @@ void JsArray::push(ExpOperation* item)
     setLength(pos + 1);
 }
 
+bool JsArray::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsArray::runAssign() '%s'='%s' (%s) in '%s' [%p]",
+	oper.name().c_str(),oper.c_str(),oper.typeOf(),toString().c_str(),this);
+    if (oper.name() == YSTRING("length")) {
+	int newLen = oper.toInteger(-1);
+	if (newLen < 0)
+	    return false;
+	for (int i = newLen; i < length(); i++)
+	    params().clearParam(String(i));
+	setLength(newLen);
+	return true;
+    }
+    else if (!JsObject::runAssign(stack,oper,context))
+	return false;
+    int idx = oper.toString().toInteger(-1) + 1;
+    if (idx && idx > m_length)
+	setLength(idx);
+    return true;
+}
+
+bool JsArray::runField(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsArray::runField() '%s' in '%s' [%p]",
+	oper.name().c_str(),toString().c_str(),this);
+    if (oper.name() == YSTRING("length")) {
+	// Reflects the number of elements in an array.
+	ExpEvaluator::pushOne(stack,new ExpOperation(length()));
+	return true;
+    }
+    return JsObject::runField(stack,oper,context);
+}
+
 bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(DebugAll,"JsArray::runNative() '%s' in '%s' [%p]",
@@ -526,7 +559,6 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    const_cast<String&>(op->name()) = (unsigned int)m_length++;
 	    params().addParam(op);
 	}
-	setLength();
 	ExpEvaluator::pushOne(stack,new ExpOperation(length()));
     }
     else if (oper.name() == YSTRING("pop")) {
@@ -543,19 +575,14 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	if (!last)
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
 	else {
-	    NamedPointer* np = (NamedPointer*)last->getObject(YATOM("NamedPointer"));
-	    if (!np)
+	    ExpWrapper* w = YOBJECT(ExpWrapper,last);
+	    if (!w)
 		ExpEvaluator::pushOne(stack,new ExpOperation(*last));
 	    else
-		ExpEvaluator::pushOne(stack,new ExpWrapper(np->userData(),0));
+		ExpEvaluator::pushOne(stack,w->clone(w->name()));
 	}
 	// clear last
 	params().clearParam(last);
-	setLength();
-    }
-    else if (oper.name() == YSTRING("length")) {
-	// Reflects the number of elements in an array.
-	ExpEvaluator::pushOne(stack,new ExpOperation(length()));
     }
     else if (oper.name() == YSTRING("concat")) {
 	// Returns a new array comprised of this array joined with other array(s) and/or value(s).

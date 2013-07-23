@@ -4843,10 +4843,10 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     bool nat = false;
     if (addr.getProtocol().startsWith("sip")) {
 	nat = isNatBetween(addr.getHost(),raddr);
-	if (!nat) {
+	if (!nat && YOBJECT(YateUDPParty,message->getParty())) {
 	    int port = addr.getPort();
 	    if (!port)
-		port = (addr.getProtocol() == YSTRING("sips")) ? 5061 : 5060;
+		port = 5060;
 	    nat = (rport != port) && msg.getBoolValue(YSTRING("nat_port_support"),true);
 	}
     }

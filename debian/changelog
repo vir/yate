@@ -1,4 +1,4 @@
-yate (4.3.1~svn5587) UNRELEASED; urgency=low
+yate (4.3.1~svn5588) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -615,8 +615,10 @@ yate (4.3.1~svn5587) UNRELEASED; urgency=low
     objects.  + Resolve fields on expressions/non-objects also.
   * Updated to SVN revision 5587: + Ignore To tags in 100 answers, they
     are not supposed to establish a dialog.
+  * Updated to SVN revision 5588: + Incoming registration NAT detection:
+    don't check port for non udp parties.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 19 Jul 2013 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 24 Jul 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

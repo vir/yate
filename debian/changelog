@@ -1,4 +1,4 @@
-yate (4.3.1~svn5588) UNRELEASED; urgency=low
+yate (4.3.1~svn5591) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -617,8 +617,12 @@ yate (4.3.1~svn5588) UNRELEASED; urgency=low
     are not supposed to establish a dialog.
   * Updated to SVN revision 5588: + Incoming registration NAT detection:
     don't check port for non udp parties.
+  * Updated to SVN revision 5591: + Renamed leaf moduleInfo to
+    moduleExtra to fix a duplicate name.  + Fixed order of declarations
+    in the genericAlarm notification.  + Fixed two minor MIB errors.  +
+    Fixed MIB type usage to be SMIv2 compliant.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 24 Jul 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 30 Jul 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

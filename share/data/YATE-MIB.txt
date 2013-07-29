@@ -12,7 +12,7 @@ IMPORTS
 		FROM NULL-TEAM-MIB;
 
 yate MODULE-IDENTITY
-	LAST-UPDATED	"201307081430Z"
+	LAST-UPDATED	"201307291235Z"
 	ORGANIZATION	"S.C. Null Team Impex S.R.L."
 	CONTACT-INFO
 		"Diana Cionoiu
@@ -21,7 +21,7 @@ yate MODULE-IDENTITY
 		  Email: office@null.ro"
 	DESCRIPTION
 		"The MIB module for Yate."
-	REVISION	"201307081430Z"
+	REVISION	"201307291235Z"
 	DESCRIPTION
 		"Most recent version of this MIB module."
 	REVISION	"201009281300Z"
@@ -299,7 +299,7 @@ moduleType OBJECT-TYPE
 		"Module type."
 	::= { moduleEntry 3 }
 
-moduleInfo OBJECT-TYPE
+moduleExtra OBJECT-TYPE
 	SYNTAX		DisplayString
 	MAX-ACCESS	read-only
 	STATUS		current
@@ -1883,8 +1883,8 @@ unexpectedRestart OBJECT-TYPE
 genericAlarms		OBJECT IDENTIFIER ::= { alarms 7 }
 
 genericAlarm NOTIFICATION-TYPE
-	STATUS		current
 	OBJECTS { alarmSource, alarmLevel, alarmText }
+	STATUS		current
 	DESCRIPTION
 		"A generic YATE alarm."
 	::= { genericAlarms 1 }

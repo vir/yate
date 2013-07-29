@@ -1077,7 +1077,7 @@ static TokenDict s_categories[] = {
     {"moduleIndex",		Monitor::MODULE},
     {"moduleName",		Monitor::MODULE},
     {"moduleType",		Monitor::MODULE},
-    {"moduleInfo",		Monitor::MODULE},
+    {"moduleExtra",		Monitor::MODULE},
     // request stats
     {"authenticationRequests",  Monitor::AUTH_REQUESTS},
     {"registerRequests",	Monitor::REGISTER_REQUESTS},
@@ -1281,7 +1281,7 @@ static TokenDict s_moduleQuery[] = {
     {"moduleIndex",     ModuleInfo::INDEX},
     {"moduleName",      ModuleInfo::MODULE_NAME},
     {"moduleType",      ModuleInfo::MODULE_TYPE},
-    {"moduleInfo",      ModuleInfo::MODULE_INFO},
+    {"moduleExtra",     ModuleInfo::MODULE_INFO},
     {0,0}
 };
 

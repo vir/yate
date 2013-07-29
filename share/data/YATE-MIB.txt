@@ -385,7 +385,7 @@ callEntryCalled OBJECT-TYPE
 	::= { activeCallEntry 5 }
 
 callEntryDuration OBJECT-TYPE
-	SYNTAX		DisplayString
+	SYNTAX		Counter32
 	UNITS		"seconds"
 	MAX-ACCESS	read-only
 	STATUS		current
@@ -1388,7 +1388,7 @@ databaseThresholds  OBJECT-TYPE
 		"Alarm thresholds for this database account."
 	::= { databaseEntry 8 }
 
-DatabaseAlarmCounters ::= SEQUENCE {
+DatabaseThresholds ::= SEQUENCE {
 	queriesCountThreshold		Counter32,
 	failedQueriesThreshold		Counter32,
 	errorQueriesThreshold		Counter32,

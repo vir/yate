@@ -2,14 +2,16 @@ YATE-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
 	MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE,
-	Integer32, Counter32, TimeTicks, Unsigned32, Gauge32
+	Integer32, Counter32, TimeTicks
 		FROM SNMPv2-SMI
 
-	DisplayString, TruthValue
+	DisplayString
 		FROM SNMPv2-TC
 
 	null-team
 		FROM NULL-TEAM-MIB;
+
+PercentageOrNone ::= Integer32 (-1..100)
 
 yate MODULE-IDENTITY
 	LAST-UPDATED	"201307291235Z"
@@ -144,7 +146,7 @@ acceptStatus OBJECT-TYPE
 cpuLoad		OBJECT IDENTIFIER ::= { engine 9 }
 
 kernelLoad OBJECT-TYPE
-	SYNTAX		INTEGER (0..100)
+	SYNTAX		Integer32 (0..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -152,7 +154,7 @@ kernelLoad OBJECT-TYPE
 	::= { cpuLoad 1 }
 
 userLoad OBJECT-TYPE
-	SYNTAX		INTEGER (0..100)
+	SYNTAX		Integer32 (0..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -160,7 +162,7 @@ userLoad OBJECT-TYPE
 	::= { cpuLoad 2 }
 
 totalLoad OBJECT-TYPE
-	SYNTAX		INTEGER (0..100)
+	SYNTAX		Integer32 (0..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -168,7 +170,7 @@ totalLoad OBJECT-TYPE
 	::= { cpuLoad 3 }
 
 systemLoad OBJECT-TYPE
-	SYNTAX		INTEGER (0..100)
+	SYNTAX		Integer32 (0..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -908,10 +910,10 @@ asrData OBJECT-TYPE
 	::= { qosEntry 3 }
 
 ASRData ::= SEQUENCE {
-	lowASRThreshold		INTEGER (-1..100),
-	highASRThreshold	INTEGER	(-1..100),
-	currentASR		INTEGER (-1..100),
-	overallASR		INTEGER (-1..100),
+	lowASRThreshold		PercentageOrNone,
+	highASRThreshold	PercentageOrNone,
+	currentASR		PercentageOrNone,
+	overallASR		PercentageOrNone,
 	currentLowASRAlarmCount		Counter32,
 	currentHighASRAlarmCount	Counter32,
 	overallLowASRAlarmCount		Counter32,
@@ -919,7 +921,7 @@ ASRData ::= SEQUENCE {
 }
 
 lowASRThreshold OBJECT-TYPE
-	SYNTAX		INTEGER (-1..100)
+	SYNTAX		PercentageOrNone
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -927,7 +929,7 @@ lowASRThreshold OBJECT-TYPE
 	::= { asrData 1 }
 
 highASRThreshold OBJECT-TYPE
-	SYNTAX		INTEGER (-1..100)
+	SYNTAX		PercentageOrNone
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -935,7 +937,7 @@ highASRThreshold OBJECT-TYPE
 	::= { asrData 2 }
 
 currentASR OBJECT-TYPE
-	SYNTAX		INTEGER (-1..100)
+	SYNTAX		PercentageOrNone
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -944,7 +946,7 @@ currentASR OBJECT-TYPE
 	::= { asrData 3 }
 
 overallASR OBJECT-TYPE
-	SYNTAX		INTEGER (-1..100)
+	SYNTAX		PercentageOrNone
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -993,15 +995,15 @@ nerData OBJECT-TYPE
 	::= { qosEntry 4 }
 
 NERData ::= SEQUENCE {
-	lowNERThreshold		INTEGER (-1..100),
-	currentNER		INTEGER (-1..100),
-	overallNER		INTEGER (-1..100),
+	lowNERThreshold		PercentageOrNone,
+	currentNER		PercentageOrNone,
+	overallNER		PercentageOrNone,
 	currentLowNERAlarmCount	Counter32,
 	overallLowNERAlarmCount	Counter32
 }
 
 lowNERThreshold OBJECT-TYPE
-	SYNTAX		INTEGER (-1..100)
+	SYNTAX		PercentageOrNone
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -1009,7 +1011,7 @@ lowNERThreshold OBJECT-TYPE
 	::= { nerData 1 }
 
 currentNER OBJECT-TYPE
-	SYNTAX		INTEGER (-1..100)
+	SYNTAX		PercentageOrNone
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -1018,7 +1020,7 @@ currentNER OBJECT-TYPE
 	::= { nerData 2 }
 
 overallNER OBJECT-TYPE
-	SYNTAX		INTEGER (-1..100)
+	SYNTAX		PercentageOrNone
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION

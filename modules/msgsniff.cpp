@@ -70,7 +70,7 @@ public:
 static bool s_active = true;
 static bool s_timer = false;
 static Regexp s_filter;
-static bool s_filtermatch;
+static bool s_filtermatch = true;
 static Mutex s_mutex(false,"FilterSniff");
 
 static void setFilterRegex(const String& str)

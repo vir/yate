@@ -1,3 +1,10 @@
+yate (4.3.1~vir2013073001) UNRELEASED; urgency=low
+
+  * Added "negative" mode for message sniffer filter
+  * Merged upstream SIP NAT and MIB fixes.
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Tue, 30 Jul 2013 09:30:19 +0400
+
 yate (4.3.1~vir2013072201) UNRELEASED; urgency=low
 
   * Merged upstream changes, most notably SNMP traps-related.

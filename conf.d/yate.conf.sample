@@ -61,6 +61,8 @@
 ; If empty it will match all messages except engine.timer which is never displayed
 ; Example for a filter matching all chan.Anything messages and engine.halt:
 ;  filtersniff=^\(chan\.\|engine\.halt$\)
+; To act on non-matching expressions add a ^ at end of the regexp.
+;  filtersniff=^\(database|call\.cdr|user\.auth|user\.register\)$^
 ;filtersniff=
 
 

@@ -573,16 +573,21 @@ static const TokenDict s_pdus[] = {
 };
 
 static const TokenDict s_types[] = {
+    // ASN.1 built-in types
     {"INTEGER",		AsnValue::INTEGER},
-    {"DisplayString", 	AsnValue::STRING},
+    {"OCTET_STRING",	AsnValue::STRING},
     {"OBJECT_ID",	AsnValue::OBJECT_ID},
+    // SNMP v2 SMI
+    {"Integer32",	AsnValue::INTEGER},
+    {"DisplayString", 	AsnValue::STRING},
+    // SNMP v2 SMI tagged types
     {"IpAddress",	AsnValue::IPADDRESS},
     {"Counter32",	AsnValue::COUNTER},
+    {"Gauge32",		AsnValue::UNSIGNED_INTEGER},
+    {"Unsigned32",	AsnValue::UNSIGNED_INTEGER},
     {"TimeTicks",	AsnValue::TIMETICKS},
     {"Opaque",		AsnValue::ARBITRARY},
     {"Counter64",	AsnValue::BIG_COUNTER},
-    {"Unsigned32",	AsnValue::UNSIGNED_INTEGER},
-    {"OCTET_STRING",    AsnValue::STRING},
     {0,0}
 };
 

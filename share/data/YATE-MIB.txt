@@ -2,7 +2,7 @@ YATE-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
 	MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE,
-	Integer32, Counter32, TimeTicks
+	Integer32, Gauge32, Counter32
 		FROM SNMPv2-SMI
 
 	DisplayString
@@ -11,10 +11,8 @@ IMPORTS
 	null-team
 		FROM NULL-TEAM-MIB;
 
-PercentageOrNone ::= Integer32 (-1..100)
-
 yate MODULE-IDENTITY
-	LAST-UPDATED	"201307291235Z"
+	LAST-UPDATED	"201307311120Z"
 	ORGANIZATION	"S.C. Null Team Impex S.R.L."
 	CONTACT-INFO
 		"Diana Cionoiu
@@ -23,13 +21,15 @@ yate MODULE-IDENTITY
 		  Email: office@null.ro"
 	DESCRIPTION
 		"The MIB module for Yate."
-	REVISION	"201307291235Z"
+	REVISION	"201307311120Z"
 	DESCRIPTION
 		"Most recent version of this MIB module."
 	REVISION	"201009281300Z"
 	DESCRIPTION
 		"Initial published revision."
 	::= { null-team 1 }
+
+PercentageOrNone ::= Integer32 (-1..100)
 
 yateMIBRevision OBJECT-TYPE
 	SYNTAX		DisplayString
@@ -64,7 +64,7 @@ commands		OBJECT IDENTIFIER ::= { yate 9 }
 engine		OBJECT IDENTIFIER ::= { status 1 }
 
 plugins OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -72,7 +72,7 @@ plugins OBJECT-TYPE
 	::= { engine 1 }
 
 handlers OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -80,7 +80,7 @@ handlers OBJECT-TYPE
 	::= { engine 2 }
 
 messages OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -88,7 +88,7 @@ messages OBJECT-TYPE
 	::= { engine 3 }
 
 threads OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -96,7 +96,7 @@ threads OBJECT-TYPE
 	::= { engine 4 }
 
 workers OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -104,7 +104,7 @@ workers OBJECT-TYPE
 	::= { engine 5 }
 
 mutexes OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -112,7 +112,7 @@ mutexes OBJECT-TYPE
 	::= { engine 6 }
 
 locks OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -120,7 +120,7 @@ locks OBJECT-TYPE
 	::= { mutexes 1 }
 
 semaphores OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -128,7 +128,7 @@ semaphores OBJECT-TYPE
 	::= { engine 7 }
 
 waitingSemaphores OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -247,7 +247,7 @@ failedConnections OBJECT-TYPE
 -- moduleInfo BEGIN
 
 moduleCount OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -271,14 +271,14 @@ moduleEntry OBJECT-TYPE
 	::= { moduleTable 1 }
 
 ModuleEntry ::= SEQUENCE {
-	moduleIndex	Counter32,
+	moduleIndex	Gauge32,
 	moduleName	DisplayString,
 	moduleType	DisplayString,
-	moduleInfo	DisplayString
+	moduleExtra	DisplayString
 }
 
 moduleIndex OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -313,7 +313,7 @@ moduleExtra OBJECT-TYPE
 -- activeCalls BEGIN
 
 activeCallsCount OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -337,7 +337,7 @@ activeCallEntry OBJECT-TYPE
 	::= { activeCallsTable 1 }
 
 ActiveCallEntry ::= SEQUENCE {
-	callEntryIndex		Counter32,
+	callEntryIndex		Gauge32,
 	callEntryID		DisplayString,
 	callEntryStatus		DisplayString,
 	callEntryCaller		DisplayString,
@@ -347,7 +347,7 @@ ActiveCallEntry ::= SEQUENCE {
 }
 
 callEntryIndex OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -409,7 +409,7 @@ callEntryPeerChan OBJECT-TYPE
 trunks 		OBJECT IDENTIFIER ::= { connections 1 }
 
 trunksCount OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -433,18 +433,18 @@ trunkEntry OBJECT-TYPE
 	::= { trunkTable 1 }
 
 TrunkEntry ::= SEQUENCE {
-	trunkIndex		Counter32,
+	trunkIndex		Gauge32,
 	trunkID			DisplayString,
 	trunkType		DisplayString,
-	trunkCircuitCount	Counter32,
-	trunkCurrentCallsCount	Counter32,
+	trunkCircuitCount	Gauge32,
+	trunkCurrentCallsCount	Gauge32,
 	trunkDownAlarms		Counter32,
-	trunkCircuitsLocked	Counter32,
-	trunkCircuitsIdle	Counter32
+	trunkCircuitsLocked	Gauge32,
+	trunkCircuitsIdle	Gauge32
 }
 
 trunkIndex OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -468,7 +468,7 @@ trunkType OBJECT-TYPE
 	::= { trunkEntry 3 }
 
 trunkCircuitCount OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -476,7 +476,7 @@ trunkCircuitCount OBJECT-TYPE
 	::= { trunkEntry 4 }
 
 trunkCurrentCallsCount OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -492,7 +492,7 @@ trunkDownAlarms OBJECT-TYPE
 	::= { trunkEntry 6 }
 
 trunkCircuitsLocked OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -500,7 +500,7 @@ trunkCircuitsLocked OBJECT-TYPE
 	::= { trunkEntry 7 }
 
 trunkCircuitsIdle OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -513,7 +513,7 @@ trunkCircuitsIdle OBJECT-TYPE
 linksets 	OBJECT IDENTIFIER ::= { connections 2 }
 
 linksetCount OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -537,7 +537,7 @@ linksetEntry OBJECT-TYPE
 	::= { linksetTable 1 }
 
 LinksetEntry ::= SEQUENCE {
-	linksetIndex		Counter32,
+	linksetIndex		Gauge32,
 	linksetID		DisplayString,
 	linksetType		DisplayString,
 	linksetStatus		DisplayString,
@@ -545,7 +545,7 @@ LinksetEntry ::= SEQUENCE {
 }
 
 linksetIndex OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -591,7 +591,7 @@ linksetDownAlarms OBJECT-TYPE
 links		OBJECT IDENTIFIER ::= { connections 3 }
 
 linkCount OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -615,7 +615,7 @@ linkEntry OBJECT-TYPE
 	::= { linksTable 1 }
 
 LinkEntry ::= SEQUENCE {
-	linkIndex	Counter32,
+	linkIndex	Gauge32,
 	linkID		DisplayString,
 	linkType	DisplayString,
 	linkStatus	DisplayString,
@@ -624,7 +624,7 @@ LinkEntry ::= SEQUENCE {
 }
 
 linkIndex OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -677,7 +677,7 @@ linkUptime OBJECT-TYPE
 interfaces	OBJECT IDENTIFIER ::= { connections 4 }
 
 interfacesCount OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -701,14 +701,14 @@ interfaceEntry OBJECT-TYPE
 	::= { interfacesTable 1 }
 
 InterfaceEntry ::= SEQUENCE {
-	interfaceIndex		Counter32,
+	interfaceIndex		Gauge32,
 	interfaceID		DisplayString,
 	interfaceStatus		DisplayString,
 	interfaceDownAlarms	Counter32
 }
 
 interfaceIndex OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -748,7 +748,7 @@ isdnQ921	OBJECT IDENTIFIER ::= { connections 5 }
 accounts	OBJECT IDENTIFIER ::= { connections 6 }
 
 accountsCount OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -772,7 +772,7 @@ accountEntry OBJECT-TYPE
 	::= { accountsTable 1 }
 
 AccountEntry ::= SEQUENCE {
-	accountIndex		Counter32,
+	accountIndex		Gauge32,
 	accountID		DisplayString,
 	accountStatus		DisplayString,
 	accountProtocol		DisplayString,
@@ -780,7 +780,7 @@ AccountEntry ::= SEQUENCE {
 }
 
 accountIndex OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -854,7 +854,7 @@ outgoingCalls  OBJECT-TYPE
 serviceQuality 		OBJECT IDENTIFIER ::= { calls 2 }
 
 qosDirectionsCount  OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -878,7 +878,7 @@ qosEntry OBJECT-TYPE
 	::= { qosDirectionsTable 1 }
 
 QOSEntry ::= SEQUENCE {
-	qosEntryIndex		Counter32,
+	qosEntryIndex		Gauge32,
 	qosEntryDirection	DisplayString,
 	asrData			ASRData,
 	nerData			NERData,
@@ -886,7 +886,7 @@ QOSEntry ::= SEQUENCE {
 }
 
 qosEntryIndex OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -1243,7 +1243,7 @@ overallNoMediaEndCause OBJECT-TYPE
 database  		OBJECT IDENTIFIER ::= { statistics 2 }
 
 databaseCount  OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -1267,18 +1267,18 @@ databaseEntry OBJECT-TYPE
 	::= { databaseTable 1 }
 
 DatabaseEntry ::= SEQUENCE {
-	databaseIndex			Counter32,
+	databaseIndex			Gauge32,
 	databaseAccount			DisplayString,
 	queriesCount			Counter32,
 	failedQueries			Counter32,
 	errorQueries			Counter32,
-	queryExecTime			INTEGER,
+	queryExecTime			Gauge32,
 	databaseAlarmCounters		DatabaseAlarmCounters,
 	databaseThresholds		DatabaseThresholds
 }
 
 databaseIndex OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -1318,7 +1318,7 @@ errorQueries   OBJECT-TYPE
 	::= { databaseEntry 5 }
 
 queryExecTime  OBJECT-TYPE
-	SYNTAX		INTEGER
+	SYNTAX		Gauge32
 	UNITS		"miliseconds"
 	MAX-ACCESS	read-only
 	STATUS		current
@@ -1391,14 +1391,14 @@ databaseThresholds  OBJECT-TYPE
 	::= { databaseEntry 8 }
 
 DatabaseThresholds ::= SEQUENCE {
-	queriesCountThreshold		Counter32,
-	failedQueriesThreshold		Counter32,
-	errorQueriesThreshold		Counter32,
-	queryExecTimeThreshold		Counter32
+	queriesCountThreshold		Gauge32,
+	failedQueriesThreshold		Gauge32,
+	errorQueriesThreshold		Gauge32,
+	queryExecTimeThreshold		Gauge32
 }
 
 queriesCountThreshold OBJECT-TYPE
-	SYNTAX 		Counter32
+	SYNTAX 		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -1406,7 +1406,7 @@ queriesCountThreshold OBJECT-TYPE
 	::= { databaseThresholds 1 }
 
 failedQueriesThreshold OBJECT-TYPE
-	SYNTAX 		Counter32
+	SYNTAX 		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -1414,7 +1414,7 @@ failedQueriesThreshold OBJECT-TYPE
 	::= { databaseThresholds 2 }
 
 errorQueriesThreshold OBJECT-TYPE
-	SYNTAX 		Counter32
+	SYNTAX 		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -1422,7 +1422,7 @@ errorQueriesThreshold OBJECT-TYPE
 	::= { databaseThresholds 3 }
 
 queryExecTimeThreshold OBJECT-TYPE
-	SYNTAX 		Counter32
+	SYNTAX 		Gauge32
 	UNITS		"miliseconds"
 	MAX-ACCESS	read-only
 	STATUS		current
@@ -1436,7 +1436,7 @@ queryExecTimeThreshold OBJECT-TYPE
 rtpData			OBJECT IDENTIFIER ::= { statistics 3}
 
 rtpDirectionsCount OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -1460,7 +1460,7 @@ rtpEntry OBJECT-TYPE
 	::= { rtpDirectionsTable 1 }
 
 RTPEntry ::= SEQUENCE {
-	rtpEntryIndex		Counter32,
+	rtpEntryIndex		Gauge32,
 	rtpDirection		DisplayString,
 	noAudioCounter		Counter32,
 	lostAudioCounter	Counter32,
@@ -1472,7 +1472,7 @@ RTPEntry ::= SEQUENCE {
 }
 
 rtpEntryIndex  OBJECT-TYPE
-	SYNTAX		Counter32
+	SYNTAX		Gauge32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -1873,7 +1873,7 @@ mgcpGatewayUp OBJECT-TYPE
 engineAlarms		OBJECT IDENTIFIER ::= { alarms 6 }
 
 unexpectedRestart OBJECT-TYPE
-	SYNTAX 		Counter32
+	SYNTAX 		Integer32
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION

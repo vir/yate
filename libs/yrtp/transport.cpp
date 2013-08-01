@@ -164,7 +164,8 @@ void RTPProcessor::getStats(String& stats) const
 
 RTPTransport::RTPTransport(RTPTransport::Type type)
     : RTPProcessor(),
-      m_type(type), m_processor(0), m_monitor(0), m_autoRemote(false)
+      m_type(type), m_processor(0), m_monitor(0), m_autoRemote(false),
+      m_warnSendErrorRtp(true), m_warnSendErrorRtcp(true)
 {
     DDebug(DebugAll,"RTPTransport::RTPTransport(%d) [%p]",type,this);
 }
@@ -252,6 +253,40 @@ void RTPTransport::timerTick(const Time& when)
     }
 }
 
+// Send data to remote party
+// Put a debug message on failure
+// Return true if all bytes were sent
+static bool sendData(Socket& sock, const SocketAddr& to, const void* data, int len,
+    const char* what, bool& flag)
+{
+    if (!sock.valid())
+	return false;
+    if (!to.valid()) {
+	if (flag) {
+	    flag = false;
+	    SocketAddr local;
+	    sock.getSockName(local);
+	    Debug(DebugNote,"%s send failed (local=%s:%d): invalid remote address",
+		what,local.host().c_str(),local.port());
+	}
+	return false;
+    }
+    int wr = sock.sendTo(data,len,to);
+    if (wr == Socket::socketError() && flag && !sock.canRetry()) {
+	flag = false;
+	// Retrieve the error before calling getSockName() to avoid reset
+	String s;
+	int e = sock.error();
+	Thread::errorString(s,e);
+	SocketAddr local;
+	sock.getSockName(local);
+	Debug(DebugNote,"%s send failed (local=%s:%d remote=%s:%d): %d %s",
+	    what,local.host().c_str(),local.port(),to.host().c_str(),to.port(),
+	    e,s.c_str());
+    }
+    return wr == len;
+}
+
 void RTPTransport::rtpData(const void* data, int len)
 {
     if (!data)
@@ -268,16 +303,14 @@ void RTPTransport::rtpData(const void* data, int len)
 	default:
 	    break;
     }
-    if (m_rtpSock.valid() && m_remoteAddr.valid())
-	m_rtpSock.sendTo(data,len,m_remoteAddr);
+    sendData(m_rtpSock,m_remoteAddr,data,len,"RTP",m_warnSendErrorRtp);
 }
 
 void RTPTransport::rtcpData(const void* data, int len)
 {
     if ((len < 8) || !data)
 	return;
-    if (m_rtcpSock.valid() && m_remoteRTCP.valid())
-	m_rtcpSock.sendTo(data,len,m_remoteRTCP);
+    sendData(m_rtcpSock,m_remoteRTCP,data,len,"RTCP",m_warnSendErrorRtcp);
 }
 
 void RTPTransport::setProcessor(RTPProcessor* processor)
@@ -306,6 +339,8 @@ bool RTPTransport::localAddr(SocketAddr& addr, bool rtcp)
     // for RTCP make sure we don't have a port or it's an even one
     if (rtcp && (p & 1))
 	return false;
+    m_warnSendErrorRtp = true;
+    m_warnSendErrorRtcp = true;
     if (m_rtpSock.create(addr.family(),SOCK_DGRAM) && m_rtpSock.bind(addr)) {
 	m_rtpSock.setBlocking(false);
 	if (!rtcp) {
@@ -361,6 +396,8 @@ bool RTPTransport::remoteAddr(SocketAddr& addr, bool sniff)
     // make sure we have a valid address and a port
     // we do not check that it's even numbered as many NAPTs will break that
     if (p && addr.valid()) {
+	m_warnSendErrorRtp = true;
+	m_warnSendErrorRtcp = true;
 	m_remoteAddr = addr;
 	m_remoteRTCP = addr;
 	m_remoteRTCP.port(addr.port()+1);

@@ -345,6 +345,8 @@ private:
     SocketAddr m_rxAddrRTP;
     SocketAddr m_rxAddrRTCP;
     bool m_autoRemote;
+    bool m_warnSendErrorRtp;
+    bool m_warnSendErrorRtcp;
 };
 
 /**

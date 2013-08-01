@@ -382,6 +382,25 @@ bool DataBlock::unHexify(const char* data, unsigned int len, char sep)
     return (iBuf >= n);
 }
 
+// This variant of unHexify automatically detects presence of separators
+bool DataBlock::unHexify(const char* data, unsigned int len)
+{
+    char sep = 0;
+    if (len > 2) {
+	const char* s = " :;.,-/|";
+	while (char c = *s++) {
+	    unsigned int offs = 2;
+	    if (data[0] == c)
+		offs++;
+	    if (len == offs || data[offs] == c) {
+		sep = c;
+		break;
+	    }
+	}
+    }
+    return unHexify(data,len,sep);
+}
+
 String DataBlock::sqlEscape(char extraEsc) const
 {
     unsigned int len = m_length;

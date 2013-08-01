@@ -101,7 +101,7 @@ public:
      */
     inline DataBlock& fromHexString(const String& value)
     {
-	unHexify(value,value.length());
+	unHexify(value);
 	return *this;
     }
 };

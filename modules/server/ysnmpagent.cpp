@@ -2909,7 +2909,7 @@ OctetString SnmpAgent::genEngineId(const int format, String& info)
 	    aux.append(info);
 	    break;
 	case OCTETS:
-	    db.unHexify(info,info.length());
+	    db.unHexify(info);
 	    aux.append(db);
 	    break;
 	case ENTERPRISE:

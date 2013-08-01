@@ -3607,13 +3607,33 @@ public:
      * Build this data block from a hexadecimal string representation.
      * Each octet must be represented in the input string with 2 hexadecimal characters.
      * If a separator is specified, the octets in input string must be separated using
-     *  exactly 1 separator. Only 1 leading or 1 trailing separators are allowed
+     *  exactly 1 separator. Only 1 leading or 1 trailing separators are allowed.
      * @param data Input character string
      * @param len Length of the input string
      * @param sep Separator character used between octets. 0 if no separator is expected
      * @return True if the input string was succesfully parsed, false otherwise
      */
-    bool unHexify(const char* data, unsigned int len, char sep = 0);
+    bool unHexify(const char* data, unsigned int len, char sep);
+
+    /**
+     * Build this data block from a hexadecimal string representation.
+     * Each octet must be represented in the input string with 2 hexadecimal characters.
+     * This method guesses if separators are used. If so the octets in input string must be
+     *  separated using exactly 1 separator. Only 1 leading or 1 trailing separators are allowed.
+     * @param data Input character string
+     * @param len Length of the input string
+     * @return True if the input string was succesfully parsed, false otherwise
+     */
+    bool unHexify(const char* data, unsigned int len);
+
+    /**
+     * Build this data block from a hexadecimal string representation.
+     * This version parses a String and guesses separators presence.
+     * @param data Input character string
+     * @return True if the input string was succesfully parsed, false otherwise
+     */
+    inline bool unHexify(const String& data)
+	{ return unHexify(data.c_str(),data.length()); }
 
     /**
      * Create an escaped string suitable for use in SQL queries

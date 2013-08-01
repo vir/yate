@@ -1805,10 +1805,8 @@ static void copySipBody(SIPMessage& sip, const NamedList& msg)
 		    ok = true;
 		    break;
 		case SipHandler::BodyHex:
-		    ok = binBody.unHexify(body,body.length());
-		    break;
 		case SipHandler::BodyHexS:
-		    ok = binBody.unHexify(body,body.length(),' ');
+		    ok = binBody.unHexify(body);
 		    break;
 		case SipHandler::BodyBase64:
 		    {

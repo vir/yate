@@ -280,7 +280,7 @@ void JBFeaturesModule::initialize()
     s_groupSeparator = general->getValue("groups_separator");
     if (s_groupSeparator.length() == 2) {
 	DataBlock d;
-	d.unHexify(s_groupSeparator.c_str(),2);
+	d.unHexify(s_groupSeparator);
 	s_groupSeparator.clear();
 	if (d.length() && d[0])
 	    s_groupSeparator = (char)d[0];

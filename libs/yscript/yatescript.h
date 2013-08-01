@@ -897,6 +897,11 @@ protected:
     ObjList m_opcodes;
 
     /**
+     * Internally used for faster appending to the operator codes list
+     */
+    ObjList* m_lastOpcode;
+
+    /**
      * Flag that we encountered a parse or compile error
      */
     bool m_inError;

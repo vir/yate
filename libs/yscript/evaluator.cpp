@@ -156,13 +156,13 @@ ParsePoint& ParsePoint::operator=(ParsePoint& parsePoint)
 }
 
 ExpEvaluator::ExpEvaluator(const TokenDict* operators, const TokenDict* unaryOps)
-    : m_operators(operators), m_unaryOps(unaryOps),
+    : m_operators(operators), m_unaryOps(unaryOps), m_lastOpcode(&m_opcodes),
       m_inError(false), m_lineNo(1), m_extender(0)
 {
 }
 
 ExpEvaluator::ExpEvaluator(ExpEvaluator::Parser style)
-    : m_operators(0), m_unaryOps(0),
+    : m_operators(0), m_unaryOps(0), m_lastOpcode(&m_opcodes),
     m_inError(false), m_lineNo(1), m_extender(0)
 {
     switch (style) {
@@ -178,13 +178,13 @@ ExpEvaluator::ExpEvaluator(ExpEvaluator::Parser style)
 }
 
 ExpEvaluator::ExpEvaluator(const ExpEvaluator& original)
-    : m_operators(original.m_operators), m_unaryOps(original.unaryOps()),
+    : m_operators(original.m_operators), m_unaryOps(original.unaryOps()), m_lastOpcode(&m_opcodes),
       m_inError(false), m_lineNo(original.lineNumber()), m_extender(0)
 {
     extender(original.extender());
     for (ObjList* l = original.m_opcodes.skipNull(); l; l = l->skipNext()) {
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
-	m_opcodes.append(o->clone());
+	m_lastOpcode = m_lastOpcode->append(o->clone());
     }
 }
 
@@ -786,6 +786,7 @@ bool ExpEvaluator::trySimplify()
 		break;
 	}
     }
+    m_lastOpcode = m_opcodes.last();
     return done;
 }
 
@@ -797,7 +798,7 @@ void ExpEvaluator::addOpcode(ExpOperation* oper, unsigned int line)
     if (!line)
 	line = lineNumber();
     oper->lineNumber(line);
-    m_opcodes.append(oper);
+    m_lastOpcode = m_lastOpcode->append(oper);
 }
 
 ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
@@ -815,7 +816,7 @@ ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
     }
     ExpOperation* op = new ExpOperation(oper,0,ExpOperation::nonInteger(),barrier);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
@@ -824,7 +825,7 @@ ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, long int value,
     DDebug(this,DebugAll,"addOpcode %u (%s) %lu",oper,getOperator(oper),value);
     ExpOperation* op = new ExpOperation(oper,0,value,barrier);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
@@ -833,7 +834,7 @@ ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, const String& n
     DDebug(this,DebugAll,"addOpcode %u (%s) '%s' %ld",oper,getOperator(oper),name.c_str(),value);
     ExpOperation* op = new ExpOperation(oper,name,value,barrier);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
@@ -842,7 +843,7 @@ ExpOperation* ExpEvaluator::addOpcode(const String& value)
     DDebug(this,DebugAll,"addOpcode ='%s'",value.c_str());
     ExpOperation* op = new ExpOperation(value);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
@@ -851,7 +852,7 @@ ExpOperation* ExpEvaluator::addOpcode(long int value)
     DDebug(this,DebugAll,"addOpcode =%ld",value);
     ExpOperation* op = new ExpOperation(value);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
@@ -860,7 +861,7 @@ ExpOperation* ExpEvaluator::addOpcode(bool value)
     DDebug(this,DebugAll,"addOpcode =%s",String::boolText(value));
     ExpOperation* op = new ExpOperation(value);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 

@@ -1,4 +1,4 @@
-yate (4.3.1~svn5592) UNRELEASED; urgency=low
+yate (4.3.1~svn5597) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -623,8 +623,16 @@ yate (4.3.1~svn5592) UNRELEASED; urgency=low
     Fixed MIB type usage to be SMIv2 compliant.
   * Updated to SVN revision 5592: + MIB type usage fixes, use Gauge32
     instead of Counter32 for values that do not roll-over.
+  * Updated to SVN revision 5597: + Improved speed of appending parsed
+    operator codes to the operator codes list.  + Improved some code
+    comments in the script.  + Use message watches in bruteforcers ban
+    script to improve behavior under load.  + Warn if failed to send
+    RTP/RTCP data.  + Added unHexify version that automatically detects
+    separator presence.  + Accelerated function name comparations in
+    regexroute.  + Added possibility to sepcify the hexa separator in
+    regexroute.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 01 Aug 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 02 Aug 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

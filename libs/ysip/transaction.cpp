@@ -692,6 +692,49 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
     return e;
 }
 
+// Event transmission failed notification
+void SIPTransaction::msgTransmitFailed(SIPMessage* msg)
+{
+    if (!msg)
+	return;
+    Lock lock(getEngine());
+    DDebug(getEngine(),DebugNote,
+	"SIPTransaction send failed state=%s msg=%p first=%p last=%p [%p]",
+	stateName(m_state),msg,m_firstMessage,m_lastMessage,this);
+    // Do nothing in termination states
+    if (m_state == Invalid || m_state == Finish || m_state == Cleared)
+	return;
+    if (isOutgoing()) {
+	if (m_state == Trying) {
+	    if (msg != m_firstMessage)
+		return;
+	    // Reliable transport: terminate now
+	    // Non reliable: terminate if this is the first attempt
+	    if ((msg->getParty() && msg->getParty()->isReliable()) ||
+		m_engine->getReqTransCount() == m_timeouts) {
+		Debug(getEngine(),DebugInfo,
+		    "SIPTransaction send failed state=%s: clearing [%p]",
+		    stateName(m_state),this);
+		m_response = 500;
+		changeState(Cleared);
+		return;
+	    }
+	}
+	else if (m_state == Initial || msg != m_lastMessage)
+	    return;
+    }
+    else {
+	// Incoming
+	if (msg != m_lastMessage)
+	    return;
+    }
+    // Avoid party retry
+    Debug(getEngine(),DebugAll,
+	"SIPTransaction send failed state=%s resetting msg %p party [%p]",
+	stateName(m_state),msg,this);
+    msg->setParty();
+}
+
 bool SIPTransaction::tryAutoAuth(SIPMessage* answer)
 {
     if ((answer->code != 401) && (answer->code != 407))

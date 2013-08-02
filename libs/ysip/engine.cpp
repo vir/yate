@@ -331,8 +331,9 @@ void SIPEngine::processEvent(SIPEvent *event)
 		    if (!event->getMessage()->isAnswer())
 			break;
 		default:
-		    if (event->getParty())
-			event->getParty()->transmit(event);
+		    if (event->getParty() && !event->getParty()->transmit(event) &&
+			event->getTransaction())
+			event->getTransaction()->msgTransmitFailed(event->getMessage());
 	    }
 	}
 	if (event->isIncoming()) {

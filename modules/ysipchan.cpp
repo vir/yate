@@ -411,7 +411,7 @@ public:
     bool init(const NamedList& params, const NamedList& defs, bool first,
 	Thread::Priority prio = Thread::Normal);
     // Send data
-    void send(const void* data, unsigned int len, const SocketAddr& addr);
+    bool send(const void* data, unsigned int len, const SocketAddr& addr);
     // Process data (read)
     virtual int process();
 protected:
@@ -449,7 +449,7 @@ public:
     // Reset idle timeout
     void setFlowTimer(bool on, unsigned int interval);
     // Send an event
-    void send(SIPEvent* event);
+    bool send(SIPEvent* event);
     // Process data (read/send)
     virtual int process();
 protected:
@@ -555,7 +555,7 @@ public:
     ~YateUDPParty();
     inline const SocketAddr& addr() const
 	{ return m_addr; }
-    virtual void transmit(SIPEvent* event);
+    virtual bool transmit(SIPEvent* event);
     virtual const char* getProtoName() const;
     virtual bool setParty(const URI& uri);
     virtual void* getTransport();
@@ -571,7 +571,7 @@ class YateTCPParty : public SIPParty
 public:
     YateTCPParty(YateSIPTCPTransport* trans);
     ~YateTCPParty();
-    virtual void transmit(SIPEvent* event);
+    virtual bool transmit(SIPEvent* event);
     virtual const char* getProtoName() const;
     virtual bool setParty(const URI& uri);
     virtual void* getTransport();
@@ -2805,19 +2805,20 @@ bool YateSIPUDPTransport::init(const NamedList& params, const NamedList& defs, b
 }
 
 // Send data
-void YateSIPUDPTransport::send(const void* data, unsigned int len, const SocketAddr& addr)
+bool YateSIPUDPTransport::send(const void* data, unsigned int len, const SocketAddr& addr)
 {
     if (!m_sock)
-	return;
+	return false;
     Lock lck(this);
     if (!m_sock)
-	return;
+	return false;
     int sent = m_sock->sendTo(data,len,addr);
     bool err = (sent < 0);
     printWriteError(sent,len,err && !m_errored);
     if (m_errored && !err)
 	Alarm(&plugin,"socket",DebugNote,"Transport(%s) error cleared [%p]",m_id.c_str(),this);
     m_errored = err;
+    return !err || m_sock->canRetry();
 }
 
 // Process data (read/send).
@@ -2989,16 +2990,20 @@ void YateSIPTCPTransport::setFlowTimer(bool on, unsigned int interval)
 }
 
 // Send data
-void YateSIPTCPTransport::send(SIPEvent* event)
+bool YateSIPTCPTransport::send(SIPEvent* event)
 {
     SIPMessage* msg = event->getMessage();
-    if (!msg || s_engineHalt)
-	return;
+    if (!msg)
+	return true;
+    if (s_engineHalt)
+	return false;
     Lock lock(this);
     if (m_status == Terminated)
-	return;
-    if (m_queue.find(msg) || !msg->ref())
-	return;
+	return false;
+    if (m_queue.find(msg))
+	return true;
+    if (!msg->ref())
+	return false;
     m_queue.append(msg);
 #ifdef XDEBUG
     String tmp;
@@ -3006,6 +3011,7 @@ void YateSIPTCPTransport::send(SIPEvent* event)
     Debug(&plugin,DebugAll,"Transport(%s) enqueued (%p,%s) [%p]",
 	m_id.c_str(),msg,tmp.c_str(),this);
 #endif
+    return true;
 }
 
 // Process data (read/send)
@@ -3764,22 +3770,22 @@ YateUDPParty::~YateUDPParty()
     TelEngine::destruct(m_transport);
 }
 
-void YateUDPParty::transmit(SIPEvent* event)
+bool YateUDPParty::transmit(SIPEvent* event)
 {
     const SIPMessage* msg = event->getMessage();
     if (!msg)
-	return;
+	return false;
     if (m_transport) {
 	Lock lck(m_transport);
 	if (s_printMsg)
 	    m_transport->printSendMsg(msg,&m_addr);
-	m_transport->send(msg->getBuffer().data(),msg->getBuffer().length(),m_addr);
-	return;
+	return m_transport->send(msg->getBuffer().data(),msg->getBuffer().length(),m_addr);
     }
     String tmp;
     getMsgLine(tmp,msg);
     Debug(&plugin,DebugWarn,"No transport to send %s to %s:%d",
 	tmp.c_str(),m_addr.host().c_str(),m_addr.port());
+    return false;
 }
 
 const char* YateUDPParty::getProtoName() const
@@ -3850,19 +3856,18 @@ YateTCPParty::~YateTCPParty()
     TelEngine::destruct(m_transport);
 }
 
-void YateTCPParty::transmit(SIPEvent* event)
+bool YateTCPParty::transmit(SIPEvent* event)
 {
     const SIPMessage* msg = event->getMessage();
     if (!msg)
-	return;
-    if (m_transport) {
-	m_transport->send(event);
-	return;
-    }
+	return false;
+    if (m_transport)
+	return m_transport->send(event);
     String tmp;
     getMsgLine(tmp,msg);
     Debug(&plugin,DebugWarn,"YateTCPParty no transport to send %s [%p]",
 	tmp.c_str(),this);
+    return false;
 }
 
 const char* YateTCPParty::getProtoName() const

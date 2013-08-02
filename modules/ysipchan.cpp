@@ -541,6 +541,7 @@ private:
     Mutex m_mutex;                       // Mutex protecting transport parameters and bind ip/port
     String m_reason;                     // Last error (state change) string
     bool m_sslContextChanged;            // SSL context changed flag
+    bool m_sslContextCheck;              // Check SSL context availability
     bool m_transParamsChanged;           // Transport parameters changed flag
     Socket* m_socket;                    // The socket
     unsigned int m_backlog;              // Pending connections queue length
@@ -1055,6 +1056,7 @@ class SIPDriver : public Driver
 public:
     enum Relay {
 	Stop = Private,
+	Start = Private << 1,
     };
     SIPDriver();
     ~SIPDriver();
@@ -1126,8 +1128,10 @@ public:
 static ObjList s_lines;
 static Configuration s_cfg;
 static Mutex s_globalMutex(true,"SIPGlobal"); // Protect globals (don't use the plugin to avoid deadlocks)
+static bool s_engineStart = false;       // engine.start received
 static unsigned int s_engineStop = 0;    // engine.stop message counter
 static bool s_engineHalt = false;        // engine.halt received
+static bool s_sslClientAvailable = false;// SSL is available to be used when connecting to remote hosts
 static unsigned int s_bindRetryMs = 500; // Listeners bind retry interval
 static String s_realm = "Yate";
 static int s_floodEvents = 100;
@@ -3067,6 +3071,11 @@ int YateSIPTCPTransport::process()
     if (!(m_sock && m_sock->valid())) {
 	if (!m_outgoing)
 	    return -1;
+	if (tls() && !s_sslClientAvailable) {
+	    Debug(&plugin,DebugNote,"Transport(%s) SSL not available locally [%p]",
+		toString().c_str(),this);
+	    return -1;
+	}
 	if (!m_connectRetry || s_engineStop)
 	    return -1;
 	int retVal = Thread::idleUsec();
@@ -3588,7 +3597,7 @@ YateSIPTCPListener::YateSIPTCPListener(int proto, const String& name, const Name
     String(name),
     ProtocolHolder(proto),
     m_mutex(true,"YSIPListener"),
-    m_sslContextChanged(true), m_transParamsChanged(true),
+    m_sslContextChanged(true), m_sslContextCheck(true), m_transParamsChanged(true),
     m_socket(0), m_backlog(5), m_transParams(params), m_initialized(false)
 {
     init(params,true);
@@ -3621,6 +3630,8 @@ void YateSIPTCPListener::init(const NamedList& params, bool first)
 	if (!m_sslContext)
 	    Alarm(&plugin,"config",DebugConf,"Listener(%s,'%s') ssl context is empty [%p]",
 		protoName(),c_str(),this);
+	// Always set check flag on re-init
+	m_sslContextCheck = true;
     }
     m_backlog = params.getIntValue("backlog",5,0);
     m_bind = setAddr(addr,port) || first;
@@ -3642,25 +3653,60 @@ void YateSIPTCPListener::run()
     SocketAddr lAddr(PF_INET);
     NamedList transParams("");
     String sslContext;
+    bool showWaitStart = true;
+    bool sslAvailable = false;
     while (true) {
 	if (Thread::check(false))
 	    break;
 	if (m_sslContextChanged || m_transParamsChanged) {
 	    Lock lock(m_mutex);
 	    if (m_sslContextChanged) {
-		sslContext = m_sslContext;
+		if (sslContext != m_sslContext) {
+		    sslAvailable = false;
+		    sslContext = m_sslContext;
+		}
 		if (tls() && !sslContext)
-		    m_reason = "Empty ssl context";
+		    m_reason = "Empty SSL context";
 	    }
 	    if (m_transParamsChanged)
 		transParams = m_transParams;
 	    m_sslContextChanged = false;
 	    m_transParamsChanged = false;
 	}
-	if (tls() && !sslContext) {
-	    stopListening();
-	    Thread::msleep(3 * Thread::idleMsec());
-	    continue;
+	if (tls()) {
+	    if (!sslContext) {
+		stopListening();
+		Thread::msleep(3 * Thread::idleMsec());
+		continue;
+	    }
+	    if (m_sslContextCheck) {
+		if (!s_engineStart) {
+		    if (showWaitStart) {
+			Debug(&plugin,DebugAll,
+			    "Listener(%s,'%s') waiting for engine start to check SSL context [%p]",
+			    protoName(),c_str(),this);
+			showWaitStart = false;
+		    }
+		    Thread::idle();
+		    continue;
+		}
+		sslAvailable = plugin.socketSsl(0,true,sslContext);
+		Lock lck(m_mutex);
+		m_sslContextCheck = false;
+		if (!sslAvailable)
+		    m_reason = "SSL context not available";
+		lck.drop();
+		if (!sslAvailable) {
+		    Alarm(&plugin,"config",DebugConf,
+			"Listener(%s,'%s') SSL context '%s' not available [%p]",
+			protoName(),c_str(),sslContext.c_str(),this);
+		    stopListening();
+		}
+	    }
+	    if (!sslAvailable) {
+		Thread::msleep(3 * Thread::idleMsec());
+		continue;
+	    }
 	}
 	bool force = bindNow(&m_mutex);
 	if (force || !m_socket) {
@@ -8171,6 +8217,10 @@ bool SIPDriver::received(Message& msg, int id)
 	    return false;
 	}
     }
+    else if (id == Start) {
+	s_engineStart = true;
+	s_sslClientAvailable = socketSsl(0,false);
+    }
     return Driver::received(msg,id);
 }
 
@@ -8224,6 +8274,8 @@ SIPDriver::~SIPDriver()
 void SIPDriver::initialize()
 {
     Output("Initializing module SIP Channel");
+    if (s_engineStart)
+	s_sslClientAvailable = socketSsl(0,false);
     s_cfg = Engine::configFile("ysipchan");
     s_globalMutex.lock();
     s_cfg.load();
@@ -8291,6 +8343,7 @@ void SIPDriver::initialize()
 	installRelay(Route);
 	installRelay(Status);
 	installRelay(Stop,"engine.stop");
+	installRelay(Start,"engine.start");
 	Engine::install(new UserHandler);
 	if (s_cfg.getBoolValue("general","generate"))
 	    Engine::install(new SipHandler);

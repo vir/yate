@@ -366,6 +366,8 @@ protected:
     // Status changed notification for descendents
     virtual void statusChanged()
 	{}
+    // Start the worker thread
+    bool startWorker(Thread::Priority prio);
     // Change transport status. Notify it
     void changeStatus(int stat);
     // Handle received messages, set party, add to engine
@@ -2542,13 +2544,7 @@ bool YateSIPTransport::init(const NamedList& params, const NamedList& defs,
 	m_sock->getSockName(m_local);
 	m_sock->getPeerName(m_remote);
     }
-    m_worker = new YateSIPTransportWorker(this,prio);
-    if (m_worker->startup())
-	return true;
-    Debug(&plugin,DebugWarn,"Transport(%s) failed to start worker thread [%p]",m_id.c_str(),this);
-    m_reason = "Failed to start worker";
-    m_worker = 0;
-    return false;
+    return true;
 }
 
 void YateSIPTransport::printSendMsg(const SIPMessage* msg, const SocketAddr* addr)
@@ -2664,6 +2660,21 @@ void YateSIPTransport::destroyed()
     resetSocket(m_sock,-1);
     Debug(&plugin,DebugAll,"Transport(%s) destroyed [%p]",m_id.c_str(),this);
     RefObject::destroyed();
+}
+
+// Start the worker thread
+bool YateSIPTransport::startWorker(Thread::Priority prio)
+{
+    Lock lck(this);
+    if (m_worker)
+	return true;
+    m_worker = new YateSIPTransportWorker(this,prio);
+    if (m_worker->startup())
+	return true;
+    Debug(&plugin,DebugWarn,"Transport(%s) failed to start worker thread [%p]",m_id.c_str(),this);
+    m_reason = "Failed to start worker";
+    m_worker = 0;
+    return false;
 }
 
 // Change transport status. Notify it
@@ -2801,6 +2812,8 @@ bool YateSIPUDPTransport::init(const NamedList& params, const NamedList& defs, b
 	"Transport(%s) initialized addr='%s:%d' default=%s maxpkt=%u rtp_localip=%s nat_address=%s [%p]",
 	m_id.c_str(),m_address.c_str(),m_port,String::boolText(m_default),m_maxpkt,
 	m_rtpLocalAddr.c_str(),m_rtpNatAddr.c_str(),this);
+    if (ok && first)
+	ok = startWorker(prio);
     return ok;
 }
 
@@ -2973,6 +2986,8 @@ bool YateSIPTCPTransport::init(const NamedList& params, bool first, Thread::Prio
     Debug(&plugin,DebugAll,
 	"Transport(%s) initialized maxpkt=%u rtp_localip=%s nat_address=%s tcp_idle=%u [%p]",
 	m_id.c_str(),m_maxpkt,m_rtpLocalAddr.c_str(),m_rtpNatAddr.c_str(),m_idleInterval,this);
+    if (ok && first)
+	ok = startWorker(prio);
     return ok;
 }
 

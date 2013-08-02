@@ -1325,7 +1325,7 @@ JBClusterStream* YJBEngine::getClusterStream(const String& remote, const NamedLi
 LocalDomain* YJBEngine::findDomain(const String& domain)
 {
     if (!domain)
-	return false;
+	return 0;
     Lock lock(this);
     ObjList* o = findDomain(domain,true);
     if (!o)

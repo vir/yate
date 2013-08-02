@@ -5375,7 +5375,7 @@ ClientResource* ClientContact::findFileTransferResource(bool ref)
 ClientResource* ClientContact::appendResource(const String& id)
 {
     if (findResource(id))
-	return false;
+	return 0;
     ClientResource* r = new ClientResource(id);
     if (!insertResource(r))
 	TelEngine::destruct(r);

@@ -3009,7 +3009,7 @@ YSocksWrapper* YSocksEngine::findWrapper(bool client, const String& dstAddr, int
 YSocksWrapper* YSocksEngine::findWrapper(const String& wID)
 {
     if (!wID)
-	return false;
+	return 0;
     Lock lock(this);
     ObjList* o = m_wrappers.find(wID);
     if (!o)

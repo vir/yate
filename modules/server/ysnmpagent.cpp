@@ -105,7 +105,7 @@ public:
 	{}
     virtual bool init() = 0;
     virtual void run() = 0;
-    virtual bool sendMessage(DataBlock& data, SocketAddr& to) = 0;
+    virtual bool sendMessage(DataBlock& data, const SocketAddr& to) = 0;
     virtual void cleanup() = 0;
 
 protected:
@@ -158,7 +158,7 @@ public:
 	{ m_data = data;}
     inline DataBlock& data()
 	{ return m_data;}
-    inline SocketAddr& peer()
+    inline const SocketAddr& peer()
 	{ return m_from;}
     inline void setPeer(SocketAddr peer)
 	{ m_from = peer;}
@@ -250,7 +250,7 @@ public:
 	{ return m_reportFlag;}
 
     // validate a SNMPv3 message
-    int validate(Snmp::SNMPv3Message& msg);
+    int validate(Snmp::SNMPv3Message& msg, int& authRes);
     // handle a request
     int processRequest(Snmp::SNMPv3Message& msg);
     // prepare a message for sending. Generate authentication and privacy information as needed.
@@ -347,6 +347,7 @@ public:
     };
     // SNMPv3 process statuses
     enum USMEnum {
+	WRONG_COMMUNITY		= -2,
 	MESSAGE_DROP		= -1,
 	SUCCESS			= 0,
 	WRONG_SEC_LEVEL		= 1,
@@ -412,7 +413,7 @@ public:
     Snmp::PDU* decodeBulkPDU(int& reqType, Snmp::BulkPDU* pdu, const int& access);
 
     // handle a SNMPv3 message
-    int processSnmpV3Msg(Snmp::SNMPv3Message& msg, const String& host);
+    int processSnmpV3Msg(Snmp::SNMPv3Message& msg, const String& host, int& authRes);
     // generate reports and responses for SNMPv3 messages
     int generateReport(Snmp::SNMPv3Message& msg, const int& usmRes, SnmpV3MsgContainer& msgContainer);
     int generateResponse(Snmp::SNMPv3Message& msg, SnmpV3MsgContainer& msgContainer);
@@ -454,6 +455,7 @@ public:
     inline SnmpUser* getUser(const String& user)
 	{ return static_cast<SnmpUser*>(m_users[user]); }
     void setMsgQueue(SnmpMsgQueue* queue);
+    void authFail(const SocketAddr& addr, int snmpVersion, int reason, int protocol = TransportType::UDP);
 
 private:
     bool m_init;
@@ -496,7 +498,7 @@ public:
     ~SnmpUdpListener();
     virtual bool init();
     virtual void run();
-    virtual bool sendMessage(DataBlock& data, SocketAddr& to);
+    virtual bool sendMessage(DataBlock& data, const SocketAddr& to);
     virtual void cleanup();
 };
 
@@ -541,6 +543,19 @@ static const TokenDict s_errors[] = {
     {"WRONG_ENGINE_ID",		SnmpAgent::WRONG_ENGINE_ID},
     {"WRONG_DIGEST",		SnmpAgent::WRONG_DIGEST},
     {"WRONG_ENCRYPT",		SnmpAgent::WRONG_ENCRYPT},
+    {0,0}
+};
+
+static const TokenDict s_readableErrors[] = {
+    {"wrong community string",  SnmpAgent::WRONG_COMMUNITY},
+    {"message dropped",         SnmpAgent::MESSAGE_DROP},
+    {"success",                 SnmpAgent::SUCCESS},
+    {"wrong security level",    SnmpAgent::WRONG_SEC_LEVEL},
+    {"wrong time window",       SnmpAgent::WRONG_WINDOW_TIME},
+    {"unknown user",            SnmpAgent::WRONG_USER},
+    {"wrong engine ID",         SnmpAgent::WRONG_ENGINE_ID},
+    {"wrong digest",            SnmpAgent::WRONG_DIGEST},
+    {"encryption failure",      SnmpAgent::WRONG_ENCRYPT},
     {0,0}
 };
 
@@ -739,7 +754,7 @@ void SnmpUdpListener::run()
     }
 }
 
-bool SnmpUdpListener::sendMessage(DataBlock& d, SocketAddr& to)
+bool SnmpUdpListener::sendMessage(DataBlock& d, const SocketAddr& to)
 {
     DDebug(&__plugin,DebugAll,"SnmpUdpListener::sendMessage() of length '%d' to '%s:%d'",d.length(),to.host().c_str(),to.port());
 
@@ -1027,7 +1042,7 @@ void SnmpUser::generateAuthInfo()
   */
 
 // validate a message
-int SnmpV3MsgContainer::validate(Snmp::SNMPv3Message& msg)
+int SnmpV3MsgContainer::validate(Snmp::SNMPv3Message& msg, int& authRes)
 {
     DDebug(&__plugin,DebugAll,"SnmpV3MsgContainer::validate() [%p]",this);
     int res = processHeader(msg);
@@ -1040,13 +1055,17 @@ int SnmpV3MsgContainer::validate(Snmp::SNMPv3Message& msg)
     // if the auth flag is set, check the digest for the message
     if (m_authFlag) {
 	res = checkAuth(msg);
-	if (res != SnmpAgent::SUCCESS)
+	if (res != SnmpAgent::SUCCESS) {
+	    authRes = res;
 	    return res;
+	}
     }
     // check the user data
     res = checkUser();
-    if (res != SnmpAgent::SUCCESS)
+    if (res != SnmpAgent::SUCCESS) {
+	authRes = res;
 	return res;
+    }
     // if the privacy flag is set, decrypt the message
     if (m_privFlag) {
 	res = decrypt(msg);
@@ -1279,7 +1298,7 @@ int SnmpV3MsgContainer::processScopedPdu()
 int SnmpV3MsgContainer::checkAuth(Snmp::SNMPv3Message& msg)
 {
     if (!m_user)
-	return SnmpAgent::MESSAGE_DROP;
+	return SnmpAgent::WRONG_USER;
     DDebug(&__plugin,DebugAll,"SnmpV3MsgContainer::checkAuth('%s') [%p]",m_user->toString().c_str(),this);
     //put digest on zero
     OctetString authDigest = m_security.m_msgAuthenticationParameters;
@@ -1690,7 +1709,10 @@ int SnmpAgent::processMsg(SnmpMessage* msg)
 	// SNMPv2 message
 	DDebug(&__plugin,DebugAll,"::processMsg() - received %s message msg=%p",lookup(msgSnmp.m_version,s_proto,""),&msgSnmp);
 	// try to handle it
-	if (processSnmpV2Msg(msgSnmp,host) < 0) {
+	int res = processSnmpV2Msg(msgSnmp,host);
+	if (res < 0) {
+	    if (res == WRONG_COMMUNITY)
+		authFail(msg->peer(),msgSnmp.m_version,res);
 	    m_silentDrops++;
 	    return MESSAGE_DROP;
 	}
@@ -1705,7 +1727,11 @@ int SnmpAgent::processMsg(SnmpMessage* msg)
 	if (l >= 0) {
 	    // SNMPv3 message
 	    DDebug(&__plugin,DebugAll,"::processMsg() - received SNMPv3 message msg=%p",&m);
-	    if(processSnmpV3Msg(m,host) < 0) {
+	    int authRes = SUCCESS;
+	    int res = processSnmpV3Msg(m,host,authRes);
+	    if (authRes != SUCCESS)
+		authFail(msg->peer(),m.m_msgVersion,authRes);
+	    if(res < 0) {
 		m_silentDrops++;
 		return MESSAGE_DROP;
 	    }
@@ -1751,7 +1777,7 @@ int SnmpAgent::processSnmpV2Msg(Snmp::Message& msg, const String& host)
     if (access == AsnMib::notAccessible) {
     	Debug(&__plugin,DebugInfo,"Dropping message from %s with wrong community '%s'",
 	    host.c_str(),community.safe());
-	return MESSAGE_DROP;
+	return WRONG_COMMUNITY;
     }
     // obtain pdus and do decoding
     DataBlock pdu = msg.m_data;
@@ -2257,13 +2283,13 @@ void SnmpAgent::assignValue(Snmp::VarBind* varBind, AsnValue* val)
   *	    or
   *	    - encrypted Data - string to be decrypted according the encryption methos (DES-CBC / AES-CFB)
   */
-int SnmpAgent::processSnmpV3Msg(Snmp::SNMPv3Message& msg, const String& host)
+int SnmpAgent::processSnmpV3Msg(Snmp::SNMPv3Message& msg, const String& host, int& authRes)
 {
     DDebug(&__plugin,DebugAll,"::processSnmpV3Msg() [%p]",&msg);
     // initialize a SNMPv3 container
     SnmpV3MsgContainer msgContainer;
     // message is valid?
-    int secRes = msgContainer.validate(msg);
+    int secRes = msgContainer.validate(msg,authRes);
     if (secRes == MESSAGE_DROP) {
  	Debug(&__plugin,DebugNote, "SNMPv3 message from %s not validated, silent drop",host.c_str());
 	return MESSAGE_DROP;
@@ -2943,6 +2969,23 @@ OctetString SnmpAgent::genEngineId(const int format, String& info)
 	TelEngine::destruct(list);
     }
     return aux;
+}
+
+void SnmpAgent::authFail(const SocketAddr& addr, int snmpVersion, int reason, int protocol)
+{
+    String rAddr = addr.host();
+    String rPort(addr.port());
+
+    Message* m = new Message("user.authfail");
+    m->setParam(YSTRING("module"),name());
+    m->setParam(YSTRING("address"),rAddr + ":" + rPort);
+    m->setParam(YSTRING("ip_host"),rAddr);
+    m->setParam(YSTRING("ip_port"),rPort);
+    m->setParam(YSTRING("ip_transport"),lookup(protocol,TransportType::s_typeText,""));
+    m->setParam(YSTRING("protocol"),lookup(snmpVersion,s_proto,""));
+    m->setParam(YSTRING("reason"),lookup(reason,s_readableErrors,""));
+
+    Engine::enqueue(m);
 }
 
 }; // anonymous namespace

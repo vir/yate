@@ -62,7 +62,12 @@ public:
     SIPParty(Mutex* mutex = 0);
     SIPParty(bool reliable, Mutex* mutex = 0);
     virtual ~SIPParty();
-    virtual void transmit(SIPEvent* event) = 0;
+    /**
+     * Transmit an event
+     * @param event Evend to send
+     * @return False on fatal failure (subsequent send would fail again)
+     */
+    virtual bool transmit(SIPEvent* event) = 0;
     virtual const char* getProtoName() const = 0;
     virtual bool setParty(const URI& uri) = 0;
     virtual void* getTransport() = 0;
@@ -865,6 +870,12 @@ public:
      */
     inline int getResponseCode() const
 	{ return m_response; }
+
+    /**
+     * Message send failure notification
+     * @param msg Failed message
+     */
+    void msgTransmitFailed(SIPMessage* msg);
 
     /**
      * Set an arbitrary pointer as user specific data

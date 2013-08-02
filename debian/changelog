@@ -1,4 +1,4 @@
-yate (4.3.1~svn5597) UNRELEASED; urgency=low
+yate (4.3.1~svn5604) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -631,8 +631,22 @@ yate (4.3.1~svn5597) UNRELEASED; urgency=low
     separator presence.  + Accelerated function name comparations in
     regexroute.  + Added possibility to sepcify the hexa separator in
     regexroute.
+  * Updated to SVN revision 5604: + Added possibility to sepcify the
+    hexa separator in regexroute.  + Fixed conversion from boolean false
+    to pointer.  + Propagate non-retryable send errors to transaction.
+    Terminate outgoing transactions in Trying state if first send
+    attempt failed. Reset failed message party otherwise.  + Fixed bug:
+    start transport worker thread after init to make sure data is
+    initialized. Fixes incoming tcp transport race condition.  + Check
+    ssl availability. Don't bind a tls listener if the context is not
+    valid. Don't try to connect a tls transport if ssl is not available.
+    + Emit a user.authfail message when authentification for a SNMP
+    request fails.  + Initialize all CallMonitor data members.  + Reset
+    connect retry counter when received data not when connect succeeds.
+    Fixes forever connect retry when connection is closed after accepted
+    without receiving any data. Improved debug.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 02 Aug 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 03 Aug 2013 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -3078,29 +3078,19 @@ int YateSIPTCPTransport::process()
 	}
 	if (!m_connectRetry || s_engineStop)
 	    return -1;
-	int retVal = Thread::idleUsec();
 	if (m_nextConnect > Time::now())
-	    return retVal;
+	    return Thread::idleUsec();
+	m_connectRetry--;
 	int conn = connect();
-	if (conn > 0) {
-	    m_connectRetry = s_tcpConnectRetry;
-	    m_nextConnect = 0;
+	if (conn > 0)
 	    setIdleTimeout();
-	}
-	else if (!conn) {
-	    m_connectRetry--;
-	    DDebug(&plugin,DebugAll,"Transport(%s) connect retry is %u [%p]",
-		toString().c_str(),m_connectRetry,this);
-	    if (m_connectRetry)
-		m_nextConnect = Time::now() + s_tcpConnectInterval;
-	    else
-		retVal = -1;
-	}
-	else {
+	else if (conn < 0)
 	    m_connectRetry = 0;
-	    retVal = -1;
+	if (conn > 0 || m_connectRetry) {
+	    m_nextConnect = Time::now() + s_tcpConnectInterval;
+	    return Thread::idleUsec();
 	}
-	return retVal;
+	return -1;
     }
     Time time;
     bool sent = false;
@@ -3114,6 +3104,13 @@ int YateSIPTCPTransport::process()
     if (!readData(time,read)) {
 	resetConnection();
 	return m_outgoing ? 0 : -1;
+    }
+    // Outgoing received data: reset reconnect
+    if (m_outgoing && read && m_nextConnect) {
+	DDebug(&plugin,DebugAll,"Transport(%s) resetting re-connect [%p]",
+	    m_id.c_str(),this);
+	m_connectRetry = s_tcpConnectRetry;
+	m_nextConnect = 0;
     }
     // Idle incoming with refcount=2 (the worker is referencing us): terminate
     if (!m_outgoing && m_idleTimeout < time) {
@@ -3298,7 +3295,8 @@ int YateSIPTCPTransport::connect(u_int64_t connToutUs)
 	    else
 		m_reason = "Connect failed";
 	}
-	Debug(&plugin,level,"Transport(%s) %s [%p]",m_id.c_str(),m_reason.c_str(),this);
+	Debug(&plugin,level,"Transport(%s) %s (remaining %u connect attempts) [%p]",
+	    m_id.c_str(),m_reason.c_str(),!retVal ? m_connectRetry : 0,this);
 	resetSocket(sock,0);
     }
     return retVal;

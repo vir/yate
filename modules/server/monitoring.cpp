@@ -3245,7 +3245,9 @@ bool CallRouteQoS::get(int query, String& result)
 CallMonitor::CallMonitor(const NamedList* sect, unsigned int priority)
       : MessageHandler("call.cdr",priority),
 	Thread("Call Monitor"),
-	m_checkTime(3600), m_routeParam("address"),
+	m_checkTime(3600),
+	m_notifTime(0), m_inCalls(0), m_outCalls(0), m_first(true),
+	m_routeParam("address"),
 	m_monitor(false)
 {
     setFilter("operation","finalize");
@@ -3253,9 +3255,6 @@ CallMonitor::CallMonitor(const NamedList* sect, unsigned int priority)
     setConfigure(sect);
 
     m_notifTime = Time::secNow() + m_checkTime;
-    m_inCalls = m_outCalls = 0;
-    // flags
-    m_first = true;
     init();
 }
 

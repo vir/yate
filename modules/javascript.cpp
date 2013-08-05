@@ -234,6 +234,10 @@ public:
 	    params().addParam(new ExpFunction("dump_r"));
 	    params().addParam(new ExpFunction("print_r"));
 	    params().addParam(new ExpFunction("debugName"));
+	    params().addParam(new ExpFunction("debugLevel"));
+	    params().addParam(new ExpFunction("debugEnabled"));
+	    params().addParam(new ExpFunction("debugAt"));
+	    params().addParam(new ExpFunction("setDebug"));
 	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
 	    params().addParam(new ExpFunction("setInterval"));
 	    params().addParam(new ExpFunction("clearInterval"));
@@ -749,6 +753,62 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 		tmp = "javascript";
 	    m_debugName = tmp;
 	    debugName(m_debugName);
+	}
+	else
+	    return false;
+    }
+    else if (oper.name() == YSTRING("debugLevel")) {
+	if (oper.number() == 0)
+	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)debugLevel()));
+	else if (oper.number() == 1) {
+	    ExpOperation* op = popValue(stack,context);
+	    if (op && op->isInteger())
+		debugLevel(op->valInteger());
+	    TelEngine::destruct(op);
+	}
+	else
+	    return false;
+    }
+    else if (oper.name() == YSTRING("debugEnabled")) {
+	if (oper.number() == 0)
+	    ExpEvaluator::pushOne(stack,new ExpOperation(debugEnabled()));
+	else if (oper.number() == 1) {
+	    ExpOperation* op = popValue(stack,context);
+	    if (op)
+		debugEnabled(op->valBoolean());
+	    TelEngine::destruct(op);
+	}
+	else
+	    return false;
+    }
+    else if (oper.name() == YSTRING("debugAt")) {
+	if (oper.number() == 1) {
+	    ExpOperation* op = popValue(stack,context);
+	    if (!(op && op->isInteger()))
+		return false;
+	    ExpEvaluator::pushOne(stack,new ExpOperation(debugAt(op->valInteger())));
+	    TelEngine::destruct(op);
+	}
+	else
+	    return false;
+    }
+    else if (oper.name() == YSTRING("setDebug")) {
+	if (oper.number() == 1) {
+	    ExpOperation* op = popValue(stack,context);
+	    if (!op)
+		return false;
+	    if (op->startSkip("level")) {
+		int dbg = debugLevel();
+		*op >> dbg;
+		debugLevel(dbg);
+	    }
+	    else if (*op == "reset")
+		debugChain(&__plugin);
+	    else if (*op == "engine")
+		debugCopy();
+	    else if (op->isBoolean())
+		debugEnabled(op->toBoolean(debugEnabled()));
+	    TelEngine::destruct(op);
 	}
 	else
 	    return false;

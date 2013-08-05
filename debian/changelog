@@ -1,4 +1,4 @@
-yate (4.3.1~svn5604) UNRELEASED; urgency=low
+yate (4.3.1~svn5606) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -645,8 +645,11 @@ yate (4.3.1~svn5604) UNRELEASED; urgency=low
     connect retry counter when received data not when connect succeeds.
     Fixes forever connect retry when connection is closed after accepted
     without receiving any data. Improved debug.
+  * Updated to SVN revision 5606: + Added Javascript methods for
+    enabling and controlling debug levels.  + Added settings to allow
+    matching inbound calls from broken registrars.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 03 Aug 2013 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 06 Aug 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

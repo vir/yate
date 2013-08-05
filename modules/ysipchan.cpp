@@ -632,6 +632,7 @@ class YateSIPLine : public String, public Mutex, public YateSIPPartyHolder
 public:
     YateSIPLine(const String& name);
     virtual ~YateSIPLine();
+    bool matchInbound(const String& addr, int port, const String& user) const;
     void setupAuth(SIPMessage* msg) const;
     SIPMessage* buildRegister(int expires) const;
     void login();
@@ -698,6 +699,8 @@ private:
     int m_partyPort;
     bool m_localDetect;
     bool m_keepTcpOffline;               // Don't reset party when offline
+    bool m_matchPort;
+    bool m_matchUser;
 };
 
 class YateSIPEndPoint : public Thread
@@ -7450,7 +7453,8 @@ YateSIPLine::YateSIPLine(const String& name)
       m_resend(0), m_keepalive(0), m_interval(0), m_alive(0),
       m_flags(-1), m_tr(0), m_marked(false), m_valid(false),
       m_localPort(0), m_partyPort(0), m_localDetect(false),
-      m_keepTcpOffline(s_lineKeepTcpOffline)
+      m_keepTcpOffline(s_lineKeepTcpOffline),
+      m_matchPort(true), m_matchUser(true)
 {
     m_partyMutex = this;
     DDebug(&plugin,DebugInfo,"YateSIPLine::YateSIPLine('%s') [%p]",c_str(),this);
@@ -7462,6 +7466,17 @@ YateSIPLine::~YateSIPLine()
     DDebug(&plugin,DebugInfo,"YateSIPLine::~YateSIPLine() '%s' [%p]",c_str(),this);
     s_lines.remove(this,false);
     logout();
+}
+
+bool YateSIPLine::matchInbound(const String& addr, int port, const String& user) const
+{
+    if (m_matchPort && port && (getPartyPort() != port))
+	return false;
+    if (getPartyAddr() != addr)
+	return false;
+    if (m_matchUser && user && (getUserName() != user))
+	return false;
+    return true;
 }
 
 void YateSIPLine::setupAuth(SIPMessage* msg) const
@@ -7796,6 +7811,8 @@ bool YateSIPLine::update(const Message& msg)
     chg = change(m_flags,msg.getIntValue(YSTRING("xsip_flags"),-1)) || chg;
     m_display = msg.getValue(YSTRING("description"));
     m_interval = msg.getIntValue(YSTRING("interval"),600);
+    m_matchPort = msg.getBoolValue(YSTRING("match_port"),true);
+    m_matchUser = msg.getBoolValue(YSTRING("match_user"),true);
     String tmp(msg.getValue(YSTRING("localaddress"),s_auto_nat ? "auto" : ""));
     // "auto", "yes", "enable" or "true" to autodetect local address
     m_localDetect = (tmp == YSTRING("auto")) || tmp.toBoolean(false);
@@ -8111,6 +8128,8 @@ YateSIPLine* SIPDriver::findLine(const String& addr, int port, const String& use
     ObjList* l = s_lines.skipNull();
     for (; l; l = l->skipNext()) {
 	YateSIPLine* sl = static_cast<YateSIPLine*>(l->get());
+	if (sl->matchInbound(addr,port,user))
+	    return sl;
 	if (sl->getPartyPort() && (sl->getPartyPort() == port) && (sl->getPartyAddr() == addr)) {
 	    if (user && (sl->getUserName() != user))
 		continue;

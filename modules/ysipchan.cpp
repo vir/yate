@@ -940,6 +940,7 @@ protected:
     virtual Message* buildChanRtp(RefObject* context);
     MimeSdpBody* createProvisionalSDP(Message& msg);
     virtual void mediaChanged(const SDPMedia& media);
+    virtual void dispatchingRtp(Message*& msg, SDPMedia* media);
     virtual void endDisconnect(const Message& msg, bool handled);
 
 private:
@@ -5315,6 +5316,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       m_honorDtmfDetect(s_honorDtmfDetect),
       m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
 {
+    setSdpDebug(this,this);
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
     m_tr->ref();
@@ -5488,6 +5490,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_honorDtmfDetect(s_honorDtmfDetect),
       m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
 {
+    setSdpDebug(this,this);
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
     m_targetid = target;
@@ -5982,6 +5985,17 @@ void YateSIPConnection::mediaChanged(const SDPMedia& media)
     }
     // Clear the data endpoint, will be rebuilt later if required
     clearEndpoint(media);
+}
+
+void YateSIPConnection::dispatchingRtp(Message*& msg, SDPMedia* media)
+{
+    if (!(msg && media))
+	return;
+    if (media->formats() || !(media->isAudio() || media->isVideo()))
+	return;
+    Debug(this,DebugInfo,"Not sending %s for empty media %s [%p]",
+	msg->c_str(),media->c_str(),this);
+    TelEngine::destruct(msg);
 }
 
 // Process SIP events belonging to this connection

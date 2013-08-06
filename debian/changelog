@@ -1,4 +1,4 @@
-yate (4.3.1~svn5606) UNRELEASED; urgency=low
+yate (4.3.1~svn5611) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -648,8 +648,14 @@ yate (4.3.1~svn5606) UNRELEASED; urgency=low
   * Updated to SVN revision 5606: + Added Javascript methods for
     enabling and controlling debug levels.  + Added settings to allow
     matching inbound calls from broken registrars.
+  * Updated to SVN revision 5611: + Notify SDPSession descendents before
+    dispatching chan.rtp. Improved debug.  + Stop chan.rtp dispatch for
+    audio or video media with empty formats list.  + Changed license
+    terms in each source file to reference an external file.  + Fixed
+    comment destroyed by script.  + Separated 32 and 64 bit constructors
+    and assignments for String.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 06 Aug 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 07 Aug 2013 02:19:22 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

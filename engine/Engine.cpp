@@ -1500,7 +1500,7 @@ int Engine::run()
 	XDebug(DebugAll,"Sleeping for %ld",t);
 	Thread::usleep(t);
 	Message* m = new Message("engine.timer",0,true);
-	m->addParam("time",String((int)m->msgTime().sec()));
+	m->addParam("time",String(m->msgTime().sec()));
 	if (nodeName())
 	    m->addParam("nodename",nodeName());
 	if (s_haltcode == -1) {

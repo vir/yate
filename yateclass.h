@@ -1613,7 +1613,7 @@ public:
      * Constructor from unsigned numeric code
      * @param code Code of the Unicode character
      */
-    inline explicit UChar(unsigned int code = 0)
+    inline explicit UChar(uint32_t code = 0)
 	: m_chr(code)
 	{ encode(); }
 
@@ -1621,7 +1621,7 @@ public:
      * Constructor from signed numeric code
      * @param code Code of the Unicode character
      */
-    inline explicit UChar(signed int code)
+    inline explicit UChar(int32_t code)
 	: m_chr((code < 0) ? 0 : code)
 	{ encode(); }
 
@@ -1646,7 +1646,7 @@ public:
      * @param code Character code to assign
      * @return Reference to this object
      */
-    inline UChar& operator=(unsigned int code)
+    inline UChar& operator=(uint32_t code)
 	{ m_chr = code; encode(); return *this; }
 
     /**
@@ -1661,7 +1661,7 @@ public:
      * Get the Unicode value of the character
      * @return Code of the character as defined by Unicode
      */
-    inline unsigned int code() const
+    inline uint32_t code() const
 	{ return m_chr; }
 
     /**
@@ -1685,11 +1685,11 @@ public:
      * @param overlong Accept overlong UTF-8 sequences (dangerous!)
      * @return True if an Unicode character was decoded from string
      */
-    bool decode(const char*& str, unsigned int maxChar = 0x10ffff, bool overlong = false);
+    bool decode(const char*& str, uint32_t maxChar = 0x10ffff, bool overlong = false);
 
 private:
     void encode();
-    u_int32_t m_chr;
+    uint32_t m_chr;
     char m_str[8];
 };
 
@@ -1723,16 +1723,28 @@ public:
     explicit String(char value, unsigned int repeat = 1);
 
     /**
-     * Creates a new initialized string from an integer.
+     * Creates a new initialized string from a 32 bit integer.
      * @param value Value to convert to string
      */
-    explicit String(int value);
+    explicit String(int32_t value);
 
     /**
-     * Creates a new initialized string from an unsigned int.
+     * Creates a new initialized string from a 32 bit unsigned int.
      * @param value Value to convert to string
      */
-    explicit String(unsigned int value);
+    explicit String(uint32_t value);
+
+    /**
+     * Creates a new initialized string from a 64 bit integer.
+     * @param value Value to convert to string
+     */
+    explicit String(int64_t value);
+
+    /**
+     * Creates a new initialized string from a 64 bit unsigned int.
+     * @param value Value to convert to string
+     */
+    explicit String(uint64_t value);
 
     /**
      * Creates a new initialized string from a boolean.
@@ -1821,7 +1833,7 @@ public:
      * @param overlong Accept overlong UTF-8 sequences (dangerous!)
      * @return Count of Unicode characters, -1 if not valid UTF-8
      */
-    static int lenUtf8(const char* value, unsigned int maxChar = 0x10ffff, bool overlong = false);
+    static int lenUtf8(const char* value, uint32_t maxChar = 0x10ffff, bool overlong = false);
 
     /**
      * Get the number of characters in the string assuming UTF-8 encoding
@@ -1829,7 +1841,7 @@ public:
      * @param overlong Accept overlong UTF-8 sequences (dangerous!)
      * @return Count of Unicode characters, -1 if not valid UTF-8
      */
-    inline int lenUtf8(unsigned int maxChar = 0x10ffff, bool overlong = false) const
+    inline int lenUtf8(uint32_t maxChar = 0x10ffff, bool overlong = false) const
 	{ return lenUtf8(m_string,maxChar,overlong); }
 
 
@@ -1840,7 +1852,7 @@ public:
      * @param overlong Accept overlong UTF-8 sequences (dangerous!)
      * @return Count of invalid UTF-8 sequences that were replaced
      */
-    int fixUtf8(const char* replace = 0, unsigned int maxChar = 0x10ffff, bool overlong = false);
+    int fixUtf8(const char* replace = 0, uint32_t maxChar = 0x10ffff, bool overlong = false);
 
     /**
      * Check if a string starts with UTF-8 Byte Order Mark
@@ -2053,12 +2065,14 @@ public:
 
     /**
      * Assignment operator.
+     * @param value Value to assign to the string
      */
     inline String& operator=(const String& value)
 	{ return operator=(value.c_str()); }
 
     /**
      * Assignment from String* operator.
+     * @param value Value to assign to the string
      * @see TelEngine::strcpy
      */
     inline String& operator=(const String* value)
@@ -2066,33 +2080,51 @@ public:
 
     /**
      * Assignment from char* operator.
+     * @param value Value to assign to the string
      * @see TelEngine::strcpy
      */
     String& operator=(const char* value);
 
     /**
      * Assignment operator for single characters.
+     * @param value Value to assign to the string
      */
     String& operator=(char value);
 
     /**
-     * Assignment operator for integers.
+     * Assignment operator for 32 bit integers.
+     * @param value Value to assign to the string
      */
-    String& operator=(int value);
+    String& operator=(int32_t value);
 
     /**
-     * Assignment operator for unsigned integers.
+     * Assignment operator for 32 bit unsigned integers.
+     * @param value Value to assign to the string
      */
-    String& operator=(unsigned int value);
+    String& operator=(uint32_t value);
+
+    /**
+     * Assignment operator for 64 bit integers.
+     * @param value Value to assign to the string
+     */
+    String& operator=(int64_t value);
+
+    /**
+     * Assignment operator for 64 bit unsigned integers.
+     * @param value Value to assign to the string
+     */
+    String& operator=(uint64_t value);
 
     /**
      * Assignment operator for booleans.
+     * @param value Value to assign to the string
      */
     inline String& operator=(bool value)
 	{ return operator=(boolText(value)); }
 
     /**
      * Appending operator for strings.
+     * @param value Value to assign to the string
      * @see TelEngine::strcat
      */
     inline String& operator+=(const char* value)
@@ -2100,21 +2132,37 @@ public:
 
     /**
      * Appending operator for single characters.
+     * @param value Value to append to the string
      */
     String& operator+=(char value);
 
     /**
-     * Appending operator for integers.
+     * Appending operator for 32 bit integers.
+     * @param value Value to append to the string
      */
-    String& operator+=(int value);
+    String& operator+=(int32_t value);
 
     /**
-     * Appending operator for unsigned integers.
+     * Appending operator for 32 bit unsigned integers.
+     * @param value Value to append to the string
      */
-    String& operator+=(unsigned int value);
+    String& operator+=(uint32_t value);
+
+    /**
+     * Appending operator for 64 bit integers.
+     * @param value Value to append to the string
+     */
+    String& operator+=(int64_t value);
+
+    /**
+     * Appending operator for 64 bit unsigned integers.
+     * @param value Value to append to the string
+     */
+    String& operator+=(uint64_t value);
 
     /**
      * Appending operator for booleans.
+     * @param value Value to append to the string
      */
     inline String& operator+=(bool value)
 	{ return operator+=(boolText(value)); }
@@ -2164,15 +2212,27 @@ public:
 	{ return operator+=(value); }
 
     /**
-     * Stream style appending operator for integers
+     * Stream style appending operator for 32 bit integers
      */
-    inline String& operator<<(int value)
+    inline String& operator<<(int32_t value)
 	{ return operator+=(value); }
 
     /**
-     * Stream style appending operator for unsigned integers
+     * Stream style appending operator for 32 bit unsigned integers
      */
-    inline String& operator<<(unsigned int value)
+    inline String& operator<<(uint32_t value)
+	{ return operator+=(value); }
+
+    /**
+     * Stream style appending operator for 64 bit integers
+     */
+    inline String& operator<<(int64_t value)
+	{ return operator+=(value); }
+
+    /**
+     * Stream style appending operator for 64 bit unsigned integers
+     */
+    inline String& operator<<(uint64_t value)
 	{ return operator+=(value); }
 
     /**

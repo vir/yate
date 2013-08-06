@@ -5,21 +5,18 @@
  * SDP media handling
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2009 Null Team
+ * Copyright (C) 2004-2013 Null Team
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This software is distributed under multiple licenses;
+ * see the COPYING file in the main directory for licensing
+ * information for this specific distribution.
+ *
+ * This use of this software may be subject to additional restrictions.
+ * See the LEGAL file in the main directory for details.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
 #ifndef __YATESDP_H
@@ -86,6 +83,13 @@ public:
      */
     inline bool isAudio() const
 	{ return m_audio; }
+
+    /**
+     * Check if this media type is video
+     * @return True if this media describe a video one
+     */
+    inline bool isVideo() const
+	{ return m_video; }
 
     /**
      * Check if a media parameter changed
@@ -287,6 +291,7 @@ public:
 
 private:
     bool m_audio;
+    bool m_video;
     bool m_modified;
     bool m_securable;
     // local rtp data changed flag
@@ -597,6 +602,31 @@ protected:
      */
     virtual void mediaChanged(const SDPMedia& media);
 
+    /**
+     * Dispatch rtp notification.
+     * This method is called before dispatching the message.
+     * Clear the message to stop dispatch
+     * @param msg Message to dispatch
+     * @param media Media for which the message is going to be dispatched
+     */
+    virtual void dispatchingRtp(Message*& msg, SDPMedia* media);
+
+    /**
+     * Set data used in debug 
+     * @param enabler The DebugEnabler to use (0 to to use the parser)
+     * @param ptr Pointer to print, 0 to use the session pointer
+     */
+    inline void setSdpDebug(DebugEnabler* enabler = 0, void* ptr = 0) {
+	    m_enabler = enabler ? enabler : (DebugEnabler*)m_parser;
+	    m_ptr = ptr ? ptr : (void*)this;
+	}
+
+    /**
+     * Print current media to output
+     * @param reason Reason to print
+     */
+    void printRtpMedia(const char* reason);
+
     SDPParser* m_parser;
     int m_mediaStatus;
     bool m_rtpForward;                   // Forward RTP flag
@@ -611,6 +641,10 @@ protected:
     String m_host;
     bool m_secure;
     int m_rfc2833;                       // Payload of RFC 2833 for remote party
+
+private:
+    DebugEnabler* m_enabler;             // Debug enabler used for output
+    void* m_ptr;                         // Pointer to show in debug messages
 };
 
 /**

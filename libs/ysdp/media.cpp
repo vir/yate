@@ -5,21 +5,18 @@
  * SDP media handling
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2009 Null Team
+ * Copyright (C) 2004-2013 Null Team
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This software is distributed under multiple licenses;
+ * see the COPYING file in the main directory for licensing
+ * information for this specific distribution.
+ *
+ * This use of this software may be subject to additional restrictions.
+ * See the LEGAL file in the main directory for details.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
 #include <yatesdp.h>
@@ -32,14 +29,16 @@ namespace TelEngine {
 SDPMedia::SDPMedia(const char* media, const char* transport, const char* formats,
     int rport, int lport)
     : NamedList(media),
-    m_audio(true), m_modified(false), m_securable(true), m_localChanged(false),
+    m_audio(true), m_video(false), m_modified(false), m_securable(true),
+    m_localChanged(false),
     m_transport(transport), m_formats(formats),
     m_rfc2833(String::boolText(false))
 {
     DDebug(DebugAll,"SDPMedia::SDPMedia('%s','%s','%s',%d,%d) [%p]",
 	media,transport,formats,rport,lport,this);
-    if (String::operator!=("audio")) {
+    if (String::operator!=(YSTRING("audio"))) {
 	m_audio = false;
+	m_video = String::operator==(YSTRING("video"));
 	m_suffix << "_" << media;
     }
     int q = m_formats.find(',');

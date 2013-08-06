@@ -4,21 +4,18 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2011 Null Team
+ * Copyright (C) 2011-2013 Null Team
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This software is distributed under multiple licenses;
+ * see the COPYING file in the main directory for licensing
+ * information for this specific distribution.
+ *
+ * This use of this software may be subject to additional restrictions.
+ * See the LEGAL file in the main directory for details.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
 #include "yatescript.h"
@@ -568,7 +565,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 
 	NamedString* last = 0;
 	while (!last) {
-	    last = params().getParam(String((int)--m_length));
+	    last = params().getParam(String(--m_length));
 	    if (m_length == 0)
 		break;
 	}
@@ -601,7 +598,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	JsArray* array = new JsArray(mutex());
 	// copy this array
 	for (long int i = 0; i < m_length; i++)
-	    array->params().addParam(params().getParam(String((int)i)));
+	    array->params().addParam(params().getParam(String(i)));
 	array->setLength(length());
 	// add parameters (JsArray of JsObject)
 	for (long int i = oper.number(); i; i--) {
@@ -612,13 +609,13 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    JsArray* ja = (JsArray*)obj->getObject(YATOM("JsArray"));
 	    if (ja) {
 		for (long int i = 0; i < ja->length(); i++)
-		    array->params().addParam(String((int)(i + array->length())),ja->params().getValue(String((int)i)));
+		    array->params().addParam(String(i + array->length()),ja->params().getValue(String(i)));
 		array->setLength(array->length() + ja->length());
 	    }
 	    else {
 		JsObject* jo = (JsObject*)obj->getObject(YATOM("JsObject"));
 		if (jo) {
-		    array->params().addParam(new NamedPointer(String((unsigned int)array->length()),jo));
+		    array->params().addParam(new NamedPointer(String(array->length()),jo));
 		    array->setLength(array->length() + 1);
 		    jo->ref();
 		}
@@ -643,7 +640,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	}
 	String result;
 	for (long int i = 0; i < length(); i++)
-	    result.append(params()[String((int)i)],separator);
+	    result.append(params()[String(i)],separator);
 	ExpEvaluator::pushOne(stack,new ExpOperation(result));
     }
     else if (oper.name() == YSTRING("reverse")) {
@@ -654,10 +651,10 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	String separator = ",";
 	String toCopy;
 	for (long int i = 0; i < length(); i++)
-	    toCopy.append(params()[String((int)i)],separator);
+	    toCopy.append(params()[String(i)],separator);
 	reversed.copyParams(params(),toCopy);
 	for (long int i = length(); i; i--)
-	    params().setParam(String((int)(length() - i)),reversed.getValue(String((int)(i - 1))));
+	    params().setParam(String(length() - i),reversed.getValue(String(i - 1)));
     }
     else if (oper.name() == YSTRING("shift")) {
 	// Removes the first element from an array and returns that element
@@ -677,8 +674,8 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    ExpEvaluator::pushOne(stack,new ExpOperation(params().getValue("0")));
 	    // shift : value n+1 becomes value n
 	    for (long int i = 0; i < length() - 1; i++)
-		params().setParam(String((int)i),params().getValue(String((int)i + 1)));
-	    params().clearParam(String((int)(length() - 1)));
+		params().setParam(String(i),params().getValue(String(i + 1)));
+	    params().clearParam(String(length() - 1));
 	    setLength(length() - 1);
 	}
     }
@@ -696,7 +693,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// shift array
 	long shift = oper.number();
 	for (long int i = length(); i; i--)
-	    params().setParam(String((int)(i - 1 + shift)),params().getValue(String((int)(i - 1))));
+	    params().setParam(String(i - 1 + shift),params().getValue(String(i - 1)));
 	for (long int i = shift; i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    ExpWrapper* obj = YOBJECT(ExpWrapper,op);
@@ -706,8 +703,8 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    if (!jo)
 		continue;
 	    jo->ref();
-	    params().clearParam(String((int)(i - 1)));
-	    params().setParam(new NamedPointer(String((int)(i - 1)),jo));
+	    params().clearParam(String(i - 1));
+	    params().setParam(new NamedPointer(String(i - 1),jo));
 	    TelEngine::destruct(op);
 	}
 	setLength(length() + shift);
@@ -727,7 +724,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	String separator = ",";
 	String result;
 	for (long int i = 0; i < length(); i++)
-	    result.append(params()[String((int)i)],separator);
+	    result.append(params()[String(i)],separator);
 	ExpEvaluator::pushOne(stack,new ExpOperation(result));
     } else if (oper.name() == YSTRING("indexOf")) {
 	ObjList args;
@@ -800,7 +797,7 @@ bool JsArray::runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject
     // TODO
     //JsArray* slice = new JsArray(mutex());
     for (long int i = begin; i < end; i++) {
-//	slice->params().addParam(new NamedString(String((int)(i - begin),
+//	slice->params().addParam(new NamedString(String(i - begin),
     }
     return true;
 }

@@ -329,11 +329,13 @@ void SDPParser::initialize(const NamedList* codecs, const NamedList* hacks, cons
 		m_audioFormats.append(fmt,",");
 	}
     }
-    if (!m_audioFormats) {
-	Debug(this,DebugWarn,"No default audio codecs, using defaults");
+    if (m_audioFormats)
+	Debug(this,DebugAll,"Initialized audio codecs: %s",m_audioFormats.c_str());
+    else {
 	m_audioFormats = "alaw,mulaw";
+	Debug(this,DebugWarn,"No default audio codecs, using defaults: %s",
+	    m_audioFormats.c_str());
     }
-    DDebug(this,DebugNote,"Default audio codecs: %s",m_audioFormats.c_str());
     m_ignorePort = m_hacks.getBoolValue("ignore_sdp_port",false);
     m_rfc2833 = 101;
     m_secure = false;

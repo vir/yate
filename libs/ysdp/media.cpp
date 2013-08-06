@@ -32,14 +32,16 @@ namespace TelEngine {
 SDPMedia::SDPMedia(const char* media, const char* transport, const char* formats,
     int rport, int lport)
     : NamedList(media),
-    m_audio(true), m_modified(false), m_securable(true), m_localChanged(false),
+    m_audio(true), m_video(false), m_modified(false), m_securable(true),
+    m_localChanged(false),
     m_transport(transport), m_formats(formats),
     m_rfc2833(String::boolText(false))
 {
     DDebug(DebugAll,"SDPMedia::SDPMedia('%s','%s','%s',%d,%d) [%p]",
 	media,transport,formats,rport,lport,this);
-    if (String::operator!=("audio")) {
+    if (String::operator!=(YSTRING("audio"))) {
 	m_audio = false;
+	m_video = String::operator==(YSTRING("video"));
 	m_suffix << "_" << media;
     }
     int q = m_formats.find(',');

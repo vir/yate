@@ -88,6 +88,13 @@ public:
 	{ return m_audio; }
 
     /**
+     * Check if this media type is video
+     * @return True if this media describe a video one
+     */
+    inline bool isVideo() const
+	{ return m_video; }
+
+    /**
      * Check if a media parameter changed
      * @return True if a media changed
      */
@@ -287,6 +294,7 @@ public:
 
 private:
     bool m_audio;
+    bool m_video;
     bool m_modified;
     bool m_securable;
     // local rtp data changed flag
@@ -597,6 +605,31 @@ protected:
      */
     virtual void mediaChanged(const SDPMedia& media);
 
+    /**
+     * Dispatch rtp notification.
+     * This method is called before dispatching the message.
+     * Clear the message to stop dispatch
+     * @param msg Message to dispatch
+     * @param media Media for which the message is going to be dispatched
+     */
+    virtual void dispatchingRtp(Message*& msg, SDPMedia* media);
+
+    /**
+     * Set data used in debug 
+     * @param enabler The DebugEnabler to use (0 to to use the parser)
+     * @param ptr Pointer to print, 0 to use the session pointer
+     */
+    inline void setSdpDebug(DebugEnabler* enabler = 0, void* ptr = 0) {
+	    m_enabler = enabler ? enabler : (DebugEnabler*)m_parser;
+	    m_ptr = ptr ? ptr : (void*)this;
+	}
+
+    /**
+     * Print current media to output
+     * @param reason Reason to print
+     */
+    void printRtpMedia(const char* reason);
+
     SDPParser* m_parser;
     int m_mediaStatus;
     bool m_rtpForward;                   // Forward RTP flag
@@ -611,6 +644,10 @@ protected:
     String m_host;
     bool m_secure;
     int m_rfc2833;                       // Payload of RFC 2833 for remote party
+
+private:
+    DebugEnabler* m_enabler;             // Debug enabler used for output
+    void* m_ptr;                         // Pointer to show in debug messages
 };
 
 /**

@@ -33,15 +33,19 @@ SDPSession::SDPSession(SDPParser* parser)
     : m_parser(parser), m_mediaStatus(MediaMissing),
       m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0),
-      m_secure(m_parser->m_secure), m_rfc2833(m_parser->m_rfc2833)
+      m_secure(m_parser->m_secure), m_rfc2833(m_parser->m_rfc2833),
+      m_enabler(0), m_ptr(0)
 {
+    setSdpDebug();
 }
 
 SDPSession::SDPSession(SDPParser* parser, NamedList& params)
     : m_parser(parser), m_mediaStatus(MediaMissing),
       m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
-      m_sdpSession(0), m_sdpVersion(0)
+      m_sdpSession(0), m_sdpVersion(0),
+      m_enabler(0), m_ptr(0)
 {
+    setSdpDebug();
     m_rtpForward = params.getBoolValue("rtp_forward");
     m_secure = params.getBoolValue("secure",parser->m_secure);
     m_rfc2833 = parser->m_rfc2833;
@@ -58,7 +62,7 @@ bool SDPSession::setMedia(ObjList* media)
 {
     if (media == m_rtpMedia)
 	return false;
-    DDebug(m_parser,DebugAll,"SDPSession::setMedia(%p) [%p]",media,this);
+    DDebug(m_enabler,DebugAll,"SDPSession::setMedia(%p) [%p]",media,m_ptr);
     ObjList* tmp = m_rtpMedia;
     m_rtpMedia = media;
     bool chg = m_rtpMedia != 0;
@@ -73,6 +77,7 @@ bool SDPSession::setMedia(ObjList* media)
 	}
 	TelEngine::destruct(tmp);
     }
+    printRtpMedia("Set media");
     return chg;
 }
 
@@ -111,9 +116,11 @@ void SDPSession::setRfc2833(const String& value)
 bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
     bool pick, RefObject* context)
 {
-    DDebug(m_parser,DebugAll,"SDPSession::dispatchRtp(%p,%s,%u,%u,%p) [%p]",
-	media,addr,start,pick,context,this);
+    DDebug(m_enabler,DebugAll,"SDPSession::dispatchRtp(%p,%s,%u,%u,%p) [%p]",
+	media,addr,start,pick,context,m_ptr);
     Message* m = buildChanRtp(media,addr,start,context);
+    if (m)
+	dispatchingRtp(m,media);
     if (!(m && Engine::dispatch(m))) {
 	TelEngine::destruct(m);
 	return false;
@@ -162,8 +169,8 @@ bool SDPSession::dispatchRtp(const char* addr, bool start, RefObject* context)
 {
     if (!m_rtpMedia)
 	return false;
-    DDebug(m_parser,DebugAll,"SDPSession::dispatchRtp(%s,%u,%p) [%p]",
-	addr,start,context,this);
+    DDebug(m_enabler,DebugAll,"SDPSession::dispatchRtp(%s,%u,%p) [%p]",
+	addr,start,context,m_ptr);
     bool ok = false;
     ObjList* o = m_rtpMedia->skipNull();
     while (o) {
@@ -173,9 +180,9 @@ bool SDPSession::dispatchRtp(const char* addr, bool start, RefObject* context)
 	    o = o->skipNext();
 	}
 	else {
-	    Debug(m_parser,DebugMild,
+	    Debug(m_enabler,DebugMild,
 		"Removing failed SDP media '%s' format '%s' from offer [%p]",
-		m->c_str(),m->format().safe(),this);
+		m->c_str(),m->format().safe(),m_ptr);
 	    o->remove();
 	    o = o->skipNull();
 	}
@@ -188,7 +195,7 @@ bool SDPSession::startRtp(RefObject* context)
 {
     if (m_rtpForward || !m_rtpMedia || (m_mediaStatus != MediaStarted))
 	return false;
-    DDebug(m_parser,DebugAll,"SDPSession::startRtp(%p) [%p]",context,this);
+    DDebug(m_enabler,DebugAll,"SDPSession::startRtp(%p) [%p]",context,m_ptr);
     bool ok = false;
     for (ObjList* o = m_rtpMedia->skipNull(); o; o = o->skipNext()) {
 	SDPMedia* m = static_cast<SDPMedia*>(o->get());
@@ -200,7 +207,7 @@ bool SDPSession::startRtp(RefObject* context)
 // Update from parameters. Build a default SDP if no media is found in params
 bool SDPSession::updateSDP(const NamedList& params)
 {
-    DDebug(m_parser,DebugAll,"SDPSession::updateSdp('%s') [%p]",params.c_str(),this);
+    DDebug(m_enabler,DebugAll,"SDPSession::updateSdp('%s') [%p]",params.c_str(),m_ptr);
     bool defaults = true;
     const char* sdpPrefix = params.getValue("osdp-prefix","osdp");
     ObjList* lst = 0;
@@ -278,7 +285,7 @@ bool SDPSession::updateSDP(const NamedList& params)
 // Return true if media changed
 bool SDPSession::updateRtpSDP(const NamedList& params)
 {
-    DDebug(m_parser,DebugAll,"SDPSession::updateRtpSDP(%s) [%p]",params.c_str(),this);
+    DDebug(m_enabler,DebugAll,"SDPSession::updateRtpSDP(%s) [%p]",params.c_str(),m_ptr);
     String addr;
     ObjList* tmp = updateRtpSDP(params,addr,m_rtpMedia);
     if (tmp) {
@@ -293,7 +300,7 @@ bool SDPSession::updateRtpSDP(const NamedList& params)
 // Use own list if given media list is 0
 MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 {
-    DDebug(m_parser,DebugAll,"SDPSession::createSDP('%s',%p) [%p]",addr,mediaList,this);
+    DDebug(m_enabler,DebugAll,"SDPSession::createSDP('%s',%p) [%p]",addr,mediaList,m_ptr);
     if (!mediaList)
 	mediaList = m_rtpMedia;
     // if we got no media descriptors we simply create no SDP
@@ -368,16 +375,16 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 			tmp = *mapping;
 			tmp >> "=" >> payload;
 			found = true;
-			XDebug(m_parser,DebugAll,"RTP mapped payload %d for '%s' [%p]",
-			    payload,s->c_str(),this);
+			XDebug(m_enabler,DebugAll,"RTP mapped payload %d for '%s' [%p]",
+			    payload,s->c_str(),m_ptr);
 			break;
 		    }
 		    String tmp2 = *mapping;
 		    int pload;
 		    tmp2 >> "=" >> pload;
 		    if (payload == pload) {
-			XDebug(m_parser,DebugAll,"RTP conflict for payload %d, allocating new [%p]",
-			    payload,this);
+			XDebug(m_enabler,DebugAll,"RTP conflict for payload %d, allocating new [%p]",
+			    payload,m_ptr);
 			payload = -1;
 			u_int32_t bmap = 0;
 			for (ObjList* sl = map; sl; sl = sl->next()) {
@@ -471,12 +478,12 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 
 	if (frm.null()) {
 	    if (m->isAudio() || !m->fmtList()) {
-		Debug(m_parser,DebugMild,"No formats for '%s', excluding from SDP [%p]",
-		    m->c_str(),this);
+		Debug(m_enabler,DebugMild,"No formats for '%s', excluding from SDP [%p]",
+		    m->c_str(),m_ptr);
 		continue;
 	    }
-	    Debug(m_parser,DebugInfo,"Assuming formats '%s' for media '%s' [%p]",
-		m->fmtList(),m->c_str(),this);
+	    Debug(m_enabler,DebugInfo,"Assuming formats '%s' for media '%s' [%p]",
+		m->fmtList(),m->c_str(),m_ptr);
 	    frm << " " << m->fmtList();
 	    // brutal but effective
 	    for (char* p = const_cast<char*>(frm.c_str()); *p; p++) {
@@ -594,8 +601,8 @@ void SDPSession::updateFormats(const NamedList& msg, bool changeMedia)
 	    SDPMedia* rtp = static_cast<SDPMedia*>(m_rtpMedia->operator[](tmp));
 	    if (!rtp)
 		continue;
-	    Debug(m_parser,DebugNote,"Removing disabled media '%s' [%p]",
-		tmp.c_str(),this);
+	    Debug(m_enabler,DebugNote,"Removing disabled media '%s' [%p]",
+		tmp.c_str(),m_ptr);
 	    m_rtpMedia->remove(rtp,false);
 	    mediaChanged(*rtp);
 	    TelEngine::destruct(rtp);
@@ -622,12 +629,12 @@ void SDPSession::updateFormats(const NamedList& msg, bool changeMedia)
 	SDPMedia* rtp = static_cast<SDPMedia*>(m_rtpMedia->operator[](tmp));
 	if (rtp) {
 	    if (rtp->update(*p))
-		Debug(m_parser,DebugNote,"Formats for '%s' changed to '%s' [%p]",
-		    tmp.c_str(),rtp->formats().c_str(),this);
+		Debug(m_enabler,DebugNote,"Formats for '%s' changed to '%s' [%p]",
+		    tmp.c_str(),rtp->formats().c_str(),m_ptr);
 	}
 	else if (*p) {
-	    Debug(m_parser,DebugNote,"Got formats '%s' for absent media '%s' [%p]",
-		p->c_str(),tmp.c_str(),this);
+	    Debug(m_enabler,DebugNote,"Got formats '%s' for absent media '%s' [%p]",
+		p->c_str(),tmp.c_str(),m_ptr);
 	    if (trans) {
 		rtp = new SDPMedia(tmp,trans,p->c_str());
 		m_rtpMedia->append(rtp);
@@ -754,7 +761,7 @@ Message* SDPSession::buildChanRtp(SDPMedia* media, const char* addr, bool start,
 		    m->addParam("crypto_params",sdes.matchString(4));
 	    }
 	    else
-		Debug(m_parser,DebugWarn,"Invalid SDES: '%s' [%p]",sdes.c_str(),this);
+		Debug(m_enabler,DebugWarn,"Invalid SDES: '%s' [%p]",sdes.c_str(),m_ptr);
 	}
 	else if (media->securable())
 	    m->addParam("secure",String::boolText(true));
@@ -867,8 +874,29 @@ ObjList* SDPSession::updateRtpSDP(const NamedList& params, String& rtpAddr, ObjL
 // Media changed notification.
 void SDPSession::mediaChanged(const SDPMedia& media)
 {
-    XDebug(m_parser,DebugAll,"SDPSession::mediaChanged('%s' %p)%s%s [%p]",
-	media.c_str(),&media,(media.id() ? " id=" : ""),media.id().safe(),this);
+    XDebug(m_enabler,DebugAll,"SDPSession::mediaChanged('%s' %p)%s%s [%p]",
+	media.c_str(),&media,(media.id() ? " id=" : ""),media.id().safe(),m_ptr);
+}
+
+// Dispatch rtp notification
+void SDPSession::dispatchingRtp(Message*& msg, SDPMedia* media)
+{
+    XDebug(m_enabler,DebugAll,"SDPSession::dispatchingRtp(%p,%p) [%p]",msg,media,m_ptr);
+}
+
+// Print current media to output
+void SDPSession::printRtpMedia(const char* reason)
+{
+    if (!(m_rtpMedia && m_enabler->debugAt(DebugAll)))
+	return;
+    String tmp;
+    for (ObjList* o = m_rtpMedia->skipNull(); o; o = o->skipNext()) {
+    	SDPMedia* m = static_cast<SDPMedia*>(o->get());
+	if (tmp)
+	    tmp << " ";
+	tmp << m->c_str() << "=" << m->formats();
+    }
+    Debug(m_enabler,DebugAll,"%s: %s [%p]",reason,tmp.c_str(),m_ptr);
 }
 
 };   // namespace TelEngine

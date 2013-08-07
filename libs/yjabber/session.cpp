@@ -2146,7 +2146,7 @@ bool JGSession1::sendStreamHosts(const ObjList& hosts, String* stanzaId)
 	return false;
     XmlElement* xml = XMPPUtils::createIq(XMPPUtils::IqSet,m_local,m_remote,0);
     xml->addChild(JGStreamHost::buildHosts(hosts,m_sid));
-    return sendStanza(xml,stanzaId,true,false,m_engine->streamHostTimeout());
+    return sendStanza(xml,stanzaId,true,false,(unsigned int)m_engine->streamHostTimeout());
 }
 
 // Send a stanza with a stream host used

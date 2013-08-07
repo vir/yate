@@ -1286,7 +1286,7 @@ bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, GenObje
 	&stack,oper.name().c_str(),oper.number(),context,(void*)m_extender);
     if (oper.name() == YSTRING("chr")) {
 	String res;
-	for (long int i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* o = popValue(stack,context);
 	    if (!o)
 		return gotError("ExpEvaluator stack underflow",oper.lineNumber());
@@ -1506,7 +1506,7 @@ ExpOperation* ExpOperation::clone(const char* name) const
 ExpOperation* ExpFunction::clone(const char* name) const
 {
     XDebug(DebugInfo,"ExpFunction::clone('%s') [%p]",name,this);
-    ExpFunction* op = new ExpFunction(name,number());
+    ExpFunction* op = new ExpFunction(name,(long int)number());
     op->lineNumber(lineNumber());
     return op;
 }
@@ -1632,7 +1632,7 @@ unsigned int TableEvaluator::evalLimit(GenObject* context)
 	    const ExpOperation* o = static_cast<const ExpOperation*>(first->get());
 	    if (o->opcode() != ExpEvaluator::OpcPush)
 		break;
-	    int lim = o->number();
+	    int lim = (int)o->number();
 	    if (lim < 0)
 		lim = 0;
 	    m_limitVal = lim;

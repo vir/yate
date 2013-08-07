@@ -588,7 +588,7 @@ bool JsContext::runFunction(ObjList& stack, const ExpOperation& oper, GenObject*
 	    int base = 0;
 	    ExpOperation* op2 = static_cast<ExpOperation*>(args[1]);
 	    if (op2) {
-		base = op2->valInteger();
+		base = (int)op2->valInteger();
 		if (base < 2 || base > 36)
 		    base = 0;
 	    }
@@ -628,7 +628,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	if (extractArgs(stack,oper,context,args)) {
 	    ExpOperation* op = static_cast<ExpOperation*>(args[0]);
 	    if (op && op->isInteger())
-		idx = op->number();
+		idx = (int)op->number();
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(String(str->at(idx))));
 	return true;
@@ -640,7 +640,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	    const String* what = static_cast<String*>(args[0]);
 	    if (what) {
 		ExpOperation* from = static_cast<ExpOperation*>(args[1]);
-		int offs = (from && from->isInteger()) ? from->number() : 0;
+		int offs = (from && from->isInteger()) ? (int)from->number() : 0;
 		if (offs < 0)
 		    offs = 0;
 		idx = str->find(*what,offs);
@@ -656,10 +656,10 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	if (extractArgs(stack,oper,context,args)) {
 	    ExpOperation* op = static_cast<ExpOperation*>(args[0]);
 	    if (op && op->isInteger())
-		offs = op->number();
+		offs = (int)op->number();
 	    op = static_cast<ExpOperation*>(args[1]);
 	    if (op && op->isInteger()) {
-		len = op->number();
+		len = (int)op->number();
 		if (len < 0)
 		    len = 0;
 	    }
@@ -789,7 +789,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	ExpOperation* op = YOBJECT(ExpOperation,str);
 	if (op && op->isInteger()) {
 	    ExpOperation* tmp = static_cast<ExpOperation*>(args[0]);
-	    int radix = tmp ? tmp->valInteger() : 0;
+	    int radix = tmp ? (int)tmp->valInteger() : 0;
 	    if (radix < 2 || radix > 36)
 		radix = 10;
 	    static const char s_base[] = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -807,7 +807,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 		s = buf + s;
 	    } while ((n = n / radix));
 	    tmp = static_cast<ExpOperation*>(args[1]);
-	    int len = tmp ? tmp->valInteger() : 0;
+	    int len = tmp ? (int)tmp->valInteger() : 0;
 	    if (len > 1) {
 		if (neg)
 		    len--;
@@ -905,7 +905,7 @@ bool JsCode::link()
 	const ExpOperation* l = static_cast<const ExpOperation*>(m_linked[i]);
 	if (!l || l->opcode() != OpcLabel)
 	    continue;
-	long int lbl = l->number();
+	long int lbl = (long int)l->number();
 	if (lbl >= 0 && l->barrier())
 	    entries++;
 	for (unsigned int j = 0; j < n; j++) {
@@ -938,7 +938,7 @@ bool JsCode::link()
 	for (unsigned int j = 0; j < n; j++) {
 	    const ExpOperation* l = static_cast<const ExpOperation*>(m_linked[j]);
 	    if (l && l->barrier() && l->opcode() == OpcLabel && l->number() >= 0) {
-		m_entries[e].number = l->number();
+		m_entries[e].number = (long int)l->number();
 		m_entries[e++].index = j;
 	    }
 	}
@@ -1372,7 +1372,7 @@ class ParseLoop : public ParseNested
 {
     friend class JsCode;
 public:
-    inline ParseLoop(JsCode* code, GenObject* nested, JsCode::JsOpcode oper, long int lblCont, long int lblBreak)
+    inline ParseLoop(JsCode* code, GenObject* nested, JsCode::JsOpcode oper, int64_t lblCont, int64_t lblBreak)
 	: ParseNested(code,nested,oper),
 	  m_lblCont(lblCont), m_lblBreak(lblBreak)
 	{ }
@@ -1537,9 +1537,9 @@ bool JsCode::parseSwitch(ParsePoint& expr, GenObject* nested)
 	ExpOperation* j = static_cast<ExpOperation*>(parseStack.m_cases.remove(false));
 	if (!j)
 	    break;
-	addOpcode(c,(int64_t)c->lineNumber());
+	addOpcode(c,c->lineNumber());
 	addOpcode((Opcode)OpcCase);
-	addOpcode(j,(int64_t)c->lineNumber());
+	addOpcode(j,c->lineNumber());
     }
     // if no case matched drop the expression
     addOpcode(OpcDrop);
@@ -1715,7 +1715,7 @@ bool JsCode::parseFuncDef(ParsePoint& expr, bool publish)
     expr++;
     addOpcode((Opcode)OpcReturn);
     addOpcode(OpcLabel,jump->number());
-    JsFunction* obj = new JsFunction(0,name,&args,lbl->number(),this);
+    JsFunction* obj = new JsFunction(0,name,&args,(long int)lbl->number(),this);
     addOpcode(new ExpWrapper(obj,name));
     if (publish && name && obj->ref())
 	m_globals.append(new ExpWrapper(obj,name));
@@ -2132,7 +2132,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		}
 		if (!op)
 		    break;
-		ExpFunction ctr(op->name(),op->number());
+		ExpFunction ctr(op->name(),(long int)op->number());
 		ctr.lineNumber(oper.lineNumber());
 		TelEngine::destruct(op);
 		if (!runOperation(stack,ctr,context))
@@ -2165,7 +2165,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		bool ok = false;
 		while (ExpOperation* drop = popAny(stack)) {
 		    ok = drop->barrier() && (drop->opcode() == OpcFunc);
-		    long int lbl = drop->number();
+		    long int lbl = (long int)drop->number();
 		    if (ok && (lbl < -1)) {
 			lbl = -lbl;
 			XDebug(this,DebugInfo,"Returning this=%p from constructor '%s'",
@@ -2350,13 +2350,13 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		case OpcJump:
 		case OpcJumpTrue:
 		case OpcJumpFalse:
-		    if (!jumpToLabel(oper.number(),context))
+		    if (!jumpToLabel((long int)oper.number(),context))
 			return gotError("Label not found",oper.lineNumber());
 		    break;
 		case OpcJRel:
 		case OpcJRelTrue:
 		case OpcJRelFalse:
-		    if (!jumpRelative(oper.number(),context))
+		    if (!jumpRelative((long int)oper.number(),context))
 			return gotError("Relative jump failed",oper.lineNumber());
 		    break;
 		default:

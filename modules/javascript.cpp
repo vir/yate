@@ -552,10 +552,10 @@ bool JsEngAsync::run()
 {
     switch (m_oper) {
 	case AsyncSleep:
-	    Thread::sleep(m_val);
+	    Thread::sleep((unsigned int)m_val);
 	    break;
 	case AsyncUsleep:
-	    Thread::usleep(m_val);
+	    Thread::usleep((unsigned long)m_val);
 	    break;
 	case AsyncYield:
 	    Thread::yield();
@@ -572,7 +572,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 {
     if (oper.name() == YSTRING("output")) {
 	String str;
-	for (long int i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (str)
 		str = *op + " " + str;
@@ -586,12 +586,12 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
     else if (oper.name() == YSTRING("debug")) {
 	int level = DebugNote;
 	String str;
-	for (long int i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (!op)
 		continue;
 	    if ((i == 1) && oper.number() > 1 && op->isInteger())
-		level = op->number();
+		level = (int)op->number();
 	    else if (*op) {
 		if (str)
 		    str = *op + " " + str;
@@ -615,14 +615,14 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	int level = -1;
 	String info;
 	String str;
-	for (long int i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (!op)
 		continue;
 	    if (i == 1) {
 		if (level < 0) {
 		    if (op->isInteger())
-			level = op->number();
+			level = (int)op->number();
 		    else
 			return false;
 		}
@@ -630,7 +630,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 		    info = *op;
 	    }
 	    else if ((i == 2) && oper.number() > 2 && op->isInteger())
-		level = op->number();
+		level = (int)op->number();
 	    else if (*op) {
 		if (str)
 		    str = *op + " " + str;
@@ -760,7 +760,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	else if (oper.number() == 1) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (op && op->isInteger())
-		debugLevel(op->valInteger());
+		debugLevel((int)op->valInteger());
 	    TelEngine::destruct(op);
 	}
 	else
@@ -783,7 +783,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    ExpOperation* op = popValue(stack,context);
 	    if (!(op && op->isInteger()))
 		return false;
-	    ExpEvaluator::pushOne(stack,new ExpOperation(debugAt(op->valInteger())));
+	    ExpEvaluator::pushOne(stack,new ExpOperation(debugAt((int)op->valInteger())));
 	    TelEngine::destruct(op);
 	}
 	else
@@ -845,7 +845,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	if (!extractArgs(stack,oper,context,args))
 	    return false;
 	ExpOperation* id = static_cast<ExpOperation*>(args[0]);
-	bool ret = m_worker->removeEvent(id->valInteger(),oper.name() == YSTRING("clearInterval"));
+	bool ret = m_worker->removeEvent((unsigned int)id->valInteger(),oper.name() == YSTRING("clearInterval"));
 	ExpEvaluator::pushOne(stack,new ExpOperation(ret));
     }
     else
@@ -891,7 +891,7 @@ bool JsShared::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpOperation* modulo = static_cast<ExpOperation*>(args[1]);
 	int mod = 0;
 	if (modulo && modulo->isInteger())
-	    mod = modulo->number();
+	    mod = (int)modulo->number();
 	if (mod > 1)
 	    mod--;
 	else
@@ -911,7 +911,7 @@ bool JsShared::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpOperation* modulo = static_cast<ExpOperation*>(args[1]);
 	int mod = 0;
 	if (modulo && modulo->isInteger())
-	    mod = modulo->number();
+	    mod = (int)modulo->number();
 	if (mod > 1)
 	    mod--;
 	else
@@ -1107,7 +1107,7 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	unsigned int priority = 100;
 	if (prio) {
 	    if (prio->isInteger() && (prio->number() >= 0))
-		priority = prio->number();
+		priority = (unsigned int)prio->number();
 	    else
 		return false;
 	}
@@ -1277,7 +1277,7 @@ void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* co
 	    // [ val1, val2, val3 ]
 	    int idx = -1;
 	    if (col->isInteger())
-		idx = col->number();
+		idx = (int)col->number();
 	    else {
 		for (int i = 0; i < cols; i++) {
 		    GenObject* o = arr->get(i,0);
@@ -1333,7 +1333,7 @@ void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* conte
 	if (row) {
 	    // { col1: val1, col2: val2 }
 	    if (row->isInteger()) {
-		int idx = row->number() + 1;
+		int idx = (int)row->number() + 1;
 		if (idx > 0 && idx <= rows) {
 		    JsObject* jso = new JsObject("Object",mutex());
 		    for (int c = 0; c < cols; c++) {
@@ -1381,11 +1381,11 @@ void JsMessage::getResult(ObjList& stack, const ExpOperation& row, const ExpOper
     if (arr && arr->getRows() && row.isInteger()) {
 	int rows = arr->getRows() - 1;
 	int cols = arr->getColumns();
-	int r = row.number();
+	int r = (int)row.number();
 	if (r >= 0 && r < rows) {
 	    int c = -1;
 	    if (col.isInteger())
-		c = col.number();
+		c = (int)col.number();
 	    else {
 		for (int i = 0; i < cols; i++) {
 		    GenObject* o = arr->get(i,0);
@@ -1615,7 +1615,7 @@ bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	    return false;
 	}
 	bool ok = fTime->isInteger() && (fTime->number() >= 0) &&
-	    File::setFileTime(*fName,fTime->number());
+	    File::setFileTime(*fName,(unsigned int)fTime->number());
 	TelEngine::destruct(fTime);
 	TelEngine::destruct(fName);
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));

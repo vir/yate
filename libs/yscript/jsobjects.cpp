@@ -75,7 +75,7 @@ public:
 protected:
     inline JsDate(Mutex* mtx, u_int64_t msecs, bool local = false)
 	: JsObject("Date",mtx),
-	  m_time(msecs / 1000), m_msec(msecs % 1000), m_offs(Time::timeZone())
+	  m_time((unsigned int)(msecs / 1000)), m_msec((unsigned int)(msecs % 1000)), m_offs(Time::timeZone())
 	{ if (local) m_time -= m_offs; }
     inline JsDate(Mutex* mtx, const char* name, unsigned int time, unsigned int msec, unsigned int offs)
 	: JsObject(mtx,name),
@@ -372,7 +372,7 @@ bool JsObject::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpEvaluator::pushOne(stack,new ExpOperation(params()));
     else if (oper.name() == YSTRING("hasOwnProperty")) {
 	bool ok = true;
-	for (long int i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (!op)
 		continue;
@@ -419,11 +419,11 @@ int JsObject::extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& ope
 {
     if (!obj || !oper.number())
 	return 0;
-    for (long int i = oper.number(); i;  i--) {
+    for (int i = (int)oper.number(); i;  i--) {
 	ExpOperation* op = obj->popValue(stack,context);
 	arguments.insert(op);
     }
-    return oper.number();
+    return (int)oper.number();
 }
 
 // Static helper method that deep copies all parameters
@@ -597,19 +597,19 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    return false;
 	JsArray* array = new JsArray(mutex());
 	// copy this array
-	for (int32_t i = 0; i < m_length; i++)
+	for (int i = 0; i < m_length; i++)
 	    array->params().addParam(params().getParam(String(i)));
 	array->setLength(length());
 	// add parameters (JsArray of JsObject)
-	for (int32_t i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    ExpWrapper* obj = YOBJECT(ExpWrapper,op);
 	    if (!obj)
 		continue;
 	    JsArray* ja = (JsArray*)obj->getObject(YATOM("JsArray"));
 	    if (ja) {
-		for (int32_t i = 0; i < ja->length(); i++)
-		    array->params().addParam(String(i + array->length()),ja->params().getValue(String(i)));
+		for (int j = 0; j < ja->length(); j++)
+		    array->params().addParam(String(j + array->length()),ja->params().getValue(String(j)));
 		array->setLength(array->length() + ja->length());
 	    }
 	    else {
@@ -691,7 +691,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// myFish after: ["drum", "lion", "angel", "clown"]
 	// New length: 4
 	// shift array
-	int32_t shift = oper.number();
+	int32_t shift = (int32_t)oper.number();
 	for (int32_t i = length(); i; i--)
 	    params().setParam(String(i - 1 + shift),params().getValue(String(i - 1)));
 	for (int32_t i = shift; i; i--) {
@@ -780,11 +780,11 @@ bool JsArray::runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject
     //	       < 0 offset from the end of the array
     // end missing -> go to end of array  
     int begin = length(), end = length();
-    for (long int i = oper.number(); i; i--) {
+    for (int i = (int)oper.number(); i; i--) {
 	ExpOperation* op = popValue(stack,context);
 	if (op->isInteger()) {
 	    end = begin;
-	    begin = op->number();
+	    begin = (int)op->number();
 	}
 	TelEngine::destruct(op);
     }
@@ -814,7 +814,7 @@ bool JsArray::runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObjec
 	return false;
     // get start index
     ExpOperation* op = static_cast<ExpOperation*>(arguments[0]);
-    int begin = op->number();
+    int begin = (int)op->number();
     if (begin < 0)
 	begin = length() + begin;
     // get count to delete
@@ -822,7 +822,7 @@ bool JsArray::runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObjec
     if (arguments.count() > 1) {
 	// get count
 	op = static_cast<ExpOperation*>(arguments[1]);
-	count = op->number();
+	count = (int)op->number();
     }
 
     // remove elements
@@ -965,7 +965,7 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	if (!oper.number())
 	    return false;
 	int64_t n = 0;
-	for (long int i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (op->isInteger())
 		n = op->number();
@@ -979,7 +979,7 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	if (!oper.number())
 	    return false;
 	int64_t n = LLONG_MIN;
-	for (long int i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (op->isInteger() && op->number() > n)
 		n = op->number();
@@ -991,7 +991,7 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	if (!oper.number())
 	    return false;
 	int64_t n = LLONG_MAX;
-	for (long int i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (op->isInteger() && op->number() < n)
 		n = op->number();
@@ -1055,7 +1055,7 @@ JsObject* JsDate::runConstructor(ObjList& stack, const ExpOperation& oper, GenOb
 		    ExpOperation* val = static_cast<ExpOperation*>(args[i]);
 		    if (val) {
 			if (val->isInteger())
-			    parts[i] = val->number();
+			    parts[i] = (int)val->number();
 			else
 			    return 0;
 		    }

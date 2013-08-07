@@ -354,7 +354,7 @@ bool ExpireHandler::received(Message &msg)
 {
     if ((s_count = (s_count+1) % 30)) // Check for timeouts once at 30 seconds
 	return false;
-    u_int64_t time = msg.msgTime().sec();
+    unsigned int time = msg.msgTime().sec();
     Lock lock(s_mutex);
     int count = s_accounts.sections();
     for (int i = 0;i < count;) {

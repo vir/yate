@@ -53,7 +53,7 @@
 				ProgramDataBaseFileName=".\Debug\miniwebrtc/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
-				DebugInformationFormat="4"
+				DebugInformationFormat="3"
 				CompileAs="0"
 			/>
 			<Tool
@@ -211,6 +211,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\arith_routines.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\arith_routines.c"
 				>
 				<FileConfiguration
@@ -231,10 +235,6 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
-			</File>
-			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\arith_routines.c"
-				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\arith_routines_hist.c"
@@ -263,6 +263,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\arith_routines_logist.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\arith_routines_logist.c"
 				>
 				<FileConfiguration
@@ -285,10 +289,6 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\arith_routines_logist.c"
-				>
-			</File>
-			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\audio_buffer.cc"
 				>
 			</File>
@@ -306,10 +306,6 @@
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\auto_correlation.c"
-				>
-			</File>
-			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\bandwidth_estimator.c"
 				>
 			</File>
 			<File
@@ -333,6 +329,10 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\bandwidth_estimator.c"
+				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\bw_expand.c"
@@ -463,10 +463,6 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\decode_bwe.c"
-				>
-			</File>
-			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\decode_bwe.c"
 				>
 				<FileConfiguration
@@ -487,6 +483,10 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\decode_bwe.c"
+				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\decode_plc.c"
@@ -545,10 +545,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\encode.c"
-				>
-			</File>
-			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\encode.c"
 				>
 				<FileConfiguration
@@ -593,6 +589,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\encode.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\encode_lpc_swb.c"
 				>
 			</File>
@@ -617,6 +617,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\entropy_coding.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\entropy_coding.c"
 				>
 				<FileConfiguration
@@ -637,10 +641,6 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
-			</File>
-			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\entropy_coding.c"
-				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\fft.c"
@@ -693,33 +693,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\filterbank_tables.c"
-				>
-				<FileConfiguration
-					Name="Debug|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-					/>
-				</FileConfiguration>
-			</File>
-			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\filterbank_tables.c"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\filterbanks.c"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\filterbank_tables.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -743,6 +721,28 @@
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\filterbanks.c"
 				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\filterbanks.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\filtered_cb_vecs.c"
@@ -849,6 +849,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\lattice.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\lattice.c"
 				>
 				<FileConfiguration
@@ -869,10 +873,6 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
-			</File>
-			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\lattice.c"
-				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\lattice_c.c"
@@ -993,10 +993,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_estimator.c"
-				>
-			</File>
-			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\pitch_estimator.c"
 				>
 				<FileConfiguration
@@ -1017,6 +1013,10 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_estimator.c"
+				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_filter.c"
@@ -1045,10 +1045,6 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_gain_tables.c"
-				>
-			</File>
-			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\pitch_gain_tables.c"
 				>
 				<FileConfiguration
@@ -1071,7 +1067,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_lag_tables.c"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_gain_tables.c"
 				>
 			</File>
 			<File
@@ -1095,6 +1091,10 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_lag_tables.c"
+				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\poly_to_lsf.c"
@@ -1177,6 +1177,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\spectrum_ar_model_tables.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\spectrum_ar_model_tables.c"
 				>
 				<FileConfiguration
@@ -1197,10 +1201,6 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
-			</File>
-			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\spectrum_ar_model_tables.c"
-				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\spl_sqrt.c"
@@ -1261,10 +1261,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\transform.c"
-				>
-			</File>
-			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\transform.c"
 				>
 				<FileConfiguration
@@ -1285,6 +1281,10 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\transform.c"
+				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\unpack_bits.c"
@@ -1400,11 +1400,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\bandwidth_estimator.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\bandwidth_estimator.h"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\bandwidth_estimator.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\bandwidth_estimator.h"
 				>
 			</File>
 			<File
@@ -1444,11 +1444,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\codec.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\codec.h"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\codec.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\codec.h"
 				>
 			</File>
 			<File
@@ -1568,11 +1568,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\fft.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\fft.h"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\fft.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\fft.h"
 				>
 			</File>
 			<File
@@ -1588,11 +1588,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\filterbank_tables.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\filterbank_tables.h"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\filterbank_tables.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\filterbank_tables.h"
 				>
 			</File>
 			<File
@@ -1708,11 +1708,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\lpc_tables.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\lpc_tables.h"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\lpc_tables.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\lpc_tables.h"
 				>
 			</File>
 			<File
@@ -1784,19 +1784,19 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_gain_tables.h"
-				>
-			</File>
-			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\pitch_gain_tables.h"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_lag_tables.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_gain_tables.h"
 				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\pitch_lag_tables.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_lag_tables.h"
 				>
 			</File>
 			<File
@@ -1900,11 +1900,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\structs.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\structs.h"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\structs.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\structs.h"
 				>
 			</File>
 			<File

@@ -50,7 +50,7 @@ private:
     bool m_swap;
     unsigned m_rate;
     unsigned m_brate;
-    long m_repeatPos;
+    int64_t m_repeatPos;
     unsigned m_total;
     u_int64_t m_time;
     String m_id;

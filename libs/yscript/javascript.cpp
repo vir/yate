@@ -580,7 +580,7 @@ bool JsContext::runFunction(ObjList& stack, const ExpOperation& oper, GenObject*
 	return true;
     }
     if (name == YSTRING("parseInt")) {
-	long int val = ExpOperation::nonInteger();
+	int64_t val = ExpOperation::nonInteger();
 	ObjList args;
 	extractArgs(stack,oper,context,args);
 	ExpOperation* op1 = static_cast<ExpOperation*>(args[0]);
@@ -592,7 +592,7 @@ bool JsContext::runFunction(ObjList& stack, const ExpOperation& oper, GenObject*
 		if (base < 2 || base > 36)
 		    base = 0;
 	    }
-	    val = op1->trimSpaces().toLong(val,base);
+	    val = op1->trimSpaces().toInt64(val,base);
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(val));
 	return true;
@@ -646,7 +646,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 		idx = str->find(*what,offs);
 	    }
 	}
-	ExpEvaluator::pushOne(stack,new ExpOperation((long int)idx));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)idx));
 	return true;
     }
     if (name == YSTRING("substr")) {
@@ -685,7 +685,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 		JsArray* jsa = new JsArray(mutex());
 		for (int i = 0; i <= buf.matchCount(); i++)
 		    jsa->push(new ExpOperation(buf.matchString(i)));
-		jsa->params().addParam(new ExpOperation((long int)buf.matchOffset(),"index"));
+		jsa->params().addParam(new ExpOperation((int64_t)buf.matchOffset(),"index"));
 		if (rexp)
 		    jsa->params().addParam(wrap->clone("input"));
 		ExpEvaluator::pushOne(stack,new ExpWrapper(jsa));
@@ -793,7 +793,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	    if (radix < 2 || radix > 36)
 		radix = 10;
 	    static const char s_base[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-	    long int n = op->valInteger();
+	    int64_t n = op->valInteger();
 	    bool neg = false;
 	    if (n < 0) {
 		n = -n;
@@ -831,7 +831,7 @@ bool JsContext::runStringField(GenObject* obj, const String& name, ObjList& stac
     if (!s)
 	return false;
     if (name == YSTRING("length")) {
-	ExpEvaluator::pushOne(stack,new ExpOperation((long int)s->length()));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)s->length()));
 	return true;
     }
     return false;

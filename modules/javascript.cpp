@@ -505,14 +505,14 @@ public:
 	AsyncYield,
 	AsyncIdle
     };
-    inline JsEngAsync(ScriptRun* runner, Oper op, long int val = 0)
+    inline JsEngAsync(ScriptRun* runner, Oper op, int64_t val = 0)
 	: ScriptAsync(runner),
 	  m_oper(op), m_val(val)
-	{ XDebug(DebugAll,"JsEngAsync %d %ld",op,val); }
+	{ XDebug(DebugAll,"JsEngAsync %d " FMT64,op,val); }
     virtual bool run();
 private:
     Oper m_oper;
-    long int m_val;
+    int64_t m_val;
 };
 
 class JsMsgAsync : public ScriptAsync
@@ -654,7 +654,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpOperation* op = popValue(stack,context);
 	if (!op)
 	    return false;
-	long int val = op->valInteger();
+	int64_t val = op->valInteger();
 	TelEngine::destruct(op);
 	if (val < 0)
 	    val = 0;
@@ -670,7 +670,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpOperation* op = popValue(stack,context);
 	if (!op)
 	    return false;
-	long int val = op->valInteger();
+	int64_t val = op->valInteger();
 	TelEngine::destruct(op);
 	if (val < 0)
 	    val = 0;
@@ -1599,7 +1599,7 @@ bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	if (!op)
 	    return false;
 	unsigned int epoch = 0;
-	long int fTime = File::getFileTime(*op,epoch) ? (signed long int)epoch : -1;
+	int64_t fTime = File::getFileTime(*op,epoch) ? (int64_t)epoch : -1;
 	ExpEvaluator::pushOne(stack,new ExpOperation(fTime));
 	TelEngine::destruct(op);
     }

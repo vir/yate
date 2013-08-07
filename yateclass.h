@@ -85,6 +85,7 @@ typedef unsigned long in_addr_t;
 #define vsnprintf _vsnprintf
 #define snprintf _snprintf
 #define strdup _strdup
+#define strtoll _strtoi64
 #define open _open
 #define dup2 _dup2
 #define read _read
@@ -159,6 +160,30 @@ typedef int HANDLE;
 #endif
 
 #endif /* ! _WINDOWS */
+
+#ifndef LLONG_MAX
+#ifdef _I64_MAX
+#defien LLONG_MAX _I64_MAX
+#else
+#define LLONG_MAX 9223372036854775807LL
+#endif
+#endif
+
+#ifndef LLONG_MIN
+#ifdef _I64_MIN
+#defien LLONG_MIN _I64_MIN
+#else
+#define LLONG_MIN (-LLONG_MAX - 1LL)
+#endif
+#endif
+
+#ifndef ULLONG_MAX
+#ifdef _UI64_MAX
+#defien ULLONG_MAX _UI64_MAX
+#else
+#define ULLONG_MAX 18446744073709551615ULL
+#endif
+#endif
 
 #ifndef O_LARGEFILE
 #define O_LARGEFILE 0
@@ -1981,6 +2006,19 @@ public:
      */
     long int toLong(long int defvalue = 0, int base = 0, long int minvalue = LONG_MIN,
 	long int maxvalue = LONG_MAX, bool clamp = true) const;
+
+    /**
+     * Convert the string to an 64 bit integer value.
+     * @param defvalue Default to return if the string is not a number
+     * @param base Numeration base, 0 to autodetect
+     * @param minvalue Minimum value allowed
+     * @param maxvalue Maximum value allowed
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
+     * @return The 64 bit integer interpretation or defvalue.
+     */
+    int64_t toInt64(int64_t defvalue = 0, int base = 0, int64_t minvalue = LLONG_MIN,
+	int64_t maxvalue = LLONG_MAX, bool clamp = true) const;
 
     /**
      * Convert the string to a floating point value.

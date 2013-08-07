@@ -354,11 +354,11 @@ bool ExpEvaluator::getNumber(ParsePoint& expr)
 	return false;
     XDebug(this,DebugAll,"getNumber '%.30s'",(const char*)expr);
     char* endp = 0;
-    long int val = ::strtol(expr,&endp,0);
+    int64_t val = ::strtoll(expr,&endp,0);
     if (!endp || (endp == expr))
 	return false;
     expr = endp;
-    DDebug(this,DebugAll,"Found %ld",val);
+    DDebug(this,DebugAll,"Found " FMT64,val);
     addOpcode(val);
     return true;
 }
@@ -710,7 +710,7 @@ bool ExpEvaluator::trySimplify()
 		    if (o->opcode() == OpcLAnd || o->opcode() == OpcAnd || o->opcode() == OpcMul) {
 			if ((op1->opcode() == OpcPush && !op1->number() && op2->opcode() == OpcField) ||
 			    (op2->opcode() == OpcPush && !op2->number() && op1->opcode() == OpcField)) {
-			    ExpOperation* newOp = (o->opcode() == OpcLAnd) ? new ExpOperation(false) : new ExpOperation((long int)0);
+			    ExpOperation* newOp = (o->opcode() == OpcLAnd) ? new ExpOperation(false) : new ExpOperation((int64_t)0);
 			    newOp->lineNumber(o->lineNumber());
 			    (m_opcodes+i)->set(newOp);
 			    m_opcodes.remove(op1);
@@ -817,18 +817,18 @@ ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
     return op;
 }
 
-ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, long int value, bool barrier)
+ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, int64_t value, bool barrier)
 {
-    DDebug(this,DebugAll,"addOpcode %u (%s) %lu",oper,getOperator(oper),value);
+    DDebug(this,DebugAll,"addOpcode %u (%s) " FMT64,oper,getOperator(oper),value);
     ExpOperation* op = new ExpOperation(oper,0,value,barrier);
     op->lineNumber(lineNumber());
     m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
-ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, const String& name, long int value, bool barrier)
+ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, const String& name, int64_t value, bool barrier)
 {
-    DDebug(this,DebugAll,"addOpcode %u (%s) '%s' %ld",oper,getOperator(oper),name.c_str(),value);
+    DDebug(this,DebugAll,"addOpcode %u (%s) '%s' " FMT64,oper,getOperator(oper),name.c_str(),value);
     ExpOperation* op = new ExpOperation(oper,name,value,barrier);
     op->lineNumber(lineNumber());
     m_lastOpcode = m_lastOpcode->append(op);
@@ -844,9 +844,9 @@ ExpOperation* ExpEvaluator::addOpcode(const String& value)
     return op;
 }
 
-ExpOperation* ExpEvaluator::addOpcode(long int value)
+ExpOperation* ExpEvaluator::addOpcode(int64_t value)
 {
-    DDebug(this,DebugAll,"addOpcode =%ld",value);
+    DDebug(this,DebugAll,"addOpcode =" FMT64,value);
     ExpOperation* op = new ExpOperation(value);
     op->lineNumber(lineNumber());
     m_lastOpcode = m_lastOpcode->append(op);
@@ -1024,7 +1024,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		    default:
 			break;
 		}
-		long int val = 0;
+		int64_t val = 0;
 		switch (oper.opcode()) {
 		    case OpcAnd:
 			val = op1->valInteger() & op2->valInteger();
@@ -1084,7 +1084,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		    pushOne(stack,new ExpOperation(val != 0));
 		}
 		else {
-		    DDebug(this,DebugAll,"Numeric result: %lu",val);
+		    DDebug(this,DebugAll,"Numeric result: " FMT64,val);
 		    pushOne(stack,new ExpOperation(val));
 		}
 	    }
@@ -1190,7 +1190,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		    TelEngine::destruct(fld);
 		    return false;
 		}
-		long int num = val->valInteger();
+		int64_t num = val->valInteger();
 		switch (oper.opcode()) {
 		    case OpcIncPre:
 			num++;
@@ -1299,7 +1299,7 @@ bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, GenObje
     if (oper.name() == YSTRING("now")) {
 	if (oper.number())
 	    return gotError("Function expects no arguments",oper.lineNumber());
-	pushOne(stack,new ExpOperation((long int)Time::secNow()));
+	pushOne(stack,new ExpOperation((int64_t)Time::secNow()));
 	return true;
     }
     return m_extender && m_extender->runFunction(stack,oper,context);
@@ -1472,7 +1472,7 @@ void ExpEvaluator::dump(const ObjList& codes, String& res) const
     }
 }
 
-long int ExpOperation::valInteger() const
+int64_t ExpOperation::valInteger() const
 {
     return isInteger() ? number() : 0;
 }

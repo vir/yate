@@ -767,11 +767,21 @@ protected:
     /**
      * Add a simple operator to the expression
      * @param oper Operator code to add
-     * @param value Integer value to add
+     * @param value 64 bit nteger value to add
      * @param barrier True to create an evaluator stack barrier
      * @return Newly added operation
      */
-    ExpOperation* addOpcode(Opcode oper, long int value, bool barrier = false);
+    ExpOperation* addOpcode(Opcode oper, int64_t value, bool barrier = false);
+
+    /**
+     * Add a simple operator to the expression
+     * @param oper Operator code to add
+     * @param value Long integer value to add
+     * @param barrier True to create an evaluator stack barrier
+     * @return Newly added operation
+     */
+    inline ExpOperation* addOpcode(Opcode oper, long int value, bool barrier = false)
+	{ return addOpcode(oper,(int64_t)value,barrier); }
 
     /**
      * Add a string constant to the expression
@@ -785,7 +795,7 @@ protected:
      * @param value Integer value to add, will be pushed on execution
      * @return Newly added operation
      */
-    ExpOperation* addOpcode(long int value);
+    ExpOperation* addOpcode(int64_t value);
 
     /**
      * Add a boolean constant to the expression
@@ -802,7 +812,7 @@ protected:
      * @param barrier True to create an exavuator stack barrier
      * @return Newly added operation
      */
-    ExpOperation* addOpcode(Opcode oper, const String& name, long int value = 0, bool barrier = false);
+    ExpOperation* addOpcode(Opcode oper, const String& name, int64_t value = 0, bool barrier = false);
 
     /**
      * Remove from the code and return the last operation
@@ -926,8 +936,8 @@ public:
      * Special value that is not recognized as an integer value
      * @return A value that indicates a non-integer value
      */
-    inline static long int nonInteger()
-	{ return LONG_MIN; }
+    inline static int64_t nonInteger()
+	{ return LLONG_MIN; }
 
     /**
      * Copy constructor
@@ -959,7 +969,7 @@ public:
     inline explicit ExpOperation(const String& value, const char* name = 0, bool autoNum = false)
 	: NamedString(name,value),
 	  m_opcode(ExpEvaluator::OpcPush),
-	  m_number(autoNum ? value.toLong(nonInteger()) : nonInteger()),
+	  m_number(autoNum ? value.toInt64(nonInteger()) : nonInteger()),
 	  m_lineNo(0), m_barrier(false)
 	{ if (autoNum && value.isBoolean()) m_number = value.toBoolean() ? 1 : 0; }
 
@@ -974,7 +984,18 @@ public:
 	{ }
 
     /**
-     * Push Number constructor
+     * Push 64 bit Number constructor
+     * @param value Integer constant to push on stack on execution
+     * @param name Optional of the newly created constant
+     */
+    inline explicit ExpOperation(int64_t value, const char* name = 0)
+	: NamedString(name,"NaN"),
+	  m_opcode(ExpEvaluator::OpcPush),
+	  m_number(value), m_lineNo(0), m_barrier(false)
+	{ if (value != nonInteger()) String::operator=(value); }
+
+    /**
+     * Push Long integer constructor
      * @param value Integer constant to push on stack on execution
      * @param name Optional of the newly created constant
      */
@@ -982,7 +1003,7 @@ public:
 	: NamedString(name,"NaN"),
 	  m_opcode(ExpEvaluator::OpcPush),
 	  m_number(value), m_lineNo(0), m_barrier(false)
-	{ if (value != nonInteger()) String::operator=((int)value); }
+	{ if (m_number != nonInteger()) String::operator=(m_number); }
 
     /**
      * Push Boolean constructor
@@ -1002,7 +1023,7 @@ public:
      * @param value Optional integer constant used as function parameter count
      * @param barrier True if the operation is an expression barrier on the stack
      */
-    inline ExpOperation(ExpEvaluator::Opcode oper, const char* name = 0, long int value = nonInteger(), bool barrier = false)
+    inline ExpOperation(ExpEvaluator::Opcode oper, const char* name = 0, int64_t value = nonInteger(), bool barrier = false)
 	: NamedString(name,""),
 	  m_opcode(oper), m_number(value), m_lineNo(0), m_barrier(barrier)
 	{ }
@@ -1037,7 +1058,7 @@ public:
      * Retrieve the number stored in this operation
      * @return Stored number
      */
-    inline long int number() const
+    inline int64_t number() const
 	{ return m_number; }
 
     /**
@@ -1066,14 +1087,14 @@ public:
      * @param num Numeric value to assign to the operation
      * @return Assigned number
      */
-    inline long int operator=(long int num)
-	{ m_number = num; String::operator=((int)num); return num; }
+    inline int64_t operator=(int64_t num)
+	{ m_number = num; String::operator=(num); return num; }
 
     /**
      * Retrieve the numeric value of the operation
      * @return Number contained in operation, zero if not a number
      */
-    virtual long int valInteger() const;
+    virtual int64_t valInteger() const;
 
     /**
      * Retrieve the boolean value of the operation
@@ -1111,7 +1132,7 @@ public:
 
 private:
     ExpEvaluator::Opcode m_opcode;
-    long int m_number;
+    int64_t m_number;
     unsigned int m_lineNo;
     bool m_barrier;
 };
@@ -2181,7 +2202,7 @@ public:
      * Retrieve the length of the array
      * @return Number of numerically indexed objects in array
      */
-    inline long length() const
+    inline int32_t length() const
 	{ return m_length; }
 
     /**
@@ -2239,14 +2260,14 @@ protected:
      * Set the internal length and the "length" parameter to a specific value
      * @param len Length of array to set
      */
-    inline void setLength(long len)
+    inline void setLength(int32_t len)
 	{ m_length = len; }
 
 private:
     bool runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context);
     bool runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObject* context);
     bool runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject* context);
-    long m_length;
+    int32_t m_length;
 };
 
 /**

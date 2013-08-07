@@ -623,7 +623,7 @@ void AnalyzerChan::localParams(String& str, Message* msg)
 bool AnalyzerChan::callRouted(Message& msg)
 {
     if (!m_timeRoute)
-	m_timeRoute = Time::now() - m_timeStart;
+	m_timeRoute = (unsigned long)(Time::now() - m_timeStart);
     setDuration(msg);
     return Channel::callRouted(msg);
 }
@@ -631,14 +631,14 @@ bool AnalyzerChan::callRouted(Message& msg)
 bool AnalyzerChan::msgRinging(Message& msg)
 {
     if (!m_timeRing)
-	m_timeRing = Time::now() - m_timeStart;
+	m_timeRing = (unsigned long)(Time::now() - m_timeStart);
     return Channel::msgRinging(msg);
 }
 
 bool AnalyzerChan::msgAnswered(Message& msg)
 {
     if (!m_timeAnswer)
-	m_timeAnswer = Time::now() - m_timeStart;
+	m_timeAnswer = (unsigned long)(Time::now() - m_timeStart);
     addConsumer();
     addSource();
     return Channel::msgAnswered(msg);

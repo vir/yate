@@ -1177,7 +1177,7 @@ unsigned long YRTPConsumer::Consume(const DataBlock &data, unsigned long tStamp,
 	XDebug(&splugin,DebugAll,"YRTPConsumer writing %d UDPTL bytes, ts=%lu [%p]",
 	    data.length(),tStamp,this);
 	// for T.38 the timestamp is used as sequence number
-	m_wrap->udptl()->udptlSend(ptr,len,tStamp);
+	m_wrap->udptl()->udptlSend(ptr,len,(uint16_t)tStamp);
 	return invalidStamp();
     }
     if (!(m_wrap->bufSize() && m_wrap->rtp()))
@@ -1266,7 +1266,7 @@ void YRTPMonitor::startup()
 
 void YRTPMonitor::saveStats(Message& msg) const
 {
-    unsigned int d = m_start ? ((m_last - m_start + 500000) / 1000000) : 0;
+    uint64_t d = m_start ? ((m_last - m_start + 500000) / 1000000) : 0;
     msg.addParam("rtp_rx_packets",String(m_rtpPackets));
     msg.addParam("rtcp_rx_packets",String(m_rtcpPackets));
     msg.addParam("rtp_rx_bytes",String(m_rtpBytes));

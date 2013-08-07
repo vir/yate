@@ -75,7 +75,7 @@ public:
 protected:
     inline JsDate(Mutex* mtx, u_int64_t msecs, bool local = false)
 	: JsObject("Date",mtx),
-	  m_time(msecs / 1000), m_msec(msecs % 1000), m_offs(Time::timeZone())
+	  m_time((unsigned int)(msecs / 1000)), m_msec((unsigned int)(msecs % 1000)), m_offs(Time::timeZone())
 	{ if (local) m_time -= m_offs; }
     inline JsDate(Mutex* mtx, const char* name, unsigned int time, unsigned int msec, unsigned int offs)
 	: JsObject(mtx,name),
@@ -372,7 +372,7 @@ bool JsObject::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpEvaluator::pushOne(stack,new ExpOperation(params()));
     else if (oper.name() == YSTRING("hasOwnProperty")) {
 	bool ok = true;
-	for (long int i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (!op)
 		continue;
@@ -419,11 +419,11 @@ int JsObject::extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& ope
 {
     if (!obj || !oper.number())
 	return 0;
-    for (long int i = oper.number(); i;  i--) {
+    for (int i = (int)oper.number(); i;  i--) {
 	ExpOperation* op = obj->popValue(stack,context);
 	arguments.insert(op);
     }
-    return oper.number();
+    return (int)oper.number();
 }
 
 // Static helper method that deep copies all parameters
@@ -537,7 +537,7 @@ bool JsArray::runField(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	oper.name().c_str(),toString().c_str(),this);
     if (oper.name() == YSTRING("length")) {
 	// Reflects the number of elements in an array.
-	ExpEvaluator::pushOne(stack,new ExpOperation(length()));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)length()));
 	return true;
     }
     return JsObject::runField(stack,oper,context);
@@ -556,7 +556,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    const_cast<String&>(op->name()) = (unsigned int)m_length++;
 	    params().addParam(op);
 	}
-	ExpEvaluator::pushOne(stack,new ExpOperation(length()));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)length()));
     }
     else if (oper.name() == YSTRING("pop")) {
 	// Removes the last element from an array and returns that element
@@ -597,19 +597,19 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    return false;
 	JsArray* array = new JsArray(mutex());
 	// copy this array
-	for (long int i = 0; i < m_length; i++)
+	for (int i = 0; i < m_length; i++)
 	    array->params().addParam(params().getParam(String(i)));
 	array->setLength(length());
 	// add parameters (JsArray of JsObject)
-	for (long int i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    ExpWrapper* obj = YOBJECT(ExpWrapper,op);
 	    if (!obj)
 		continue;
 	    JsArray* ja = (JsArray*)obj->getObject(YATOM("JsArray"));
 	    if (ja) {
-		for (long int i = 0; i < ja->length(); i++)
-		    array->params().addParam(String(i + array->length()),ja->params().getValue(String(i)));
+		for (int j = 0; j < ja->length(); j++)
+		    array->params().addParam(String(j + array->length()),ja->params().getValue(String(j)));
 		array->setLength(array->length() + ja->length());
 	    }
 	    else {
@@ -639,7 +639,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    TelEngine::destruct(op);
 	}
 	String result;
-	for (long int i = 0; i < length(); i++)
+	for (int32_t i = 0; i < length(); i++)
 	    result.append(params()[String(i)],separator);
 	ExpEvaluator::pushOne(stack,new ExpOperation(result));
     }
@@ -650,10 +650,10 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	NamedList reversed("");
 	String separator = ",";
 	String toCopy;
-	for (long int i = 0; i < length(); i++)
+	for (int32_t i = 0; i < length(); i++)
 	    toCopy.append(params()[String(i)],separator);
 	reversed.copyParams(params(),toCopy);
-	for (long int i = length(); i; i--)
+	for (int32_t i = length(); i; i--)
 	    params().setParam(String(length() - i),reversed.getValue(String(i - 1)));
     }
     else if (oper.name() == YSTRING("shift")) {
@@ -673,7 +673,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	else {
 	    ExpEvaluator::pushOne(stack,new ExpOperation(params().getValue("0")));
 	    // shift : value n+1 becomes value n
-	    for (long int i = 0; i < length() - 1; i++)
+	    for (int32_t i = 0; i < length() - 1; i++)
 		params().setParam(String(i),params().getValue(String(i + 1)));
 	    params().clearParam(String(length() - 1));
 	    setLength(length() - 1);
@@ -691,10 +691,10 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// myFish after: ["drum", "lion", "angel", "clown"]
 	// New length: 4
 	// shift array
-	long shift = oper.number();
-	for (long int i = length(); i; i--)
+	int32_t shift = (int32_t)oper.number();
+	for (int32_t i = length(); i; i--)
 	    params().setParam(String(i - 1 + shift),params().getValue(String(i - 1)));
-	for (long int i = shift; i; i--) {
+	for (int32_t i = shift; i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    ExpWrapper* obj = YOBJECT(ExpWrapper,op);
 	    if (!obj)
@@ -708,7 +708,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    TelEngine::destruct(op);
 	}
 	setLength(length() + shift);
-	ExpEvaluator::pushOne(stack,new ExpOperation(length()));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)length()));
     }
     else if (oper.name() == YSTRING("slice"))
 	return runNativeSlice(stack,oper,context);
@@ -723,7 +723,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// var myVar = monthNames.toString(); // assigns "Jan,Feb,Mar,Apr" to myVar.
 	String separator = ",";
 	String result;
-	for (long int i = 0; i < length(); i++)
+	for (int32_t i = 0; i < length(); i++)
 	    result.append(params()[String(i)],separator);
 	ExpEvaluator::pushOne(stack,new ExpOperation(result));
     } else if (oper.name() == YSTRING("indexOf")) {
@@ -780,11 +780,11 @@ bool JsArray::runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject
     //	       < 0 offset from the end of the array
     // end missing -> go to end of array  
     int begin = length(), end = length();
-    for (long int i = oper.number(); i; i--) {
+    for (int i = (int)oper.number(); i; i--) {
 	ExpOperation* op = popValue(stack,context);
 	if (op->isInteger()) {
 	    end = begin;
-	    begin = op->number();
+	    begin = (int)op->number();
 	}
 	TelEngine::destruct(op);
     }
@@ -814,7 +814,7 @@ bool JsArray::runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObjec
 	return false;
     // get start index
     ExpOperation* op = static_cast<ExpOperation*>(arguments[0]);
-    int begin = op->number();
+    int begin = (int)op->number();
     if (begin < 0)
 	begin = length() + begin;
     // get count to delete
@@ -822,7 +822,7 @@ bool JsArray::runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObjec
     if (arguments.count() > 1) {
 	// get count
 	op = static_cast<ExpOperation*>(arguments[1]);
-	count = op->number();
+	count = (int)op->number();
     }
 
     // remove elements
@@ -964,8 +964,8 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
     if (oper.name() == YSTRING("abs")) {
 	if (!oper.number())
 	    return false;
-	long int n = 0;
-	for (long int i = oper.number(); i; i--) {
+	int64_t n = 0;
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (op->isInteger())
 		n = op->number();
@@ -978,8 +978,8 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
     else if (oper.name() == YSTRING("max")) {
 	if (!oper.number())
 	    return false;
-	long int n = LONG_MIN;
-	for (long int i = oper.number(); i; i--) {
+	int64_t n = LLONG_MIN;
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (op->isInteger() && op->number() > n)
 		n = op->number();
@@ -990,8 +990,8 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
     else if (oper.name() == YSTRING("min")) {
 	if (!oper.number())
 	    return false;
-	long int n = LONG_MAX;
-	for (long int i = oper.number(); i; i--) {
+	int64_t n = LLONG_MAX;
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (op->isInteger() && op->number() < n)
 		n = op->number();
@@ -1020,8 +1020,8 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	unsigned long interval = max;
 	if (min != 0)
 	    interval -= min + 1;
-	long rand = (Random::random() % interval) + min;
-	ExpEvaluator::pushOne(stack,new ExpOperation((long)rand));
+	int64_t rand = (Random::random() % interval) + min;
+	ExpEvaluator::pushOne(stack,new ExpOperation(rand));
     }
     else
 	return JsObject::runNative(stack,oper,context);
@@ -1055,7 +1055,7 @@ JsObject* JsDate::runConstructor(ObjList& stack, const ExpOperation& oper, GenOb
 		    ExpOperation* val = static_cast<ExpOperation*>(args[i]);
 		    if (val) {
 			if (val->isInteger())
-			    parts[i] = val->number();
+			    parts[i] = (int)val->number();
 			else
 			    return 0;
 		    }
@@ -1081,7 +1081,7 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	oper.name().c_str(),toString().c_str(),this);
     if (oper.name() == YSTRING("now")) {
 	// Returns the number of milliseconds elapsed since 1 January 1970 00:00:00 UTC.
-	ExpEvaluator::pushOne(stack,new ExpOperation((long int)Time::msecNow()));  // should check conversion from u_int64_t 
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)Time::msecNow()));
     }
     else if (oper.name() == YSTRING("getDate")) {
 	// Returns the day of the month for the specified date according to local time.
@@ -1089,7 +1089,7 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)day));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)day));
 	else
 	    return false;
     }
@@ -1098,7 +1098,7 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0, wday = 0;
 	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec,&wday))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)wday));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)wday));
 	else
 	    return false;
     }
@@ -1107,7 +1107,7 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)year));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)year));
 	else
 	    return false;
     }
@@ -1116,20 +1116,20 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)hour));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)hour));
 	else
 	    return false;
     }
     else if (oper.name() == YSTRING("getMilliseconds")) {
 	// Returns just the milliseconds part ( 0 - 999 )
-	ExpEvaluator::pushOne(stack,new ExpOperation((long int)m_msec));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_msec));
     }
     else if (oper.name() == YSTRING("getMinutes")) {
 	// Returns the minute ( 0 - 59 ) of the specified date according to local time.
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)minute));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)minute));
 	else
 	    return false;
     }
@@ -1138,7 +1138,7 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)month - 1));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)month - 1));
 	else
 	    return false;
     }
@@ -1147,17 +1147,17 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time + m_offs,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)sec));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)sec));
 	else
 	    return false;
     }
     else if (oper.name() == YSTRING("getTime")) {
 	// Returns the time in milliseconds since UNIX Epoch
-	ExpEvaluator::pushOne(stack,new ExpOperation(1000 * ((long int)m_time) + (long int)m_msec));
+	ExpEvaluator::pushOne(stack,new ExpOperation(1000 * ((int64_t)m_time) + (int64_t)m_msec));
     }
     else if (oper.name() == YSTRING("getTimezoneOffset")) {
 	// Returns the UTC to local difference in minutes, positive goes west
-	ExpEvaluator::pushOne(stack,new ExpOperation((long int)(m_offs / -60)));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)(m_offs / -60)));
     }
     else if (oper.name() == YSTRING("getUTCDate")) {
 	// Returns the day of the month for the specified date according to local time.
@@ -1165,7 +1165,7 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)day));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)day));
 	else
 	    return false;
     }
@@ -1174,7 +1174,7 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0, wday = 0;
 	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec,&wday))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)wday));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)wday));
 	else
 	    return false;
     }
@@ -1183,7 +1183,7 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)year));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)year));
 	else
 	    return false;
     }
@@ -1192,20 +1192,20 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)hour));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)hour));
 	else
 	    return false;
     }
     else if (oper.name() == YSTRING("getUTCMilliseconds")) {
 	// Returns just the milliseconds part ( 0 - 999 )
-	ExpEvaluator::pushOne(stack,new ExpOperation((long int)m_msec));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_msec));
     }
     else if (oper.name() == YSTRING("getUTCMinutes")) {
 	// Returns the minute ( 0 - 59 ) of the specified date according to local time.
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)minute));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)minute));
 	else
 	    return false;
     }
@@ -1214,7 +1214,7 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)month - 1));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)month - 1));
 	else
 	    return false;
     }
@@ -1223,7 +1223,7 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	int year = 0;
 	unsigned int month = 0, day = 0, hour = 0, minute = 0, sec = 0;
 	if (Time::toDateTime(m_time,year,month,day,hour,minute,sec))
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)sec));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)sec));
 	else
 	    return false;
     }

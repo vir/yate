@@ -404,7 +404,7 @@ RTPSender::RTPSender(RTPSession* session, bool randomTs)
     if (randomTs) {
 	m_ts = Random::random() & ~1;
 	// avoid starting sequence numbers too close to zero
-	m_seq = 2500 + (Random::random() % 60000);
+	m_seq = (uint16_t)(2500 + (Random::random() % 60000));
     }
 }
 
@@ -923,8 +923,8 @@ void RTPSession::sendRtcpReport(const Time& when)
 	// Include a sender report
 	buf[1] = 0xc8; // SR
 	// NTP timestamp
-	store32(buf,len,2208988800 + (when.usec() / 1000000));
-	store32(buf,len,((when.usec() % 1000000) << 32) / 1000000);
+	store32(buf,len,(uint32_t)(2208988800 + (when.usec() / 1000000)));
+	store32(buf,len,(uint32_t)(((when.usec() % 1000000) << 32) / 1000000));
 	// RTP timestamp
 	store32(buf,len,m_send->tsLast());
 	// Packet and octet counters
@@ -938,7 +938,7 @@ void RTPSession::sendRtcpReport(const Time& when)
 	u_int32_t lost = m_recv->ioPacketsLost();
 	u_int32_t lostf = 0xff & (lost * 255 / (lost + m_recv->ioPackets()));
 	store32(buf,len,(lost & 0xffffff) | (lostf << 24));
-	store32(buf,len,m_recv->fullSeq());
+	store32(buf,len,(uint32_t)m_recv->fullSeq());
 	// TODO: Compute and store Jitter, LSR and DLSR
 	store32(buf,len,0);
 	store32(buf,len,0);

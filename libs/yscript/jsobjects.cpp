@@ -1020,7 +1020,7 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	unsigned long interval = max;
 	if (min != 0)
 	    interval -= min + 1;
-	long rand = (Random::random() % interval) + min;
+	int64_t rand = (Random::random() % interval) + min;
 	ExpEvaluator::pushOne(stack,new ExpOperation(rand));
     }
     else

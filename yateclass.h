@@ -163,7 +163,7 @@ typedef int HANDLE;
 
 #ifndef LLONG_MAX
 #ifdef _I64_MAX
-#defien LLONG_MAX _I64_MAX
+#define LLONG_MAX _I64_MAX
 #else
 #define LLONG_MAX 9223372036854775807LL
 #endif
@@ -171,7 +171,7 @@ typedef int HANDLE;
 
 #ifndef LLONG_MIN
 #ifdef _I64_MIN
-#defien LLONG_MIN _I64_MIN
+#define LLONG_MIN _I64_MIN
 #else
 #define LLONG_MIN (-LLONG_MAX - 1LL)
 #endif
@@ -179,7 +179,7 @@ typedef int HANDLE;
 
 #ifndef ULLONG_MAX
 #ifdef _UI64_MAX
-#defien ULLONG_MAX _UI64_MAX
+#define ULLONG_MAX _UI64_MAX
 #else
 #define ULLONG_MAX 18446744073709551615ULL
 #endif

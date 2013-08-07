@@ -774,16 +774,6 @@ protected:
     ExpOperation* addOpcode(Opcode oper, int64_t value, bool barrier = false);
 
     /**
-     * Add a simple operator to the expression
-     * @param oper Operator code to add
-     * @param value Long integer value to add
-     * @param barrier True to create an evaluator stack barrier
-     * @return Newly added operation
-     */
-    inline ExpOperation* addOpcode(Opcode oper, long int value, bool barrier = false)
-	{ return addOpcode(oper,(int64_t)value,barrier); }
-
-    /**
      * Add a string constant to the expression
      * @param value String value to add, will be pushed on execution
      * @return Newly added operation
@@ -993,17 +983,6 @@ public:
 	  m_opcode(ExpEvaluator::OpcPush),
 	  m_number(value), m_lineNo(0), m_barrier(false)
 	{ if (value != nonInteger()) String::operator=(value); }
-
-    /**
-     * Push Long integer constructor
-     * @param value Integer constant to push on stack on execution
-     * @param name Optional of the newly created constant
-     */
-    inline explicit ExpOperation(long int value, const char* name = 0)
-	: NamedString(name,"NaN"),
-	  m_opcode(ExpEvaluator::OpcPush),
-	  m_number(value), m_lineNo(0), m_barrier(false)
-	{ if (m_number != nonInteger()) String::operator=(m_number); }
 
     /**
      * Push Boolean constructor

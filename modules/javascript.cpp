@@ -199,7 +199,7 @@ private:
     JsEngine* m_engine;
 };
 
-#define MKDEBUG(lvl) params().addParam(new ExpOperation((long int)Debug ## lvl,"Debug" # lvl))
+#define MKDEBUG(lvl) params().addParam(new ExpOperation((int64_t)Debug ## lvl,"Debug" # lvl))
 class JsEngine : public JsObject, public DebugEnabler
 {
     YCLASS(JsEngine,JsObject)
@@ -756,7 +756,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
     }
     else if (oper.name() == YSTRING("debugLevel")) {
 	if (oper.number() == 0)
-	    ExpEvaluator::pushOne(stack,new ExpOperation((long int)debugLevel()));
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)debugLevel()));
 	else if (oper.number() == 1) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (op && op->isInteger())
@@ -836,7 +836,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	}
 	unsigned int id = m_worker->addEvent(*callback,interval->toInteger(),
 		oper.name() == YSTRING("setInterval"));
-	ExpEvaluator::pushOne(stack,new ExpOperation((long int)id));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)id));
     }
     else if (oper.name() == YSTRING("clearInterval") || oper.name() == YSTRING("clearTimeout")) {
 	if (!m_worker)
@@ -896,7 +896,7 @@ bool JsShared::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    mod--;
 	else
 	    mod = 0;
-	ExpEvaluator::pushOne(stack,new ExpOperation((long)Engine::sharedVars().inc(*param,mod)));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)Engine::sharedVars().inc(*param,mod)));
     }
     else if (oper.name() == YSTRING("dec")) {
 	ObjList args;
@@ -916,7 +916,7 @@ bool JsShared::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    mod--;
 	else
 	    mod = 0;
-	ExpEvaluator::pushOne(stack,new ExpOperation((long)Engine::sharedVars().dec(*param,mod)));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)Engine::sharedVars().dec(*param,mod)));
     }
     else if (oper.name() == YSTRING("get")) {
 	if (oper.number() != 1)

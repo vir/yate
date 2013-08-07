@@ -1380,8 +1380,8 @@ protected:
     virtual bool isMatch(JsCode::JsOpcode opcode)
 	{ return JsCode::OpcBreak == opcode || JsCode::OpcCont == opcode; }
 private:
-    long int m_lblCont;
-    long int m_lblBreak;
+    int64_t m_lblCont;
+    int64_t m_lblBreak;
 };
 
 class ParseSwitch : public ParseNested
@@ -1404,8 +1404,8 @@ protected:
 	{ return JsCode::OpcCase == opcode || JsCode::OpcDefault == opcode ||
 	    JsCode::OpcBreak == opcode; }
 private:
-    long int m_lblBreak;
-    long int m_lblDefault;
+    int64_t m_lblBreak;
+    int64_t m_lblDefault;
     SwitchState m_state;
     ObjList m_cases;
 };
@@ -1444,7 +1444,7 @@ bool JsCode::parseInner(ParsePoint& expr, JsOpcode opcode, ParseNested* nested)
 			XDebug(this,DebugAll,"Parsing switch:case: '%.30s'",(const char*)expr);
 			block->m_state = ParseSwitch::InCase;
 			block->m_cases.append(popOpcode());
-			addOpcode(OpcLabel,++m_label);
+			addOpcode(OpcLabel,(int64_t)++m_label);
 			block->m_cases.append(new ExpOperation((Opcode)OpcJumpTrue,0,m_label));
 			break;
 		    case OpcDefault:
@@ -1479,14 +1479,14 @@ bool JsCode::parseIf(ParsePoint& expr, GenObject* nested)
 	return false;
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
-    ExpOperation* cond = addOpcode((Opcode)OpcJumpFalse,++m_label);
+    ExpOperation* cond = addOpcode((Opcode)OpcJumpFalse,(int64_t)++m_label);
     expr++;
     if (!getOneInstruction(expr,nested))
 	return false;
     skipComments(expr);
     ParsePoint save = expr;
     if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
-	ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
+	ExpOperation* jump = addOpcode((Opcode)OpcJump,(int64_t)++m_label);
 	addOpcode(OpcLabel,cond->number());
 	if (!getOneInstruction(expr,nested))
 	    return false;
@@ -1513,7 +1513,7 @@ bool JsCode::parseSwitch(ParsePoint& expr, GenObject* nested)
     expr++;
     const char* savedSeps = expr.m_searchedSeps;
     expr.m_searchedSeps = "";
-    ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
+    ExpOperation* jump = addOpcode((Opcode)OpcJump,(int64_t)++m_label);
     ParseSwitch parseStack(this,nested,++m_label);
     for (;;) {
 	if (!runCompile(expr,'}',parseStack))
@@ -1537,9 +1537,9 @@ bool JsCode::parseSwitch(ParsePoint& expr, GenObject* nested)
 	ExpOperation* j = static_cast<ExpOperation*>(parseStack.m_cases.remove(false));
 	if (!j)
 	    break;
-	addOpcode(c,c->lineNumber());
+	addOpcode(c,(int64_t)c->lineNumber());
 	addOpcode((Opcode)OpcCase);
-	addOpcode(j,c->lineNumber());
+	addOpcode(j,(int64_t)c->lineNumber());
     }
     // if no case matched drop the expression
     addOpcode(OpcDrop);
@@ -1557,12 +1557,12 @@ bool JsCode::parseFor(ParsePoint& expr, GenObject* nested)
     addOpcode((Opcode)OpcBegin);
     if ((skipComments(++expr) != ';') && !runCompile(expr,')'))
 	return false;
-    long int cont = 0;
-    long int jump = ++m_label;
-    long int body = ++m_label;
+    int64_t cont = 0;
+    int64_t jump = ++m_label;
+    int64_t body = ++m_label;
     // parse initializer
     if (skipComments(expr) == ';') {
-	long int check = body;
+	int64_t check = body;
 	if (skipComments(++expr) != ';') {
 	    check = ++m_label;
 	    addOpcode(OpcLabel,check);
@@ -1612,13 +1612,13 @@ bool JsCode::parseWhile(ParsePoint& expr, GenObject* nested)
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
     addOpcode((Opcode)OpcBegin);
-    long int cont = ++m_label;
+    int64_t cont = ++m_label;
     addOpcode(OpcLabel,cont);
     if (!runCompile(++expr,')'))
 	return false;
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
-    long int jump = ++m_label;
+    int64_t jump = ++m_label;
     addOpcode((Opcode)OpcJumpFalse,jump);
     ParseLoop parseStack(this,nested,OpcWhile,cont,jump);
     if (!getOneInstruction(++expr,parseStack))
@@ -1699,8 +1699,8 @@ bool JsCode::parseFuncDef(ParsePoint& expr, bool publish)
     if (skipComments(++expr) != '{')
 	return gotError("Expecting '{'",expr);
     expr++;
-    ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
-    ExpOperation* lbl = addOpcode(OpcLabel,++m_label,true);
+    ExpOperation* jump = addOpcode((Opcode)OpcJump,(int64_t)++m_label);
+    ExpOperation* lbl = addOpcode(OpcLabel,(int64_t)++m_label,true);
     for (;;) {
 	if (!runCompile(expr,'}'))
 	    return false;

@@ -99,5 +99,11 @@ Recommends: gdb
 Replaces: libyate-dbg, yate-telhw-dbg
 Description: Debug symbols for all yate applications and libraries
 
+Package: libyate-perl
+Section: devel
+Architecture: any
+Depends: perl (>= 5)
+Description: Perl module
+
 
 

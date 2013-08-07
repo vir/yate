@@ -8,7 +8,6 @@ debian/tmp/usr/share/yate/scripts/libyateivr.php
 debian/tmp/usr/share/yate/scripts/libyatechan.php
 debian/tmp/usr/share/yate/scripts/libvoicemail.php
 debian/tmp/usr/share/yate/scripts/libyate.py
-debian/tmp/usr/share/yate/scripts/Yate.pm
 debian/tmp/usr/share/yate/scripts/leavemail.php
 debian/tmp/usr/share/yate/scripts/voicemail.php
 debian/tmp/usr/share/yate/scripts/route.php

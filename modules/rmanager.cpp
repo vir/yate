@@ -683,7 +683,7 @@ void Connection::endSubnegotiation()
 		break;
 	    m_width = (((unsigned int)m_subBuf[0]) << 8) | m_subBuf[1];
 	    m_height = (((unsigned int)m_subBuf[2]) << 8) | m_subBuf[3];
-	    Debug("RManager",DebugAll,"New screen size is %u x %u on connection %s",m_width,m_height,m_address.c_str());
+	    DDebug("RManager",DebugAll,"New screen size is %u x %u on connection %s",m_width,m_height,m_address.c_str());
 	    return;
 	default:
 	    Debug("RManager",DebugMild,"Unsupported telnet suboption %u (0x%02X)",m_subOpt,m_subOpt);

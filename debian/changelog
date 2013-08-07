@@ -1,4 +1,4 @@
-yate (4.3.1~svn5611) UNRELEASED; urgency=low
+yate (4.3.1~svn5615) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -654,8 +654,13 @@ yate (4.3.1~svn5611) UNRELEASED; urgency=low
     terms in each source file to reference an external file.  + Fixed
     comment destroyed by script.  + Separated 32 and 64 bit constructors
     and assignments for String.
+  * Updated to SVN revision 5615: + Fixed 64 bit types usage in
+    Javascript, was broken on 32 bit machines.  + More fixes related to
+    32 and 64 bit types usage in JS.  + Fixed warnings - mostly
+    conversions - exposed by Visual C++ compiler.  + Don't display
+    telnet window size changes in non-debug compile.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 07 Aug 2013 02:19:22 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 08 Aug 2013 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

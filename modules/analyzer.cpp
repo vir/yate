@@ -5,7 +5,7 @@
  * Test call generator and audio quality analyzer
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2006 Null Team
+ * Copyright (C) 2004-2013 Null Team
  *
  * FFT routine taken from Murphy McCauley's FFT DLL based in turn on the
  *  work of Don Cross <dcross@intersrv.com>
@@ -13,19 +13,16 @@
  *  and http://www.constantthought.com/
  * Thank both for a sleek routine that doesn't even fill a floppy ;-)
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This software is distributed under multiple licenses;
+ * see the COPYING file in the main directory for licensing
+ * information for this specific distribution.
+ *
+ * This use of this software may be subject to additional restrictions.
+ * See the LEGAL file in the main directory for details.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
 #include <yatephone.h>
@@ -626,7 +623,7 @@ void AnalyzerChan::localParams(String& str, Message* msg)
 bool AnalyzerChan::callRouted(Message& msg)
 {
     if (!m_timeRoute)
-	m_timeRoute = Time::now() - m_timeStart;
+	m_timeRoute = (unsigned long)(Time::now() - m_timeStart);
     setDuration(msg);
     return Channel::callRouted(msg);
 }
@@ -634,14 +631,14 @@ bool AnalyzerChan::callRouted(Message& msg)
 bool AnalyzerChan::msgRinging(Message& msg)
 {
     if (!m_timeRing)
-	m_timeRing = Time::now() - m_timeStart;
+	m_timeRing = (unsigned long)(Time::now() - m_timeStart);
     return Channel::msgRinging(msg);
 }
 
 bool AnalyzerChan::msgAnswered(Message& msg)
 {
     if (!m_timeAnswer)
-	m_timeAnswer = Time::now() - m_timeStart;
+	m_timeAnswer = (unsigned long)(Time::now() - m_timeStart);
     addConsumer();
     addSource();
     return Channel::msgAnswered(msg);

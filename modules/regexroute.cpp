@@ -5,21 +5,18 @@
  * Regular expressions based routing
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2006 Null Team
+ * Copyright (C) 2004-2013 Null Team
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This software is distributed under multiple licenses;
+ * see the COPYING file in the main directory for licensing
+ * information for this specific distribution.
+ *
+ * This use of this software may be subject to additional restrictions.
+ * See the LEGAL file in the main directory for details.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
 #include <yatephone.h>
@@ -172,16 +169,16 @@ static void evalFunc(String& str, Message& msg)
 	    str = str.substr(0,sep);
 	    sep = par.find(',');
 	}
-	if (str == "length")
+	if (str == YSTRING("length"))
 	    str = vars(par).length();
-	else if (str == "upper")
+	else if (str == YSTRING("upper"))
 	    str = vars(par).toUpper();
-	else if (str == "lower")
+	else if (str == YSTRING("lower"))
 	    str = vars(par).toLower();
-	else if (str == "chr")
+	else if (str == YSTRING("chr"))
 	    str = static_cast<char>(0xff & vars(par).toInteger());
-	else if ((sep >= 0) && ((str == "streq") || (str == "strne"))) {
-	    bool ret = (str == "strne");
+	else if ((sep >= 0) && ((str == YSTRING("streq")) || (str == YSTRING("strne")))) {
+	    bool ret = (str == YSTRING("strne"));
 	    str = par.substr(sep+1);
 	    par = par.substr(0,sep);
 	    vars(str);
@@ -189,7 +186,7 @@ static void evalFunc(String& str, Message& msg)
 	    ret ^= (str == par);
 	    str = ret;
 	}
-	else if ((sep >= 0) && (str == "strpos")) {
+	else if ((sep >= 0) && (str == YSTRING("strpos"))) {
 	    str = par.substr(sep+1);
 	    par = par.substr(0,sep);
 	    vars(str);
@@ -218,7 +215,7 @@ static void evalFunc(String& str, Message& msg)
 	    mathOper(str,par,sep,OPER_GE);
 	else if ((sep >= 0) && (str == "le"))
 	    mathOper(str,par,sep,OPER_LE);
-	else if (str == "random") {
+	else if (str == YSTRING("random")) {
 	    str.clear();
 	    vars(par);
 	    for (unsigned int i = 0; i < par.length(); i++) {
@@ -228,11 +225,18 @@ static void evalFunc(String& str, Message& msg)
 		    str << par.at(i);
 	    }
 	}
-	else if (str == "hex") {
+	else if (str == YSTRING("hex")) {
+	    char hsep = ' ';
 	    int len = 0;
 	    if (sep >= 0) {
-		len = par.substr(sep+1).toInteger();
+		str = par.substr(sep+1);
 		par = par.substr(0,sep);
+		sep = str.find(',');
+		if (sep >= 0) {
+		    hsep = str.at(sep+1);
+		    str = str.substr(0,sep);
+		}
+		len = str.toInteger();
 	    }
 	    int val = par.toInteger();
 	    unsigned char buf[4];
@@ -252,10 +256,10 @@ static void evalFunc(String& str, Message& msg)
 		else
 		    len = 1;
 	    }
-	    str.hexify(&buf,len,' ');
+	    str.hexify(&buf,len,hsep);
 	}
-	else if ((sep > 0) && ((str == "index") || (str == "rotate"))) {
-	    bool rotate = (str == "rotate");
+	else if ((sep > 0) && ((str == YSTRING("index")) || (str == YSTRING("rotate")))) {
+	    bool rotate = (str == YSTRING("rotate"));
 	    String vname;
 	    str = par.substr(0,sep);
 	    par = par.substr(sep+1).trimBlanks();
@@ -290,29 +294,29 @@ static void evalFunc(String& str, Message& msg)
 	    }
 	    lst->destruct();
 	}
-	else if ((sep >= 0) && (str == "config")) {
+	else if ((sep >= 0) && (str == YSTRING("config"))) {
 	    str = par.substr(0,sep).trimBlanks();
 	    par = par.substr(sep+1).trimBlanks();
 	    str = Engine::config().getValue(str,par);
 	}
-	else if (str == "engine")
+	else if (str == YSTRING("engine"))
 	    str = Engine::runParams().getValue(vars(par));
-	else if (str == "message") {
+	else if (str == YSTRING("message")) {
 	    if (sep >= 0) {
 		str = par.substr(sep+1).trimBlanks();
 		par = par.substr(0,sep).trimBlanks();
 	    }
 	    else
 		str.clear();
-	    if (par.null() || par == "name")
+	    if (par.null() || par == YSTRING("name"))
 		str = msg;
-	    else if (par == "time")
+	    else if (par == YSTRING("time"))
 		str = msg.msgTime().sec();
-	    else if (par == "broadcast")
+	    else if (par == YSTRING("broadcast"))
 		str = msg.broadcast();
-	    else if (par == "count")
+	    else if (par == YSTRING("count"))
 		str = msg.count();
-	    else if (par == "parameters") {
+	    else if (par == YSTRING("parameters")) {
 		par = str;
 		if (par.null())
 		    par = ",";
@@ -327,15 +331,15 @@ static void evalFunc(String& str, Message& msg)
 	    else
 		str.clear();
 	}
-	else if (str == "runid") {
+	else if (str == YSTRING("runid")) {
 	    str.clear();
 	    str << Engine::runId();
 	}
-	else if (str == "nodename")
+	else if (str == YSTRING("nodename"))
 	    str = Engine::nodeName();
-	else if (str == "threadname")
+	else if (str == YSTRING("threadname"))
 	    str = Thread::currentName();
-	else if ((sep >= 0) && (str == "transcode")) {
+	else if ((sep >= 0) && (str == YSTRING("transcode"))) {
 	    str = par.substr(0,sep);
 	    par = par.substr(sep+1).trimBlanks();
 	    ObjList* fmts = DataTranslator::allFormats(par,
@@ -346,7 +350,7 @@ static void evalFunc(String& str, Message& msg)
 	    str.append(fmts,",");
 	    TelEngine::destruct(fmts);
 	}
-	else if (str == "dispatching")
+	else if (str == YSTRING("dispatching"))
 	    str = s_dispatching;
 	else if (bare && str.trimBlanks())
 	    str = s_vars.getValue(str);

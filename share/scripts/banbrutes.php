@@ -5,21 +5,18 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2011-2012 Null Team
+ * Copyright (C) 2011-2013 Null Team
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This software is distributed under multiple licenses;
+ * see the COPYING file in the main directory for licensing
+ * information for this specific distribution.
+ *
+ * This use of this software may be subject to additional restrictions.
+ * See the LEGAL file in the main directory for details.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
 /* Brute force attack detect and ban for the Yate PHP interface
@@ -30,6 +27,9 @@
     or
   banbrutes.php=NNN
     where NNN >= 2 is the number of failures causing a ban
+
+  If you are using SIP proxies or clients with multiple subscriptions you will need to
+   allow more failures for each since each separate transaction will fail once
 
   This script requires Yate to run as root or have permissions to run iptables
  */
@@ -270,7 +270,7 @@ function onHelp($l,&$retval)
 Yate::Init();
 // Comment the next line to get output only in logs, not in rmanager
 Yate::Output(true);
-// Uncomment the next line to get debugging details
+// Uncomment the next line to get debugging details by default
 //Yate::Debug(true);
 
 $n = round(1 * Yate::Arg());
@@ -279,8 +279,8 @@ if ($n >= 2)
 
 Yate::SetLocal("trackparam","banbrutes");
 Yate::Watch("user.auth");
-Yate::Install("user.authfail",120);
-Yate::Install("engine.timer",150);
+Yate::Watch("user.authfail");
+Yate::Watch("engine.timer");
 Yate::Install("engine.command",120);
 Yate::Install("engine.help",150);
 Yate::SetLocal("restart",true);
@@ -293,13 +293,6 @@ for (;;) {
         continue;
     if ($ev->type == "incoming") {
 	switch ($ev->name) {
-	    case "user.authfail":
-		$addr = $ev->GetValue("ip_host");
-		if ($addr != "")
-		    updateAuth($addr,false);
-	    case "engine.timer":
-		onTimer();
-		break;
 	    case "engine.command":
 		if ($ev->GetValue("line"))
 		    $ev->handled = onCommand($ev->GetValue("line"),$ev->retval);
@@ -313,10 +306,21 @@ for (;;) {
 	$ev->Acknowledge();
     }
     if ($ev->type == "answer") {
-	// This is the watched user.auth
-	$addr = $ev->GetValue("ip_host");
-	if ($addr != "")
-	    updateAuth($addr,$ev->handled && ($ev->retval != "-"));
+	switch ($ev->name) {
+	    case "user.auth":
+		$addr = $ev->GetValue("ip_host");
+		if ($addr != "")
+		    updateAuth($addr,$ev->handled && ($ev->retval != "-"));
+		break;
+	    case "user.authfail":
+		$addr = $ev->GetValue("ip_host");
+		if ($addr != "")
+		    updateAuth($addr,false);
+		break;
+	    case "engine.timer":
+		onTimer();
+		break;
+	}
     }
 }
 

@@ -3,21 +3,18 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2006 Null Team
+ * Copyright (C) 2004-2013 Null Team
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This software is distributed under multiple licenses;
+ * see the COPYING file in the main directory for licensing
+ * information for this specific distribution.
+ *
+ * This use of this software may be subject to additional restrictions.
+ * See the LEGAL file in the main directory for details.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
 #include "yateclass.h"
@@ -156,13 +153,13 @@ ParsePoint& ParsePoint::operator=(ParsePoint& parsePoint)
 }
 
 ExpEvaluator::ExpEvaluator(const TokenDict* operators, const TokenDict* unaryOps)
-    : m_operators(operators), m_unaryOps(unaryOps),
+    : m_operators(operators), m_unaryOps(unaryOps), m_lastOpcode(&m_opcodes),
       m_inError(false), m_lineNo(1), m_extender(0)
 {
 }
 
 ExpEvaluator::ExpEvaluator(ExpEvaluator::Parser style)
-    : m_operators(0), m_unaryOps(0),
+    : m_operators(0), m_unaryOps(0), m_lastOpcode(&m_opcodes),
     m_inError(false), m_lineNo(1), m_extender(0)
 {
     switch (style) {
@@ -178,13 +175,13 @@ ExpEvaluator::ExpEvaluator(ExpEvaluator::Parser style)
 }
 
 ExpEvaluator::ExpEvaluator(const ExpEvaluator& original)
-    : m_operators(original.m_operators), m_unaryOps(original.unaryOps()),
+    : m_operators(original.m_operators), m_unaryOps(original.unaryOps()), m_lastOpcode(&m_opcodes),
       m_inError(false), m_lineNo(original.lineNumber()), m_extender(0)
 {
     extender(original.extender());
     for (ObjList* l = original.m_opcodes.skipNull(); l; l = l->skipNext()) {
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
-	m_opcodes.append(o->clone());
+	m_lastOpcode = m_lastOpcode->append(o->clone());
     }
 }
 
@@ -357,11 +354,11 @@ bool ExpEvaluator::getNumber(ParsePoint& expr)
 	return false;
     XDebug(this,DebugAll,"getNumber '%.30s'",(const char*)expr);
     char* endp = 0;
-    long int val = ::strtol(expr,&endp,0);
+    int64_t val = ::strtoll(expr,&endp,0);
     if (!endp || (endp == expr))
 	return false;
     expr = endp;
-    DDebug(this,DebugAll,"Found %ld",val);
+    DDebug(this,DebugAll,"Found " FMT64,val);
     addOpcode(val);
     return true;
 }
@@ -713,7 +710,7 @@ bool ExpEvaluator::trySimplify()
 		    if (o->opcode() == OpcLAnd || o->opcode() == OpcAnd || o->opcode() == OpcMul) {
 			if ((op1->opcode() == OpcPush && !op1->number() && op2->opcode() == OpcField) ||
 			    (op2->opcode() == OpcPush && !op2->number() && op1->opcode() == OpcField)) {
-			    ExpOperation* newOp = (o->opcode() == OpcLAnd) ? new ExpOperation(false) : new ExpOperation((long int)0);
+			    ExpOperation* newOp = (o->opcode() == OpcLAnd) ? new ExpOperation(false) : new ExpOperation((int64_t)0);
 			    newOp->lineNumber(o->lineNumber());
 			    (m_opcodes+i)->set(newOp);
 			    m_opcodes.remove(op1);
@@ -786,6 +783,7 @@ bool ExpEvaluator::trySimplify()
 		break;
 	}
     }
+    m_lastOpcode = m_opcodes.last();
     return done;
 }
 
@@ -797,7 +795,7 @@ void ExpEvaluator::addOpcode(ExpOperation* oper, unsigned int line)
     if (!line)
 	line = lineNumber();
     oper->lineNumber(line);
-    m_opcodes.append(oper);
+    m_lastOpcode = m_lastOpcode->append(oper);
 }
 
 ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
@@ -815,25 +813,25 @@ ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
     }
     ExpOperation* op = new ExpOperation(oper,0,ExpOperation::nonInteger(),barrier);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
-ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, long int value, bool barrier)
+ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, int64_t value, bool barrier)
 {
-    DDebug(this,DebugAll,"addOpcode %u (%s) %lu",oper,getOperator(oper),value);
+    DDebug(this,DebugAll,"addOpcode %u (%s) " FMT64,oper,getOperator(oper),value);
     ExpOperation* op = new ExpOperation(oper,0,value,barrier);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
-ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, const String& name, long int value, bool barrier)
+ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, const String& name, int64_t value, bool barrier)
 {
-    DDebug(this,DebugAll,"addOpcode %u (%s) '%s' %ld",oper,getOperator(oper),name.c_str(),value);
+    DDebug(this,DebugAll,"addOpcode %u (%s) '%s' " FMT64,oper,getOperator(oper),name.c_str(),value);
     ExpOperation* op = new ExpOperation(oper,name,value,barrier);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
@@ -842,16 +840,16 @@ ExpOperation* ExpEvaluator::addOpcode(const String& value)
     DDebug(this,DebugAll,"addOpcode ='%s'",value.c_str());
     ExpOperation* op = new ExpOperation(value);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
-ExpOperation* ExpEvaluator::addOpcode(long int value)
+ExpOperation* ExpEvaluator::addOpcode(int64_t value)
 {
-    DDebug(this,DebugAll,"addOpcode =%ld",value);
+    DDebug(this,DebugAll,"addOpcode =" FMT64,value);
     ExpOperation* op = new ExpOperation(value);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
@@ -860,7 +858,7 @@ ExpOperation* ExpEvaluator::addOpcode(bool value)
     DDebug(this,DebugAll,"addOpcode =%s",String::boolText(value));
     ExpOperation* op = new ExpOperation(value);
     op->lineNumber(lineNumber());
-    m_opcodes.append(op);
+    m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
@@ -1026,7 +1024,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		    default:
 			break;
 		}
-		long int val = 0;
+		int64_t val = 0;
 		switch (oper.opcode()) {
 		    case OpcAnd:
 			val = op1->valInteger() & op2->valInteger();
@@ -1086,7 +1084,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		    pushOne(stack,new ExpOperation(val != 0));
 		}
 		else {
-		    DDebug(this,DebugAll,"Numeric result: %lu",val);
+		    DDebug(this,DebugAll,"Numeric result: " FMT64,val);
 		    pushOne(stack,new ExpOperation(val));
 		}
 	    }
@@ -1192,7 +1190,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		    TelEngine::destruct(fld);
 		    return false;
 		}
-		long int num = val->valInteger();
+		int64_t num = val->valInteger();
 		switch (oper.opcode()) {
 		    case OpcIncPre:
 			num++;
@@ -1288,7 +1286,7 @@ bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, GenObje
 	&stack,oper.name().c_str(),oper.number(),context,(void*)m_extender);
     if (oper.name() == YSTRING("chr")) {
 	String res;
-	for (long int i = oper.number(); i; i--) {
+	for (int i = (int)oper.number(); i; i--) {
 	    ExpOperation* o = popValue(stack,context);
 	    if (!o)
 		return gotError("ExpEvaluator stack underflow",oper.lineNumber());
@@ -1301,7 +1299,7 @@ bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, GenObje
     if (oper.name() == YSTRING("now")) {
 	if (oper.number())
 	    return gotError("Function expects no arguments",oper.lineNumber());
-	pushOne(stack,new ExpOperation((long int)Time::secNow()));
+	pushOne(stack,new ExpOperation((int64_t)Time::secNow()));
 	return true;
     }
     return m_extender && m_extender->runFunction(stack,oper,context);
@@ -1474,7 +1472,7 @@ void ExpEvaluator::dump(const ObjList& codes, String& res) const
     }
 }
 
-long int ExpOperation::valInteger() const
+int64_t ExpOperation::valInteger() const
 {
     return isInteger() ? number() : 0;
 }
@@ -1508,7 +1506,7 @@ ExpOperation* ExpOperation::clone(const char* name) const
 ExpOperation* ExpFunction::clone(const char* name) const
 {
     XDebug(DebugInfo,"ExpFunction::clone('%s') [%p]",name,this);
-    ExpFunction* op = new ExpFunction(name,number());
+    ExpFunction* op = new ExpFunction(name,(long int)number());
     op->lineNumber(lineNumber());
     return op;
 }
@@ -1634,7 +1632,7 @@ unsigned int TableEvaluator::evalLimit(GenObject* context)
 	    const ExpOperation* o = static_cast<const ExpOperation*>(first->get());
 	    if (o->opcode() != ExpEvaluator::OpcPush)
 		break;
-	    int lim = o->number();
+	    int lim = (int)o->number();
 	    if (lim < 0)
 		lim = 0;
 	    m_limitVal = lim;

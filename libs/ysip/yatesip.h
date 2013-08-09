@@ -4,21 +4,18 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2006 Null Team
+ * Copyright (C) 2004-2013 Null Team
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This software is distributed under multiple licenses;
+ * see the COPYING file in the main directory for licensing
+ * information for this specific distribution.
+ *
+ * This use of this software may be subject to additional restrictions.
+ * See the LEGAL file in the main directory for details.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
 #ifndef __YATESIP_H
@@ -62,7 +59,12 @@ public:
     SIPParty(Mutex* mutex = 0);
     SIPParty(bool reliable, Mutex* mutex = 0);
     virtual ~SIPParty();
-    virtual void transmit(SIPEvent* event) = 0;
+    /**
+     * Transmit an event
+     * @param event Evend to send
+     * @return False on fatal failure (subsequent send would fail again)
+     */
+    virtual bool transmit(SIPEvent* event) = 0;
     virtual const char* getProtoName() const = 0;
     virtual bool setParty(const URI& uri) = 0;
     virtual void* getTransport() = 0;
@@ -865,6 +867,12 @@ public:
      */
     inline int getResponseCode() const
 	{ return m_response; }
+
+    /**
+     * Message send failure notification
+     * @param msg Failed message
+     */
+    void msgTransmitFailed(SIPMessage* msg);
 
     /**
      * Set an arbitrary pointer as user specific data

@@ -1,8 +1,8 @@
 #!/bin/sh
 
-grep -l -r '[[:space:]]\+$' * | while read fn; do
+grep -l -r '[ \t]\+$' * | grep -v '\.svn\|\.html\|Doxyfile\|Makefile' | while read fn; do
 echo -n "Processing: $fn ..."
-sed 's/[[:space:]]\+$//' < "$fn" > "$fn.tmp"
+sed 's/[ \t]\+$//' < "$fn" > "$fn.tmp"
 if cmp -s "$fn" "$fn.tmp"; then
     echo " unchanged"
     rm "$fn.tmp"

@@ -4,21 +4,18 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2006 Null Team
+ * Copyright (C) 2004-2013 Null Team
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This software is distributed under multiple licenses;
+ * see the COPYING file in the main directory for licensing
+ * information for this specific distribution.
+ *
+ * This use of this software may be subject to additional restrictions.
+ * See the LEGAL file in the main directory for details.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
 #include <yatejingle.h>
@@ -2149,7 +2146,7 @@ bool JGSession1::sendStreamHosts(const ObjList& hosts, String* stanzaId)
 	return false;
     XmlElement* xml = XMPPUtils::createIq(XMPPUtils::IqSet,m_local,m_remote,0);
     xml->addChild(JGStreamHost::buildHosts(hosts,m_sid));
-    return sendStanza(xml,stanzaId,true,false,m_engine->streamHostTimeout());
+    return sendStanza(xml,stanzaId,true,false,(unsigned int)m_engine->streamHostTimeout());
 }
 
 // Send a stanza with a stream host used

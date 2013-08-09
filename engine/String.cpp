@@ -3,21 +3,18 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2006 Null Team
+ * Copyright (C) 2004-2013 Null Team
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This software is distributed under multiple licenses;
+ * see the COPYING file in the main directory for licensing
+ * information for this specific distribution.
+ *
+ * This use of this software may be subject to additional restrictions.
+ * See the LEGAL file in the main directory for details.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
 #include "yateclass.h"
@@ -184,7 +181,7 @@ void UChar::encode()
 	m_str[0] = '\0';
 }
 
-bool UChar::decode(const char*& str, unsigned int maxChar, bool overlong)
+bool UChar::decode(const char*& str, uint32_t maxChar, bool overlong)
 {
     operator=('\0');
     if (!str)
@@ -193,8 +190,8 @@ bool UChar::decode(const char*& str, unsigned int maxChar, bool overlong)
 	maxChar = 0x10ffff; // RFC 3629 default limit
 
     unsigned int more = 0;
-    u_int32_t min = 0;
-    u_int32_t val = 0;
+    uint32_t min = 0;
+    uint32_t val = 0;
 
     unsigned char c = (unsigned char)*str++;
     // from 1st byte we find out how many are supposed to follow
@@ -350,11 +347,11 @@ String::String(char value, unsigned int repeat)
     }
 }
 
-String::String(int value)
+String::String(int32_t value)
     : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
     XDebug(DebugAll,"String::String(%d) [%p]",value,this);
-    char buf[64];
+    char buf[16];
     ::sprintf(buf,"%d",value);
     m_string = ::strdup(buf);
     if (!m_string)
@@ -362,12 +359,36 @@ String::String(int value)
     changed();
 }
 
-String::String(unsigned int value)
+String::String(int64_t value)
+    : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
+{
+    XDebug(DebugAll,"String::String(" FMT64 ") [%p]",value,this);
+    char buf[24];
+    ::sprintf(buf,FMT64,value);
+    m_string = ::strdup(buf);
+    if (!m_string)
+	Debug("String",DebugFail,"strdup() returned NULL!");
+    changed();
+}
+
+String::String(uint32_t value)
     : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
     XDebug(DebugAll,"String::String(%u) [%p]",value,this);
-    char buf[64];
+    char buf[16];
     ::sprintf(buf,"%u",value);
+    m_string = ::strdup(buf);
+    if (!m_string)
+	Debug("String",DebugFail,"strdup() returned NULL!");
+    changed();
+}
+
+String::String(uint64_t value)
+    : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
+{
+    XDebug(DebugAll,"String::String(" FMT64U ") [%p]",value,this);
+    char buf[24];
+    ::sprintf(buf,FMT64U,value);
     m_string = ::strdup(buf);
     if (!m_string)
 	Debug("String",DebugFail,"strdup() returned NULL!");
@@ -593,6 +614,27 @@ long int String::toLong(long int defvalue, int base, long int minvalue, long int
     return defvalue;
 }
 
+int64_t String::toInt64(int64_t defvalue, int base, int64_t minvalue, int64_t maxvalue,
+    bool clamp) const
+{
+    if (!m_string)
+	return defvalue;
+    char *eptr = 0;
+
+    errno = 0;
+    int64_t val = ::strtoll(m_string,&eptr,base);
+    // on overflow/underflow mark the entire string as unreadable
+    if ((errno == ERANGE) && eptr)
+	eptr = m_string;
+    if (!eptr || *eptr)
+	return defvalue;
+    if (val >= minvalue && val <= maxvalue)
+	return val;
+    if (clamp)
+	return (val < minvalue) ? minvalue : maxvalue;
+    return defvalue;
+}
+
 double String::toDouble(double defvalue) const
 {
     if (!m_string)
@@ -712,17 +754,31 @@ String& String::operator=(char value)
     return operator=(buf);
 }
 
-String& String::operator=(int value)
+String& String::operator=(int32_t value)
 {
-    char buf[64];
+    char buf[16];
     ::sprintf(buf,"%d",value);
     return operator=(buf);
 }
 
-String& String::operator=(unsigned int value)
+String& String::operator=(uint32_t value)
 {
-    char buf[64];
+    char buf[16];
     ::sprintf(buf,"%u",value);
+    return operator=(buf);
+}
+
+String& String::operator=(int64_t value)
+{
+    char buf[24];
+    ::sprintf(buf,FMT64,value);
+    return operator=(buf);
+}
+
+String& String::operator=(uint64_t value)
+{
+    char buf[24];
+    ::sprintf(buf,FMT64U,value);
     return operator=(buf);
 }
 
@@ -732,17 +788,31 @@ String& String::operator+=(char value)
     return operator+=(buf);
 }
 
-String& String::operator+=(int value)
+String& String::operator+=(int32_t value)
 {
-    char buf[64];
+    char buf[16];
     ::sprintf(buf,"%d",value);
     return operator+=(buf);
 }
 
-String& String::operator+=(unsigned int value)
+String& String::operator+=(uint32_t value)
 {
-    char buf[64];
+    char buf[16];
     ::sprintf(buf,"%u",value);
+    return operator+=(buf);
+}
+
+String& String::operator+=(int64_t value)
+{
+    char buf[24];
+    ::sprintf(buf,FMT64,value);
+    return operator+=(buf);
+}
+
+String& String::operator+=(uint64_t value)
+{
+    char buf[24];
+    ::sprintf(buf,FMT64U,value);
     return operator+=(buf);
 }
 
@@ -1290,7 +1360,7 @@ unsigned int String::hash(const char* value)
     return h;
 }
 
-int String::lenUtf8(const char* value, unsigned int maxChar, bool overlong)
+int String::lenUtf8(const char* value, uint32_t maxChar, bool overlong)
 {
     if (!value)
 	return 0;
@@ -1299,8 +1369,8 @@ int String::lenUtf8(const char* value, unsigned int maxChar, bool overlong)
 
     int count = 0;
     unsigned int more = 0;
-    u_int32_t min = 0;
-    u_int32_t val = 0;
+    uint32_t min = 0;
+    uint32_t val = 0;
 
     while (unsigned char c = (unsigned char) *value++) {
 	if (more) {
@@ -1363,7 +1433,7 @@ int String::lenUtf8(const char* value, unsigned int maxChar, bool overlong)
     return count;
 }
 
-int String::fixUtf8(const char* replace, unsigned int maxChar, bool overlong)
+int String::fixUtf8(const char* replace, uint32_t maxChar, bool overlong)
 {
     if (null())
 	return 0;
@@ -1374,8 +1444,8 @@ int String::fixUtf8(const char* replace, unsigned int maxChar, bool overlong)
 
     int count = 0;
     unsigned int more = 0;
-    u_int32_t min = 0;
-    u_int32_t val = 0;
+    uint32_t min = 0;
+    uint32_t val = 0;
     unsigned int pos = 0;
     bool bad = false;
     String tmp;

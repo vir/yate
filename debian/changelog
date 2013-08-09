@@ -1,3 +1,9 @@
+yate (4.3.1~vir2013080901) UNRELEASED; urgency=low
+
+  * Merged upstream fixes.
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Fri, 09 Aug 2013 14:50:24 +0400
+
 yate (4.3.1~vir2013080701) UNRELEASED; urgency=low
 
   * new package "libyate-perl"

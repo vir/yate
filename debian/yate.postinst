@@ -27,13 +27,12 @@ case "$1" in
             addgroup --system yate
             adduser --system --ingroup yate --home $H --gecos "YATE daemon" --shell /bin/sh --disabled-password yate
         fi
-        mkdir -p $H $P
-        if ! dpkg-statoverride --list $H >/dev/null; then
-            chown yate:yate $H
-        fi
-        if ! dpkg-statoverride --list $P >/dev/null; then
-            chown yate:yate $P
-        fi
+
+        for DIR in $H $P
+        do
+            mkdir -p ${DIR}
+            dpkg-statoverride --list $H >/dev/null || chown yate:yate ${DIR}
+        done
         ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

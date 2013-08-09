@@ -1655,6 +1655,24 @@ void Engine::pluginMode(PluginMode mode)
     s_loadMode = mode;
 }
 
+void Engine::tryPluginFile(const String& name, const String& path, bool defload)
+{
+    XDebug(DebugInfo,"Found dir entry: %s",name.c_str());
+    if (s_modsuffix && !name.endsWith(s_modsuffix))
+	return;
+    const String* s = s_cfg.getKey(YSTRING("modules"),name);
+    if (s) {
+	if (!s->toBoolean(defload || s->null()))
+	    return;
+    }
+    else if (!defload)
+	return;
+
+    loadPlugin(path + PATH_SEP + name,
+	s_cfg.getBoolValue(YSTRING("localsym"),name,s_localsymbol),
+	s_cfg.getBoolValue(YSTRING("nounload"),name));
+}
+
 bool Engine::loadPluginDir(const String& relPath)
 {
 #ifdef DEBUG
@@ -1688,13 +1706,7 @@ bool Engine::loadPluginDir(const String& relPath)
 	return false;
     }
     do {
-	XDebug(DebugInfo,"Found dir entry %s",entry.cFileName);
-	int n = ::strlen(entry.cFileName) - s_modsuffix.length();
-	if ((n > 0) && !::strcmp(entry.cFileName+n,s_modsuffix)) {
-	    if (s_cfg.getBoolValue("modules",entry.cFileName,defload))
-		loadPlugin(path + PATH_SEP + entry.cFileName,false,
-		    s_cfg.getBoolValue("nounload",entry.cFileName));
-	}
+	tryPluginFile(entry.cFileName,path,defload);
     } while (::FindNextFile(hf,&entry) && !exiting());
     ::FindClose(hf);
 #else
@@ -1704,16 +1716,8 @@ bool Engine::loadPluginDir(const String& relPath)
 	return false;
     }
     struct dirent *entry;
-    while (((entry = ::readdir(dir)) != 0) && !exiting()) {
-	XDebug(DebugInfo,"Found dir entry %s",entry->d_name);
-	int n = ::strlen(entry->d_name) - s_modsuffix.length();
-	if ((n > 0) && !::strcmp(entry->d_name+n,s_modsuffix)) {
-	    if (s_cfg.getBoolValue("modules",entry->d_name,defload))
-		loadPlugin(path + PATH_SEP + entry->d_name,
-		    s_cfg.getBoolValue("localsym",entry->d_name,s_localsymbol),
-		    s_cfg.getBoolValue("nounload",entry->d_name));
-	}
-    }
+    while (((entry = ::readdir(dir)) != 0) && !exiting())
+	tryPluginFile(entry->d_name,path,defload);
     ::closedir(dir);
 #endif
     return true;
@@ -1726,7 +1730,7 @@ void Engine::loadPlugins()
         unsigned int len = l->length();
         for (unsigned int i=0; i<len; i++) {
             NamedString *n = l->getParam(i);
-            if (n && n->toBoolean()) {
+            if (n && n->toBoolean(n->null())) {
         	String path(n->name());
         	s_params.replaceParams(path);
                 loadPlugin(path);
@@ -1747,7 +1751,7 @@ void Engine::loadPlugins()
 	    if (exiting())
 		return;
             NamedString *n = l->getParam(i);
-            if (n && n->toBoolean()) {
+            if (n && n->toBoolean(n->null())) {
         	String path(n->name());
         	s_params.replaceParams(path);
                 loadPlugin(path);

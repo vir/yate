@@ -1,4 +1,4 @@
-yate (4.3.1~svn5616) UNRELEASED; urgency=low
+yate (4.3.1~svn5617) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -660,8 +660,10 @@ yate (4.3.1~svn5616) UNRELEASED; urgency=low
     conversions - exposed by Visual C++ compiler.  + Don't display
     telnet window size changes in non-debug compile.
   * Updated to SVN revision 5616: + Fixed VC project options conflicts.
+  * Updated to SVN revision 5617: + No longer require =true on a line
+    that requests to load a module.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 09 Aug 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 10 Aug 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

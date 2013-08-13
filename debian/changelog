@@ -1,4 +1,4 @@
-yate (4.3.1~svn5617) UNRELEASED; urgency=low
+yate (4.3.1~svn5622) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -662,8 +662,18 @@ yate (4.3.1~svn5617) UNRELEASED; urgency=low
   * Updated to SVN revision 5616: + Fixed VC project options conflicts.
   * Updated to SVN revision 5617: + No longer require =true on a line
     that requests to load a module.
+  * Updated to SVN revision 5622: + Changed im.execute relay id. Removed
+    im.route message relay. Route chat using call.route message.  +
+    Always handle MESSAGE method. Route incoming MESSAGE received
+    outside INVITE dialog using call.route and send it using
+    msg.execute. Forward MESSAGE received inside INVITE dialogs to
+    channel peer using chan.text.  + Fixed compile error.  + Add a
+    configurable route_type parameter if missing when late routing a
+    msg.execute message.  + Moved msg.execute route type config
+    parameter to separate section. Made it configurable for call.execute
+    also. Drop global mutex lock when done using global data.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 10 Aug 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 14 Aug 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -35,10 +35,11 @@ public:
 class LateHandler : public MessageHandler
 {
 public:
-    LateHandler(const char* name, unsigned priority);
+    LateHandler(const char* name, unsigned priority, const char* routeType = 0);
     virtual bool received(Message& msg);
 protected:
-    String m_routeMsg;
+    bool m_msgExecute;
+    String m_routeType;
 };
 
 static Regexp s_regexp;
@@ -46,6 +47,7 @@ static String s_called;
 static Mutex s_mutex(false,"LateRoute");
 static LateHandler* s_callHandler = 0;
 static LateHandler* s_msgHandler = 0;
+static const String s_routeTypeParam = "route_type";
 
 INIT_PLUGIN(LateRouter);
 
@@ -62,12 +64,11 @@ UNLOAD_PLUGIN(unloadNow)
 }
 
 
-LateHandler::LateHandler(const char* name, unsigned priority)
-    : MessageHandler(name,priority,__plugin.name())
+LateHandler::LateHandler(const char* name, unsigned priority, const char* routeType)
+    : MessageHandler(name,priority,__plugin.name()),
+    m_msgExecute(toString() == "msg.execute"),
+    m_routeType(routeType)
 {
-    // build a proper routing message name
-    int sep = find('.');
-    m_routeMsg = substr(0,sep) + ".route";
 }
 
 bool LateHandler::received(Message& msg)
@@ -88,15 +89,24 @@ bool LateHandler::received(Message& msg)
     msg.clearParam("callto");
     msg.setParam("called",dest);
     // change the message name to the routing one
-    msg = m_routeMsg;
+    msg = "call.route";
+    NamedString* routeType = 0;
+    if (m_msgExecute && m_routeType && !msg.getParam(s_routeTypeParam)) {
+	routeType = new NamedString(s_routeTypeParam,m_routeType);
+	msg.addParam(routeType);
+    }
     bool ok = Engine::dispatch(msg);
     dest = msg.retValue();
     msg.retValue().clear();
+    if (routeType)
+	msg.clearParam(routeType);
     // and restore it back to this handler's name
     msg = toString();
     ok = ok && dest && (dest != "-") && (dest != "error");
     if (ok && (dest == callto)) {
-	Debug(DebugMild,"Call to '%s' late routed back to itself!",callto.c_str());
+	Debug(DebugMild,"%s to '%s' late routed back to itself!",
+	   !m_msgExecute ? "Call" : msg.getValue(s_routeTypeParam,m_routeType),
+	   callto.c_str());
 	ok = false;
     }
     if (!ok) {
@@ -105,7 +115,9 @@ bool LateHandler::received(Message& msg)
 	msg.setParam("callto",callto);
 	return false;
     }
-    Debug(DebugInfo,"Late routing call to '%s' via '%s'",callto.c_str(),dest.c_str());
+    Debug(DebugInfo,"Late routing %s to '%s' via '%s'",
+	!m_msgExecute ? "call" : msg.getValue(s_routeTypeParam,m_routeType),
+	callto.c_str(),dest.c_str());
     // let it pass through to the new target
     msg.setParam("callto",dest);
     return false;
@@ -160,7 +172,8 @@ void LateRouter::initialize()
     if (!s_callHandler && cfg.getBoolValue("general","enabled",(s_regexp && s_called))) {
 	int priority = cfg.getIntValue("general","priority",75);
 	s_callHandler = new LateHandler("call.execute",priority);
-	s_msgHandler = new LateHandler("msg.execute",priority);
+	s_msgHandler = new LateHandler("msg.execute",priority,
+	    cfg.getValue("general","msgexecute_routetype","msg"));
 	Engine::install(s_callHandler);
 	Engine::install(s_msgHandler);
     }

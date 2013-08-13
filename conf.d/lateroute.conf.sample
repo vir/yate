@@ -4,7 +4,7 @@
 ; enabled: boolean: Enable late routing module operation
 ;enabled=true if the list of types is not empty
 
-; priority: int: Priority of call.execute handler
+; priority: int: Priority of call.execute and msg.execute handler
 ;priority=75
 
 ; types: list: Comma separated list of target types to be late routed
@@ -20,3 +20,9 @@
 ; called: string: Template for creating calling number from regexp match
 ;  OBSOLETE - do not use, for backwards compatibility only
 ;called=\0
+
+; msgexecute_routetype: string: route_type parameter to be set when sending call.route
+;  for a msg.execute message
+; This parameter is ignored if 'route_type' is already set
+; Defaults to 'msg' if missing
+;msgexecute_routetype=msg

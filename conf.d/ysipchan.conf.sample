@@ -289,6 +289,13 @@
 ; Defaults to the value set by the maxchans setting from yate.conf
 ;maxchans=
 
+; msg_auth: bool: Flag used to automatically challenge the message method for
+;  authentication
+; The parameter can be overridden when routing by 'omsg_auth' for outgoing calls
+;  and 'imsg_auth' for incoming calls
+; Defaults to true
+;msg_auth=true
+
 ; printmsg: boolean: Print SIP messages to output
 ; This parameter is applied on reload
 ; Defaults to yes

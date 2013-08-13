@@ -1414,9 +1414,8 @@ protected:
 	Update     = 0x00020000,
 	Transfer   = 0x00040000,
 	Control	   = 0x00080000,
-	// Instant messenging related
-	ImRoute    = 0x00100000,
-	ImExecute  = 0x00200000,
+	// Instant messaging related
+	MsgExecute = 0x00100000,
 	// Last possible public ID
 	PubLast    = 0x0fffffff,
 	// Private messages base ID

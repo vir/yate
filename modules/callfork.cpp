@@ -691,7 +691,7 @@ void ForkModule::initialize()
 		    case Text:
 		    case Update:
 		    case Control:
-		    case ImExecute:
+		    case MsgExecute:
 			break;
 		    default:
 			Debug(this,DebugWarn,"Refusing to fork message '%s'",item->name().c_str());

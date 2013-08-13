@@ -5076,7 +5076,7 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     bool isMsg = (meth == YSTRING("message"));
     Message m(isMsg ? "call.route" : ("sip." + meth).c_str());
     if (isMsg) {
-	m.addParam("module",plugin.name())
+	m.addParam("module",plugin.name());
 	m.addParam("route_type","msg");
     }
     String host;

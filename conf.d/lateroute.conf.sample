@@ -21,8 +21,19 @@
 ;  OBSOLETE - do not use, for backwards compatibility only
 ;called=\0
 
-; msgexecute_routetype: string: route_type parameter to be set when sending call.route
+
+[route type]
+
+; call.execute: string: route_type parameter to be set when sending call.route
+;  for a call.execute message
+; This parameter is ignored if 'route_type' is already set
+; This parameter is not applied on reload
+; Defaults to 'call' if missing
+;call.execute=call
+
+; msg.execute: string: route_type parameter to be set when sending call.route
 ;  for a msg.execute message
 ; This parameter is ignored if 'route_type' is already set
+; This parameter is not applied on reload
 ; Defaults to 'msg' if missing
-;msgexecute_routetype=msg
+;msg.execute=msg

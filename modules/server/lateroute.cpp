@@ -35,10 +35,9 @@ public:
 class LateHandler : public MessageHandler
 {
 public:
-    LateHandler(const char* name, unsigned priority, const char* routeType = 0);
+    LateHandler(const char* name, unsigned priority, const char* routeType);
     virtual bool received(Message& msg);
 protected:
-    bool m_msgExecute;
     String m_routeType;
 };
 
@@ -66,7 +65,6 @@ UNLOAD_PLUGIN(unloadNow)
 
 LateHandler::LateHandler(const char* name, unsigned priority, const char* routeType)
     : MessageHandler(name,priority,__plugin.name()),
-    m_msgExecute(toString() == "msg.execute"),
     m_routeType(routeType)
 {
 }
@@ -81,6 +79,7 @@ bool LateHandler::received(Message& msg)
 	return false;
     String callto = dest;
     dest = dest.replaceMatches(s_called);
+    lock.drop();
     msg.replaceParams(dest);
     if (dest.trimBlanks().null())
 	return false;
@@ -90,23 +89,17 @@ bool LateHandler::received(Message& msg)
     msg.setParam("called",dest);
     // change the message name to the routing one
     msg = "call.route";
-    NamedString* routeType = 0;
-    if (m_msgExecute && m_routeType && !msg.getParam(s_routeTypeParam)) {
-	routeType = new NamedString(s_routeTypeParam,m_routeType);
-	msg.addParam(routeType);
-    }
+    if (!msg.getParam(s_routeTypeParam))
+	msg.addParam(s_routeTypeParam,m_routeType);
     bool ok = Engine::dispatch(msg);
     dest = msg.retValue();
     msg.retValue().clear();
-    if (routeType)
-	msg.clearParam(routeType);
     // and restore it back to this handler's name
     msg = toString();
     ok = ok && dest && (dest != "-") && (dest != "error");
     if (ok && (dest == callto)) {
 	Debug(DebugMild,"%s to '%s' late routed back to itself!",
-	   !m_msgExecute ? "Call" : msg.getValue(s_routeTypeParam,m_routeType),
-	   callto.c_str());
+	   msg.getValue(s_routeTypeParam,m_routeType),callto.c_str());
 	ok = false;
     }
     if (!ok) {
@@ -116,8 +109,7 @@ bool LateHandler::received(Message& msg)
 	return false;
     }
     Debug(DebugInfo,"Late routing %s to '%s' via '%s'",
-	!m_msgExecute ? "call" : msg.getValue(s_routeTypeParam,m_routeType),
-	callto.c_str(),dest.c_str());
+	msg.getValue(s_routeTypeParam,m_routeType),callto.c_str(),dest.c_str());
     // let it pass through to the new target
     msg.setParam("callto",dest);
     return false;
@@ -171,9 +163,10 @@ void LateRouter::initialize()
     DDebug("lateroute",DebugInfo,"regexp='%s' called='%s'",s_regexp.c_str(),s_called.c_str());
     if (!s_callHandler && cfg.getBoolValue("general","enabled",(s_regexp && s_called))) {
 	int priority = cfg.getIntValue("general","priority",75);
-	s_callHandler = new LateHandler("call.execute",priority);
+	s_callHandler = new LateHandler("call.execute",priority,
+	    cfg.getValue("route type","call.execute","call"));
 	s_msgHandler = new LateHandler("msg.execute",priority,
-	    cfg.getValue("general","msgexecute_routetype","msg"));
+	    cfg.getValue("route type","msg.execute","msg"));
 	Engine::install(s_callHandler);
 	Engine::install(s_msgHandler);
     }

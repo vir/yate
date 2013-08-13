@@ -43,3 +43,16 @@
 
 ; contact_delete: string: Database query used to delete a specific contact
 ;contact_delete=DELETE FROM roster WHERE username='${username}' AND contact='${contact}'
+
+; route_callto: string: Target to set when successfully handled a call.route message
+; This parameter is applied on reload
+;route_callto=jabber/${called}
+
+
+[priorities]
+; Message handlers priorities
+
+; call.route: integer: call.route message handler priority
+; Defaults to 100
+; This parameter is not applied on reload
+;call.route=100

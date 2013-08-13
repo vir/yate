@@ -3084,7 +3084,7 @@ void JBModule::initialize()
 	setup();
 	installRelay(Halt);
 	installRelay(Help);
-	installRelay(ImExecute);
+	installRelay(MsgExecute);
 	installRelay(EngineStart,"engine.start");
 	s_jabber = new YJBEngine;
 	s_jabber->debugChain(this);
@@ -3115,7 +3115,7 @@ void JBModule::initialize()
 // Message handler
 bool JBModule::received(Message& msg, int id)
 {
-    if (id == ImExecute) {
+    if (id == MsgExecute) {
 	if (isModule(msg))
 	    return false;
 	String* line = getLine(msg);

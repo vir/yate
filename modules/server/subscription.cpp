@@ -497,8 +497,8 @@ public:
     bool handleUserRosterDelete(const String& user, const String& contact, Message& msg);
     // Handle 'user.update' messages with operation 'delete'
     void handleUserUpdateDelete(const String& user, Message& msg);
-    // Handle 'msg.route' messages
-    bool imRoute(Message& msg);
+    // Handle 'call.route' messages
+    bool imRoute(Message& msg, const String& type);
     void expireSubscriptions();
     // Build a database message from account and query.
     // Replace query params. Return Message pointer on success
@@ -518,6 +518,7 @@ public:
     String m_contactSetFullQuery;
     String m_contactDeleteQuery;
     String m_genericUserLoadQuery;
+    String m_routeCallto;
     UserList m_users;
     Mutex m_eventsMutex;
     ObjList m_events;
@@ -1729,13 +1730,12 @@ SubscriptionModule::~SubscriptionModule()
 void SubscriptionModule::initialize()
 {
     Output("Initializing module Subscriptions");
-
+    Configuration cfg(Engine::configFile("subscription"));
     if (m_handlers.skipNull()) {
 	// Reload generic users (wait engine.start for the first load)
 	m_genericUsers.load();
     }
     else {
-	Configuration cfg(Engine::configFile("subscription"));
 	m_account = cfg.getValue("general","account");
 	m_userLoadQuery = cfg.getValue("general","user_roster_load");
 	m_userEventQuery = cfg.getValue("general","user_event_auth");
@@ -1753,7 +1753,7 @@ void SubscriptionModule::initialize()
 	// Install relays
 	setup();
 	installRelay(Halt);
-	installRelay(ImRoute);
+	installRelay(Route,cfg.getIntValue("priorities","call.route",100));
 	// Install handlers
 	for (const TokenDict* d = s_msgHandler; d->token; d++) {
 	    if (d->value == SubMessageHandler::CallCdr && !m_userEventQuery)
@@ -1763,6 +1763,10 @@ void SubscriptionModule::initialize()
 	    m_handlers.append(h);
 	}
     }
+    Lock lck(this);
+    m_routeCallto = cfg.getValue("general","route_callto","jabber/${called}");
+    if (!m_routeCallto)
+	Debug(this,DebugConf,"Empty 'route_callto' in config");
 }
 
 // Enqueue a resource.notify for a given instance
@@ -2788,8 +2792,8 @@ void SubscriptionModule::handleUserUpdateDelete(const String& user, Message& msg
     TelEngine::destruct(queryDb(m));
 }
 
-// Handle 'msg.route' messages
-bool SubscriptionModule::imRoute(Message& msg)
+// Handle 'call.route' messages
+bool SubscriptionModule::imRoute(Message& msg, const String& type)
 {
     String* caller = msg.getParam("caller");
     String* called = msg.getParam("called");
@@ -2799,16 +2803,30 @@ bool SubscriptionModule::imRoute(Message& msg)
 	msg.c_str(),caller->c_str(),called->c_str());
     PresenceUser* u = m_users.getUser(*called);
     if (!u) {
-	Debug(this,DebugStub,"%s caller=%s called=%s destination is an unknown user",
-	    msg.c_str(),caller->c_str(),called->c_str());
+	XDebug(this,DebugAll,
+	    "%s '%s' caller=%s called=%s destination is an unknown user",
+	    msg.c_str(),type.c_str(),caller->c_str(),called->c_str());
 	return false;
     }
     bool auth = msg.getBoolValue("auth");
     bool ok = true;
     unsigned int n = 0;
-    u->lock();
     String* tmp = msg.getParam("called_instance");
-    if (TelEngine::null(tmp)) {
+    bool haveInst = !TelEngine::null(tmp);
+    u->lock();
+    // An instance was given
+    if (haveInst) {
+	if (!auth || u->findContact(*caller) || *caller == *called) {
+	    Instance* inst = u->instances().findInstance(*tmp);
+	    if (inst)
+		inst->addListParam(msg,++n);
+	}
+	else
+	    ok = false;
+    }
+    // No instance given or requested to fallback to online instances
+    if (ok && !n &&
+	(!haveInst || msg.getBoolValue(YSTRING("fallback_online_instances")))) {
 	String* skip = 0;
 	if (*caller == *called)
 	    skip = msg.getParam("caller_instance");
@@ -2817,18 +2835,22 @@ bool SubscriptionModule::imRoute(Message& msg)
 	if (ok)
 	    n = u->instances().addListParam(msg,skip);
     }
-    else if (!auth || u->findContact(*caller) || *caller == *called) {
-	Instance* inst = u->instances().findInstance(*tmp);
-	if (inst)
-	    inst->addListParam(msg,++n);
-    }
-    else
-	ok = false;
     u->unlock();
     TelEngine::destruct(u);
-    if (ok)
-	msg.addParam("instance.count",String(n));
-    return ok && n != 0;
+    if (!ok)
+	return false;
+    msg.addParam("instance.count",String(n));
+    if (n) {
+	lock();
+	msg.retValue() = m_routeCallto;
+	unlock();
+	msg.replaceParams(msg.retValue());
+	if (!msg.retValue())
+	    return false;
+	Debug(this,DebugAll,"Routing '%s' caller=%s called=%s to '%s' instances=%u",
+	    type.c_str(),caller->c_str(),called->c_str(),msg.retValue().c_str(),n);
+    }
+    return n != 0;
 }
 
 void SubscriptionModule::expireSubscriptions()
@@ -2916,8 +2938,13 @@ bool SubscriptionModule::received(Message& msg, int id)
 	case Timer:
 	    s_check = true;
 	    break;
-	case ImRoute:
-	    return imRoute(msg);
+	case Route:
+	    {
+		if (!m_routeCallto)
+		    return false;
+		String* t = msg.getParam(YSTRING("route_type"));
+		return t && (*t == YSTRING("msg")) && imRoute(msg,*t);
+	    }
 	case Halt:
 	    Lock lock(this);
 	    if (m_expire)

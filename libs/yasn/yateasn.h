@@ -201,8 +201,8 @@ public:
      * Get the value in the form of a string
      * @return String containing the internal data
      */
-    inline String getValue()
-	{ return m_data;}
+    inline const String& getValue()
+	{ return m_data; }
 
     /**
      * Get the type of the data so that we know how to interpret it
@@ -227,7 +227,7 @@ public:
      * Assign operator
      */
     inline AsnValue& operator=( AsnValue val)
-    {  
+    {
 	m_data = val.getValue();
 	m_type = val.type();
 	return *this;

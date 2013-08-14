@@ -1,4 +1,4 @@
-yate (4.3.1~svn5622) UNRELEASED; urgency=low
+yate (4.3.1~svn5625) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -672,8 +672,12 @@ yate (4.3.1~svn5622) UNRELEASED; urgency=low
     msg.execute message.  + Moved msg.execute route type config
     parameter to separate section. Made it configurable for call.execute
     also. Drop global mutex lock when done using global data.
+  * Updated to SVN revision 5625: + Improves performance of SNMP
+    queries.  + Return string by reference instead of value from ASN.1
+    library.  + Fixed SNMP Counter64 implementation.  + Constified
+    XmlElement::getText()
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 14 Aug 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 15 Aug 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

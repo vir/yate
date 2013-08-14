@@ -2249,7 +2249,7 @@ void SnmpAgent::assignValue(Snmp::VarBind* varBind, AsnValue* val)
 	    objSyn->m_choiceType = Snmp::ObjectSyntax::APPLICATION_WIDE;
 	    objSyn->m_application_wide = app;
 	    app->m_choiceType = Snmp::ApplicationSyntax::BIG_COUNTER_VALUE;
-	    app->m_big_counter_value->m_Counter64 = *((u_int64_t*)val->getValue().c_str());
+	    app->m_big_counter_value->m_Counter64 = (uint64_t)val->getValue().toInt64();
 	    break;
 	case AsnValue::UNSIGNED_INTEGER:
 	    objSyn->m_choiceType = Snmp::ObjectSyntax::APPLICATION_WIDE;

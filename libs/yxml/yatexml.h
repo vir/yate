@@ -1370,7 +1370,7 @@ public:
     /**
      * @return The first XmlText found in this XmlElement children
      */
-    const String& getText();
+    const String& getText() const;
 
     /**
      * Add a text child

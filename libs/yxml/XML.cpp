@@ -1824,9 +1824,9 @@ void XmlElement::addInheritedNs(const NamedList& list)
 }
 
 // Obtain the first text of this xml element
-const String& XmlElement::getText()
+const String& XmlElement::getText() const
 {
-    XmlText* txt = 0;
+    const XmlText* txt = 0;
     for (ObjList* ob = getChildren().skipNull(); ob && !txt; ob = ob->skipNext())
 	txt = (static_cast<XmlChild*>(ob->get()))->xmlText();
     return txt ? txt->getText() : String::empty();

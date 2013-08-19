@@ -2930,12 +2930,18 @@ int YateSIPUDPTransport::process()
     b[res] = 0;
     if (s_printMsg)
 	printRecvMsg(b,res);
-    if (s_floodProtection && s_floodEvents && plugin.ep() && plugin.ep()->s_evCount >= s_floodEvents && !msgIsAllowed(b,res)) {
-	if (Time::now() >= s_printFloodTime) {
-	    Debug(&plugin,DebugWarn,"Flood detected, dropping INVITE/REGISTER/SUBSCRIBE/OPTIONS messages, allowing reINVITES");
-	    s_printFloodTime = Time::now() + 10000000;
-	}
-	return 0;
+
+    if (s_floodProtection && s_floodEvents && evc >= s_floodEvents) {
+	if (!s_printFloodTime)
+	    Alarm(&plugin,"performance",DebugWarn,
+		"Flood detected, dropping INVITE/REGISTER/SUBSCRIBE/OPTIONS, allowing reINVITES");
+	s_printFloodTime = Time::now() + 10000000;
+	if (!msgIsAllowed(b,res))
+	    return 0;
+    }
+    else if (s_printFloodTime && s_printFloodTime < Time::now()) {
+	s_printFloodTime = 0;
+	Alarm(&plugin,"performance",DebugNote,"Flood drop cleared, resumed normal message processing");
     }
 
     SIPMessage* msg = SIPMessage::fromParsing(0,b,res);

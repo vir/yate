@@ -18,6 +18,7 @@ BINARY=${BINARY:-/usr/bin/yate}
 
 start() {
 	ebegin "Starting ${SVCNAME}"
+	export PWLIB_ASSERT_ACTION=C
 	start-stop-daemon --start --exec "${BINARY}" \
 	    --pidfile "${PIDFILE}" -- \
 	    -d -p "${PIDFILE}" ${OPTS}

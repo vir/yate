@@ -75,6 +75,7 @@ do_start()
 		exit 1
 	fi
 
+	export PWLIB_ASSERT_ACTION=C
 	start-stop-daemon --start --quiet --pidfile $PIDFILE \
 		--exec $DAEMON --test >>/dev/null \
 		|| return 1

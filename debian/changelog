@@ -1,4 +1,4 @@
-yate (4.3.1~svn5625) UNRELEASED; urgency=low
+yate (4.3.1~svn5627) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -676,8 +676,13 @@ yate (4.3.1~svn5625) UNRELEASED; urgency=low
     queries.  + Return string by reference instead of value from ASN.1
     library.  + Fixed SNMP Counter64 implementation.  + Constified
     XmlElement::getText()
+  * Updated to SVN revision 5627: + The undesired default behavior is to
+    interactively ask what to do.  + Make the H.323 channel abort
+    immediately on assertion failure.  + Try to detect early the
+    OpenH323 cleaner overload for outbound calls.  + Emit alerts for SIP
+    and H.323 flood / local congestions.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 15 Aug 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 20 Aug 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

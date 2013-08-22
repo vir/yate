@@ -616,10 +616,7 @@ protected:
      * @param enabler The DebugEnabler to use (0 to to use the parser)
      * @param ptr Pointer to print, 0 to use the session pointer
      */
-    inline void setSdpDebug(DebugEnabler* enabler = 0, void* ptr = 0) {
-	    m_enabler = enabler ? enabler : (DebugEnabler*)m_parser;
-	    m_ptr = ptr ? ptr : (void*)this;
-	}
+    void setSdpDebug(DebugEnabler* enabler = 0, void* ptr = 0);
 
     /**
      * Print current media to output

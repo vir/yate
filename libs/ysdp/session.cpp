@@ -881,6 +881,13 @@ void SDPSession::dispatchingRtp(Message*& msg, SDPMedia* media)
     XDebug(m_enabler,DebugAll,"SDPSession::dispatchingRtp(%p,%p) [%p]",msg,media,m_ptr);
 }
 
+// Set data used in debug 
+void SDPSession::setSdpDebug(DebugEnabler* enabler, void* ptr)
+{
+    m_enabler = enabler ? enabler : static_cast<DebugEnabler*>(m_parser);
+    m_ptr = ptr ? ptr : (void*)this;
+}
+
 // Print current media to output
 void SDPSession::printRtpMedia(const char* reason)
 {

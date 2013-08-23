@@ -716,7 +716,7 @@ public:
     void regRun(const SIPMessage* message, SIPTransaction* t);
     void options(SIPEvent* e, SIPTransaction* t);
     bool generic(SIPEvent* e, SIPTransaction* t, int defErr = 405, bool async = false);
-    bool generic(const SIPMessage* message, SIPTransaction* t, const String& meth, bool autoAuth);
+    bool generic(const SIPMessage* message, SIPTransaction* t, const String& meth, bool autoAuth, bool isMsg);
     bool buildParty(SIPMessage* message, const char* host = 0, int port = 0, const YateSIPLine* line = 0);
     inline void addTcpTransport(YateSIPTCPTransport* trans) {
 	    if (!trans)
@@ -843,13 +843,13 @@ class YateSIPGeneric : public Thread
 {
 public:
     inline YateSIPGeneric(YateSIPEndPoint* ep, SIPMessage* message, SIPTransaction* t,
-	const char* method, int defErr, bool autoAuth)
+	const char* method, int defErr, bool autoAuth, bool isMsg)
 	: Thread("YSIP Generic"),
 	  m_ep(ep), m_msg(message), m_tr(t),
-	  m_method(method), m_error(defErr), m_auth(autoAuth)
+	  m_method(method), m_error(defErr), m_auth(autoAuth), m_message(isMsg)
 	{ }
     virtual void run()
-	{ if (!m_ep->generic(m_msg,m_tr,m_method,m_auth)) m_tr->setResponse(m_error); }
+	{ if (!m_ep->generic(m_msg,m_tr,m_method,m_auth,m_message)) m_tr->setResponse(m_error); }
 private:
     YateSIPEndPoint* m_ep;
     RefPointer<SIPMessage> m_msg;
@@ -857,6 +857,7 @@ private:
     String m_method;
     int m_error;
     bool m_auth;
+    bool m_message;
 };
 
 class YateSIPConnection : public Channel, public SDPSession, public YateSIPPartyHolder
@@ -995,7 +996,6 @@ private:
     Message* m_route;
     ObjList* m_routes;
     bool m_authBye;
-    bool m_authMessage;
     bool m_checkAllowInfo;               // Check Allow in INVITE and OK for INFO support
     bool m_missingAllowInfoDefVal;       // Default INFO support if Allow header is missing
     DtmfMethods m_dtmfMethods;
@@ -1151,7 +1151,13 @@ static bool s_start_rtp = false;
 static bool s_ack_required = true;
 static bool s_1xx_formats = true;
 static bool s_rtp_preserve = false;
+static bool s_enable_transfer = false;
+static bool s_enable_options = false;
+static bool s_enable_message = false;
+static bool s_enable_register = false;
+static bool s_auth_message = true;
 static bool s_auth_register = true;
+static bool s_msg_async = true;
 static bool s_reg_async = true;
 static bool s_gen_async = true;
 static bool s_multi_ringing = false;
@@ -1161,7 +1167,7 @@ static bool s_preventive_bye = true;
 static bool s_ignoreVia = true;          // Ignore Via headers and send answer back to the source
 static bool s_sipt_isup = false;         // Control the application/isup body processing
 static bool s_printMsg = true;           // Print sent/received SIP messages to output
-static bool s_authMessage = true;
+
 static u_int64_t s_waitActiveUdpTrans = 1000000; // Time to wait for active UDP transactions
                                                  // to complete when a listener is disabled
 static unsigned int s_tcpConnectRetry = 3; // Number of TCP connect attempts
@@ -4030,12 +4036,13 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     addAllowed("INVITE");
     addAllowed("BYE");
     addAllowed("CANCEL");
-    addAllowed("MESSAGE");
-    if (s_cfg.getBoolValue("general","registrar",!Engine::clientMode()))
+    if (s_enable_message)
+	addAllowed("MESSAGE");
+    if (s_enable_register)
 	addAllowed("REGISTER");
-    if (s_cfg.getBoolValue("general","transfer",!Engine::clientMode()))
+    if (s_enable_transfer)
 	addAllowed("REFER");
-    if (s_cfg.getBoolValue("general","options",true))
+    if (s_enable_options)
 	addAllowed("OPTIONS");
     m_prack = s_cfg.getBoolValue("general","prack");
     if (m_prack)
@@ -4811,13 +4818,11 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	if (!done)
 	    t->setResponse(415);
     }
-    else if (t->getMethod() == YSTRING("REGISTER"))
+    else if (s_enable_register && t->getMethod() == YSTRING("REGISTER"))
 	regReq(e,t);
-    else if (t->getMethod() == YSTRING("OPTIONS")) {
-	if (!generic(e,t))
-	    options(e,t);
-    }
-    else if (t->getMethod() == YSTRING("REFER")) {
+    else if (s_enable_options && t->getMethod() == YSTRING("OPTIONS"))
+	options(e,t);
+    else if (s_enable_transfer && t->getMethod() == YSTRING("REFER")) {
 	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
 	if (conn) {
 	    conn->doRefer(t);
@@ -4826,7 +4831,7 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	else
 	    t->setResponse(481);
     }
-    else if (t->getMethod() == YSTRING("MESSAGE")) {
+    else if (s_enable_message && t->getMethod() == YSTRING("MESSAGE")) {
 	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
 	if (conn) {
 	    conn->doMessage(t);
@@ -5056,30 +5061,36 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t, int defErr, bool a
     String meth(t->getMethod());
     meth.toLower();
     bool autoAuth = false;
-    if (meth != YSTRING("message")) {
+    bool isMsg = false;
+    if (s_enable_message && meth == YSTRING("message")) {
+	isMsg = true;
+	autoAuth = s_auth_message;
+	if (s_msg_async)
+	    async = true;
+    }
+    if (!isMsg) {
 	Lock mylock(s_globalMutex);
 	const String* auth = s_cfg.getKey("methods",meth);
 	if (!auth)
 	    return false;
 	autoAuth = auth->toBoolean(true);
+	if (s_gen_async)
+	    async = true;
     }
-    else
-	autoAuth = s_authMessage;
-    if (async || s_gen_async) {
-	YateSIPGeneric* gen = new YateSIPGeneric(this,e->getMessage(),t,meth,defErr,autoAuth);
+    if (async) {
+	YateSIPGeneric* gen = new YateSIPGeneric(this,e->getMessage(),t,meth,defErr,autoAuth,isMsg);
 	if (gen->startup())
 	    return true;
 	Debug(&plugin,DebugWarn,"Failed to start generic thread");
 	delete gen;
     }
-    return generic(e->getMessage(),t,meth,autoAuth);
+    return generic(e->getMessage(),t,meth,autoAuth,isMsg);
 }
 
-bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, const String& meth, bool autoAuth)
+bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, const String& meth, bool autoAuth, bool isMsg)
 {
     if (!(message && t))
 	return false;
-    bool isMsg = (meth == YSTRING("message"));
     Message m(isMsg ? "call.route" : ("sip." + meth).c_str());
     if (isMsg) {
 	m.addParam("module",plugin.name());
@@ -5370,7 +5381,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       YateSIPPartyHolder(driver()),
       m_tr(tr), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(false),
       m_state(Incoming), m_port(0), m_route(0), m_routes(0),
-      m_authBye(true), m_authMessage(s_authMessage),
+      m_authBye(true),
       m_checkAllowInfo(s_checkAllowInfo), m_missingAllowInfoDefVal(s_missingAllowInfoDefVal),
       m_honorDtmfDetect(s_honorDtmfDetect),
       m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
@@ -5544,7 +5555,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       YateSIPPartyHolder(driver()),
       m_tr(0), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(true),
       m_state(Outgoing), m_port(0), m_route(0), m_routes(0),
-      m_authBye(false), m_authMessage(s_authMessage),
+      m_authBye(false),
       m_checkAllowInfo(s_checkAllowInfo), m_missingAllowInfoDefVal(s_missingAllowInfoDefVal),
       m_honorDtmfDetect(s_honorDtmfDetect),
       m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
@@ -5554,7 +5565,6 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	&msg,uri.c_str(),this);
     m_targetid = target;
     setReason();
-    m_authMessage = msg.getBoolValue(YSTRING("omsg_auth"),m_authMessage);
     m_checkAllowInfo = msg.getBoolValue(YSTRING("ocheck_allow_info"),m_checkAllowInfo);
     m_missingAllowInfoDefVal = msg.getBoolValue(YSTRING("omissing_allow_info"),m_missingAllowInfoDefVal);
     String* meths = msg.getParam("odtmfmethods");
@@ -6812,11 +6822,11 @@ void YateSIPConnection::doRefer(SIPTransaction* t)
 
 void YateSIPConnection::doMessage(SIPTransaction* t)
 {
-    DDebug(this,DebugAll,"doMessage(%p) auth=%u [%p]",t,m_authMessage,this);
+    DDebug(this,DebugAll,"doMessage(%p) [%p]",t,this);
     const SIPMessage* sip = t ? t->initialMessage() : 0;
     if (!sip)
 	return;
-    if (m_authMessage && !checkUser(t))
+    if (m_authBye && !checkUser(t))
 	return;
     // Change party
     if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
@@ -7229,7 +7239,6 @@ void YateSIPConnection::callAccept(Message& msg)
 	    m_rtpForward = false;
     }
     m_secure = m_secure && msg.getBoolValue(YSTRING("secure"),true);
-    m_authMessage = msg.getBoolValue(YSTRING("imsg_auth"),m_authMessage);
     // Update dtmf methods from message
     m_checkAllowInfo = msg.getBoolValue(YSTRING("icheck_allow_info"),m_checkAllowInfo);
     m_missingAllowInfoDefVal = msg.getBoolValue(YSTRING("imissing_allow_info"),m_missingAllowInfoDefVal);
@@ -8353,12 +8362,19 @@ void SIPDriver::initialize()
     s_lineKeepTcpOffline = s_cfg.getBoolValue("general","line_keeptcpoffline",!Engine::clientMode());
     s_defEncoding = s_cfg.getIntValue("general","body_encoding",SipHandler::s_bodyEnc,SipHandler::BodyBase64);
     s_gen_async = s_cfg.getBoolValue("general","async_generic",true);
-    s_authMessage = s_cfg.getBoolValue("general","msg_auth",true);
     s_sipt_isup = s_cfg.getBoolValue("sip-t","isup",false);
+    s_enable_transfer = s_cfg.getBoolValue("general","transfer",!Engine::clientMode());
+    s_enable_options = s_cfg.getBoolValue("options","enable",
+	s_cfg.getBoolValue("general","options",true));
+    s_enable_message = s_cfg.getBoolValue("message","enable",false);
+    s_auth_message = s_cfg.getBoolValue("message","auth_required",true);
+    s_msg_async = s_cfg.getBoolValue("message","async_process",true);
+    s_enable_register = s_cfg.getBoolValue("registrar","enable",
+	s_cfg.getBoolValue("general","registrar",!Engine::clientMode()));
+    s_auth_register = s_cfg.getBoolValue("registrar","auth_required",true);
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);
-    s_auth_register = s_cfg.getBoolValue("registrar","auth_required",true);
     s_nat_refresh = s_cfg.getIntValue("registrar","nat_refresh",25);
     s_reg_async = s_cfg.getBoolValue("registrar","async_process",true);
     s_ack_required = !s_cfg.getBoolValue("hacks","ignore_missing_ack",false);

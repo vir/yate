@@ -1,4 +1,4 @@
-yate (4.3.1~svn5628) UNRELEASED; urgency=low
+yate (4.3.1~svn5629) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -683,8 +683,12 @@ yate (4.3.1~svn5628) UNRELEASED; urgency=low
     and H.323 flood / local congestions.
   * Updated to SVN revision 5628: + Emit alerts for SIP and H.323 flood
     / local congestions.  + Fixed bug: properly convert pointers.
+  * Updated to SVN revision 5629: + Removed separate in-dialog
+    authetication for MESSAGE, follow same rule as BYE.  + Made the
+    routed MESSAGE advertising and processing disabled by default.  +
+    Added separate config sections for SIP MESSAGE and OPTIONS.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 23 Aug 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 24 Aug 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

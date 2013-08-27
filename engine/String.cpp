@@ -1290,8 +1290,10 @@ String String::sqlEscape(const char* str, char extraEsc)
 	return s;
     char c;
     while ((c=*str++)) {
-	if (c == '\\' || c == '\'' || c == extraEsc)
-	    s += '\\';
+	if (c == '\'')
+	    s += "'";
+	else if (c == '\\' || c == extraEsc)
+	    s += "\\";
 	s += c;
     }
     return s;

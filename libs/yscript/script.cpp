@@ -59,7 +59,7 @@ bool ScriptParser::parseFile(const char* name, bool fragment)
     if (f.readData(text,(int)len) != len)
 	return false;
     text[len] = '\0';
-    return parse(text,fragment,name);
+    return parse(text,fragment,name,(int)len);
 }
 
 void ScriptParser::setCode(ScriptCode* code)

@@ -728,6 +728,10 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	NO_PARAM_STRING_METHOD(trimBlanks);
 	return true;
     }
+    if (name == YSTRING("sqlEscape")) {
+	NO_PARAM_STRING_METHOD(sqlEscape);
+	return true;
+    }
 #undef NO_PARAM_STRING_METHOD
 
 #define MAKE_WITH_METHOD \

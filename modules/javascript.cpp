@@ -133,7 +133,6 @@ public:
 private:
     JsParser m_jsCode;
     RefPointer<ScriptContext> m_context;
-    unsigned int m_fileTime;
     bool m_inUse;
     static ObjList s_globals;
 };
@@ -2508,7 +2507,7 @@ ObjList JsGlobal::s_globals;
 
 JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath)
     : NamedString(scriptName,fileName),
-      m_fileTime(0), m_inUse(true)
+      m_inUse(true)
 {
     m_jsCode.basePath(s_basePath);
     if (relPath)
@@ -2516,7 +2515,6 @@ JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath)
     m_jsCode.link(s_allowLink);
     m_jsCode.trace(s_allowTrace);
     DDebug(&__plugin,DebugAll,"Loading global Javascript '%s' from '%s'",name().c_str(),c_str());
-    File::getFileTime(c_str(),m_fileTime);
     if (m_jsCode.parseFile(*this))
 	Debug(&__plugin,DebugInfo,"Parsed '%s' script: %s",name().c_str(),c_str());
     else if (*this)
@@ -2540,15 +2538,7 @@ JsGlobal::~JsGlobal()
 
 bool JsGlobal::fileChanged(const char* fileName) const
 {
-    if (m_jsCode.basePath() != s_basePath)
-	return true;
-    String tmp(fileName);
-    m_jsCode.adjustPath(tmp);
-    if (tmp != *this)
-	return true;
-    unsigned int time;
-    File::getFileTime(tmp,time);
-    return (time != m_fileTime);
+    return m_jsCode.scriptChanged(fileName,s_basePath);
 }
 
 void JsGlobal::markUnused()
@@ -2901,19 +2891,28 @@ void JsModule::initialize()
 	tmp += Engine::pathSeparator();
     s_basePath = tmp;
     s_allowAbort = cfg.getBoolValue("general","allow_abort");
-    s_allowTrace = cfg.getBoolValue("general","allow_trace");
-    s_allowLink = cfg.getBoolValue("general","allow_link",true);
-    lock();
-    m_assistCode.clear();
-    m_assistCode.basePath(tmp);
-    m_assistCode.link(s_allowLink);
-    m_assistCode.trace(s_allowTrace);
+    bool changed = false;
+    if (cfg.getBoolValue("general","allow_trace") != s_allowTrace) {
+	s_allowTrace = !s_allowTrace;
+	changed = true;
+    }
+    if (cfg.getBoolValue("general","allow_link",true) != s_allowLink) {
+	s_allowLink = !s_allowLink;
+	changed = true;
+    }
     tmp = cfg.getValue("general","routing");
-    m_assistCode.adjustPath(tmp);
-    if (m_assistCode.parseFile(tmp))
-	Debug(this,DebugInfo,"Parsed routing script: %s",tmp.c_str());
-    else if (tmp)
-	Debug(this,DebugWarn,"Failed to parse script: %s",tmp.c_str());
+    lock();
+    if (changed || m_assistCode.scriptChanged(tmp,s_basePath)) {
+	m_assistCode.clear();
+	m_assistCode.link(s_allowLink);
+	m_assistCode.trace(s_allowTrace);
+	m_assistCode.basePath(s_basePath);
+	m_assistCode.adjustPath(tmp);
+	if (m_assistCode.parseFile(tmp))
+	    Debug(this,DebugInfo,"Parsed routing script: %s",tmp.c_str());
+	else if (tmp)
+	    Debug(this,DebugWarn,"Failed to parse script: %s",tmp.c_str());
+    }
     JsGlobal::markUnused();
     unlock();
     NamedList* sect = cfg.getSection("scripts");

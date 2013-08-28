@@ -76,6 +76,18 @@ protected:
 	{ obj->ref(); }
 };
 
+class JsCodeFile : public String
+{
+public:
+    inline JsCodeFile(const String& file)
+	: String(file), m_fileTime(0)
+	{ File::getFileTime(file,m_fileTime); }
+    inline bool fileChanged() const
+	{ unsigned int t = 0; return !(File::getFileTime(c_str(),t) && t == m_fileTime); }
+private:
+    unsigned int m_fileTime;
+};
+
 struct JsEntry
 {
     long int number;
@@ -167,6 +179,7 @@ public:
     const String& getFileAt(unsigned int index) const;
     inline const String& getFileName(unsigned int line) const
 	{ return getFileAt(getFileNo(line)); }
+    bool scriptChanged(const String& file) const;
 protected:
     inline void trace(bool allowed)
 	{ m_traceable = allowed; }
@@ -1132,9 +1145,20 @@ void JsCode::setBaseFile(const String& file)
 {
     if (file.null() || m_depth || m_included.find(file))
 	return;
-    m_included.append(new String(file));
+    m_included.append(new JsCodeFile(file));
     int idx = m_included.index(file);
     m_lineNo = ((idx + 1) << 24) | 1;
+}
+
+bool JsCode::scriptChanged(const String& file) const
+{
+    const JsCodeFile* f = static_cast<const JsCodeFile*>(m_included.get());
+    if (!f || file != *f)
+	return true;
+    for (const ObjList* l = m_included.skipNull(); l; l = l->skipNext())
+	if (static_cast<const JsCodeFile*>(l->get())->fileChanged())
+	    return true;
+    return false;
 }
 
 bool JsCode::preProcessInclude(ParsePoint& expr, bool once, GenObject* context)
@@ -1156,7 +1180,7 @@ bool JsCode::preProcessInclude(ParsePoint& expr, bool once, GenObject* context)
 		int idx = m_included.index(str);
 		if (!(once && (idx >= 0))) {
 		    if (idx < 0) {
-			String* s = new String(str);
+			String* s = new JsCodeFile(str);
 			m_included.append(s);
 			idx = m_included.index(s);
 		    }
@@ -3318,7 +3342,7 @@ bool JsParser::callable(const String& name)
 }
 
 // Parse a piece of Javascript text
-bool JsParser::parse(const char* text, bool fragment, const char* file)
+bool JsParser::parse(const char* text, bool fragment, const char* file, int len)
 {
     if (TelEngine::null(text))
 	return false;
@@ -3345,6 +3369,19 @@ bool JsParser::parse(const char* text, bool fragment, const char* file)
 	code->link();
     code->trace(m_allowTrace);
     return true;
+}
+
+// Check if the script, path or any included files have changed
+bool JsParser::scriptChanged(const char* file) const
+{
+    if (TelEngine::null(file))
+	return true;
+    const JsCode* c = static_cast<const JsCode*>(code());
+    if (!c)
+	return true;
+    String tmp(file);
+    adjustPath(tmp);
+    return c->scriptChanged(tmp);
 }
 
 // Evaluate a string as expression or statement

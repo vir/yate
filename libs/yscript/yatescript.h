@@ -1725,9 +1725,10 @@ public:
      * @param text Source code text
      * @param fragment True if the code is just an included fragment
      * @param file Name of the file that is being parsed
+     * @param len Length of text, negative if unknown
      * @return True if the text was successfully parsed
      */
-    virtual bool parse(const char* text, bool fragment = false, const char* file = 0) = 0;
+    virtual bool parse(const char* text, bool fragment = false, const char* file = 0, int len = -1) = 0;
 
     /**
      * Parse a file as script source code
@@ -2335,9 +2336,10 @@ public:
      * @param text Source code text
      * @param fragment True if the code is just an included fragment
      * @param file Name of the file that is being parsed
+     * @param len Length of text, negative if unknown
      * @return True if the text was successfully parsed
      */
-    virtual bool parse(const char* text, bool fragment = false, const char* file = 0);
+    virtual bool parse(const char* text, bool fragment = false, const char* file = 0, int len = -1);
 
     /**
      * Create a context adequate for Javascript code
@@ -2384,11 +2386,27 @@ public:
 	{ return m_basePath; }
 
     /**
-     * Set the pase script path
+     * Set the base script path
      * @param path Base path to add to relative script paths
      */
     inline void basePath(const char* path)
 	{ m_basePath = path; }
+
+    /**
+     * Check if the script or any includes have changed
+     * @param file Name of the file to check
+     * @return True if the script may have changed, false if not changed
+     */
+    bool scriptChanged(const char* file) const;
+
+    /**
+     * Check if the script or any includes have changed
+     * @param file Name of the file to check
+     * @param path New base path to check
+     * @return True if the script may have changed, false if not changed
+     */
+    inline bool scriptChanged(const char* file, const String& path) const
+	{ return (path != m_basePath) || scriptChanged(file); }
 
     /**
      * Set whether the Javascript code should be linked or not

@@ -976,7 +976,6 @@ const String& JsCode::getFileAt(unsigned int index) const
     if (!index)
 	return s_noFile;
     const GenObject* file = m_included[index - 1];
-Debug(DebugTest,"get file at(%u) got %p '%s'",index,file,(file?file->toString().c_str():""));
     return file ? file->toString() : s_noFile;
 }
 

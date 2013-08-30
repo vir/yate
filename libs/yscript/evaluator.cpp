@@ -1439,7 +1439,7 @@ void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
 	case OpcPush:
 	case OpcCopy:
 	    if (oper.isInteger())
-		res << (int)oper.number();
+		res << oper.number();
 	    else
 		res << "'" << oper << "'";
 	    break;
@@ -1447,7 +1447,7 @@ void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
 	    res << oper.name();
 	    break;
 	case OpcFunc:
-	    res << oper.name() << "(" << (int)oper.number() << ")";
+	    res << oper.name() << "(" << oper.number() << ")";
 	    break;
 	default:
 	    {
@@ -1458,7 +1458,7 @@ void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
 		    res << "[" << oper.opcode() << "]";
 	    }
 	    if (oper.number() && oper.isInteger())
-		res << "(" << (int)oper.number() << ")";
+		res << "(" << oper.number() << ")";
     }
 }
 
@@ -1470,6 +1470,11 @@ void ExpEvaluator::dump(const ObjList& codes, String& res) const
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
 	dump(*o,res);
     }
+}
+
+void ExpEvaluator::dump(String& res) const
+{
+    return dump(m_opcodes,res);
 }
 
 int64_t ExpOperation::valInteger() const

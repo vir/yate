@@ -82,6 +82,11 @@ public:
     inline JsCodeFile(const String& file)
 	: String(file), m_fileTime(0)
 	{ File::getFileTime(file,m_fileTime); }
+    inline JsCodeFile(const String& file, unsigned int fTime)
+	: String(file), m_fileTime(fTime)
+	{ }
+    inline unsigned int fileTime() const
+	{ return m_fileTime; }
     inline bool fileChanged() const
 	{ unsigned int t = 0; return !(File::getFileTime(c_str(),t) && t == m_fileTime); }
 private:
@@ -163,6 +168,7 @@ public:
     virtual bool evaluate(ScriptRun& runner, ObjList& results) const;
     virtual ScriptRun* createRunner(ScriptContext* context, const char* title);
     virtual bool null() const;
+    virtual void dump(String& res) const;
     bool link();
     inline bool traceable() const
 	{ return m_traceable; }
@@ -2723,11 +2729,25 @@ ScriptRun* JsCode::createRunner(ScriptContext* context, const char* title)
     return new JsRunner(this,context,title);
 }
 
-
 bool JsCode::null() const
 {
     return m_linked.null() && !m_opcodes.skipNull();
 }
+
+void JsCode::dump(String& res) const
+{
+    if (m_linked.null())
+	return ExpEvaluator::dump(res);
+    for (unsigned int i = 0; i < m_linked.length(); i++) {
+	const ExpOperation* o = static_cast<const ExpOperation*>(m_linked[i]);
+	if (!o)
+	    continue;
+	if (res)
+	    res << " ";
+	ExpEvaluator::dump(*o,res);
+    }
+}
+
 
 ScriptRun::Status JsRunner::reset(bool init)
 {
@@ -3217,9 +3237,8 @@ void JsCodeStats::dump(Stream& file)
 		str << "calls=" << cs->callsCount << " "
 		    << JsCode::getLineNo(cs->calledLine) << "\n";
 	    }
-	    // TODO: properly write microseconds
 	    str << JsCode::getLineNo(ls->lineNumber) << " " << ls->operations << " "
-		<< (unsigned int)ls->microseconds << "\n";
+		<< ls->microseconds << "\n";
 	}
 	file.writeData(str);
     }
@@ -3366,11 +3385,13 @@ bool JsParser::parse(const char* text, bool fragment, const char* file, int len)
 	setCode(0);
 	return false;
     }
-    DDebug(DebugAll,"Compiled: %s",code->dump().c_str());
+    DDebug(DebugAll,"Compiled: %s",code->ExpEvaluator::dump().c_str());
     code->simplify();
-    DDebug(DebugAll,"Simplified: %s",code->dump().c_str());
-    if (m_allowLink)
+    DDebug(DebugAll,"Simplified: %s",code->ExpEvaluator::dump().c_str());
+    if (m_allowLink) {
 	code->link();
+	DDebug(DebugAll,"Linked: %s",code->ExpEvaluator::dump().c_str());
+    }
     code->trace(m_allowTrace);
     return true;
 }

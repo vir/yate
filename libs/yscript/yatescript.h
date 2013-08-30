@@ -409,8 +409,7 @@ public:
      * Dump the postfix expression according to current operators dictionary
      * @param res Result string representation of operations
      */
-    inline void dump(String& res) const
-	{ return dump(m_opcodes,res); }
+    virtual void dump(String& res) const;
 
     /**
      * Dump a list of operations according to current operators dictionary
@@ -1020,6 +1019,19 @@ public:
 	{ }
 
     /**
+     * Constructor from components
+     * @param oper Operation code
+     * @param name Optional name of the operation or result
+     * @param value String value of operation
+     * @param number Integer value
+     * @param barrier True if the operation is an expression barrier on the stack
+     */
+    inline ExpOperation(ExpEvaluator::Opcode oper, const char* name, const char* value, int64_t number, bool barrier)
+	: NamedString(name,value),
+	  m_opcode(oper), m_number(number), m_lineNo(0), m_barrier(barrier)
+	{ }
+
+    /**
      * Retrieve the code of this operation
      * @return Operation code as declared in the expression evaluator
      */
@@ -1128,9 +1140,10 @@ public:
      * Constructor
      * @param name Name of the function
      * @param argc Number of arguments expected by function
+     * @param barrier True if the function is an expression barrier on the stack
      */
-    inline ExpFunction(const char* name, long int argc = 0)
-	: ExpOperation(ExpEvaluator::OpcFunc,name,argc)
+    inline ExpFunction(const char* name, long int argc = 0, bool barrier = false)
+	: ExpOperation(ExpEvaluator::OpcFunc,name,argc,barrier)
 	{ if (name) (*this) << "[function " << name << "()]"; }
 
     /**
@@ -2186,6 +2199,13 @@ public:
 	{ return m_length; }
 
     /**
+     * Set the internal length to a specific value
+     * @param len Length of array to set
+     */
+    inline void setLength(int32_t len)
+	{ m_length = len; }
+
+    /**
      * Add an item at the end of the array
      * @param item Item to add to array
      */
@@ -2235,13 +2255,6 @@ protected:
      * @return True if evaluation succeeded
      */
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
-
-    /**
-     * Set the internal length and the "length" parameter to a specific value
-     * @param len Length of array to set
-     */
-    inline void setLength(int32_t len)
-	{ m_length = len; }
 
 private:
     bool runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context);

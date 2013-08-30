@@ -2406,6 +2406,13 @@ public:
 	{ m_basePath = path; }
 
     /**
+     * Retrieve the last parsed file name
+     * @return Name of the successfully parsed file or an empty String
+     */
+    inline const String& parsedFile() const
+	{ return m_parsedFile; }
+
+    /**
      * Check if the script or any includes have changed
      * @param file Name of the file to check
      * @return True if the script may have changed, false if not changed
@@ -2472,6 +2479,7 @@ public:
 
 private:
     String m_basePath;
+    String m_parsedFile;
     bool m_allowLink;
     bool m_allowTrace;
 };

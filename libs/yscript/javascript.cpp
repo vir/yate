@@ -88,7 +88,7 @@ public:
     inline unsigned int fileTime() const
 	{ return m_fileTime; }
     inline bool fileChanged() const
-	{ unsigned int t = 0; return !(File::getFileTime(c_str(),t) && t == m_fileTime); }
+	{ unsigned int t = 0; File::getFileTime(c_str(),t); return t != m_fileTime; }
 private:
     unsigned int m_fileTime;
 };
@@ -185,7 +185,7 @@ public:
     const String& getFileAt(unsigned int index) const;
     inline const String& getFileName(unsigned int line) const
 	{ return getFileAt(getFileNo(line)); }
-    bool scriptChanged(const String& file) const;
+    bool scriptChanged() const;
 protected:
     inline void trace(bool allowed)
 	{ m_traceable = allowed; }
@@ -976,6 +976,7 @@ const String& JsCode::getFileAt(unsigned int index) const
     if (!index)
 	return s_noFile;
     const GenObject* file = m_included[index - 1];
+Debug(DebugTest,"get file at(%u) got %p '%s'",index,file,(file?file->toString().c_str():""));
     return file ? file->toString() : s_noFile;
 }
 
@@ -1160,11 +1161,8 @@ void JsCode::setBaseFile(const String& file)
     m_lineNo = ((idx + 1) << 24) | 1;
 }
 
-bool JsCode::scriptChanged(const String& file) const
+bool JsCode::scriptChanged() const
 {
-    const JsCodeFile* f = static_cast<const JsCodeFile*>(m_included.get());
-    if (!f || file != *f)
-	return true;
     for (const ObjList* l = m_included.skipNull(); l; l = l->skipNext())
 	if (static_cast<const JsCodeFile*>(l->get())->fileChanged())
 	    return true;
@@ -3373,6 +3371,7 @@ bool JsParser::parse(const char* text, bool fragment, const char* file, int len)
     ParsePoint expr(text,0,0,file);
     if (fragment)
 	return code() && static_cast<JsCode*>(code())->compile(expr,this);
+    m_parsedFile.clear();
     JsCode* code = new JsCode;
     setCode(code);
     code->deref();
@@ -3385,6 +3384,7 @@ bool JsParser::parse(const char* text, bool fragment, const char* file, int len)
 	setCode(0);
 	return false;
     }
+    m_parsedFile = file;
     DDebug(DebugAll,"Compiled: %s",code->ExpEvaluator::dump().c_str());
     code->simplify();
     DDebug(DebugAll,"Simplified: %s",code->ExpEvaluator::dump().c_str());
@@ -3406,7 +3406,7 @@ bool JsParser::scriptChanged(const char* file) const
 	return true;
     String tmp(file);
     adjustPath(tmp);
-    return c->scriptChanged(tmp);
+    return (parsedFile() != tmp) || c->scriptChanged();
 }
 
 // Evaluate a string as expression or statement

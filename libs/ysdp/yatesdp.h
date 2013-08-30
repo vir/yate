@@ -475,9 +475,11 @@ public:
      * Use the raw SDP if present.
      * @param msg The list of parameters
      * @param update True to update RTP/SDP data if raw SDP is not found in the list
+     * @param allowEmptyAddr Allow empty address in parameters (default: false)
      * @return MimeSdpBody pointer or 0
      */
-    MimeSdpBody* createPasstroughSDP(NamedList& msg, bool update = true);
+    MimeSdpBody* createPasstroughSDP(NamedList& msg, bool update = true,
+	bool allowEmptyAddr = false);
 
     /**
      * Creates a set of unstarted external RTP channels from remote addr and
@@ -542,11 +544,12 @@ public:
      * @param natAddr Optional NAT address if detected
      * @param body Pointer to the body to extract raw SDP from
      * @param force True to override RTP forward flag
+     * @param allowEmptyAddr Allow empty address in parameters (default: false)
      * @return True if RTP data was added. Media is always added if present and
      *  remote address is not empty
      */
     bool addRtpParams(NamedList& msg, const String& natAddr = String::empty(),
-	const MimeBody* body = 0, bool force = false);
+	const MimeBody* body = 0, bool force = false, bool allowEmptyAddr = false);
 
     /**
      * Reset this object to default values
@@ -589,10 +592,11 @@ public:
      * @param rtpAddr String to be filled with rtp address from the list
      * @param oldList Optional existing media list (found media will be removed
      *  from it and added to the returned list
+     * @param allowEmptyAddr Allow empty address in parameters (default: false)
      * @return List of media or 0 if not found or rtpAddr is empty
      */
     static ObjList* updateRtpSDP(const NamedList& params, String& rtpAddr,
-	ObjList* oldList = 0);
+	ObjList* oldList = 0, bool allowEmptyAddr = false);
 
 protected:
     /**

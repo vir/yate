@@ -82,8 +82,13 @@ public:
     inline JsCodeFile(const String& file)
 	: String(file), m_fileTime(0)
 	{ File::getFileTime(file,m_fileTime); }
+    inline JsCodeFile(const String& file, unsigned int fTime)
+	: String(file), m_fileTime(fTime)
+	{ }
+    inline unsigned int fileTime() const
+	{ return m_fileTime; }
     inline bool fileChanged() const
-	{ unsigned int t = 0; return !(File::getFileTime(c_str(),t) && t == m_fileTime); }
+	{ unsigned int t = 0; File::getFileTime(c_str(),t); return t != m_fileTime; }
 private:
     unsigned int m_fileTime;
 };
@@ -163,6 +168,7 @@ public:
     virtual bool evaluate(ScriptRun& runner, ObjList& results) const;
     virtual ScriptRun* createRunner(ScriptContext* context, const char* title);
     virtual bool null() const;
+    virtual void dump(String& res) const;
     bool link();
     inline bool traceable() const
 	{ return m_traceable; }
@@ -179,7 +185,7 @@ public:
     const String& getFileAt(unsigned int index) const;
     inline const String& getFileName(unsigned int line) const
 	{ return getFileAt(getFileNo(line)); }
-    bool scriptChanged(const String& file) const;
+    bool scriptChanged() const;
 protected:
     inline void trace(bool allowed)
 	{ m_traceable = allowed; }
@@ -1154,11 +1160,8 @@ void JsCode::setBaseFile(const String& file)
     m_lineNo = ((idx + 1) << 24) | 1;
 }
 
-bool JsCode::scriptChanged(const String& file) const
+bool JsCode::scriptChanged() const
 {
-    const JsCodeFile* f = static_cast<const JsCodeFile*>(m_included.get());
-    if (!f || file != *f)
-	return true;
     for (const ObjList* l = m_included.skipNull(); l; l = l->skipNext())
 	if (static_cast<const JsCodeFile*>(l->get())->fileChanged())
 	    return true;
@@ -2723,11 +2726,25 @@ ScriptRun* JsCode::createRunner(ScriptContext* context, const char* title)
     return new JsRunner(this,context,title);
 }
 
-
 bool JsCode::null() const
 {
     return m_linked.null() && !m_opcodes.skipNull();
 }
+
+void JsCode::dump(String& res) const
+{
+    if (m_linked.null())
+	return ExpEvaluator::dump(res);
+    for (unsigned int i = 0; i < m_linked.length(); i++) {
+	const ExpOperation* o = static_cast<const ExpOperation*>(m_linked[i]);
+	if (!o)
+	    continue;
+	if (res)
+	    res << " ";
+	ExpEvaluator::dump(*o,res);
+    }
+}
+
 
 ScriptRun::Status JsRunner::reset(bool init)
 {
@@ -3217,9 +3234,8 @@ void JsCodeStats::dump(Stream& file)
 		str << "calls=" << cs->callsCount << " "
 		    << JsCode::getLineNo(cs->calledLine) << "\n";
 	    }
-	    // TODO: properly write microseconds
 	    str << JsCode::getLineNo(ls->lineNumber) << " " << ls->operations << " "
-		<< (unsigned int)ls->microseconds << "\n";
+		<< ls->microseconds << "\n";
 	}
 	file.writeData(str);
     }
@@ -3354,6 +3370,7 @@ bool JsParser::parse(const char* text, bool fragment, const char* file, int len)
     ParsePoint expr(text,0,0,file);
     if (fragment)
 	return code() && static_cast<JsCode*>(code())->compile(expr,this);
+    m_parsedFile.clear();
     JsCode* code = new JsCode;
     setCode(code);
     code->deref();
@@ -3366,11 +3383,14 @@ bool JsParser::parse(const char* text, bool fragment, const char* file, int len)
 	setCode(0);
 	return false;
     }
-    DDebug(DebugAll,"Compiled: %s",code->dump().c_str());
+    m_parsedFile = file;
+    DDebug(DebugAll,"Compiled: %s",code->ExpEvaluator::dump().c_str());
     code->simplify();
-    DDebug(DebugAll,"Simplified: %s",code->dump().c_str());
-    if (m_allowLink)
+    DDebug(DebugAll,"Simplified: %s",code->ExpEvaluator::dump().c_str());
+    if (m_allowLink) {
 	code->link();
+	DDebug(DebugAll,"Linked: %s",code->ExpEvaluator::dump().c_str());
+    }
     code->trace(m_allowTrace);
     return true;
 }
@@ -3385,7 +3405,7 @@ bool JsParser::scriptChanged(const char* file) const
 	return true;
     String tmp(file);
     adjustPath(tmp);
-    return c->scriptChanged(tmp);
+    return (parsedFile() != tmp) || c->scriptChanged();
 }
 
 // Evaluate a string as expression or statement

@@ -86,6 +86,7 @@ static const TokenDict dict_errors[] = {
     { "service-not-implemented", 501 },
     { "unimplemented", 501 },
     { "service-unavailable", 503 },
+    { "unacceptable", 488 },
     { "noresource", 503 },
     { "interworking", 500 },
     { "interworking", 400 },
@@ -6403,7 +6404,12 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 		clearEndpoint();
 	    }
 	}
-	if (!addRtpParams(*m,natAddr,sdp))
+	bool added = false;
+	if (!m_rtpForward || m_rtpAddr)
+	    added = addRtpParams(*m,natAddr,sdp);
+	else
+	    added = addRtpParams(*m,natAddr,sdp,false,true);
+	if (!added)
 	    addSdpParams(*m,sdp);
     }
     else {
@@ -7095,7 +7101,7 @@ bool YateSIPConnection::msgUpdate(Message& msg)
     if (*oper == YSTRING("notify")) {
 	bool rtpSave = m_rtpForward;
 	m_rtpForward = msg.getBoolValue(YSTRING("rtp_forward"),m_rtpForward);
-	MimeSdpBody* sdp = createPasstroughSDP(msg);
+	MimeSdpBody* sdp = createPasstroughSDP(msg,true,m_rtpForward);
 	if (!sdp) {
 	    m_rtpForward = rtpSave;
 	    m_tr2->setResponse(500,"Server failed to build the SDP");
@@ -7297,7 +7303,7 @@ bool YateSIPConnection::startClientReInvite(Message& msg, bool rtpForward)
 	clearEndpoint();
     MimeSdpBody* sdp = 0;
     if (rtpForward)
-	sdp = createPasstroughSDP(msg,false);
+	sdp = createPasstroughSDP(msg,false,true);
     else {
 	updateSDP(msg);
 	sdp = createRtpSDP(true);

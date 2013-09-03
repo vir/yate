@@ -407,6 +407,7 @@ bool EngineStatusHandler::received(Message &msg)
 	return false;
     msg.retValue() << "name=engine,type=system";
     msg.retValue() << ",version=" << YATE_VERSION;
+    msg.retValue() << ",revision=" << YATE_REVISION;
     msg.retValue() << ",nodename=" << Engine::nodeName();
     msg.retValue() << ";plugins=" << plugins.count();
     msg.retValue() << ",inuse=" << Engine::self()->usedPlugins();
@@ -1332,6 +1333,7 @@ int Engine::engineInit()
 
     s_params.addParam("version",YATE_VERSION);
     s_params.addParam("release",YATE_STATUS YATE_RELEASE);
+    s_params.addParam("revision",YATE_REVISION);
     s_params.addParam("nodename",s_node);
     s_params.addParam("runid",String(s_runid));
     s_params.addParam("configname",s_cfgfile);
@@ -2024,7 +2026,7 @@ static void noarg(bool client, const char* opt)
 
 static void version()
 {
-    ::fprintf(stdout,"Yate " YATE_VERSION " " YATE_STATUS YATE_RELEASE "\n");
+    ::fprintf(stdout,"Yate " YATE_VERSION " " YATE_STATUS YATE_RELEASE " r" YATE_REVISION "\n");
 }
 
 int Engine::main(int argc, const char** argv, const char** env, RunMode mode, EngineLoop loop, bool fail)

@@ -618,7 +618,8 @@ static u_int8_t s_zero = 0;
 static u_int32_t s_pen = 34501;
 
 static SocketAddr s_remote;
-static String s_yateRoot = "";
+static String s_yateRoot;
+static String s_yateVersion;
 
 // zero digest
 static const DataBlock s_zeroKey(0,12);
@@ -1604,6 +1605,11 @@ void SnmpAgent::initialize()
 	    continue;
 	m_users.append(new SnmpUser(sec));
     }
+
+    // reported version
+    String ver = s_cfg.getValue("general","version","${version}");
+    Engine::runParams().replaceParams(ver);
+    s_yateVersion = ver;
 
     // load saved data
     s_saveCfg = Engine::configFile("snmp_data");
@@ -2833,8 +2839,7 @@ AsnValue SnmpAgent::makeQuery(const String& query, unsigned int& index, AsnMib* 
     DDebug(&__plugin,DebugAll, "::makeQuery(query='%s', index='%d')",query.c_str(),index);
     AsnValue val;
     if (query == YSTRING("version")) {
-	String v = Engine::runParams().getValue(YSTRING("version"),"");
-	val.setValue(v);
+	val.setValue(s_yateVersion);
 	val.setType(AsnValue::STRING);
 	return val;
     }

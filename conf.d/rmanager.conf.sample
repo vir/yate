@@ -10,7 +10,7 @@
 ;addr=127.0.0.1
 
 ; header: string: Header string to display on connect
-;header=YATE ${version}-${release} (http://YATE.null.ro) ready on ${nodename}.
+;header=YATE ${version}-${release} r${revision} (http://YATE.null.ro) ready on ${nodename}.
 
 ; password: string: Password required to authenticate as admin, default empty!
 ;password=

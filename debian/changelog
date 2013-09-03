@@ -1,4 +1,4 @@
-yate (4.3.1~svn5632) UNRELEASED; urgency=low
+yate (4.3.1~svn5640) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -695,8 +695,19 @@ yate (4.3.1~svn5632) UNRELEASED; urgency=low
     changed.  + On initialization reload scripts if any included file
     has changed.  + Check the timestamps of all files included in
     Javascript.  + Expose the sqlEscape() method to Javascript.
+  * Updated to SVN revision 5640: + Exposed accessors for more
+    properties.  + Made possible to dump the linked code for debugging
+    purpose.  + Properly dump 64 bit JS values for debugging and
+    tracing.  + Fixed some of the cases related to script change
+    detection.  + Removed a leftover debug message.  + Allow loading up
+    to 256KB of script.  + Added extra method parameter to allow empty
+    address when creating passtrough sdp, updating sdp and fill rtp
+    params.  + Fixed bug: allow empty address (hold) when handling re-
+    invite with rtp forward.  + Make the SVN revision accessible to
+    engine, rmanager, SNMP.  + Provide a mapping for SIP 488 code so it
+    propagates correctly.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 29 Aug 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 04 Sep 2013 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -86,6 +86,7 @@ static const TokenDict dict_errors[] = {
     { "service-not-implemented", 501 },
     { "unimplemented", 501 },
     { "service-unavailable", 503 },
+    { "unacceptable", 488 },
     { "noresource", 503 },
     { "interworking", 500 },
     { "interworking", 400 },

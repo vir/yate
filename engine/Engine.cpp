@@ -646,6 +646,32 @@ bool EngineCommand::received(Message &msg)
 	doCompletion(msg,msg.getValue("partline"),msg.getValue("partword"));
 	return false;
     }
+    if (line.startSkip("control")) {
+	int pos = line.find(' ');
+	String id = line.substr(0,pos).trimBlanks();
+	String ctrl = line.substr(pos+1).trimBlanks();
+	if ((pos <= 0) || id.null() || ctrl.null())
+	    return false;
+	Message m("chan.control");
+	m.addParam("targetid",id);
+	m.addParam("component",id);
+	m.copyParam(msg,"module");
+	m.copyParam(msg,"cmd",'_');
+	static const Regexp r("^\\(.* \\)\\?\\([^= ]\\+\\)=\\([^=]*\\)$");
+	while (ctrl) {
+	    if (!ctrl.matches(r)) {
+		m.setParam("operation",ctrl);
+		break;
+	    }
+	    m.setParam(ctrl.matchString(2),ctrl.matchString(3).trimBlanks());
+	    ctrl = ctrl.matchString(1).trimBlanks();
+	}
+	if (!Engine::dispatch(m))
+	    return false;
+	msg.retValue() = m.retValue();
+	NamedString* opStatus = m.getParam(YSTRING("operation-status"));
+	return !opStatus || opStatus->toBoolean();
+    }
     if (!line.startSkip("module")) {
 	if (line.startSkip("events") || (line == "logview" && (line.clear(),true))) {
 	    bool clear = line.startSkip("clear");

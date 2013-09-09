@@ -1,4 +1,4 @@
-yate (4.3.1~svn5641) UNRELEASED; urgency=low
+yate (4.3.1~svn5642) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -709,8 +709,11 @@ yate (4.3.1~svn5641) UNRELEASED; urgency=low
   * Updated to SVN revision 5641: + This allows other modules to easily
     perform control operations.  + Handle the "control" command in
     engine like rmanager does.
+  * Updated to SVN revision 5642: + Handle the "control" command in
+    engine like rmanager does.  + Fixed compile warnings which appear
+    when compiling with xdebug.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 07 Sep 2013 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 10 Sep 2013 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

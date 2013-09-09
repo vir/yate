@@ -2496,7 +2496,7 @@ void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* co
 
 bool JsCode::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context) const
 {
-    DDebug(this,DebugAll,"JsCode::runFunction(%p,'%s' %ld, %p) ext=%p",
+    DDebug(this,DebugAll,"JsCode::runFunction(%p,'%s' "FMT64", %p) ext=%p",
 	&stack,oper.name().c_str(),oper.number(),context,extender());
     if (context) {
 	ScriptRun* sr = static_cast<ScriptRun*>(context);
@@ -2654,7 +2654,7 @@ bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* c
 {
     if (!(func && context))
 	return false;
-    XDebug(this,DebugInfo,"JsCode::callFunction(%p,%lu,%p) in %s'%s' this=%p",
+    XDebug(this,DebugInfo,"JsCode::callFunction(%p,"FMT64",%p) in %s'%s' this=%p",
 	&stack,oper.number(),context,(constr ? "constructor " : ""),
 	func->toString().c_str(),thisObj);
     JsRunner* runner = static_cast<JsRunner*>(context);

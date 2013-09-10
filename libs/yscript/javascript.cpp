@@ -429,6 +429,29 @@ private:
     JsCode::JsOpcode m_opcode;
 };
 
+class NativeFields : public ObjList
+{
+public:
+    inline NativeFields()
+    {
+	append(new String("length"));
+	append(new String("charAt"));
+	append(new String("indexOf"));
+	append(new String("substr"));
+	append(new String("match"));
+	append(new String("toLowerCase"));
+	append(new String("toUpperCase"));
+	append(new String("trim"));
+	append(new String("sqlEscape"));
+	append(new String("startsWith"));
+	append(new String("endsWith"));
+	append(new String("split"));
+	append(new String("toString"));
+	append(new String("isNaN"));
+	append(new String("parseInt"));
+    }
+};
+
 #define MAKEOP(s,o) { s, JsCode::Opc ## o }
 static const TokenDict s_operators[] =
 {
@@ -518,7 +541,7 @@ static const TokenDict s_internals[] =
 
 static const ExpNull s_null;
 static const String s_noFile = "[no file]";
-
+static const NativeFields s_nativeFields;
 
 GenObject* JsContext::resolveTop(ObjList& stack, const String& name, GenObject* context)
 {
@@ -538,6 +561,7 @@ GenObject* JsContext::resolve(ObjList& stack, String& name, GenObject* context)
 	obj = resolveTop(stack,name,context);
     else {
 	ObjList* list = name.split('.',true);
+	name.clear();
 	for (ObjList* l = list->skipNull(); l; ) {
 	    const String* s = static_cast<const String*>(l->get());
 	    ObjList* l2 = l->skipNext();
@@ -548,22 +572,26 @@ GenObject* JsContext::resolve(ObjList& stack, String& name, GenObject* context)
 	    }
 	    if (!obj)
 		obj = resolveTop(stack,*s,context);
-	    if (!l2) {
-		name = *s;
+	    name.append(*s,".");
+	    if (!l2)
 		break;
-	    }
 	    ExpExtender* ext = YOBJECT(ExpExtender,obj);
 	    if (ext) {
-		GenObject* adv = ext->getField(stack,*s,context);
+		GenObject* adv = ext->getField(stack,name,context);
 		XDebug(DebugAll,"JsContext::resolve advanced to '%s' of %p for '%s'",
 		    (adv ? adv->toString().c_str() : 0),ext,s->c_str());
-		if (adv)
-		    obj = adv;
-		else {
-		    name.clear();
-		    for (; l; l = l->skipNext())
-			name.append(l->get()->toString(),".");
-		    break;
+		if (adv) {
+		    if (YOBJECT(ExpExtender,adv)) {
+			obj = adv;
+			name.clear();
+		    }
+		    else if (l->count() == 2) { // there is only one other field after this one
+			s = static_cast<const String*>(l2->get());
+			if (!TelEngine::null(s) && s_nativeFields.find(*s)) {
+			    obj = adv;
+			    name.clear();
+			}
+		    }
 		}
 	    }
 	    l = l2;

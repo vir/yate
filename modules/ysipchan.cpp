@@ -6329,7 +6329,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	    m->addParam("error","timeout");
 	    Engine::enqueue(m);
 	}
-	m_revert.clear();
+	m_revert.clearParams();
 	return false;
     }
     if (!msg || msg->isOutgoing() || !msg->isAnswer())
@@ -6423,14 +6423,14 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	    // we already changed our media so try to revert
 	    detachTransaction2();
 	    if (startClientReInvite(m_revert,false)) {
-		m_revert.clear();
+		m_revert.clearParams();
 		Engine::enqueue(m);
 		return false;
 	    }
 	}
     }
     detachTransaction2();
-    m_revert.clear();
+    m_revert.clearParams();
     Engine::enqueue(m);
     return false;
 }
@@ -7094,7 +7094,7 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 		    if (msg.getBoolValue(YSTRING("mute"),false))
 			break;
 		    // save current RTP parameters so we can try to revert later
-		    m_revert.clear();
+		    m_revert.clearParams();
 		    addRtpParams(m_revert);
 		    // fall through
 		case ReinviteRequest:

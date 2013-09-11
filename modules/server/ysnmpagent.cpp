@@ -2879,9 +2879,11 @@ AsnValue SnmpAgent::makeQuery(const String& query, unsigned int& index, AsnMib* 
     msg.addParam("name",query);
     msg.addParam("index",String(index));
     if (Engine::dispatch(msg)) {
-	String value = msg.getValue("value","");
-	if (!value.null()) {
-	    val.setValue(value);
+	const String* value = msg.getParam(YSTRING("value"));
+	if (!value)
+	    value = &msg.retValue();
+	if (*value) {
+	    val.setValue(*value);
 	    val.setType(STRING);
 	}
     }

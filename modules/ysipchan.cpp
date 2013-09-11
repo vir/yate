@@ -953,7 +953,7 @@ private:
     void updateTarget(const SIPMessage* msg);
     void emitUpdate();
     bool emitPRACK(const SIPMessage* msg);
-    bool startClientReInvite(Message& msg, bool rtpForward);
+    bool startClientReInvite(NamedList& msg, bool rtpForward);
     // Build the 'call.route' and NOTIFY messages needed by the transfer thread
     bool initTransfer(Message*& msg, SIPMessage*& sipNotify, const SIPMessage* sipRefer,
 	const MimeHeaderLine* refHdr, const URI& uri, const MimeHeaderLine* replaces);
@@ -1007,6 +1007,8 @@ private:
     int m_reInviting;
     // sequence number of last transmitted PRACK
     int m_lastRseq;
+    // media parameters before we sent a reINVITE
+    NamedList m_revert;
 };
 
 class YateSIPGenerate : public GenObject
@@ -1628,7 +1630,7 @@ static void copySipHeaders(SIPMessage& sip, const NamedList& msg, const char* pr
 }
 
 // Copy privacy related information from SIP message to Yate message
-static void copyPrivacy(Message& msg, const SIPMessage& sip)
+static void copyPrivacy(NamedList& msg, const SIPMessage& sip)
 {
     bool anonip = (sip.getHeaderValue("Anonymity") &= "ipaddr");
     const MimeHeaderLine* hl = sip.getHeader("Remote-Party-ID");
@@ -1695,7 +1697,7 @@ static void copyPrivacy(Message& msg, const SIPMessage& sip)
 }
 
 // Copy privacy related information from Yate message to SIP message
-static void copyPrivacy(SIPMessage& sip, const Message& msg)
+static void copyPrivacy(SIPMessage& sip, const NamedList& msg)
 {
     const String& screened = msg[YSTRING("screened")];
     const String& privacy = msg[YSTRING("privacy")];
@@ -5385,7 +5387,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       m_authBye(true),
       m_checkAllowInfo(s_checkAllowInfo), m_missingAllowInfoDefVal(s_missingAllowInfoDefVal),
       m_honorDtmfDetect(s_honorDtmfDetect),
-      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
+      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0), m_revert("")
 {
     setSdpDebug(this,this);
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
@@ -5559,7 +5561,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_authBye(false),
       m_checkAllowInfo(s_checkAllowInfo), m_missingAllowInfoDefVal(s_missingAllowInfoDefVal),
       m_honorDtmfDetect(s_honorDtmfDetect),
-      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
+      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0), m_revert("")
 {
     setSdpDebug(this,this);
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
@@ -6327,6 +6329,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	    m->addParam("error","timeout");
 	    Engine::enqueue(m);
 	}
+	m_revert.clear();
 	return false;
     }
     if (!msg || msg->isOutgoing() || !msg->isAnswer())
@@ -6416,8 +6419,18 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	m->addParam("operation","reject");
 	m->addParam("error",lookup(code,dict_errors,"failure"));
 	m->addParam("reason",msg->reason);
+	if (ReinviteNone == m_reInviting && !m_rtpForward && m_revert.count()) {
+	    // we already changed our media so try to revert
+	    detachTransaction2();
+	    if (startClientReInvite(m_revert,false)) {
+		m_revert.clear();
+		Engine::enqueue(m);
+		return false;
+	    }
+	}
     }
     detachTransaction2();
+    m_revert.clear();
     Engine::enqueue(m);
     return false;
 }
@@ -7077,9 +7090,12 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 		    // if any side is forwarding RTP we shouldn't reach here
 		    if (m_rtpForward || msg.getBoolValue(YSTRING("rtp_forward")))
 			break;
-		    if (msg.getBoolValue(YSTRING("media"),true) ||
-			msg.getBoolValue(YSTRING("mute"),false))
-			    break;
+		    // reINVITE for mute not supported yet
+		    if (msg.getBoolValue(YSTRING("mute"),false))
+			break;
+		    // save current RTP parameters so we can try to revert later
+		    m_revert.clear();
+		    addRtpParams(m_revert);
 		    // fall through
 		case ReinviteRequest:
 		    if (startClientReInvite(msg,(ReinviteRequest == m_reInviting)))
@@ -7289,7 +7305,7 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 }
 
 // Start a client reINVITE transaction
-bool YateSIPConnection::startClientReInvite(Message& msg, bool rtpForward)
+bool YateSIPConnection::startClientReInvite(NamedList& msg, bool rtpForward)
 {
     bool hadRtp = !m_rtpForward;
     if (msg.getBoolValue(YSTRING("rtp_forward"),m_rtpForward) != rtpForward) {

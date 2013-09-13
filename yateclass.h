@@ -3743,10 +3743,187 @@ private:
 };
 
 /**
+ * Abstract base class representing a hash calculator
+ * @short An abstract hashing class
+ */
+class YATE_API Hasher
+{
+public:
+    /**
+     * Destroy the instance, free allocated memory
+     */
+    virtual ~Hasher();
+
+    /**
+     * Clear the digest and prepare for reuse
+     */
+    virtual void clear() = 0;
+
+    /**
+     * Finalize the digest computation, make result ready.
+     * Subsequent calls to @ref update() will fail
+     */
+    virtual void finalize() = 0;
+
+    /**
+     * Returns a pointer to the raw 16-byte binary value of the message digest.
+     * The digest is finalized if if wasn't already
+     * @return Pointer to the raw digest data or NULL if some error occured
+     */
+    virtual const unsigned char* rawDigest() = 0;
+
+    /**
+     * Returns the standard hexadecimal representation of the message digest.
+     * The digest is finalized if if wasn't already
+     * @return A String which holds the hex digest or a null one if some error occured
+     */
+    inline const String& hexDigest()
+	{ finalize(); return m_hex; }
+
+    /**
+     * Update the digest from a buffer of data
+     * @param buf Pointer to the data to be included in digest
+     * @param len Length of data in the buffer
+     * @return True if success, false if @ref finalize() was already called
+     */
+    inline bool update(const void* buf, unsigned int len)
+	{ return updateInternal(buf,len); }
+
+    /**
+     * Update the digest from the content of a DataBlock
+     * @param data Data to be included in digest
+     * @return True if success, false if @ref finalize() was already called
+     */
+    inline bool update(const DataBlock& data)
+	{ return updateInternal(data.data(), data.length()); }
+
+    /**
+     * Update the digest from the content of a String
+     * @param str String to be included in digest
+     * @return True if success, false if @ref finalize() was already called
+     */
+    inline bool update(const String& str)
+	{ return updateInternal(str.c_str(), str.length()); }
+
+    /**
+     * Digest updating operator for Strings
+     * @param value String to be included in digest
+     */
+    inline Hasher& operator<<(const String& value)
+	{ update(value); return *this; }
+
+    /**
+     * Digest updating operator for DataBlocks
+     * @param data Data to be included in digest
+     */
+    inline Hasher& operator<<(const DataBlock& data)
+	{ update(data); return *this; }
+
+    /**
+     * Digest updating operator for C strings
+     * @param value String to be included in digest
+     */
+    Hasher& operator<<(const char* value);
+
+    /**
+     * Start a HMAC calculation, initialize the hash and the outer pad
+     * @param opad Outer pad to be filled from key
+     * @param key Secret key
+     * @param keyLen Secret key length
+     * @return True if hash and outer pad were successfully initialized
+     */
+    bool hmacStart(DataBlock& opad, const void* key, unsigned int keyLen);
+
+    /**
+     * Start a HMAC calculation, initialize the hash and the outer pad
+     * @param opad Outer pad to be filled from key
+     * @param key Secret key
+     * @return True if hash and outer pad were successfully initialized
+     */
+    inline bool hmacStart(DataBlock& opad, const DataBlock& key)
+	{ return hmacStart(opad,key.data(),key.length()); }
+
+    /**
+     * Start a HMAC calculation, initialize the hash and the outer pad
+     * @param opad Outer pad to be filled from key
+     * @param key Secret key string
+     * @return True if hash and outer pad were successfully initialized
+     */
+    inline bool hmacStart(DataBlock& opad, const String& key)
+	{ return hmacStart(opad,key.c_str(),key.length()); }
+
+    /**
+     * Finalize a HMAC calculation with this hash
+     * @param opad Outer pad as filled by hmacStart
+     * @return True on success, HMAC result is left in hasher
+     */
+    bool hmacFinal(const DataBlock& opad);
+
+    /**
+     * Compute a Message Authentication Code with this hash
+     * @param key Secret key
+     * @param keyLen Secret key length
+     * @param msg Message to authenticate
+     * @param msgLen Message length
+     * @return True if HMAC was computed correctly, result is left in hasher
+     */
+    bool hmac(const void* key, unsigned int keyLen, const void* msg, unsigned int msgLen);
+
+    /**
+     * Compute a Message Authentication Code with this hash
+     * @param key Secret key
+     * @param msg Message to authenticate
+     * @return True if HMAC was computed correctly, result is left in hasher
+     */
+    inline bool hmac(const DataBlock& key, const DataBlock& msg)
+	{ return hmac(key.data(),key.length(),msg.data(),msg.length()); }
+
+    /**
+     * Compute a Message Authentication Code with this hash
+     * @param key Secret key string
+     * @param msg Message string to authenticate
+     * @return True if HMAC was computed correctly, result is left in hasher
+     */
+    inline bool hmac(const String& key, const String& msg)
+	{ return hmac(key.c_str(),key.length(),msg.c_str(),msg.length()); }
+
+    /**
+     * Return the length of the raw binary digest
+     * @return Length of the digest in octets
+     */
+    virtual unsigned int hashLength() const = 0;
+
+    /**
+     * Return the size of the block used in HMAC calculations
+     * @return HMAC block size in octets, usually 64
+     */
+    virtual unsigned int hmacBlockSize() const;
+
+protected:
+    /**
+     * Default constructor
+     */
+    inline Hasher()
+	: m_private(0)
+	{ }
+
+    /**
+     * Update the digest from a buffer of data
+     * @param buf Pointer to the data to be included in digest
+     * @param len Length of data in the buffer
+     * @return True if success, false if @ref finalize() was already called
+     */
+    virtual bool updateInternal(const void* buf, unsigned int len) = 0;
+
+    void* m_private;
+    String m_hex;
+};
+
+/**
  * A class to compute and check MD5 digests
  * @short A standard MD5 digest calculator
  */
-class YATE_API MD5
+class YATE_API MD5 : public Hasher
 {
 public:
     /**
@@ -3780,73 +3957,32 @@ public:
     MD5(const String& str);
 
     /**
-     * Destroy the instance, free allocated memory
-     */
-    ~MD5();
-
-    /**
      * Assignment operator.
      */
     MD5& operator=(const MD5& original);
 
     /**
+     * Destroy the instance, free allocated memory
+     */
+    virtual ~MD5();
+
+    /**
      * Clear the digest and prepare for reuse
      */
-    void clear();
+    virtual void clear();
 
     /**
      * Finalize the digest computation, make result ready.
      * Subsequent calls to @ref update() will fail
      */
-    void finalize();
-
-    /**
-     * Update the digest from a buffer of data
-     * @param buf Pointer to the data to be included in digest
-     * @param len Length of data in the buffer
-     * @return True if success, false if @ref finalize() was already called
-     */
-    bool update(const void* buf, unsigned int len);
-
-    /**
-     * Update the digest from the content of a DataBlock
-     * @param data Data to be included in digest
-     * @return True if success, false if @ref finalize() was already called
-     */
-    inline bool update(const DataBlock& data)
-	{ return update(data.data(), data.length()); }
-
-    /**
-     * Update the digest from the content of a String
-     * @param str String to be included in digest
-     * @return True if success, false if @ref finalize() was already called
-     */
-    inline bool update(const String& str)
-	{ return update(str.c_str(), str.length()); }
-
-    /**
-     * MD5 updating operator for Strings
-     */
-    inline MD5& operator<<(const String& value)
-	{ update(value); return *this; }
-
-    /**
-     * MD5 updating operator for DataBlocks
-     */
-    inline MD5& operator<<(const DataBlock& data)
-	{ update(data); return *this; }
-
-    /**
-     * MD5 updating operator for C strings
-     */
-    MD5& operator<<(const char* value);
+    virtual void finalize();
 
     /**
      * Returns a pointer to the raw 16-byte binary value of the message digest.
      * The digest is finalized if if wasn't already
      * @return Pointer to the raw digest data or NULL if some error occured
      */
-    const unsigned char* rawDigest();
+    virtual const unsigned char* rawDigest();
 
     /**
      * Return the length of the raw binary digest
@@ -3856,16 +3992,17 @@ public:
 	{ return 16; }
 
     /**
-     * Returns the standard hexadecimal representation of the message digest.
-     * The digest is finalized if if wasn't already
-     * @return A String which holds the hex digest or a null one if some error occured
+     * Return the length of the raw binary digest
+     * @return Length of the digest in octets
      */
-    const String& hexDigest();
+    virtual unsigned int hashLength() const
+	{ return 16; }
+
+protected:
+    bool updateInternal(const void* buf, unsigned int len);
 
 private:
     void init();
-    void* m_private;
-    String m_hex;
     unsigned char m_bin[16];
 };
 
@@ -3873,7 +4010,7 @@ private:
  * A class to compute and check SHA1 digests
  * @short A standard SHA1 digest calculator
  */
-class YATE_API SHA1
+class YATE_API SHA1 : public Hasher
 {
 public:
     /**
@@ -3907,73 +4044,32 @@ public:
     SHA1(const String& str);
 
     /**
-     * Destroy the instance, free allocated memory
-     */
-    ~SHA1();
-
-    /**
      * Assignment operator.
      */
     SHA1& operator=(const SHA1& original);
 
     /**
+     * Destroy the instance, free allocated memory
+     */
+    virtual ~SHA1();
+
+    /**
      * Clear the digest and prepare for reuse
      */
-    void clear();
+    virtual void clear();
 
     /**
      * Finalize the digest computation, make result ready.
      * Subsequent calls to @ref update() will fail
      */
-    void finalize();
-
-    /**
-     * Update the digest from a buffer of data
-     * @param buf Pointer to the data to be included in digest
-     * @param len Length of data in the buffer
-     * @return True if success, false if @ref finalize() was already called
-     */
-    bool update(const void* buf, unsigned int len);
-
-    /**
-     * Update the digest from the content of a DataBlock
-     * @param data Data to be included in digest
-     * @return True if success, false if @ref finalize() was already called
-     */
-    inline bool update(const DataBlock& data)
-	{ return update(data.data(), data.length()); }
-
-    /**
-     * Update the digest from the content of a String
-     * @param str String to be included in digest
-     * @return True if success, false if @ref finalize() was already called
-     */
-    inline bool update(const String& str)
-	{ return update(str.c_str(), str.length()); }
-
-    /**
-     * SHA1 updating operator for Strings
-     */
-    inline SHA1& operator<<(const String& value)
-	{ update(value); return *this; }
-
-    /**
-     * SHA1 updating operator for DataBlocks
-     */
-    inline SHA1& operator<<(const DataBlock& data)
-	{ update(data); return *this; }
-
-    /**
-     * SHA1 updating operator for C strings
-     */
-    SHA1& operator<<(const char* value);
+    virtual void finalize();
 
     /**
      * Returns a pointer to the raw 20-byte binary value of the message digest.
      * The digest is finalized if if wasn't already
      * @return Pointer to the raw digest data or NULL if some error occured
      */
-    const unsigned char* rawDigest();
+    virtual const unsigned char* rawDigest();
 
     /**
      * Return the length of the raw binary digest
@@ -3983,17 +4079,105 @@ public:
 	{ return 20; }
 
     /**
-     * Returns the standard hexadecimal representation of the message digest.
-     * The digest is finalized if if wasn't already
-     * @return A String which holds the hex digest or a null one if some error occured
+     * Return the length of the raw binary digest
+     * @return Length of the digest in octets
      */
-    const String& hexDigest();
+    virtual unsigned int hashLength() const
+	{ return 20; }
+
+protected:
+    bool updateInternal(const void* buf, unsigned int len);
 
 private:
     void init();
-    void* m_private;
-    String m_hex;
     unsigned char m_bin[20];
+};
+
+/**
+ * A class to compute and check SHA256 digests
+ * @short A standard SHA256 digest calculator
+ */
+class YATE_API SHA256 : public Hasher
+{
+public:
+    /**
+     * Construct a fresh initialized instance
+     */
+    SHA256();
+
+    /**
+     * Copy constructor
+     * @param original SHA256 instance to copy
+     */
+    SHA256(const SHA256& original);
+
+    /**
+     * Construct a digest from a buffer of data
+     * @param buf Pointer to the data to be included in digest
+     * @param len Length of data in the buffer
+     */
+    SHA256(const void* buf, unsigned int len);
+
+    /**
+     * Construct a digest from a binary DataBlock
+     * @param data Binary data to be included in digest
+     */
+    SHA256(const DataBlock& data);
+
+    /**
+     * Construct a digest from a String
+     * @param str String to be included in digest
+     */
+    SHA256(const String& str);
+
+    /**
+     * Assignment operator.
+     */
+    SHA256& operator=(const SHA256& original);
+
+    /**
+     * Destroy the instance, free allocated memory
+     */
+    virtual ~SHA256();
+
+    /**
+     * Clear the digest and prepare for reuse
+     */
+    virtual void clear();
+
+    /**
+     * Finalize the digest computation, make result ready.
+     * Subsequent calls to @ref update() will fail
+     */
+    virtual void finalize();
+
+    /**
+     * Returns a pointer to the raw 32-byte binary value of the message digest.
+     * The digest is finalized if if wasn't already
+     * @return Pointer to the raw digest data or NULL if some error occured
+     */
+    virtual const unsigned char* rawDigest();
+
+    /**
+     * Return the length of the raw binary digest
+     * @return Constant value of 32
+     */
+    inline static unsigned int rawLength()
+	{ return 32; }
+
+    /**
+     * Return the length of the raw binary digest
+     * @return Length of the digest in octets
+     */
+    virtual unsigned int hashLength() const
+	{ return 32; }
+
+protected:
+    bool updateInternal(const void* buf, unsigned int len);
+
+private:
+    void init();
+    unsigned char m_bin[32];
 };
 
 /**

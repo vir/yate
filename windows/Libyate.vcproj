@@ -386,6 +386,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\engine\Hasher.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\engine\HashList.cpp"
 				>
 				<FileConfiguration
@@ -718,6 +722,10 @@
 						PreprocessorDefinitions=""
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\engine\YSHA256.cpp"
+				>
 			</File>
 		</Filter>
 		<Filter

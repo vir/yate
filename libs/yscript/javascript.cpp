@@ -3395,31 +3395,33 @@ bool JsParser::parse(const char* text, bool fragment, const char* file, int len)
     if (TelEngine::null(text))
 	return false;
     String::stripBOM(text);
-    ParsePoint expr(text,0,0,file);
+    JsCode* jsc = static_cast<JsCode*>(code());
+    ParsePoint expr(text,0,(jsc ? jsc->lineNumber() : 0),file);
     if (fragment)
-	return code() && static_cast<JsCode*>(code())->compile(expr,this);
+	return jsc && jsc->compile(expr,this);
     m_parsedFile.clear();
-    JsCode* code = new JsCode;
-    setCode(code);
-    code->deref();
-    expr.m_eval = code;
+    jsc = new JsCode;
+    setCode(jsc);
+    jsc->deref();
+    expr.m_eval = jsc;
     if (!TelEngine::null(file)) {
-	code->setBaseFile(file);
+	jsc->setBaseFile(file);
 	expr.m_fileName = file;
+	expr.m_lineNo = jsc->lineNumber();
     }
-    if (!code->compile(expr,this)) {
+    if (!jsc->compile(expr,this)) {
 	setCode(0);
 	return false;
     }
     m_parsedFile = file;
-    DDebug(DebugAll,"Compiled: %s",code->ExpEvaluator::dump().c_str());
-    code->simplify();
-    DDebug(DebugAll,"Simplified: %s",code->ExpEvaluator::dump().c_str());
+    DDebug(DebugAll,"Compiled: %s",jsc->ExpEvaluator::dump().c_str());
+    jsc->simplify();
+    DDebug(DebugAll,"Simplified: %s",jsc->ExpEvaluator::dump().c_str());
     if (m_allowLink) {
-	code->link();
-	DDebug(DebugAll,"Linked: %s",code->ExpEvaluator::dump().c_str());
+	jsc->link();
+	DDebug(DebugAll,"Linked: %s",jsc->ExpEvaluator::dump().c_str());
     }
-    code->trace(m_allowTrace);
+    jsc->trace(m_allowTrace);
     return true;
 }
 

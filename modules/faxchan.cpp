@@ -817,6 +817,11 @@ bool FaxDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
     dest = dest.matchString(2);
+    if (transmit && !File::exists(dest)) {
+	msg.setParam("error","noroute");
+	msg.setParam("reason","File not found");
+	return false;
+    }
 
     RefPointer<FaxChan> fc;
     CallEndpoint* ce = YOBJECT(CallEndpoint,msg.userData());

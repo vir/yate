@@ -266,30 +266,25 @@ static void MD5_Final(unsigned char digest[16], MD5_CTX *ctx)
 using namespace TelEngine;
 
 MD5::MD5()
-    : m_private(0)
 {
 }
 
 MD5::MD5(const void* buf, unsigned int len)
-    : m_private(0)
 {
     update(buf,len);
 }
 
 MD5::MD5(const DataBlock& data)
-    : m_private(0)
 {
     update(data);
 }
 
 MD5::MD5(const String& str)
-    : m_private(0)
 {
     update(str);
 }
 
 MD5::MD5(const MD5& original)
-    : m_private(0)
 {
     m_hex = original.m_hex;
     ::memcpy(m_bin,original.m_bin,sizeof(m_bin));
@@ -352,7 +347,7 @@ void MD5::finalize()
     m_hex = buf;
 }
 
-bool MD5::update(const void* buf, unsigned int len)
+bool MD5::updateInternal(const void* buf, unsigned int len)
 {
     // Don't update an already finalized digest
     if (m_hex)
@@ -366,23 +361,10 @@ bool MD5::update(const void* buf, unsigned int len)
     return true;
 }
 
-MD5& MD5::operator<<(const char* value)
-{
-    if (!null(value))
-	update(value,::strlen(value));
-    return *this;
-}
-
 const unsigned char* MD5::rawDigest()
 {
     finalize();
     return m_bin;
-}
-
-const String& MD5::hexDigest()
-{
-    finalize();
-    return m_hex;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

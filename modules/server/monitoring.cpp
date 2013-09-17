@@ -3964,7 +3964,7 @@ bool Monitor::solveQuery(Message& msg)
     String query = msg.getValue("name","");
     if (query.null())
 	return false;
-    int queryWho = lookup(query,s_categories,0);
+    int queryWho = lookup(query,s_categories,-1);
     String result = "";
     unsigned int index = msg.getIntValue("index",0);
     DDebug(__plugin.name(),DebugAll,"::solveQuery(query=%s, index=%u)",query.c_str(),index);

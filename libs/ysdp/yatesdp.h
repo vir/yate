@@ -632,6 +632,7 @@ protected:
     int m_mediaStatus;
     bool m_rtpForward;                   // Forward RTP flag
     bool m_sdpForward;                   // Forward SDP (only if RTP is forwarded)
+    String m_originAddr;                 // Our SDP origin address
     String m_externalAddr;               // Our external IP address, possibly outside of a NAT
     String m_rtpAddr;                    // Remote RTP address
     String m_rtpLocalAddr;               // Local RTP address

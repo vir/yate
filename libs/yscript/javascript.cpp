@@ -193,7 +193,7 @@ protected:
     virtual void formatLineNo(String& buf, unsigned int line) const;
     virtual bool getString(ParsePoint& expr);
     virtual bool getEscape(const char*& expr, String& str, char sep);
-    virtual bool keywordChar(char c) const;
+    virtual bool keywordLetter(char c) const;
     virtual int getKeyword(const char* str) const;
     virtual char skipComments(ParsePoint& expr, GenObject* context = 0);
     virtual int preProcess(ParsePoint& expr, GenObject* context = 0);
@@ -429,6 +429,29 @@ private:
     JsCode::JsOpcode m_opcode;
 };
 
+class NativeFields : public ObjList
+{
+public:
+    inline NativeFields()
+    {
+	append(new String("length"));
+	append(new String("charAt"));
+	append(new String("indexOf"));
+	append(new String("substr"));
+	append(new String("match"));
+	append(new String("toLowerCase"));
+	append(new String("toUpperCase"));
+	append(new String("trim"));
+	append(new String("sqlEscape"));
+	append(new String("startsWith"));
+	append(new String("endsWith"));
+	append(new String("split"));
+	append(new String("toString"));
+	append(new String("isNaN"));
+	append(new String("parseInt"));
+    }
+};
+
 #define MAKEOP(s,o) { s, JsCode::Opc ## o }
 static const TokenDict s_operators[] =
 {
@@ -518,7 +541,7 @@ static const TokenDict s_internals[] =
 
 static const ExpNull s_null;
 static const String s_noFile = "[no file]";
-
+static const NativeFields s_nativeFields;
 
 GenObject* JsContext::resolveTop(ObjList& stack, const String& name, GenObject* context)
 {
@@ -538,6 +561,7 @@ GenObject* JsContext::resolve(ObjList& stack, String& name, GenObject* context)
 	obj = resolveTop(stack,name,context);
     else {
 	ObjList* list = name.split('.',true);
+	name.clear();
 	for (ObjList* l = list->skipNull(); l; ) {
 	    const String* s = static_cast<const String*>(l->get());
 	    ObjList* l2 = l->skipNext();
@@ -548,22 +572,26 @@ GenObject* JsContext::resolve(ObjList& stack, String& name, GenObject* context)
 	    }
 	    if (!obj)
 		obj = resolveTop(stack,*s,context);
-	    if (!l2) {
-		name = *s;
+	    name.append(*s,".");
+	    if (!l2)
 		break;
-	    }
 	    ExpExtender* ext = YOBJECT(ExpExtender,obj);
 	    if (ext) {
-		GenObject* adv = ext->getField(stack,*s,context);
+		GenObject* adv = ext->getField(stack,name,context);
 		XDebug(DebugAll,"JsContext::resolve advanced to '%s' of %p for '%s'",
 		    (adv ? adv->toString().c_str() : 0),ext,s->c_str());
-		if (adv)
-		    obj = adv;
-		else {
-		    name.clear();
-		    for (; l; l = l->skipNext())
-			name.append(l->get()->toString(),".");
-		    break;
+		if (adv) {
+		    if (YOBJECT(ExpExtender,adv)) {
+			obj = adv;
+			name.clear();
+		    }
+		    else if (l->count() == 2) { // there is only one other field after this one
+			s = static_cast<const String*>(l2->get());
+			if (!TelEngine::null(s) && s_nativeFields.find(*s)) {
+			    obj = adv;
+			    name.clear();
+			}
+		    }
 		}
 	    }
 	    l = l2;
@@ -1100,9 +1128,9 @@ bool JsCode::getEscape(const char*& expr, String& str, char sep)
     return ExpEvaluator::getEscape(expr,str,sep);
 }
 
-bool JsCode::keywordChar(char c) const
+bool JsCode::keywordLetter(char c) const
 {
-    return ExpEvaluator::keywordChar(c) || (c == '$');
+    return ExpEvaluator::keywordLetter(c) || (c == '$');
 }
 
 int JsCode::getKeyword(const char* str) const
@@ -1113,8 +1141,15 @@ int JsCode::getKeyword(const char* str) const
 	char c = *s++;
 	if (c <= ' ')
 	    break;
-	if (keywordChar(c) || (len && (c == '.')))
+	if (!len && keywordDigit(c))
+	    return 0;
+	if (keywordChar(c))
 	    continue;
+	if (len && (c == '.')) {
+	    if (!keywordLetter(s[0]))
+		return 0;
+	    continue;
+	}
 	break;
     }
     if (len > 1 && (s[-2] == '.'))
@@ -3367,31 +3402,33 @@ bool JsParser::parse(const char* text, bool fragment, const char* file, int len)
     if (TelEngine::null(text))
 	return false;
     String::stripBOM(text);
-    ParsePoint expr(text,0,0,file);
+    JsCode* jsc = static_cast<JsCode*>(code());
+    ParsePoint expr(text,0,(jsc ? jsc->lineNumber() : 0),file);
     if (fragment)
-	return code() && static_cast<JsCode*>(code())->compile(expr,this);
+	return jsc && jsc->compile(expr,this);
     m_parsedFile.clear();
-    JsCode* code = new JsCode;
-    setCode(code);
-    code->deref();
-    expr.m_eval = code;
+    jsc = new JsCode;
+    setCode(jsc);
+    jsc->deref();
+    expr.m_eval = jsc;
     if (!TelEngine::null(file)) {
-	code->setBaseFile(file);
+	jsc->setBaseFile(file);
 	expr.m_fileName = file;
+	expr.m_lineNo = jsc->lineNumber();
     }
-    if (!code->compile(expr,this)) {
+    if (!jsc->compile(expr,this)) {
 	setCode(0);
 	return false;
     }
     m_parsedFile = file;
-    DDebug(DebugAll,"Compiled: %s",code->ExpEvaluator::dump().c_str());
-    code->simplify();
-    DDebug(DebugAll,"Simplified: %s",code->ExpEvaluator::dump().c_str());
+    DDebug(DebugAll,"Compiled: %s",jsc->ExpEvaluator::dump().c_str());
+    jsc->simplify();
+    DDebug(DebugAll,"Simplified: %s",jsc->ExpEvaluator::dump().c_str());
     if (m_allowLink) {
-	code->link();
-	DDebug(DebugAll,"Linked: %s",code->ExpEvaluator::dump().c_str());
+	jsc->link();
+	DDebug(DebugAll,"Linked: %s",jsc->ExpEvaluator::dump().c_str());
     }
-    code->trace(m_allowTrace);
+    jsc->trace(m_allowTrace);
     return true;
 }
 

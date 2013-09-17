@@ -194,30 +194,25 @@ static void sha1_final(sha1_ctx *sctx, u_int8_t *out)
 using namespace TelEngine;
 
 SHA1::SHA1()
-    : m_private(0)
 {
 }
 
 SHA1::SHA1(const void* buf, unsigned int len)
-    : m_private(0)
 {
     update(buf,len);
 }
 
 SHA1::SHA1(const DataBlock& data)
-    : m_private(0)
 {
     update(data);
 }
 
 SHA1::SHA1(const String& str)
-    : m_private(0)
 {
     update(str);
 }
 
 SHA1::SHA1(const SHA1& original)
-    : m_private(0)
 {
     m_hex = original.m_hex;
     ::memcpy(m_bin,original.m_bin,sizeof(m_bin));
@@ -272,7 +267,7 @@ void SHA1::finalize()
     m_hex.hexify(m_bin,sizeof(m_bin));
 }
 
-bool SHA1::update(const void* buf, unsigned int len)
+bool SHA1::updateInternal(const void* buf, unsigned int len)
 {
     // Don't update an already finalized digest
     if (m_hex)
@@ -286,23 +281,10 @@ bool SHA1::update(const void* buf, unsigned int len)
     return true;
 }
 
-SHA1& SHA1::operator<<(const char* value)
-{
-    if (!null(value))
-	update(value,::strlen(value));
-    return *this;
-}
-
 const unsigned char* SHA1::rawDigest()
 {
     finalize();
     return m_bin;
-}
-
-const String& SHA1::hexDigest()
-{
-    finalize();
-    return m_hex;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

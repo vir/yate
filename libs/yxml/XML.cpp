@@ -1839,6 +1839,26 @@ XmlChild* XmlElement::getFirstChild()
     return static_cast<XmlChild*>(m_children.getChildren().skipNull()->get());
 }
 
+XmlText* XmlElement::setText(const char* text)
+{
+    XmlText* txt = 0;
+    for (ObjList* o = getChildren().skipNull(); o; o = o->skipNext()) {
+	txt = (static_cast<XmlChild*>(o->get()))->xmlText();
+	if (txt)
+	    break;
+    }
+    if (txt) {
+	if (!text)
+	    return static_cast<XmlText*>(removeChild(txt));
+	txt->setText(text);
+    }
+    else if (text) {
+	txt = new XmlText(text);
+	addChild(txt);
+    }
+    return txt;
+}
+
 // Add a text child
 void XmlElement::addText(const char* text)
 {
@@ -1946,6 +1966,14 @@ unsigned int XmlElement::copyAttributes(NamedList& list, const String& prefix) c
 	copy++;
     }
     return copy;
+}
+
+void XmlElement::setAttributes(NamedList& list, const String& prefix, bool skipPrefix)
+{
+    if (prefix)
+	m_element.copySubParams(list,prefix,skipPrefix);
+    else
+	m_element.copyParams(list);
 }
 
 // Retrieve a namespace attribute. Search in parent or inherited for it

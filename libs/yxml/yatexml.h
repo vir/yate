@@ -1373,6 +1373,15 @@ public:
     const String& getText() const;
 
     /**
+     * Set text for first XmlText element found in this XmlElement's children
+     * If child text element does not exist, create it and append it to the element's children.
+     * @param text Text to set to the XmlElement. If null, the first found XmlText element
+     *  will be deleted.
+     * @return The set XmlText if text was set, null if an XmlText was deleted
+     */
+    XmlText* setText(const char* text);
+
+    /**
      * Add a text child
      * @param text Non empty text to add
      */
@@ -1392,6 +1401,15 @@ public:
      * @return The number of attributes added to the destination list
      */
     unsigned int copyAttributes(NamedList& list, const String& prefix) const;
+
+    /**
+     * Set element attributes from a list of parameters
+     * @param list List of attributes
+     * @param prefix Add only the attributes that start with this prefix. =
+     *  If NULL, it will set as attributes the whole parameter list
+     * @param skipPrefix Skip over the prefix when building attribute name
+     */
+    void setAttributes(NamedList& list, const String& prefix, bool skipPrefix = true);
 
     /**
      * Add or replace an attribute
@@ -1696,6 +1714,13 @@ public:
      */
     inline const String& getText() const
 	{ return m_text; }
+
+    /**
+     * Set the text
+     * @param text Text to set in this XmlText
+     */
+    inline void setText(const char* text)
+	{ m_text = text; }
 
     /**
      * Build a String from this XmlText

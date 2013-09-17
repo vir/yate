@@ -536,6 +536,20 @@ protected:
     Opcode getOperator(const char*& expr, const TokenDict* operators, bool caseInsensitive = false) const;
 
     /**
+     * Check if a character can be a letter character in a keyword or identifier
+     * @param c Character to check
+     * @return True if the character can be part of a keyword or identifier
+     */
+    virtual bool keywordLetter(char c) const;
+
+    /**
+     * Check if a character can be can be a digit character in a keyword or identifier
+     * @param c Character to check
+     * @return True if the character can be part of a keyword or identifier
+     */
+    virtual bool keywordDigit(char c) const;
+
+    /**
      * Check if a character can be part of a keyword or identifier
      * @param c Character to check
      * @return True if the character can be part of a keyword or identifier

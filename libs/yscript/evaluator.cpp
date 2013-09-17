@@ -233,10 +233,19 @@ char ExpEvaluator::skipWhites(ParsePoint& expr)
     }
 }
 
+bool ExpEvaluator::keywordLetter(char c) const
+{
+    return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (c == '_');
+}
+
+bool ExpEvaluator::keywordDigit(char c) const
+{
+    return ('0' <= c && c <= '9');
+}
+
 bool ExpEvaluator::keywordChar(char c) const
 {
-    return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') ||
-	('0' <= c && c <= '9') || (c == '_');
+    return keywordLetter(c) || keywordDigit(c);
 }
 
 char ExpEvaluator::skipComments(ParsePoint& expr, GenObject* context)

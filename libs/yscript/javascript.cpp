@@ -193,7 +193,7 @@ protected:
     virtual void formatLineNo(String& buf, unsigned int line) const;
     virtual bool getString(ParsePoint& expr);
     virtual bool getEscape(const char*& expr, String& str, char sep);
-    virtual bool keywordChar(char c) const;
+    virtual bool keywordLetter(char c) const;
     virtual int getKeyword(const char* str) const;
     virtual char skipComments(ParsePoint& expr, GenObject* context = 0);
     virtual int preProcess(ParsePoint& expr, GenObject* context = 0);
@@ -1128,9 +1128,9 @@ bool JsCode::getEscape(const char*& expr, String& str, char sep)
     return ExpEvaluator::getEscape(expr,str,sep);
 }
 
-bool JsCode::keywordChar(char c) const
+bool JsCode::keywordLetter(char c) const
 {
-    return ExpEvaluator::keywordChar(c) || (c == '$');
+    return ExpEvaluator::keywordLetter(c) || (c == '$');
 }
 
 int JsCode::getKeyword(const char* str) const
@@ -1141,8 +1141,15 @@ int JsCode::getKeyword(const char* str) const
 	char c = *s++;
 	if (c <= ' ')
 	    break;
-	if (keywordChar(c) || (len && (c == '.')))
+	if (!len && keywordDigit(c))
+	    return 0;
+	if (keywordChar(c))
 	    continue;
+	if (len && (c == '.')) {
+	    if (!keywordLetter(s[0]))
+		return 0;
+	    continue;
+	}
 	break;
     }
     if (len > 1 && (s[-2] == '.'))

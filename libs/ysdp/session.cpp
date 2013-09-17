@@ -311,10 +311,12 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
     // override the address with the externally advertised if needed
     if (addr && m_rtpNatAddr)
 	addr = m_rtpNatAddr;
+    if (!m_originAddr)
+	m_originAddr = addr ? addr : m_host.safe();
     // no address means on hold or muted
     String origin;
     origin << "yate " << m_sdpSession << " " << m_sdpVersion;
-    origin << " IN IP4 " << (addr ? addr : m_host.safe());
+    origin << " IN IP4 " << m_originAddr;
     String conn;
     conn << "IN IP4 " << (addr ? addr : "0.0.0.0");
 

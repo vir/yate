@@ -1,4 +1,4 @@
-yate (4.3.1~svn5642) UNRELEASED; urgency=low
+yate (4.3.1~svn5655) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -712,8 +712,34 @@ yate (4.3.1~svn5642) UNRELEASED; urgency=low
   * Updated to SVN revision 5642: + Handle the "control" command in
     engine like rmanager does.  + Fixed compile warnings which appear
     when compiling with xdebug.
+  * Updated to SVN revision 5655: + Resolving a variable now returns a
+    container and the rest of fields that are to be applied onto the
+    container. There is one exception to this and that is when a
+    variable was resolved to a string and the last field to be applied
+    is a native string/number field or function.  + Do not stop
+    resolving a variable until all variable fields have been resolved.
+    + Check if the file exists before trying to send a fax.  + Attempt
+    to revert to previous media if our reINVITE was refused.  + Use the
+    proper method to clear saved media parameters.  + Added a revision
+    to the Windows build.  + Removed an unnecessary string copy.  + Use
+    returned string of monitor.query message if "value" parameter is not
+    set.  + Prevent the monitoring module from handling all
+    monitor.query at priority 100.  + setAttributes() allows setting
+    multiple attributes from a NamedList.  + setText() allows replacing
+    the text of an XmlElement.  + Added setText() and setAttributes()
+    functions to XmlElement class.  + Added test module for
+    cryptographic functions validation.  + Added HMAC calculation
+    methods.  + Added SHA256 calculation class.  + Added a base class
+    for all digest calculation classes.  + Added Hasher.cpp and
+    YSHA256.cpp to Windows build.  + Changed a local variable name to
+    avoid hiding a method with same name.  + Set the proper current file
+    name when starting to parse a JS file.  + Fixed bug: freeze sdp
+    session origin address to avoid changing it.  + Also do not parse
+    fields that do not start with a letter or characters '_'/'$'.  + Bug
+    fix: report parser error when parsing expressions like 'a.' (parsing
+    of field operator without subsequent field name).
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 10 Sep 2013 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 18 Sep 2013 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

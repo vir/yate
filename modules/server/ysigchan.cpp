@@ -1420,6 +1420,7 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
     if (cic && !m_forceInband) {
 	NamedList params("");
 	params.addParam("tone",tone);
+	params.addParam("dial",String::boolText(msg.getBoolValue("dial", false)));
 	if (cic->sendEvent(SignallingCircuitEvent::Dtmf,&params))
 	    return true;
     }

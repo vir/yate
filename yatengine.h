@@ -1484,6 +1484,7 @@ protected:
 private:
     Engine();
     void internalStatisticsStart();
+    void tryPluginFile(const String& name, const String& path, bool defload);
     ObjList m_libs;
     MessageDispatcher m_dispatcher;
     static Engine* s_self;

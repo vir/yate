@@ -251,7 +251,7 @@ public:
     // Process 'resource.notify' messages
     bool handleResNotify(Message& msg);
     // Process 'msg.execute' messages
-    bool handleMsgExecute(Message& msg);
+    bool handleMsgExecute(Message& msg, const String& target);
     // Process 'jabber.item' messages
     bool handleJabberItem(Message& msg);
     // Process 'engine.start' messages
@@ -581,6 +581,8 @@ class JBModule : public Module
 public:
     JBModule();
     virtual ~JBModule();
+    inline const String& prefix() const
+	{ return m_prefix; }
     // Inherited methods
     virtual void initialize();
     // Cancel a given listener or all listeners if name is empty
@@ -625,6 +627,7 @@ protected:
     void listener(TcpListener* l, bool add);
 private:
     bool m_init;
+    String m_prefix;
     ObjList m_handlers;                  // Message handlers list
     String m_domain;                     // Default domain served by the jabber engine
     ObjList m_streamListeners;
@@ -644,6 +647,8 @@ static bool s_dumpIq = false;            // Dump 'iq' xml string in jabber.iq me
 static bool s_engineStarted = false;     // Engine started flag
 static bool s_iqAuth = true;             // Allow old style auth on c2s streams
 static bool s_authCluster = false;       // Use user.auth message for incoming cluster streams
+static bool s_msgRouteExternal = false;  // Send call.route for non configured serviced domains
+static bool s_msgRouteForeign = false;   // Send call.route for foreign (unknown) domains
 static const String s_capsNode = "http://yate.null.ro/yate/server/caps"; // Server entity caps node
 static const String s_yate = "yate";
 static ObjList s_clusterControlSkip;     // Params to skip from chan.control when sent in cluster
@@ -1679,14 +1684,17 @@ bool YJBEngine::handleResNotify(Message& msg)
 }
 
 // Process 'msg.execute' messages
-bool YJBEngine::handleMsgExecute(Message& msg)
+bool YJBEngine::handleMsgExecute(Message& msg, const String& target)
 {
     JabberID caller(msg.getValue("caller"));
-    JabberID called(msg.getValue("called"));
+    JabberID called(target);
     if (!caller.resource())
 	caller.resource(msg.getValue("caller_instance"));
-    Debug(this,DebugAll,"Processing %s caller=%s called=%s",
+    Debug(this,called.domain() ? DebugAll : DebugNote,
+	"Processing %s caller=%s called=%s",
 	msg.c_str(),caller.c_str(),called.c_str());
+    if (!called.domain())
+	return false;
     if (hasDomain(called.domain()) && !hasComponent(called.domain())) {
 	// RFC 3921 11.1: Broadcast chat only to clients with non-negative resource priority
 	bool ok = false;
@@ -3348,9 +3356,14 @@ void JBPendingWorker::processChat(JBPendingJob& job)
 	return;
     }
     XMPPError::Type error = XMPPError::NoError;
-    bool localTarget = s_jabber->hasDomain(ev->to().domain()) &&
-	!s_jabber->hasComponent(ev->to().domain()) &&
-	!s_jabber->isServerItemDomain(ev->to().domain());
+    bool localTarget = s_jabber->hasDomain(ev->to().domain());
+    bool externalTarget = false;
+    if (localTarget && (s_jabber->hasComponent(ev->to().domain()) ||
+	s_jabber->isServerItemDomain(ev->to().domain()))) {
+	localTarget = false;
+	externalTarget = true;
+    }
+    bool foreignTarget = !(localTarget || externalTarget);
 
     // NOTE: RFC3921bis recommends to broadcast only 'headline' messages
     //  for bare jid target (or target resource not found)
@@ -3370,70 +3383,73 @@ void JBPendingWorker::processChat(JBPendingJob& job)
 	}
     }
 
-    Message m("msg.route");
+    Message m("call.route");
     while (true) {
+	m.addParam("route_type","msg");
 	__plugin.complete(m);
 	const char* tStr = ev->stanzaType();
 	m.addParam("type",tStr ? tStr : XMPPUtils::msgText(XMPPUtils::Normal));
+	if (localTarget)
+	    m.addParam("localdomain",String::boolText(localTarget));
+	if (externalTarget)
+	    m.addParam("externaldomain",String::boolText(externalTarget));
 	addValidParam(m,"id",ev->id());
 	m.addParam("caller",ev->from().bare());
 	addValidParam(m,"called",ev->to().bare());
 	addValidParam(m,"caller_instance",ev->from().resource());
 	addValidParam(m,"called_instance",ev->to().resource());
-	if (localTarget) {
-	    bool ok = Engine::dispatch(m);
-	    if (!ok || (m.retValue() == "-") || (m.retValue() == "error")) {
-		// Check if an 'instance.count' parameter was returned:
-		//  the target exists
-		if (m.getParam("instance.count"))
+	if (localTarget || (externalTarget && s_msgRouteExternal) ||
+	    (foreignTarget && s_msgRouteForeign)) {
+	    // Directed message with offline resource: try to retrieve online resources
+	    //  for non error/groupchat type
+	    if (localTarget && ev->to().resource() && mType != XMPPUtils::MsgError &&
+		mType != XMPPUtils::GroupChat)
+		m.addParam("fallback_online_instances",String::boolText(true));
+	    if (!(Engine::dispatch(m) && m.retValue() &&
+		m.retValue() != "-" && m.retValue() != "error")) {
+		// See RFC3921bis 8.2.2
+		// Discard errors, reject with error if type is groupchat
+		if (mType == XMPPUtils::MsgError)
+		    break;
+		if (mType == XMPPUtils::GroupChat) {
+		    error = XMPPError::ServiceUnavailable;
+		    break;
+		}
+		if (localTarget && m.getParam(YSTRING("instance.count")))
+		    // instance.count present means the sender is allowed to send chat
 		    error = XMPPError::ItemNotFound;
 		else
 		    error = XMPPError::ServiceUnavailable;
 		break;
 	    }
-	    // Directed message with instance not found
+	    m.clearParam(YSTRING("error"));
+	    m.clearParam(YSTRING("reason"));
+	    m.clearParam(YSTRING("handlers"));
+	    // Clear instance.count for directed chat if confirmed
+	    // The absence of instance.count is an indication of directed chat
 	    if (ev->to().resource()) {
-		if (m.getIntValue("instance.count")) {
-		    // Clear instance.count to signal directed message
-		    m.clearParam("instance.count");
-		}
-		else {
-		    // See RFC3921bis 8.2.2
-		    // Discard errors
-		    if (mType == XMPPUtils::MsgError)
-			break;
-		    // Deny groupchat
-		    if (mType == XMPPUtils::GroupChat) {
-			error = XMPPError::ServiceUnavailable;
-			break;
+		NamedString* n = m.getParam(YSTRING("instance.count"));
+		if (n && n->toInteger() == 1) {
+		    NamedString* inst = m.getParam(YSTRING("instance.1"));
+		    if (inst && *inst == ev->to().resource()) {
+			m.clearParam(n);
+			m.clearParam(inst);
 		    }
-		    // Broadcast all other types
-		    m.clearParam("called_instance");
-		    ok = Engine::dispatch(m);
-		    if (!ok || (m.retValue() == "-") || (m.retValue() == "error")) {
-			// Check if an 'instance.count' parameter was returned: the target exists
-			if (m.getParam("instance.count"))
-			    error = XMPPError::ItemNotFound;
-			else
-			    error = XMPPError::ServiceUnavailable;
-			break;
-		    }
-		    // Add again the called_instance param to signal directed message
-		    m.addParam("called_instance",ev->to().resource());
 		}
 	    }
+	    m.setParam("callto",m.retValue());
+	    m.retValue().clear();
 	}
-	// Check route(s)
+	else
+	    m.addParam("callto",__plugin.prefix() + ev->to().bare());
+	// Execute
 	m = "msg.execute";
-//	m.setParam("callto",m.retValue());
-	m.clearParam("error");
-	m.retValue().clear();
 	XmlElement* xml = ev->releaseXml();
 	addValidParam(m,"subject",XMPPUtils::subject(*xml));
 	addValidParam(m,"body",XMPPUtils::body(*xml));
 	m.addParam(new NamedPointer("xml",xml));
 	if (!Engine::dispatch(m))
-	   error = XMPPError::Gone;
+	    error = XMPPError::Gone;
 	break;
     }
     if (error == XMPPError::NoError)
@@ -3972,6 +3988,7 @@ JBModule::JBModule()
     m_init(false)
 {
     Output("Loaded module Jabber Server");
+    m_prefix << name() << "/";
 }
 
 JBModule::~JBModule()
@@ -3996,7 +4013,7 @@ void JBModule::initialize()
 	setup();
 	installRelay(Halt);
 	installRelay(Help);
-	installRelay(ImExecute);
+	installRelay(MsgExecute);
 	installRelay(Control);
 	s_jabber = new YJBEngine;
 	s_jabber->debugChain(this);
@@ -4035,6 +4052,8 @@ void JBModule::initialize()
     s_s2sFeatures = cfg.getBoolValue("general","s2s_offerfeatures",true);
     s_dumpIq = cfg.getBoolValue("general","dump_iq");
     s_authCluster = cfg.getBoolValue("general","authcluster");
+    s_msgRouteExternal = cfg.getBoolValue("general","message_route_external");
+    s_msgRouteForeign = cfg.getBoolValue("general","message_route_foreign");
 
     // Init the engine
     s_jabber->initialize(cfg.getSection("general"),!m_init);
@@ -4152,8 +4171,11 @@ bool JBModule::checkTls(bool server, const String& domain)
 // Message handler
 bool JBModule::received(Message& msg, int id)
 {
-    if (id == ImExecute)
-	return s_jabber->handleMsgExecute(msg);
+    if (id == MsgExecute) {
+	const String& dest = msg[YSTRING("callto")];
+	return dest.startsWith(prefix()) &&
+	    s_jabber->handleMsgExecute(msg,dest.substr(prefix().length()));
+    }
     if (id == Status) {
 	String target = msg.getValue("module");
 	// Target is the module

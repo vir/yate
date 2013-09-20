@@ -1824,9 +1824,9 @@ void XmlElement::addInheritedNs(const NamedList& list)
 }
 
 // Obtain the first text of this xml element
-const String& XmlElement::getText()
+const String& XmlElement::getText() const
 {
-    XmlText* txt = 0;
+    const XmlText* txt = 0;
     for (ObjList* ob = getChildren().skipNull(); ob && !txt; ob = ob->skipNext())
 	txt = (static_cast<XmlChild*>(ob->get()))->xmlText();
     return txt ? txt->getText() : String::empty();
@@ -1837,6 +1837,26 @@ XmlChild* XmlElement::getFirstChild()
     if (!m_children.getChildren().skipNull())
 	return 0;
     return static_cast<XmlChild*>(m_children.getChildren().skipNull()->get());
+}
+
+XmlText* XmlElement::setText(const char* text)
+{
+    XmlText* txt = 0;
+    for (ObjList* o = getChildren().skipNull(); o; o = o->skipNext()) {
+	txt = (static_cast<XmlChild*>(o->get()))->xmlText();
+	if (txt)
+	    break;
+    }
+    if (txt) {
+	if (!text)
+	    return static_cast<XmlText*>(removeChild(txt));
+	txt->setText(text);
+    }
+    else if (text) {
+	txt = new XmlText(text);
+	addChild(txt);
+    }
+    return txt;
 }
 
 // Add a text child
@@ -1946,6 +1966,14 @@ unsigned int XmlElement::copyAttributes(NamedList& list, const String& prefix) c
 	copy++;
     }
     return copy;
+}
+
+void XmlElement::setAttributes(NamedList& list, const String& prefix, bool skipPrefix)
+{
+    if (prefix)
+	m_element.copySubParams(list,prefix,skipPrefix);
+    else
+	m_element.copyParams(list);
 }
 
 // Retrieve a namespace attribute. Search in parent or inherited for it

@@ -409,8 +409,7 @@ public:
      * Dump the postfix expression according to current operators dictionary
      * @param res Result string representation of operations
      */
-    inline void dump(String& res) const
-	{ return dump(m_opcodes,res); }
+    virtual void dump(String& res) const;
 
     /**
      * Dump a list of operations according to current operators dictionary
@@ -535,6 +534,20 @@ protected:
      * @return Operator code, OpcNone on failure
      */
     Opcode getOperator(const char*& expr, const TokenDict* operators, bool caseInsensitive = false) const;
+
+    /**
+     * Check if a character can be a letter character in a keyword or identifier
+     * @param c Character to check
+     * @return True if the character can be part of a keyword or identifier
+     */
+    virtual bool keywordLetter(char c) const;
+
+    /**
+     * Check if a character can be can be a digit character in a keyword or identifier
+     * @param c Character to check
+     * @return True if the character can be part of a keyword or identifier
+     */
+    virtual bool keywordDigit(char c) const;
 
     /**
      * Check if a character can be part of a keyword or identifier
@@ -1020,6 +1033,19 @@ public:
 	{ }
 
     /**
+     * Constructor from components
+     * @param oper Operation code
+     * @param name Optional name of the operation or result
+     * @param value String value of operation
+     * @param number Integer value
+     * @param barrier True if the operation is an expression barrier on the stack
+     */
+    inline ExpOperation(ExpEvaluator::Opcode oper, const char* name, const char* value, int64_t number, bool barrier)
+	: NamedString(name,value),
+	  m_opcode(oper), m_number(number), m_lineNo(0), m_barrier(barrier)
+	{ }
+
+    /**
      * Retrieve the code of this operation
      * @return Operation code as declared in the expression evaluator
      */
@@ -1128,9 +1154,10 @@ public:
      * Constructor
      * @param name Name of the function
      * @param argc Number of arguments expected by function
+     * @param barrier True if the function is an expression barrier on the stack
      */
-    inline ExpFunction(const char* name, long int argc = 0)
-	: ExpOperation(ExpEvaluator::OpcFunc,name,argc)
+    inline ExpFunction(const char* name, long int argc = 0, bool barrier = false)
+	: ExpOperation(ExpEvaluator::OpcFunc,name,argc,barrier)
 	{ if (name) (*this) << "[function " << name << "()]"; }
 
     /**
@@ -1725,9 +1752,10 @@ public:
      * @param text Source code text
      * @param fragment True if the code is just an included fragment
      * @param file Name of the file that is being parsed
+     * @param len Length of text, negative if unknown
      * @return True if the text was successfully parsed
      */
-    virtual bool parse(const char* text, bool fragment = false, const char* file = 0) = 0;
+    virtual bool parse(const char* text, bool fragment = false, const char* file = 0, int len = -1) = 0;
 
     /**
      * Parse a file as script source code
@@ -2185,6 +2213,13 @@ public:
 	{ return m_length; }
 
     /**
+     * Set the internal length to a specific value
+     * @param len Length of array to set
+     */
+    inline void setLength(int32_t len)
+	{ m_length = len; }
+
+    /**
      * Add an item at the end of the array
      * @param item Item to add to array
      */
@@ -2234,13 +2269,6 @@ protected:
      * @return True if evaluation succeeded
      */
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
-
-    /**
-     * Set the internal length and the "length" parameter to a specific value
-     * @param len Length of array to set
-     */
-    inline void setLength(int32_t len)
-	{ m_length = len; }
 
 private:
     bool runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context);
@@ -2335,9 +2363,10 @@ public:
      * @param text Source code text
      * @param fragment True if the code is just an included fragment
      * @param file Name of the file that is being parsed
+     * @param len Length of text, negative if unknown
      * @return True if the text was successfully parsed
      */
-    virtual bool parse(const char* text, bool fragment = false, const char* file = 0);
+    virtual bool parse(const char* text, bool fragment = false, const char* file = 0, int len = -1);
 
     /**
      * Create a context adequate for Javascript code
@@ -2384,11 +2413,34 @@ public:
 	{ return m_basePath; }
 
     /**
-     * Set the pase script path
+     * Set the base script path
      * @param path Base path to add to relative script paths
      */
     inline void basePath(const char* path)
 	{ m_basePath = path; }
+
+    /**
+     * Retrieve the last parsed file name
+     * @return Name of the successfully parsed file or an empty String
+     */
+    inline const String& parsedFile() const
+	{ return m_parsedFile; }
+
+    /**
+     * Check if the script or any includes have changed
+     * @param file Name of the file to check
+     * @return True if the script may have changed, false if not changed
+     */
+    bool scriptChanged(const char* file) const;
+
+    /**
+     * Check if the script or any includes have changed
+     * @param file Name of the file to check
+     * @param path New base path to check
+     * @return True if the script may have changed, false if not changed
+     */
+    inline bool scriptChanged(const char* file, const String& path) const
+	{ return (path != m_basePath) || scriptChanged(file); }
 
     /**
      * Set whether the Javascript code should be linked or not
@@ -2441,6 +2493,7 @@ public:
 
 private:
     String m_basePath;
+    String m_parsedFile;
     bool m_allowLink;
     bool m_allowTrace;
 };

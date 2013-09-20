@@ -3889,8 +3889,7 @@ void ClientDriver::setup()
     installRelay(Progress);
     installRelay(Route,200);
     installRelay(Text);
-    installRelay(ImRoute);
-    installRelay(ImExecute);
+    installRelay(MsgExecute);
 }
 
 // if we receive a message for an incoming call, we pass the message on
@@ -3913,9 +3912,20 @@ void ClientDriver::msgTimer(Message& msg)
 // Routing handler
 bool ClientDriver::msgRoute(Message& msg)
 {
-    // don't route here our own calls
-    if (name() == msg.getValue(YSTRING("module")))
+    // don't route here our own messages
+    if (name() == msg[YSTRING("module")])
 	return false;
+    String* routeType = msg.getParam(YSTRING("route_type"));
+    if (routeType) {
+	if (*routeType == YSTRING("msg")) {
+	    if (!(Client::self() && Client::self()->imRouting(msg)))
+		return false;
+	    msg.retValue() = name() + "/*";
+	    return true;
+	}
+	if (*routeType != YSTRING("call"))
+	    return Driver::msgRoute(msg);
+    }
     if (Client::self() && Client::self()->callRouting(msg)) {
 	msg.retValue() = name() + "/*";
 	return true;
@@ -3925,16 +3935,7 @@ bool ClientDriver::msgRoute(Message& msg)
 
 bool ClientDriver::received(Message& msg, int id)
 {
-    if (id == ImRoute) {
-	// don't route here our own messages
-	if (name() == msg.getValue(YSTRING("module")))
-	    return false;
-	if (!(Client::self() && Client::self()->imRouting(msg)))
-	    return false;
-	msg.retValue() = name() + "/*";
-	return true;
-    }
-    if (id == ImExecute || id == Text) {
+    if (id == MsgExecute || id == Text) {
 	if (Client::isClientMsg(msg))
 	    return false;
 	return Client::self() && Client::self()->imExecute(msg);

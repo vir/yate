@@ -471,7 +471,7 @@ void Connection::run()
     m_histLen = cfg().getIntValue("maxhistory",DEF_HISTORY);
     if (m_histLen > MAX_HISTORY)
 	m_histLen = MAX_HISTORY;
-    String hdr = cfg().getValue("header","YATE ${version}-${release} (http://YATE.null.ro) ready on ${nodename}.");
+    String hdr = cfg().getValue("header","YATE ${version}-${release} r${revision} (http://YATE.null.ro) ready on ${nodename}.");
     Engine::runParams().replaceParams(hdr);
     if (cfg().getBoolValue("telnet",true)) {
 	m_colorize = cfg().getBoolValue("color",false);

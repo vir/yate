@@ -19,6 +19,7 @@ RETVAL=0
 
 start() {
     echo -n $"Starting YATE: "
+    export PWLIB_ASSERT_ACTION=C
     daemon yate -d -p /var/run/yate.pid $OPTS
     RETVAL=$?
     echo

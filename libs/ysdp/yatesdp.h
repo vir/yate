@@ -475,9 +475,11 @@ public:
      * Use the raw SDP if present.
      * @param msg The list of parameters
      * @param update True to update RTP/SDP data if raw SDP is not found in the list
+     * @param allowEmptyAddr Allow empty address in parameters (default: false)
      * @return MimeSdpBody pointer or 0
      */
-    MimeSdpBody* createPasstroughSDP(NamedList& msg, bool update = true);
+    MimeSdpBody* createPasstroughSDP(NamedList& msg, bool update = true,
+	bool allowEmptyAddr = false);
 
     /**
      * Creates a set of unstarted external RTP channels from remote addr and
@@ -542,11 +544,12 @@ public:
      * @param natAddr Optional NAT address if detected
      * @param body Pointer to the body to extract raw SDP from
      * @param force True to override RTP forward flag
+     * @param allowEmptyAddr Allow empty address in parameters (default: false)
      * @return True if RTP data was added. Media is always added if present and
      *  remote address is not empty
      */
     bool addRtpParams(NamedList& msg, const String& natAddr = String::empty(),
-	const MimeBody* body = 0, bool force = false);
+	const MimeBody* body = 0, bool force = false, bool allowEmptyAddr = false);
 
     /**
      * Reset this object to default values
@@ -589,10 +592,11 @@ public:
      * @param rtpAddr String to be filled with rtp address from the list
      * @param oldList Optional existing media list (found media will be removed
      *  from it and added to the returned list
+     * @param allowEmptyAddr Allow empty address in parameters (default: false)
      * @return List of media or 0 if not found or rtpAddr is empty
      */
     static ObjList* updateRtpSDP(const NamedList& params, String& rtpAddr,
-	ObjList* oldList = 0);
+	ObjList* oldList = 0, bool allowEmptyAddr = false);
 
 protected:
     /**
@@ -616,10 +620,7 @@ protected:
      * @param enabler The DebugEnabler to use (0 to to use the parser)
      * @param ptr Pointer to print, 0 to use the session pointer
      */
-    inline void setSdpDebug(DebugEnabler* enabler = 0, void* ptr = 0) {
-	    m_enabler = enabler ? enabler : (DebugEnabler*)m_parser;
-	    m_ptr = ptr ? ptr : (void*)this;
-	}
+    void setSdpDebug(DebugEnabler* enabler = 0, void* ptr = 0);
 
     /**
      * Print current media to output
@@ -631,6 +632,7 @@ protected:
     int m_mediaStatus;
     bool m_rtpForward;                   // Forward RTP flag
     bool m_sdpForward;                   // Forward SDP (only if RTP is forwarded)
+    String m_originAddr;                 // Our SDP origin address
     String m_externalAddr;               // Our external IP address, possibly outside of a NAT
     String m_rtpAddr;                    // Remote RTP address
     String m_rtpLocalAddr;               // Local RTP address

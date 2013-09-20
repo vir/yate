@@ -58,4 +58,4 @@ for opt in $@; do
     esac
 done
 
-LD_LIBRARY_PATH=.@H323_RUN@:$LD_LIBRARY_PATH exec $yate $set_conf $set_mods $set_share "$@"
+LD_LIBRARY_PATH=.@H323_RUN@:$LD_LIBRARY_PATH PWLIB_ASSERT_ACTION=C exec $yate $set_conf $set_mods $set_share "$@"

@@ -112,9 +112,11 @@
 ;transfer=enable in server mode, disable in client mode
 
 ; registrar: bool: Allow the SIP module to receive registration requests
+; OBSOLETE - please use "enable" in section [registar]
 ;registrar=enable in server mode, disable in client mode
 
 ; options: bool: Build and send a default 200 answer to OPTIONS requests
+; OBSOLETE - please use "enable" in section [options]
 ;options=enable
 
 ; prack: bool: Enable acknowledging provisional 1xx answers (RFC 3262)
@@ -295,8 +297,18 @@
 ;printmsg=yes
 
 
+[options]
+; Controls the behaviour for SIP options retrieval
+
+; enable: bool: Allow the SIP module to receive OPTIONS requests
+;enable=yes
+
+
 [registrar]
 ; Controls the behaviour when acting as registrar
+
+; enable: bool: Allow the SIP module to receive registration requests
+;enable=yes in server mode, no in client mode
 
 ; expires_min: int: Minimum allowed expiration time in seconds
 ;expires_min=60
@@ -314,6 +326,19 @@
 ;nat_refresh=25
 
 ; async_process: bool: Process registrations asynchronously in their own thread
+;async_process=enable
+
+
+[message]
+; Controls the behaviour for SIP messaging
+
+; enable: bool: Allow the SIP module to receive MESSAGE requests
+;enable=no
+
+; auth_required: bool: Automatically challenge all senders for authentication
+;auth_required=enable
+
+; async_process: bool: Process SIP MESSAGE asynchronously in their own thread
 ;async_process=enable
 
 

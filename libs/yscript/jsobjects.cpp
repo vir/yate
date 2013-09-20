@@ -1031,7 +1031,7 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 
 JsObject* JsDate::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(DebugAll,"JsDate::runConstructor '%s'(%ld)",oper.name().c_str(),oper.number());
+    XDebug(DebugAll,"JsDate::runConstructor '%s'("FMT64")",oper.name().c_str(),oper.number());
     ObjList args;
     JsObject* obj = 0;
     switch (extractArgs(stack,oper,context,args)) {

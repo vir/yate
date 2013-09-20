@@ -968,8 +968,7 @@ TokenDict Module::s_messages[] = {
     { "chan.locate",     Module::Locate },
     { "chan.transfer",   Module::Transfer },
     { "chan.control",	 Module::Control },
-    { "msg.route",       Module::ImRoute },
-    { "msg.execute",     Module::ImExecute },
+    { "msg.execute",     Module::MsgExecute },
     { 0, 0 }
 };
 

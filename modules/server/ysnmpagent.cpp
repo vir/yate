@@ -618,7 +618,8 @@ static u_int8_t s_zero = 0;
 static u_int32_t s_pen = 34501;
 
 static SocketAddr s_remote;
-static String s_yateRoot = "";
+static String s_yateRoot;
+static String s_yateVersion;
 
 // zero digest
 static const DataBlock s_zeroKey(0,12);
@@ -1605,6 +1606,11 @@ void SnmpAgent::initialize()
 	m_users.append(new SnmpUser(sec));
     }
 
+    // reported version
+    String ver = s_cfg.getValue("general","version","${version}");
+    Engine::runParams().replaceParams(ver);
+    s_yateVersion = ver;
+
     // load saved data
     s_saveCfg = Engine::configFile("snmp_data");
     s_saveCfg.load();
@@ -2249,7 +2255,7 @@ void SnmpAgent::assignValue(Snmp::VarBind* varBind, AsnValue* val)
 	    objSyn->m_choiceType = Snmp::ObjectSyntax::APPLICATION_WIDE;
 	    objSyn->m_application_wide = app;
 	    app->m_choiceType = Snmp::ApplicationSyntax::BIG_COUNTER_VALUE;
-	    app->m_big_counter_value->m_Counter64 = *((u_int64_t*)val->getValue().c_str());
+	    app->m_big_counter_value->m_Counter64 = (uint64_t)val->getValue().toInt64();
 	    break;
 	case AsnValue::UNSIGNED_INTEGER:
 	    objSyn->m_choiceType = Snmp::ObjectSyntax::APPLICATION_WIDE;
@@ -2833,8 +2839,7 @@ AsnValue SnmpAgent::makeQuery(const String& query, unsigned int& index, AsnMib* 
     DDebug(&__plugin,DebugAll, "::makeQuery(query='%s', index='%d')",query.c_str(),index);
     AsnValue val;
     if (query == YSTRING("version")) {
-	String v = Engine::runParams().getValue(YSTRING("version"),"");
-	val.setValue(v);
+	val.setValue(s_yateVersion);
 	val.setType(AsnValue::STRING);
 	return val;
     }
@@ -2874,9 +2879,11 @@ AsnValue SnmpAgent::makeQuery(const String& query, unsigned int& index, AsnMib* 
     msg.addParam("name",query);
     msg.addParam("index",String(index));
     if (Engine::dispatch(msg)) {
-	String value = msg.getValue("value","");
-	if (!value.null()) {
-	    val.setValue(value);
+	const String* value = msg.getParam(YSTRING("value"));
+	if (!value)
+	    value = &msg.retValue();
+	if (*value) {
+	    val.setValue(*value);
 	    val.setType(STRING);
 	}
     }

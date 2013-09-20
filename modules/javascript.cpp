@@ -133,7 +133,6 @@ public:
 private:
     JsParser m_jsCode;
     RefPointer<ScriptContext> m_context;
-    unsigned int m_fileTime;
     bool m_inUse;
     static ObjList s_globals;
 };
@@ -877,7 +876,7 @@ void JsEngine::initialize(ScriptContext* context)
 
 bool JsShared::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsShared::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsShared::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("inc")) {
 	ObjList args;
 	switch (extractArgs(stack,oper,context,args)) {
@@ -984,7 +983,7 @@ bool JsMessage::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* c
 
 bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsMessage::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsMessage::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("broadcast")) {
 	if (oper.number() != 0)
 	    return false;
@@ -1409,7 +1408,7 @@ void JsMessage::getResult(ObjList& stack, const ExpOperation& row, const ExpOper
 
 JsObject* JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsMessage::runConstructor '%s'(%ld)",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsMessage::runConstructor '%s'("FMT64")",oper.name().c_str(),oper.number());
     ObjList args;
     switch (extractArgs(stack,oper,context,args)) {
 	case 1:
@@ -1540,7 +1539,7 @@ bool JsMessageQueue::matchesFilters(const NamedList& filters)
 
 bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsFile::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsFile::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("exists")) {
 	if (oper.number() != 1)
 	    return false;
@@ -1639,7 +1638,7 @@ void JsFile::initialize(ScriptContext* context)
 
 bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsXML::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsXML::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
     ObjList args;
     int argc = extractArgs(stack,oper,context,args);
     if (oper.name() == YSTRING("put")) {
@@ -1853,7 +1852,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 
 JsObject* JsXML::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsXML::runConstructor '%s'(%ld) [%p]",oper.name().c_str(),oper.number(),this);
+    XDebug(&__plugin,DebugAll,"JsXML::runConstructor '%s'("FMT64") [%p]",oper.name().c_str(),oper.number(),this);
     JsXML* obj = 0;
     ObjList args;
     switch (extractArgs(stack,oper,context,args)) {
@@ -2061,7 +2060,7 @@ ScriptContext* JsEngineWorker::getContext()
 
 bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsChannel::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsChannel::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("id")) {
 	if (oper.number())
 	    return false;
@@ -2508,7 +2507,7 @@ ObjList JsGlobal::s_globals;
 
 JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath)
     : NamedString(scriptName,fileName),
-      m_fileTime(0), m_inUse(true)
+      m_inUse(true)
 {
     m_jsCode.basePath(s_basePath);
     if (relPath)
@@ -2516,7 +2515,6 @@ JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath)
     m_jsCode.link(s_allowLink);
     m_jsCode.trace(s_allowTrace);
     DDebug(&__plugin,DebugAll,"Loading global Javascript '%s' from '%s'",name().c_str(),c_str());
-    File::getFileTime(c_str(),m_fileTime);
     if (m_jsCode.parseFile(*this))
 	Debug(&__plugin,DebugInfo,"Parsed '%s' script: %s",name().c_str(),c_str());
     else if (*this)
@@ -2540,15 +2538,7 @@ JsGlobal::~JsGlobal()
 
 bool JsGlobal::fileChanged(const char* fileName) const
 {
-    if (m_jsCode.basePath() != s_basePath)
-	return true;
-    String tmp(fileName);
-    m_jsCode.adjustPath(tmp);
-    if (tmp != *this)
-	return true;
-    unsigned int time;
-    File::getFileTime(tmp,time);
-    return (time != m_fileTime);
+    return m_jsCode.scriptChanged(fileName,s_basePath);
 }
 
 void JsGlobal::markUnused()
@@ -2901,19 +2891,28 @@ void JsModule::initialize()
 	tmp += Engine::pathSeparator();
     s_basePath = tmp;
     s_allowAbort = cfg.getBoolValue("general","allow_abort");
-    s_allowTrace = cfg.getBoolValue("general","allow_trace");
-    s_allowLink = cfg.getBoolValue("general","allow_link",true);
-    lock();
-    m_assistCode.clear();
-    m_assistCode.basePath(tmp);
-    m_assistCode.link(s_allowLink);
-    m_assistCode.trace(s_allowTrace);
+    bool changed = false;
+    if (cfg.getBoolValue("general","allow_trace") != s_allowTrace) {
+	s_allowTrace = !s_allowTrace;
+	changed = true;
+    }
+    if (cfg.getBoolValue("general","allow_link",true) != s_allowLink) {
+	s_allowLink = !s_allowLink;
+	changed = true;
+    }
     tmp = cfg.getValue("general","routing");
-    m_assistCode.adjustPath(tmp);
-    if (m_assistCode.parseFile(tmp))
-	Debug(this,DebugInfo,"Parsed routing script: %s",tmp.c_str());
-    else if (tmp)
-	Debug(this,DebugWarn,"Failed to parse script: %s",tmp.c_str());
+    lock();
+    if (changed || m_assistCode.scriptChanged(tmp,s_basePath)) {
+	m_assistCode.clear();
+	m_assistCode.link(s_allowLink);
+	m_assistCode.trace(s_allowTrace);
+	m_assistCode.basePath(s_basePath);
+	m_assistCode.adjustPath(tmp);
+	if (m_assistCode.parseFile(tmp))
+	    Debug(this,DebugInfo,"Parsed routing script: %s",tmp.c_str());
+	else if (tmp)
+	    Debug(this,DebugWarn,"Failed to parse script: %s",tmp.c_str());
+    }
     JsGlobal::markUnused();
     unlock();
     NamedList* sect = cfg.getSection("scripts");

@@ -311,10 +311,12 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
     // override the address with the externally advertised if needed
     if (addr && m_rtpNatAddr)
 	addr = m_rtpNatAddr;
+    if (!m_originAddr)
+	m_originAddr = addr ? addr : m_host.safe();
     // no address means on hold or muted
     String origin;
     origin << "yate " << m_sdpSession << " " << m_sdpVersion;
-    origin << " IN IP4 " << (addr ? addr : m_host.safe());
+    origin << " IN IP4 " << m_originAddr;
     String conn;
     conn << "IN IP4 " << (addr ? addr : "0.0.0.0");
 
@@ -554,8 +556,11 @@ MimeSdpBody* SDPSession::createSDP()
 }
 
 // Creates a SDP from RTP address data present in message
-MimeSdpBody* SDPSession::createPasstroughSDP(NamedList& msg, bool update)
+MimeSdpBody* SDPSession::createPasstroughSDP(NamedList& msg, bool update,
+    bool allowEmptyAddr)
 {
+    XDebug(m_enabler,DebugAll,"createPasstroughSDP(%s,%u,%u) [%p]",
+	msg.c_str(),update,allowEmptyAddr,m_ptr);
     String tmp = msg.getValue("rtp_forward");
     msg.clearParam("rtp_forward");
     if (!(m_rtpForward && tmp.toBoolean()))
@@ -569,7 +574,7 @@ MimeSdpBody* SDPSession::createPasstroughSDP(NamedList& msg, bool update)
 	}
     }
     String addr;
-    ObjList* lst = updateRtpSDP(msg,addr,update ? m_rtpMedia : 0);
+    ObjList* lst = updateRtpSDP(msg,addr,update ? m_rtpMedia : 0,allowEmptyAddr);
     if (!lst)
 	return 0;
     MimeSdpBody* sdp = createSDP(addr,lst);
@@ -682,9 +687,12 @@ bool SDPSession::addSdpParams(NamedList& msg, const String& rawSdp)
 
 // Add RTP forwarding parameters to a message
 bool SDPSession::addRtpParams(NamedList& msg, const String& natAddr,
-    const MimeBody* body, bool force)
+    const MimeBody* body, bool force, bool allowEmptyAddr)
 {
-    if (!(m_rtpMedia && m_rtpAddr))
+    XDebug(m_enabler,DebugAll,"addRtpParams(%s,%s,%p,%u,%u) media=%p rtpaddr=%s [%p]",
+	msg.c_str(),natAddr.c_str(),body,force,allowEmptyAddr,m_rtpMedia,
+	m_rtpAddr.c_str(),m_ptr);
+    if (!(m_rtpMedia && (m_rtpAddr || allowEmptyAddr)))
 	return false;
     putMedia(msg,false);
     if (force || (!startRtp() && m_rtpForward)) {
@@ -813,11 +821,13 @@ void SDPSession::setLocalRtpChanged(bool chg)
 }
 
 // Update RTP/SDP data from parameters
-ObjList* SDPSession::updateRtpSDP(const NamedList& params, String& rtpAddr, ObjList* oldList)
+ObjList* SDPSession::updateRtpSDP(const NamedList& params, String& rtpAddr, ObjList* oldList,
+    bool allowEmptyAddr)
 {
-    DDebug(DebugAll,"SDPSession::updateRtpSDP(%s,%s,%p)",params.c_str(),rtpAddr.c_str(),oldList);
+    XDebug(DebugAll,"SDPSession::updateRtpSDP(%s,%s,%p,%u)",
+	params.c_str(),rtpAddr.c_str(),oldList,allowEmptyAddr);
     rtpAddr = params.getValue("rtp_addr");
-    if (!rtpAddr)
+    if (!(rtpAddr || allowEmptyAddr))
 	return 0;
     const char* sdpPrefix = params.getValue("osdp-prefix","osdp");
     ObjList* lst = 0;
@@ -838,7 +848,7 @@ ObjList* SDPSession::updateRtpSDP(const NamedList& params, String& rtpAddr, ObjL
 	if (!params.getBoolValue("media" + tmp,audio))
 	    continue;
 	int port = p->toInteger();
-	if (!port)
+	if (!(port || allowEmptyAddr))
 	    continue;
 	const char* fmts = params.getValue("formats" + tmp);
 	if (!fmts)
@@ -894,6 +904,13 @@ void SDPSession::mediaChanged(const SDPMedia& media)
 void SDPSession::dispatchingRtp(Message*& msg, SDPMedia* media)
 {
     XDebug(m_enabler,DebugAll,"SDPSession::dispatchingRtp(%p,%p) [%p]",msg,media,m_ptr);
+}
+
+// Set data used in debug 
+void SDPSession::setSdpDebug(DebugEnabler* enabler, void* ptr)
+{
+    m_enabler = enabler ? enabler : static_cast<DebugEnabler*>(m_parser);
+    m_ptr = ptr ? ptr : (void*)this;
 }
 
 // Print current media to output

@@ -245,6 +245,12 @@ static int cleaningCount()
     return s_connCount - s_chanCount;
 }
 
+static bool cleaningBusy()
+{
+    int maxc = s_maxCleaning;
+    return (maxc > 0) && (cleaningCount() > maxc);
+}
+
 class H323Process : public PProcess
 {
     PCLASSINFO(H323Process, PProcess)
@@ -870,6 +876,18 @@ static inline unsigned int threadIdleIntervals(u_int64_t periodUs)
     return (unsigned int)((periodUs + us - 1) / us);
 }
 
+// Emit an alarm when refusing a new call but not more often than every 10s
+static void congestedWarn(const char* msg)
+{
+    static uint64_t s_alarmTime = 0;
+    if (s_alarmTime > Time::now())
+	Debug(&hplugin,DebugWarn,"%s",msg);
+    else {
+	Alarm(&hplugin,"performance",DebugWarn,"%s",msg);
+	s_alarmTime = Time::now() + 10000000;
+    }
+}
+
 // shameless adaptation from the G711 capability declaration
 #define DEFINE_YATE_CAPAB(cls,base,param,name) \
 class cls : public base { \
@@ -1010,7 +1028,7 @@ H323Connection* YateH323EndPoint::yateMakeCall(const PString& remoteParty,
 {
     // Sync with gatekeeper changing flag
     if (!startUsingGk(false)) {
-	Debug(DebugWarn,"Refusing new outgoing H.323 call, gatekeeper busy");
+	congestedWarn("Refusing new outgoing H.323 call, gatekeeper busy");
 	return 0;
     }
     token = PString::Empty();
@@ -1025,21 +1043,18 @@ H323Connection* YateH323EndPoint::yateMakeCall(const PString& remoteParty,
 H323Connection* YateH323EndPoint::CreateConnection(unsigned callReference,
     void* userData, H323Transport* transport, H323SignalPDU* setupPDU)
 {
-    if (s_maxCleaning > 0) {
-	// check if there aren't too many connections assigned to the cleaner thread
-	int cln = cleaningCount();
-	if (cln > s_maxCleaning) {
-	    Debug(DebugWarn,"Refusing new H.323 call, there are already %d cleaning up",cln);
-	    return 0;
-	}
+    // check if there aren't too many connections assigned to the cleaner thread
+    if (cleaningBusy()) {
+	congestedWarn("Refusing new H.323 call, too many cleaning up");
+	return 0;
     }
     if (!hplugin.canAccept(userData == 0)) {
-	Debug(DebugWarn,"Refusing new H.323 call, full or exiting");
+	congestedWarn("Refusing new H.323 call, full or exiting");
 	return 0;
     }
     // Incoming call, sync with gatekeeper changing flag
     if (!userData && !startUsingGk(false)) {
-	Debug(DebugWarn,"Refusing new incoming H.323 call, gatekeeper busy");
+	congestedWarn("Refusing new incoming H.323 call, gatekeeper busy");
 	return 0;
     }
     Lock mylock(this);
@@ -1689,6 +1704,11 @@ void YateGkRegThread::Main()
 // make a call either normally or in a proxy PWlib thread
 bool YateCallThread::makeCall(YateH323EndPoint* ep, const char* remoteParty, void* userData, bool newThread)
 {
+    // check if there aren't too many connections assigned to the cleaner thread
+    if (cleaningBusy()) {
+	congestedWarn("Refusing new outgoing H.323 call, too many cleaning up");
+	return false;
+    }
     if (!newThread) {
 	PString token;
 	return ep->yateMakeCall(remoteParty,token,userData) != 0;

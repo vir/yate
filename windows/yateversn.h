@@ -21,6 +21,7 @@
 #define YATE_VERSION "4.3.1"
 #define YATE_RELEASE "1"
 #define YATE_STATUS  "alpha"
+#define YATE_REVISION "5646"
 
 /* Windows version resource - file and string style */
 #define YATE_WINVER_F 4,3,1,1

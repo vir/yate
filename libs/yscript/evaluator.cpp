@@ -233,10 +233,19 @@ char ExpEvaluator::skipWhites(ParsePoint& expr)
     }
 }
 
+bool ExpEvaluator::keywordLetter(char c) const
+{
+    return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (c == '_');
+}
+
+bool ExpEvaluator::keywordDigit(char c) const
+{
+    return ('0' <= c && c <= '9');
+}
+
 bool ExpEvaluator::keywordChar(char c) const
 {
-    return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') ||
-	('0' <= c && c <= '9') || (c == '_');
+    return keywordLetter(c) || keywordDigit(c);
 }
 
 char ExpEvaluator::skipComments(ParsePoint& expr, GenObject* context)
@@ -1282,7 +1291,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 
 bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context) const
 {
-    DDebug(this,DebugAll,"runFunction(%p,'%s' %ld, %p) ext=%p",
+    DDebug(this,DebugAll,"runFunction(%p,'%s' "FMT64", %p) ext=%p",
 	&stack,oper.name().c_str(),oper.number(),context,(void*)m_extender);
     if (oper.name() == YSTRING("chr")) {
 	String res;
@@ -1439,7 +1448,7 @@ void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
 	case OpcPush:
 	case OpcCopy:
 	    if (oper.isInteger())
-		res << (int)oper.number();
+		res << oper.number();
 	    else
 		res << "'" << oper << "'";
 	    break;
@@ -1447,7 +1456,7 @@ void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
 	    res << oper.name();
 	    break;
 	case OpcFunc:
-	    res << oper.name() << "(" << (int)oper.number() << ")";
+	    res << oper.name() << "(" << oper.number() << ")";
 	    break;
 	default:
 	    {
@@ -1458,7 +1467,7 @@ void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
 		    res << "[" << oper.opcode() << "]";
 	    }
 	    if (oper.number() && oper.isInteger())
-		res << "(" << (int)oper.number() << ")";
+		res << "(" << oper.number() << ")";
     }
 }
 
@@ -1470,6 +1479,11 @@ void ExpEvaluator::dump(const ObjList& codes, String& res) const
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
 	dump(*o,res);
     }
+}
+
+void ExpEvaluator::dump(String& res) const
+{
+    return dump(m_opcodes,res);
 }
 
 int64_t ExpOperation::valInteger() const

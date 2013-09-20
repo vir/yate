@@ -46,3 +46,16 @@
 
 ; caps_update: string: Database query used to update contact's capabilities list.
 ;caps_update=SELECT caps_update('${contact}/${instance}', '${caps.audio}')
+
+; route_callto: string: Target to set when successfully handled a call.route message
+; This parameter is applied on reload
+;route_callto=jabber/${called}
+
+
+[priorities]
+; Message handlers priorities
+
+; call.route: integer: call.route message handler priority
+; Defaults to 100
+; This parameter is not applied on reload
+;call.route=100

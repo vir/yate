@@ -10,6 +10,10 @@
 ;thread priority for SNMP message processing. Defaults to normal.
 ;thread=normal
 
+; Version string reported by SNMP, can contain Engine substitutions
+; You may consider adding ${release} or ${revision}
+;version=${version}
+
 
 [snmp_v2]
 ; SNMPv2 configuration

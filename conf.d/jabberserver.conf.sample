@@ -131,6 +131,21 @@
 ; Defaults to no
 ;dump_iq=no
 
+; message_route_external: boolean: Route (send call.route) for incoming chat to
+;  external domains (components or server items) serviced by us
+; NOTE: A module may register a server item having a domain from our configured domains.
+;  In this case the domain will become external and message stanzas addressed to it
+;  won't be routed unless message_route_external is enabled
+; If enabled and call.route fails the message stanza will be dropped or rejected
+; Defaults to no
+;message_route_external=no
+
+; message_route_foreign: boolean: Route (send call.route) for incoming chat to
+;  foreign domains (any domain not serviced by us)
+; If enabled and call.route fails the message stanza will be dropped or rejected
+; Defaults to no
+;message_route_foreign=no
+
 ; compression_formats: string: Comma separated list of supported compression formats
 ; This parameter configures the formats to be offered on incoming streams
 ; This parameter is not applied on reload

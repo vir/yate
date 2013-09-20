@@ -3869,7 +3869,7 @@ void YJGDriver::initialize()
 	installRelay(Route);
 	installRelay(Update);
 	installRelay(Transfer);
-	installRelay(ImExecute);
+	installRelay(MsgExecute);
 	installRelay(Progress);
 	// Install handlers
 	for (const TokenDict* d = s_msgHandler; d->token; d++) {
@@ -4273,7 +4273,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 // Message handler: Disconnect channels, destroy streams, clear rosters
 bool YJGDriver::received(Message& msg, int id)
 {
-    if (id == ImExecute)
+    if (id == MsgExecute)
 	return !isModule(msg) && handleImExecute(msg);
     if (id == Execute) {
 	// Client only: handle call.execute with target starting jabber/
@@ -4567,18 +4567,16 @@ bool YJGDriver::handleImExecute(Message& msg)
     // Set local (target) from callto/called parameter
     JabberID local;
     String* callto = msg.getParam("callto");
-    if (TelEngine::null(callto)) {
+    if (TelEngine::null(callto))
 	local.set(msg.getValue("called"));
-	if (local && !local.resource())
-	    local.resource(msg.getValue("called_instance"));
-    }
-    else {
-	if (!callto->startsWith(prefix()))
-	    return false;
+    else if (callto->startsWith(prefix()))
 	local.set(callto->substr(prefix().length()));
-    }
+    else
+        return false;
     if (!local)
 	return false;
+    if (!local.resource())
+	local.resource(msg.getValue("called_instance"));
     Message* m = 0;
     Lock lock(this);
     // Check if target is in our domain(s)

@@ -1,3 +1,9 @@
+yate (4.3.1~vir2013092002) UNRELEASED; urgency=low
+
+  * dtmfinband=force support for buggy E1 cards
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Fri, 20 Sep 2013 16:21:08 +0400
+
 yate (4.3.1~vir2013092001) UNRELEASED; urgency=low
 
   * Merged upstream fixes.

@@ -1,3 +1,9 @@
+yate (4.3.1~vir2013092601) UNRELEASED; urgency=low
+
+  * Added H264 codec support
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Thu, 26 Sep 2013 10:06:37 +0400
+
 yate (4.3.1~vir2013092003) UNRELEASED; urgency=low
 
   * one more inband dtmf fix
@@ -142,7 +148,7 @@ yate (4.2.1~vir2012102302) UNRELEASED; urgency=low
 
 yate (4.2.1~vir2012102301) UNRELEASED; urgency=low
 
-  * Addec H263-1998 payload mapping
+  * Added H263-1998 payload mapping
   * Merge upstream fixes and improvements, most notabely:
   * Postgresql database connection pooling
 

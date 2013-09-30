@@ -4,6 +4,9 @@
 ; expires: int: Will execute the engine.timer query only every that many seconds
 ;expires=30
 
+; unregister_expired: bool: Dispatch user.unregister messages for every row, returned by expiration query
+;unregister_expired=no
+
 ; stoperror: regexp: Regular expression matching errors that will stop fallback
 ;stoperror=busy
 
@@ -97,9 +100,10 @@
 
 [engine.timer]
 ; Query for the timer message that expires registrations
-; Also look at the expires setting in section [general]
+; Also look at the 'expires' and 'unregister_expired' settings in section [general]
 
 ;query=UPDATE users SET location=NULL,expires=NULL WHERE expires IS NOT NULL AND expires<=CURRENT_TIMESTAMP
+;query=SELECT username, location AS data, 'true' AS expired FROM users WHERE expires IS NOT NULL AND expires<=CURRENT_TIMESTAMP;
 
 
 [call.preroute]

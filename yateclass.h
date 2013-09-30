@@ -5452,6 +5452,26 @@ class YATE_API SocketAddr : public GenObject
 {
 public:
     /**
+     * Known address families
+     */
+    enum Family {
+	Unknown = AF_UNSPEC,
+	IPv4 = AF_INET,
+	AfMax = AF_MAX,
+	AfUnsupported = AfMax,
+#ifdef AF_INET6
+	IPv6 = AF_INET6,
+#else
+	IPv6 = AfUnsupported + 1,
+#endif
+#ifdef HAS_AF_UNIX
+	Unix = AF_UNIX,
+#else
+	Unix = AfUnsupported + 2,
+#endif
+    };
+
+    /**
      * Default constructor of an empty address
      */
     inline SocketAddr()
@@ -5555,6 +5575,28 @@ public:
 	{ return m_address ? m_address->sa_family : 0; }
 
     /**
+     * Retrieve address family name
+     * @return Address family name
+     */
+    inline const char* familyName()
+	{ return lookupFamily(family()); }
+
+    /**
+     * Retrieve the sin6_scope_id value of an IPv6 address
+     * @return The requested value (it may be 0), 0 if not available
+     */
+    inline unsigned int scopeId() const
+	{ return scopeId(address()); }
+
+    /**
+     * Set the sin6_scope_id value of an IPv6 address
+     * @param val Value to set
+     * @return True on success, false if not available
+     */
+    inline bool scopeId(unsigned int val)
+	{ return scopeId(address(),val); }
+
+    /**
      * Get the host of this address
      * @return Host name as String
      */
@@ -5562,7 +5604,19 @@ public:
 	{ return m_host; }
 
     /**
-     * Set the hostname of this address
+     * Get the host and port of this address
+     * @return Address String (host:port)
+     */
+    inline const String& addr() const {
+	    if (!m_addr)
+		updateAddr();
+	    return m_addr;
+	}
+
+    /**
+     * Set the hostname of this address.
+     * Guess address family if not initialized
+     * @param name Host to set
      * @return True if new host set, false if name could not be parsed
      */
     virtual bool host(const String& name);
@@ -5595,11 +5649,155 @@ public:
 	{ return m_length; }
 
     /**
+     * Check if this address is empty or null
+     * @return True if the address is empty or '0.0.0.0' (IPv4) or '::' IPv6
+     */
+    inline bool isNullAddr() const
+	{ return isNullAddr(m_host,family()); }
+
+    /**
      * Check if an address family is supported by the library
      * @param family Family of the address to check
      * @return True if the address family is supported
      */
     static bool supports(int family);
+
+    /**
+     * Retrieve the family of an address
+     * @param addr The address to check
+     * @return Address family
+     */
+    static int family(const String& addr);
+
+    /**
+     * Convert the host address to a String
+     * @param buf Destination buffer
+     * @param addr Socket address
+     * @return True on success, false if address family is not supported
+     */
+    static bool stringify(String& buf, struct sockaddr* addr);
+
+    /**
+     * Retrieve the scope id value of an IPv6 address
+     * @param addr The address
+     * @return The requested value (it may be 0), 0 if not available
+     */
+    static inline unsigned int scopeId(struct sockaddr* addr) {
+#ifdef AF_INET6
+	    if (addr && addr->sa_family == AF_INET6)
+		return ((struct sockaddr_in6*)addr)->sin6_scope_id;
+#endif
+	    return 0;
+	}
+
+    /**
+     * Set the scope id value of an IPv6 address
+     * @param addr Address to set
+     * @param val Value to set
+     * @return True on success, false if not available
+     */
+    static inline bool scopeId(struct sockaddr* addr, unsigned int val) {
+#ifdef AF_INET6
+	    if (addr && addr->sa_family == AF_INET6) {
+		((struct sockaddr_in6*)addr)->sin6_scope_id = val;
+		return true;
+	    }
+#endif
+	    return false;
+	}
+
+    /**
+     * Append an address to a buffer
+     * @param buf Destination buffer
+     * @param addr Address to append
+     * @param family Address family, set it to Unknown to detect
+     * @return Buffer address
+     */
+    static String& appendAddr(String& buf, const String& addr, int family = Unknown);
+
+    /**
+     * Append an address to a buffer in the form addr:port
+     * @param buf Destination buffer
+     * @param addr Address to append
+     * @param port Port to append
+     * @param family Address family, set it to Unknown to detect
+     * @return Buffer address
+     */
+    static inline String& appendTo(String& buf, const String& addr, int port,
+	int family = Unknown) {
+	    appendAddr(buf,addr,family) << ":" << port;
+	    return buf;
+	}
+
+    /**
+     * Append an address to a buffer in the form addr:port
+     * @param addr Address to append
+     * @param port Port to append
+     * @param family Address family, set it to Unknown to detect
+     * @return A String with concatenated address and port
+     */
+    static inline String appendTo(const String& addr, int port, int family = Unknown) {
+	    String buf;
+	    appendTo(buf,addr,port,family);
+	    return buf;
+	}
+
+    /**
+     * Check if an address is empty or null
+     * @param addr Address to check
+     * @param family Address family, set it to Unknown to detect
+     * @return True if the address is empty or '0.0.0.0' (IPv4) or '::' IPv6
+     */
+    static bool isNullAddr(const String& addr, int family = Unknown);
+
+    /**
+     * Split an interface from address
+     * An interface may be present in addr after a percent char (e.g. fe80::23%eth0)
+     * It is safe call this method with the same destination and source string
+     * @param buf Source buffer
+     * @param addr Destination buffer for address
+     * @param iface Optional pointer to be filled with interface name
+     */
+    static void splitIface(const String& buf, String& addr, String* iface = 0);
+
+    /**
+     * Split an address into ip/port.
+     * Handled formats: addr, addr:port, [addr], [addr]:port
+     * It is safe call this method with the same destination and source string
+     * @param buf Source buffer
+     * @param addr Destination buffer for address
+     * @param port Destination port
+     * @param portPresent Set it to true if the port is always present after the last ':'.
+     *  This will handle IPv6 addresses without square brackets and port present
+     *  (e.g. fe80::23:5060 will split into addr=fe80::23 and port=5060)
+     */
+    static void split(const String& buf, String& addr, int& port, bool portPresent = false);
+
+    /**
+     * Retrieve address family name
+     * @param family Address family to retrieve
+     * @return Address family name
+     */
+    static inline const char* lookupFamily(int family)
+	{ return lookup(family,s_familyName); }
+
+    /**
+     * Retrieve IPv4 null address
+     * @return IPv4 null address (0.0.0.0)
+     */
+    static const String& ipv4NullAddr();
+
+    /**
+     * Retrieve IPv6 null address
+     * @return IPv6 null address (::)
+     */
+    static const String& ipv6NullAddr();
+
+    /**
+     * Retrieve the family name dictionary
+     * @return Pointer to family name dictionary
+     */
+    static const TokenDict* dictFamilyName();
 
 protected:
     /**
@@ -5607,9 +5805,18 @@ protected:
      */
     virtual void stringify();
 
+    /**
+     * Store host:port in m_addr
+     */
+    virtual void updateAddr() const;
+
     struct sockaddr* m_address;
     socklen_t m_length;
     String m_host;
+    mutable String m_addr;
+
+private:
+    static const TokenDict s_familyName[];
 };
 
 /**
@@ -6273,6 +6480,23 @@ public:
      * @return True if operation was successfull, false if an error occured
      */
     virtual bool setOption(int level, int name, const void* value = 0, socklen_t length = 0);
+
+    /**
+     * Set or reset socket IPv6 only option.
+     * This option will tell to an IPv6 socket to accept only IPv6 packets.
+     * IPv4 packets will be accepted if disabled.
+     * This method will fail for non PF_INET6 sockets
+     * @param on True to set, false to reset it
+     * @return True if operation was successfull, false if an error occured
+     */
+    inline bool setIpv6OnlyOption(bool on) {
+#if defined(IPPROTO_IPV6) && defined(IPV6_V6ONLY)
+	    int value = on ? 1 : 0;
+	    return setOption(IPPROTO_IPV6,IPV6_V6ONLY,&value,sizeof(value));
+#else
+	    return false;
+#endif
+	}
 
     /**
      * Get socket options

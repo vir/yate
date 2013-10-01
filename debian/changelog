@@ -1,4 +1,4 @@
-yate (4.3.1~svn5656) UNRELEASED; urgency=low
+yate (4.3.1~svn5657) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -742,8 +742,10 @@ yate (4.3.1~svn5656) UNRELEASED; urgency=low
     parsing expressions like 'a.' (parsing of field operator without
     subsequent field name).  + Added IPv6 support to SocketAddr and
     Socket classes.
+  * Updated to SVN revision 5657: + Added methods used to fill a binary
+    IP address buffer from stringified address.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 01 Oct 2013 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 02 Oct 2013 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

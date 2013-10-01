@@ -477,6 +477,24 @@ bool SocketAddr::stringify(String& s, struct sockaddr* addr)
     return false;
 }
 
+// Copy a host address to a buffer
+int SocketAddr::copyAddr(uint8_t* buf, struct sockaddr* addr)
+{
+    if (!(buf && addr))
+	return Unknown;
+    switch (addr->sa_family) {
+	case AF_INET:
+	    ::memcpy(buf,&((struct sockaddr_in*)addr)->sin_addr,4);
+	    return IPv4;
+#ifdef AF_INET6
+	case AF_INET6:
+	    ::memcpy(buf,&((struct sockaddr_in6*)addr)->sin6_addr,16);
+	    return IPv6;
+#endif
+    }
+    return Unknown;
+}
+
 // Append an address to a buffer
 String& SocketAddr::appendAddr(String& buf, const String& addr, int family)
 {

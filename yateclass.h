@@ -5678,6 +5678,29 @@ public:
     static bool stringify(String& buf, struct sockaddr* addr);
 
     /**
+     * Put a host address to a buffer
+     * @param buf Destination buffer. It must be large enough to keep the address
+     *  (4 bytes for IPv4, 16 bytes for IPv6)
+     * @param host The host address
+     * @param family Address family, set it to Unknown to detect
+     * @return Address family, Unknown on failure
+     */
+    static inline int unStringify(uint8_t* buf, const String& host,
+	int family = Unknown) {
+	    SocketAddr sa(family);
+	    return sa.host(host) ? copyAddr(buf,sa.address()) : Unknown;
+	}
+
+    /**
+     * Copy a host address to a buffer
+     * @param buf Destination buffer. It must be large enough to keep the address
+     *  (4 bytes for IPv4, 16 bytes for IPv6)
+     * @param addr The host address
+     * @return Address family, Unknown on failure
+     */
+    static int copyAddr(uint8_t* buf, struct sockaddr* addr);
+
+    /**
      * Retrieve the scope id value of an IPv6 address
      * @param addr The address
      * @return The requested value (it may be 0), 0 if not available

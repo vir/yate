@@ -6402,10 +6402,43 @@ public:
      * Types of service
      */
     enum TOS {
+	Normal         = 0,
 	LowDelay       = IPTOS_LOWDELAY,
 	MaxThroughput  = IPTOS_THROUGHPUT,
 	MaxReliability = IPTOS_RELIABILITY,
 	MinCost        = IPTOS_MINCOST,
+    };
+
+    /**
+     * DiffServ bits
+     */
+    enum DSCP {
+	DefaultPHB     = 0x00,
+	// Class selectors
+	CS0            = 0x00,
+	CS1            = 0x20,
+	CS2            = 0x40,
+	CS3            = 0x60,
+	CS4            = 0x80,
+	CS5            = 0xa0,
+	CS6            = 0xc0,
+	CS7            = 0xe0,
+	// Assured forwarding
+	AF11           = 0x28,
+	AF12           = 0x30,
+	AF13           = 0x38,
+	AF21           = 0x48,
+	AF22           = 0x50,
+	AF23           = 0x58,
+	AF31           = 0x68,
+	AF32           = 0x70,
+	AF33           = 0x78,
+	AF41           = 0x88,
+	AF42           = 0x90,
+	AF43           = 0x98,
+	// Expedited forwarding
+	ExpeditedFwd   = 0xb8,
+	VoiceAdmit     = 0xb0,
     };
 
     /**
@@ -6497,6 +6530,12 @@ public:
     static int socketError();
 
     /**
+     * Retrieve the keyword lookup table for TOS / DSCP values
+     * @return Pointer to keyword dictionary for TOS and DSCP
+     */
+    static const TokenDict* tosValues();
+
+    /**
      * Set socket options
      * @param level Level of the option to set
      * @param name Socket option for which the value is to be set
@@ -6550,11 +6589,20 @@ public:
 	{ return false; }
 
     /**
-     * Set the Type of Service on the IP level of this socket
-     * @param tos New TOS bits to set
+     * Set the Type of Service or Differentiated Services Code Point on the IP level of this socket
+     * @param tos New TOS or DiffServ bits
      * @return True if operation was successfull, false if an error occured
      */
     virtual bool setTOS(int tos);
+
+    /**
+     * Set the Type of Service or Differentiated Services Code Point on the IP level of this socket
+     * @param tos Keyword describing new TOS or DSCP value
+     * @param defTos Default TOS or DiffServ value to set if the keyword is not recognized
+     * @return True if operation was successfull, false if an error occured
+     */
+    inline bool setTOS(const char* tos, int defTos = Normal)
+	{ return setTOS(lookup(tos,tosValues(),defTos)); }
 
     /**
      * Set the blocking or non-blocking operation mode of the socket

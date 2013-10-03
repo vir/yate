@@ -75,14 +75,6 @@ static TokenDict dict_yrtp_dir[] = {
     { 0 , 0 },
 };
 
-static TokenDict dict_tos[] = {
-    { "lowdelay", Socket::LowDelay },
-    { "throughput", Socket::MaxThroughput },
-    { "reliability", Socket::MaxReliability },
-    { "mincost", Socket::MinCost },
-    { 0, 0 }
-};
-
 static int s_minport = MIN_PORT;
 static int s_maxport = MAX_PORT;
 static int s_bufsize = BUF_SIZE;
@@ -98,7 +90,7 @@ static bool s_rtcp  = true;
 static bool s_drill = false;
 
 static Thread::Priority s_priority = Thread::Normal;
-static int s_tos     = 0;
+static int s_tos     = Socket::Normal;
 static int s_udpbuf  = 0;
 static int s_sleep   = 5;
 static int s_interval= 0;
@@ -641,7 +633,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
     int payload = p.toInteger(dict_payloads,-1);
     int evpayload = msg.getIntValue(YSTRING("evpayload"),101);
     const char* format = msg.getValue(YSTRING("format"));
-    int tos = msg.getIntValue(YSTRING("tos"),dict_tos,s_tos);
+    int tos = msg.getIntValue(YSTRING("tos"),Socket::tosValues(),s_tos);
     int buflen = msg.getIntValue(YSTRING("buffer"),s_udpbuf);
     int msec = msg.getIntValue(YSTRING("msleep"),s_sleep);
 
@@ -754,7 +746,7 @@ bool YRTPWrapper::startUDPTL(const char* raddr, unsigned int rport, Message& msg
 	return false;
     }
 
-    int tos = msg.getIntValue(YSTRING("tos"),dict_tos,s_tos);
+    int tos = msg.getIntValue(YSTRING("tos"),Socket::tosValues(),s_tos);
     int msec = msg.getIntValue(YSTRING("msleep"),s_sleep);
     if (!setRemote(raddr,rport,msg))
 	return false;
@@ -1848,7 +1840,7 @@ void YRTPPlugin::initialize()
     s_bufsize = cfg.getIntValue("general","buffer",BUF_SIZE);
     s_minJitter = cfg.getIntValue("general","minjitter",50);
     s_maxJitter = cfg.getIntValue("general","maxjitter",Engine::clientMode() ? 120 : 0);
-    s_tos = cfg.getIntValue("general","tos",dict_tos);
+    s_tos = cfg.getIntValue("general","tos",Socket::tosValues());
     s_udpbuf = cfg.getIntValue("general","udpbuf",0);
     s_localip = cfg.getValue("general","localip");
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);

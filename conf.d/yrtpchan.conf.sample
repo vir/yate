@@ -10,8 +10,10 @@
 ; localip: ipaddress: Local IP address to use instead of guessing
 ;localip=
 
-; tos: keyword: Type Of Service to set in outgoing UDP packets
-; numeric TOS value or: lowdelay, throughput, reliability, mincost
+; tos: keyword: Type Of Service or DiffServ to set in outgoing UDP packets
+; numeric TOS / DiffServ value or:
+;  lowdelay, throughput, reliability, mincost
+;  cs0, ... cs7, af11, af12, af13, af21, ... af43, expedited, voice
 ;tos=0
 
 ; udpbuf: int: Requested size of UDP socket's receive buffer

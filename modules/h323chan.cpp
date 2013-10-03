@@ -80,6 +80,12 @@
 typedef PBoolean BOOL;
 #endif
 
+// These defines collide with DSCP service classes
+#undef CS4
+#undef CS5
+#undef CS6
+#undef CS7
+
 #include <yatephone.h>
 #include <yateversn.h>
 

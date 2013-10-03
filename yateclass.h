@@ -4397,9 +4397,11 @@ public:
      * @param original Named list to copy parameters from
      * @param prefix Prefix to match in parameter names, must not be NULL
      * @param skipPrefix Skip over the prefix when building new parameter name
+     * @param replace Set to true to replace list parameter instead of adding a new one
      * @return Reference to this NamedList
      */
-    NamedList& copySubParams(const NamedList& original, const String& prefix, bool skipPrefix = true);
+    NamedList& copySubParams(const NamedList& original, const String& prefix,
+	bool skipPrefix = true, bool replace = false);
 
     /**
      * Check if we have a parameter that starts with prefix

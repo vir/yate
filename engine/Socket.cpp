@@ -77,6 +77,38 @@ using namespace TelEngine;
 
 static Mutex s_mutex(false,"SocketAddr");
 
+static const TokenDict s_tosValues[] = {
+    // TOS
+    { "normal",      Socket::Normal },
+    { "lowdelay",    Socket::LowDelay },
+    { "throughput",  Socket::MaxThroughput },
+    { "reliability", Socket::MaxReliability },
+    { "mincost",     Socket::MinCost },
+    // DSCP
+    { "expedited",   Socket::ExpeditedFwd },
+    { "voice",       Socket::VoiceAdmit },
+    { "af11",        Socket::AF11 },
+    { "af12",        Socket::AF12 },
+    { "af13",        Socket::AF13 },
+    { "af21",        Socket::AF21 },
+    { "af22",        Socket::AF22 },
+    { "af23",        Socket::AF23 },
+    { "af31",        Socket::AF31 },
+    { "af32",        Socket::AF32 },
+    { "af33",        Socket::AF33 },
+    { "af41",        Socket::AF41 },
+    { "af42",        Socket::AF42 },
+    { "af43",        Socket::AF43 },
+    { "cs0",         Socket::CS0 },
+    { "cs1",         Socket::CS1 },
+    { "cs2",         Socket::CS2 },
+    { "cs3",         Socket::CS3 },
+    { "cs4",         Socket::CS4 },
+    { "cs5",         Socket::CS5 },
+    { "cs6",         Socket::CS6 },
+    { "cs7",         Socket::CS7 },
+    { 0, 0 }
+};
 
 #ifdef _WINDOWS
 
@@ -1578,6 +1610,11 @@ SOCKET Socket::invalidHandle()
 #endif
 }
 
+const TokenDict* Socket::tosValues()
+{
+    return s_tosValues;
+}
+
 int Socket::socketError()
 {
 #ifdef _WINDOWS
@@ -2002,8 +2039,14 @@ bool Socket::setTOS(int tos)
 #ifdef IP_TOS
     return setOption(IPPROTO_IP,IP_TOS,&tos,sizeof(tos));
 #else
-    m_error = ENOTIMPL;
-    return false;
+    if (tos != Normal) {
+	m_error = ENOTIMPL;
+	return false;
+    }
+    else {
+	m_error = 0;
+	return true;
+    }
 #endif
 }
 

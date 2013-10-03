@@ -194,10 +194,12 @@ NamedList& NamedList::copyParams(const NamedList& original, const String& list, 
     return *this;
 }
 
-NamedList& NamedList::copySubParams(const NamedList& original, const String& prefix, bool skipPrefix)
+NamedList& NamedList::copySubParams(const NamedList& original, const String& prefix,
+    bool skipPrefix, bool replace)
 {
-    XDebug(DebugInfo,"NamedList::copySubParams(%p,\"%s\",%s) [%p]",
-	&original,prefix.c_str(),String::boolText(skipPrefix),this);
+    XDebug(DebugInfo,"NamedList::copySubParams(%p,\"%s\",%s,%s) [%p]",
+	&original,prefix.c_str(),String::boolText(skipPrefix),
+	String::boolText(replace),this);
     if (prefix) {
 	unsigned int offs = skipPrefix ? prefix.length() : 0;
 	ObjList* dest = &m_params;
@@ -205,8 +207,14 @@ NamedList& NamedList::copySubParams(const NamedList& original, const String& pre
 	    const NamedString* s = static_cast<const NamedString*>(l->get());
 	    if (s->name().startsWith(prefix)) {
 		const char* name = s->name().c_str() + offs;
-		if (*name)
+		if (!*name)
+		    continue;
+		if (!replace)
 		    dest = dest->append(new NamedString(name,*s));
+		else if (offs)
+		    setParam(name,*s);
+		else
+		    setParam(s->name(),*s);
 	    }
 	}
     }

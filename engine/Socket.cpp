@@ -2036,6 +2036,11 @@ bool Socket::getOption(int level, int name, void* buffer, socklen_t* length)
 
 bool Socket::setTOS(int tos)
 {
+#if defined(AF_INET6) && defined(IPV6_TCLASS)
+    SocketAddr addr;
+    if (getSockName(addr) && addr.family() == AF_INET6)
+	return setOption(IPPROTO_IPV6,IPV6_TCLASS,&tos,sizeof(tos));
+#endif
 #ifdef IP_TOS
     return setOption(IPPROTO_IP,IP_TOS,&tos,sizeof(tos));
 #else

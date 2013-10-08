@@ -8153,21 +8153,24 @@ bool DefaultLogic::callLogUpdate(const NamedList& params, bool save, bool update
 	if (outgoing || dir == YSTRING("outgoing")) {
 	    // Skip if there is no remote party
 	    const String& party = cdrRemoteParty(params,outgoing);
-	    if (party) {
-		NamedList p("");
-		String time;
-		Client::self()->formatDateTime(time,(unsigned int)params.getDoubleValue(YSTRING("time")),
-		    "yyyy.MM.dd hh:mm",false);
-		p.addParam("party",party);
-		p.addParam("party_image",Client::s_skinPath + (outgoing ? "outgoing.png" : "incoming.png"));
-		p.addParam("time",time);
-		time.clear();
-		Client::self()->formatDateTime(time,(unsigned int)params.getDoubleValue(YSTRING("duration")),
-		    "hh:mm:ss",true);
-		p.addParam("duration",time);
-		Client::self()->updateTableRow(s_logList,id,&p);
-	    }
+	    NamedList p("");
+	    String time;
+	    unsigned int t = (unsigned int)params.getDoubleValue(YSTRING("time"));
+	    Client::self()->formatDateTime(time,t,"yyyy.MM.dd hh:mm",false);
+	    p.addParam("party",party);
+	    p.addParam("party_image",Client::s_skinPath +
+		(outgoing ? "outgoing.png" : "incoming.png"));
+	    p.addParam("time",time);
+	    time.clear();
+	    unsigned int d = (unsigned int)params.getDoubleValue(YSTRING("duration"));
+	    Client::self()->formatDateTime(time,d,"hh:mm:ss",true);
+	    p.addParam("duration",time);
+	    Client::self()->updateTableRow(s_logList,id,&p);
 	}
+	else
+	    Debug(ClientDriver::self(),DebugNote,
+		"Failed to add CDR to history, unknown direction='%s'",
+		dir.c_str());
     }
 
     if (!save)

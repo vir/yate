@@ -27,6 +27,44 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+// Random string generator
+class IdGenerator: public Mutex
+{
+public:
+    static IdGenerator& Instance()
+    {
+	static IdGenerator inst;
+	return inst;
+    }
+    String NextVal()
+    {
+	Lock lock(this);
+	for(char * t = m_buf; *t; ++t)
+	{
+	    ++*t;
+	    if(*t <= 'z')
+		break;
+	    *t = 'a';
+	}
+	return m_buf;
+    }
+private:
+    IdGenerator(const IdGenerator&);
+    IdGenerator(size_t len = 10)
+	: Mutex(false, "sipfeatures message id generator")
+    {
+	m_buf = (char*)malloc(len);
+	for(size_t i = 0; i < len - 1; ++i)
+	    m_buf[i] = 'a';
+	m_buf[len - 1] = '\0';
+    }
+    ~IdGenerator()
+    {
+	free(m_buf);
+    }
+    char * m_buf;
+};
+
 // Features module
 class YSipFeatures : public Module
 {
@@ -34,11 +72,13 @@ public:
     enum Event {
 	Dialog  = 0,                     // dialog
 	MWI     = 1,                     // message-sumary
+	Presence = 2,                    // presence
     };
 
     enum Content {
 	AppDlgInfoXml,                   // application/dialog-info+xml
 	AppSimpleMsgSummary,             // application/simple-message-summary
+	AppPidfXml,                      // application/pidf+xml
     };
 
     YSipFeatures();
@@ -64,7 +104,7 @@ private:
 #define EXPIRES_DEF 600
 #define EXPIRES_MAX 3600
 
-#define KNOWN_EVENTS 2
+#define KNOWN_EVENTS 3
 
 static bool s_verboseXml = true;        // Build verbose XML body (add line breaks and spaces)
 static YSipFeatures s_module;
@@ -74,6 +114,7 @@ static TokenDict s_allowedEvents[KNOWN_EVENTS+1];
 static TokenDict s_events[KNOWN_EVENTS+1] = {
 	{"dialog",          YSipFeatures::Dialog},
 	{"message-summary", YSipFeatures::MWI},
+	{"presence",        YSipFeatures::Presence},
 	{0,0}
 	};
 
@@ -81,6 +122,7 @@ static TokenDict s_events[KNOWN_EVENTS+1] = {
 static TokenDict s_contents[] = {
 	{"application/dialog-info+xml",        YSipFeatures::AppDlgInfoXml},
 	{"application/simple-message-summary", YSipFeatures::AppSimpleMsgSummary},
+	{"application/pidf+xml",               YSipFeatures::AppPidfXml},
 	{0,0}
 	};
 
@@ -110,6 +152,8 @@ public:
     void createDialogBody(String& dest, const Message& src, const String& entity);
     // Create the body for 'message-summary' event notification
     void createMWIBody(String& dest, const Message& src);
+    // Create the body for 'presence' event notification
+    void createPresenceBody(String& body, const Message& src, const String& entity);
 };
 
 
@@ -260,6 +304,9 @@ bool YSipSubscribeHandler::getEventData(Message& msg, int& event, String& evName
 	case YSipFeatures::MWI:
 	    defType = YSipFeatures::AppSimpleMsgSummary;  // RFC3842
 	    break;
+	case YSipFeatures::Presence:
+	    defType = YSipFeatures::AppPidfXml;           // RFC3863
+	    break;
     }
     content = lookup(defType,s_contents);
     // Check if an Accept header is present: if so, it MUST contain the content
@@ -381,6 +428,13 @@ bool YSipNotifyHandler::received(Message &msg)
 	    break;
 	case YSipFeatures::MWI:
 	    createMWIBody(body,msg);
+	    break;
+	case YSipFeatures::Presence: {
+		URI uri(m.getValue("sip_From"));
+		String entity;
+		entity << "sip:" << uri.getUser() << "@" << uri.getHost();
+		createPresenceBody(body,msg,entity);
+	    }
 	    break;
 	default:
 	    Debug(&s_module,DebugNote,"NOTIFY. Invalid event='%s'",
@@ -517,6 +571,54 @@ void YSipNotifyHandler::createMWIBody(String& dest, const Message& src)
     }
     else
 	dest << "no\r\n";
+}
+
+// Create the body for 'presence' event notification
+void YSipNotifyHandler::createPresenceBody(String& body, const Message& src, const String& entity)
+{
+    bool is_open = src.getBoolValue("open", false);
+    bool has_imstatus = 0 <= src.getIndex("imstatus");
+    body = "";
+    body << "<?xml version=\"1.0\"?>";
+    XmlElement* xml = new XmlElement("presence");
+    xml->setXmlns(String::empty(),true,"urn:ietf:params:xml:ns:pidf");
+    if(has_imstatus)
+	xml->setXmlns("im",true,"urn:ietf:params:xml:ns:pidf:im");
+    xml->setAttributeValid("entity",entity);
+
+    String tuple_id = IdGenerator::Instance().NextVal();
+    XmlElement* tuple = new XmlElement("tuple");
+    xml->setAttributeValid("id",tuple_id);
+
+    XmlElement* status = new XmlElement("status");
+    XmlElement* basic = new XmlElement("basic");
+    basic->addText(is_open ? "open" : "closed");
+    status->addChild(basic);
+    tuple->addChild(status);
+    xml->addChild(tuple);
+
+    if(has_imstatus) {
+	XmlElement* im = new XmlElement("im:im");
+	im->addText(src.getValue("imstatus"));
+	status->addChild(im);
+    }
+    if(0 >= src.getIndex("contact")) {
+	XmlElement* c = new XmlElement("contact");
+	c->addText(src.getValue("contact"));
+	tuple->addChild(c);
+    }
+    if(0 >= src.getIndex("timestamp")) {
+	XmlElement* ts = new XmlElement("timestamp");
+	ts->addText(src.getValue("timestamp"));
+	tuple->addChild(ts);
+    }
+
+    if (s_verboseXml)
+	xml->toString(body,true,"\r\n","  ");
+    else
+	xml->toString(body);
+    body << "\r\n";
+    TelEngine::destruct(xml);
 }
 
 

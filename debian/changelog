@@ -1,3 +1,9 @@
+yate (4.3.1~vir2013100801) UNRELEASED; urgency=low
+
+  * Fixed H264 codec support :)
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Tue, 08 Oct 2013 13:36:11 +0400
+
 yate (4.3.1~vir2013093001) UNRELEASED; urgency=low
 
   * New setting in register.conf: unregister_expired.

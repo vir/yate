@@ -27,6 +27,44 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+// Random string generator
+class IdGenerator: public Mutex
+{
+public:
+    static IdGenerator& Instance()
+    {
+	static IdGenerator inst;
+	return inst;
+    }
+    String NextVal()
+    {
+	Lock lock(this);
+	for(char * t = m_buf; *t; ++t)
+	{
+	    ++*t;
+	    if(*t <= 'z')
+		break;
+	    *t = 'a';
+	}
+	return m_buf;
+    }
+private:
+    IdGenerator(const IdGenerator&);
+    IdGenerator(size_t len = 10)
+	: Mutex(false, "sipfeatures message id generator")
+    {
+	m_buf = (char*)malloc(len);
+	for(size_t i = 0; i < len - 1; ++i)
+	    m_buf[i] = 'a';
+	m_buf[len - 1] = '\0';
+    }
+    ~IdGenerator()
+    {
+	free(m_buf);
+    }
+    char * m_buf;
+};
+
 // Features module
 class YSipFeatures : public Module
 {
@@ -548,7 +586,7 @@ void YSipNotifyHandler::createPresenceBody(String& body, const Message& src, con
 	xml->setXmlns("im",true,"urn:ietf:params:xml:ns:pidf:im");
     xml->setAttributeValid("entity",entity);
 
-    String tuple_id = "qweqwe123123"; // XXX XXX XXX
+    String tuple_id = IdGenerator::Instance().NextVal();
     XmlElement* tuple = new XmlElement("tuple");
     xml->setAttributeValid("id",tuple_id);
 

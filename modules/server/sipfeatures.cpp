@@ -374,6 +374,10 @@ bool YSipSubscribeHandler::getEventData(Message& msg, int& event, String& evName
 //   Optional integer specifying the number of unread (new) voice messages 
 // message-summary.voiceold
 //   Optional integer specifying the number of read (old) voice messages 
+// presence.open
+// presence.im
+// presence.contact
+// presence.timestamp
 bool YSipNotifyHandler::received(Message &msg)
 {
     String notifyto = msg.getValue("notifyto");
@@ -576,7 +580,7 @@ void YSipNotifyHandler::createMWIBody(String& dest, const Message& src)
 // Create the body for 'presence' event notification
 void YSipNotifyHandler::createPresenceBody(String& body, const Message& src, const String& entity)
 {
-    bool is_open = src.getBoolValue("open", false);
+    bool is_open = src.getBoolValue("presence.open", false);
     bool has_imstatus = 0 <= src.getIndex("imstatus");
     body = "";
     body << "<?xml version=\"1.0\"?>";
@@ -588,7 +592,7 @@ void YSipNotifyHandler::createPresenceBody(String& body, const Message& src, con
 
     String tuple_id = IdGenerator::Instance().NextVal();
     XmlElement* tuple = new XmlElement("tuple");
-    xml->setAttributeValid("id",tuple_id);
+    tuple->setAttributeValid("id",tuple_id);
 
     XmlElement* status = new XmlElement("status");
     XmlElement* basic = new XmlElement("basic");
@@ -599,17 +603,17 @@ void YSipNotifyHandler::createPresenceBody(String& body, const Message& src, con
 
     if(has_imstatus) {
 	XmlElement* im = new XmlElement("im:im");
-	im->addText(src.getValue("imstatus"));
+	im->addText(src.getValue("presence.im"));
 	status->addChild(im);
     }
     if(0 >= src.getIndex("contact")) {
 	XmlElement* c = new XmlElement("contact");
-	c->addText(src.getValue("contact"));
+	c->addText(src.getValue("presence.contact"));
 	tuple->addChild(c);
     }
     if(0 >= src.getIndex("timestamp")) {
 	XmlElement* ts = new XmlElement("timestamp");
-	ts->addText(src.getValue("timestamp"));
+	ts->addText(src.getValue("presence.timestamp"));
 	tuple->addChild(ts);
     }
 

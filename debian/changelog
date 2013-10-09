@@ -1,3 +1,9 @@
+yate (4.3.1~vir2013100901) UNRELEASED; urgency=low
+
+  * ysnmpdata moved into /var/cache/yate and symlinked into /etc/yate
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 09 Oct 2013 09:37:43 +0400
+
 yate (4.3.1~vir2013100801) UNRELEASED; urgency=low
 
   * Fixed H264 codec support :)

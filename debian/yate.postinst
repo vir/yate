@@ -19,6 +19,7 @@ set -e
 
 H=/var/lib/yate
 P=/var/run/yate
+C=/var/cache/yate
 
 case "$1" in
     configure)
@@ -28,7 +29,7 @@ case "$1" in
             adduser --system --ingroup yate --home $H --gecos "YATE daemon" --shell /bin/sh --disabled-password yate
         fi
 
-        for DIR in $H $P
+        for DIR in $H $P $C
         do
             mkdir -p ${DIR}
             dpkg-statoverride --list $H >/dev/null || chown yate:yate ${DIR}

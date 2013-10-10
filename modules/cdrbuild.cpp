@@ -197,6 +197,7 @@ static String s_runId;
 static bool s_cdrUpdates = true;
 static bool s_cdrStatus = false;
 static bool s_statusAnswer = true;
+static bool s_ringOnProgress = false;
 static unsigned int s_statusUpdate = 60000;
 static StatusThread* s_updaterThread = 0;
 
@@ -532,7 +533,9 @@ bool CdrHandler::received(Message &msg)
 	    s_updaterThread->exit();
 	return false;
     }
-    if ((m_type == CdrProgress) && !msg.getBoolValue(YSTRING("earlymedia"),false))
+    if ((m_type == CdrProgress) &&
+	!(msg.getBoolValue(YSTRING("earlymedia"),false) ||
+	msg.getBoolValue(YSTRING("ringing"),s_ringOnProgress)))
 	return false;
     bool track = true;
     if (m_type == CdrUpdate) {
@@ -883,6 +886,7 @@ void CdrBuildPlugin::initialize()
 	s_statusUpdate = 600000;
     else
 	s_statusUpdate = sUpdate * 1000;
+    s_ringOnProgress = cfg.getBoolValue("general","ring_on_progress",false);;
 
     if (s_cdrStatus && !s_updaterThread) {
 	s_updaterThread = new StatusThread();

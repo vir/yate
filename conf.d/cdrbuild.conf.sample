@@ -24,6 +24,10 @@
 ; If set to false the first cdr status is sent after status_interval
 ;status_answer=true
 
+; ring_on_progress: bool: Start ring timer when processing call.progress
+; This parameter can be overridden in call.progress message by a 'ringing' parameter
+;ring_on_progress=no
+
 
 [parameters]
 ; Each line consists of name=bool where name is the name of the parameter being

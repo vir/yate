@@ -922,35 +922,6 @@ inline unsigned char getDec(String& dec)
     return 0;
 }
 
-// Obtain a hexa representation of the given hexa char
-inline signed char hexDecode(char c)
-{
-    if (('0' <= c) && (c <= '9'))
-	return c - '0';
-    if (('A' <= c) && (c <= 'F'))
-	return c - 'A' + 10;
-    if (('a' <= c) && (c <= 'f'))
-	return c - 'a' + 10;
-    return -1;
-}
-
-// Obtain a char from the given hexa number
-inline unsigned char getHex(String& hex)
-{
-    if (hex.length() > 6) {
-	DDebug(DebugNote,"Hex number '%s' too long",hex.c_str());
-	return 0;
-    }
-    signed char c1 = hexDecode(hex.at(3));
-    signed char c2 = hexDecode(hex.at(4));
-    if (c1 == -1 || c2 == -1) {
-	DDebug(DebugNote,"Invalid hex number '%s'",hex.c_str());
-	return 0;
-    }
-    unsigned char c = (c1 << 4) | c2;
-    return c;
-}
-
 // Unescape the given text
 void XmlSaxParser::unEscape(String& text)
 {
@@ -982,9 +953,19 @@ void XmlSaxParser::unEscape(String& text)
 	    String aux(str + found,len - found);
 	    char re = 0;
 	    if (aux.startsWith("&#")) {
-		if (aux.at(2) == 'x')
-		    re = getHex(aux);
-		else
+		if (aux.at(2) == 'x') {
+		    if (aux.length() > 4 && aux.length() <= 12) {
+			int esc = aux.substr(3,aux.length() - 4).toInteger(-1,16);
+			if (esc != -1) {
+			    UChar uc(esc);
+			    buf.append(str,found) << uc.c_str();
+			    str += len;
+			    len = 0;
+			    found = -1;
+			    continue;
+			}
+		    }
+		} else
 		    re = getDec(aux);
 	    }
 	    if (re == '&') {

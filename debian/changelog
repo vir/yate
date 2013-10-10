@@ -1,4 +1,4 @@
-yate (4.3.1~svn5661) UNRELEASED; urgency=low
+yate (4.3.1~svn5665) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -751,8 +751,15 @@ yate (4.3.1~svn5661) UNRELEASED; urgency=low
   * Updated to SVN revision 5660: + Properly set DSCP on IPv6 sockets.
   * Updated to SVN revision 5661: + Add call to history even if caller
     party number is empty.
+  * Updated to SVN revision 5665: + Added extra config and message
+    parameter used to start CDR ring timer when processing a
+    call.progress message.  + Always set cause_sip and reason_sip in
+    channel params when processing the sip transaction.  + Fixed un-
+    escape for hex escaped characters.  + Added configurable option to
+    disable rtp receiving invalid sequence warn and put a message at
+    level 9 instead.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 09 Oct 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 11 Oct 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

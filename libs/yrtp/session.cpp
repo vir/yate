@@ -231,7 +231,10 @@ void RTPReceiver::rtpData(const void* data, int len)
 			m_seq = seq;
 			m_ts = ts - m_tsLast;
 			m_seqCount = 0;
-			m_warn = true;
+			if (m_warnSeq > 0)
+			    m_warn = true;
+			else
+			    m_warnSeq = -1;
 			m_syncLost++;
 			if (m_dejitter)
 			    m_dejitter->clear();
@@ -245,9 +248,15 @@ void RTPReceiver::rtpData(const void* data, int len)
 	    else
 		m_seqSync = seq;
 	}
-	if (m_warn) {
-	    m_warn = false;
-	    Debug(DebugWarn,"RTP received SEQ %u while current is %u [%p]",seq,m_seq,this);
+	if (m_warnSeq > 0) {
+	    if (m_warn) {
+		m_warn = false;
+		Debug(DebugWarn,"RTP received SEQ %u while current is %u [%p]",seq,m_seq,this);
+	    }
+	}
+	else if (m_warnSeq < 0) {
+	    m_warnSeq = 0;
+	    Debug(DebugInfo,"RTP received SEQ %u while current is %u [%p]",seq,m_seq,this);
 	}
 	return;
     }
@@ -656,7 +665,8 @@ RTPSession::RTPSession()
     : Mutex(true,"RTPSession"),
       m_direction(FullStop),
       m_send(0), m_recv(0), m_secure(0),
-      m_reportTime(0), m_reportInterval(0)
+      m_reportTime(0), m_reportInterval(0),
+      m_warnSeq(1)
 {
     DDebug(DebugInfo,"RTPSession::RTPSession() [%p]",this);
 }
@@ -799,6 +809,8 @@ void RTPSession::receiver(RTPReceiver* recv)
     m_recv = recv;
     if (tmp)
 	delete tmp;
+    if (m_recv)
+	m_recv->m_warnSeq = m_warnSeq;
 }
 
 void RTPSession::security(RTPSecure* secure)

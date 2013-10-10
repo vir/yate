@@ -6167,9 +6167,18 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    m_byebye = false;
 	paramMutex().lock();
 	parameters().setParam("cause_sip","408");
+	parameters().clearParam("reason_sip");
 	paramMutex().unlock();
 	setReason("Request Timeout",code);
 	hangup();
+    }
+    else if (!m_hungup && code >= 100) {
+	Lock lck(paramMutex());
+	parameters().setParam("cause_sip",String(code));
+	if (msg && msg->reason)
+	    parameters().setParam("reason_sip",msg->reason);
+	else
+	    parameters().clearParam("reason_sip");
     }
 
     // Only update channels' callid if dialog tags change

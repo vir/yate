@@ -65,6 +65,12 @@
 ; minsleep: int: Minimum allowed in-loop sleep time in milliseconds
 ;minsleep=1
 
+; rtp_warn_seq: bool: Warn on receiving invalid RTP sequence number
+; If disabled the log message will be put at level 9
+; This parameter is applied on reload for new sessions only
+; It can be overridden in initial chan.rtp message or chan.attach message
+;rtp_warn_seq=enable
+
 
 [timeouts]
 ; This section controls the behaviour when RTP and RTCP data is missing

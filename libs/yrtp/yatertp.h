@@ -612,7 +612,7 @@ public:
     inline RTPReceiver(RTPSession* session = 0)
 	: RTPBaseIO(session),
 	  m_ioLostPkt(0), m_dejitter(0),
-	  m_seqSync(0), m_seqCount(0), m_warn(true),
+	  m_seqSync(0), m_seqCount(0), m_warn(true), m_warnSeq(1),
 	  m_seqLost(0), m_wrongSSRC(0), m_syncLost(0)
 	{ }
 
@@ -747,6 +747,7 @@ private:
     u_int16_t m_seqSync;
     u_int16_t m_seqCount;
     bool m_warn;
+    int m_warnSeq;                       // Warn on invalid sequence (1: DebugWarn, -1: DebugInfo)
     unsigned int m_seqLost;
     unsigned int m_wrongSSRC;
     unsigned int m_syncLost;
@@ -1295,6 +1296,14 @@ public:
      */
     virtual void incWrongSrc();
 
+    /**
+     * Set the packet with invalid sequence warn mode
+     * @param on True to show a message at DebugWarn level,
+     *  false to show at DebugInfo level
+     */
+    inline void setWarnSeq(bool on)
+	{ m_warnSeq = on ? 1 : -1; }
+
 protected:
     /**
      * Method called periodically to push any asynchronous data or statistics
@@ -1320,6 +1329,7 @@ private:
     RTPSecure* m_secure;
     u_int64_t m_reportTime;
     u_int64_t m_reportInterval;
+    int m_warnSeq;                       // Warn on invalid sequence (1: DebugWarn, -1: DebugInfo)
 };
 
 /**

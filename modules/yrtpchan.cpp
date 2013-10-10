@@ -159,7 +159,7 @@ public:
     static YRTPWrapper* find(const String& id);
     static void guessLocal(const char* remoteip, String& localip);
 private:
-    void setupRTP(const char* localip, bool rtcp);
+    void setupRTP(const char* localip, bool rtcp, bool warnSeq);
     void setupUDPTL(const char* localip, u_int16_t maxLen = 250, u_int8_t maxSec = 2);
     bool bindLocal(const char* localip, bool rtcp);
     bool startRTP(const char* raddr, unsigned int rport, Message& msg);
@@ -389,6 +389,7 @@ static ObjList s_mirrors;
 static Mutex s_mutex(false,"YRTPChan");
 static Mutex s_refMutex(false,"YRTPChan::reflect");
 static Mutex s_srcMutex(false,"YRTPChan::source");
+static bool s_rtpWarnSeq = true;         // Warn on invalid rtp sequence number
 
 
 YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* media, RTPSession::Direction direction, Message& msg, bool udptl)
@@ -422,7 +423,8 @@ YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* me
 	setupUDPTL(localip,md,ms);
     }
     else
-	setupRTP(localip,msg.getBoolValue(YSTRING("rtcp"),s_rtcp));
+	setupRTP(localip,msg.getBoolValue(YSTRING("rtcp"),s_rtcp),
+	    msg.getBoolValue(YSTRING("rtp_warn_seq"),s_rtpWarnSeq));
     splugin.changed();
     s_mutex.unlock();
 }
@@ -502,11 +504,12 @@ YRTPWrapper* YRTPWrapper::find(const String& id)
     return 0;
 }
 
-void YRTPWrapper::setupRTP(const char* localip, bool rtcp)
+void YRTPWrapper::setupRTP(const char* localip, bool rtcp, bool warnSeq)
 {
-    Debug(&splugin,DebugAll,"YRTPWrapper::setupRTP(\"%s\",%s) [%p]",
-	localip,String::boolText(rtcp),this);
+    Debug(&splugin,DebugAll,"YRTPWrapper::setupRTP(\"%s\",%s,%s) [%p]",
+	localip,String::boolText(rtcp),String::boolText(warnSeq),this);
     m_rtp = new YRTPSession(this);
+    m_rtp->setWarnSeq(warnSeq);
     m_rtp->initTransport();
     bindLocal(localip,rtcp);
 }
@@ -1853,6 +1856,7 @@ void YRTPPlugin::initialize()
     s_sleep = cfg.getIntValue("general","defsleep",5);
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));
     s_priority = Thread::priority(cfg.getValue("general","thread"));
+    s_rtpWarnSeq = cfg.getBoolValue("general","rtp_warn_seq",true);
     s_timeout = cfg.getIntValue("timeouts","timeout",3000);
     s_udptlTimeout = cfg.getIntValue("timeouts","udptl_timeout",25000);
     s_notifyMsg = cfg.getValue("timeouts","notifymsg");

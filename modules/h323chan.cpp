@@ -2851,6 +2851,8 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* add
     Debug(this,DebugAll,"YateH323Chan::YateH323Chan(%p,%s) %s [%p]",
 	conn,addr,direction(),this);
     setMaxcall(msg);
+    if (msg)
+	setMaxPDD(*msg);
     Message* s = message("chan.startup",msg);
     s_cfgMutex.lock();
     m_dtmfMethods = s_dtmfMethods;

@@ -83,6 +83,7 @@ static const TokenDict dict_errors[] = {
     { "looping", 483 },
     { "timeout", 408 },
     { "timeout", 504 },
+    { "postdialdelay", 504 },
     { "service-not-implemented", 501 },
     { "unimplemented", 501 },
     { "service-unavailable", 503 },
@@ -5729,6 +5730,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     }
     m->deref();
     setMaxcall(msg);
+    setMaxPDD(msg);
     Message* s = message("chan.startup",msg);
     s->setParam("caller",caller);
     s->copyParams(msg,"callername,called,billid,callto,username");

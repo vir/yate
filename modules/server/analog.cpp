@@ -1384,6 +1384,8 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
 	m_line->moduleGroup()->copyData(this);
 
     setMaxcall(msg);
+    if (msg)
+	setMaxPDD(*msg);
     // Startup
     Message* m = message("chan.startup");
     m->setParam("direction",status());

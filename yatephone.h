@@ -1626,6 +1626,7 @@ private:
     bool m_outgoing;
     u_int64_t m_timeout;
     u_int64_t m_maxcall;
+    u_int64_t m_maxPDD;          // Timeout while waiting for some progress on outgoing calls
     u_int64_t m_dtmfTime;
     unsigned int m_toutAns;
     unsigned int m_dtmfSeq;
@@ -1918,6 +1919,29 @@ public:
      * @param defTout Default timeout to apply, negative to not alter
      */
     void setMaxcall(const Message* msg, int defTout = -1);
+
+    /**
+     * Get the time this channel will time out while waiting for some progress
+     *  on outgoing calls
+     * @return Timeout time or zero if no timeout
+     */
+    inline u_int64_t maxPDD() const
+	{ return m_maxPDD; }
+
+    /**
+     * Set the time this channel will time out while waiting for some progress
+     *  on outgoing calls
+     * @param tout New timeout time or zero to disable
+     */
+    inline void maxPDD(u_int64_t tout)
+	{ m_maxPDD = tout; }
+
+    /**
+     * Set the time this channel will time out while waiting for some progress
+     *  on outgoing calls
+     * @param msg Reference of message possibly holding "maxpdd" parameter
+     */
+    void setMaxPDD(const Message& msg);
 
     /**
      * Get the connected channel identifier.

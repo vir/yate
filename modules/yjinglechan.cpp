@@ -921,6 +921,7 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
 	m_transferFrom.safe(),this);
     // Set timeout and maxcall
     setMaxcall(msg);
+    setMaxPDD(msg);
     if (!available) {
 	u_int64_t timeNow = Time::now();
 	// Save maxcall for later, set presence retrieval timeout instead
@@ -1642,8 +1643,10 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	    if (m_ftStatus == FTNone) {
 		// Non file transfer session
 		// Notify ringing if initiate was confirmed and the remote party doesn't support it
-		if (rspOk && !m_session->hasFeature(XMPPNamespace::JingleAppsRtpInfo))
+		if (rspOk && !m_session->hasFeature(XMPPNamespace::JingleAppsRtpInfo)) {
+		    status("ringing");
 		    Engine::enqueue(message("call.ringing",false,true));
+		}
 	    }
 	    else {
 		// File transfer session
@@ -1860,6 +1863,7 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	case JGSession::ActRinging:
 	    if (m_ftStatus == FTNone) {
 		event->confirmElement();
+		status("ringing");
 		Engine::enqueue(message("call.ringing",false,true));
 	    }
 	    else
@@ -3029,6 +3033,7 @@ void YJGConnection::enqueueCallProgress()
 {
     if (!(m_audioContent && m_audioContent->isEarlyMedia()))
 	return;
+    status("progressing");
     Message* m = message("call.progress");
     String formats;
     m_audioContent->m_rtpMedia.createList(formats,true);

@@ -1201,6 +1201,7 @@ bool SigChannel::startCall(Message& msg, String& trunks)
 	}
     }
     setMaxcall(msg);
+    setMaxPDD(msg);
     Message* m = message("chan.startup",msg);
     m->setParam("direction",status());
     m_targetid = msg.getValue("id");

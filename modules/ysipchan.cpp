@@ -6657,7 +6657,9 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 	    paramMutex().unlock();
 	}
     }
+    Lock mylock(driver());
     setMedia(0);
+    mylock.drop();
     SIPMessage* m = new SIPMessage(t->initialMessage(),200);
     paramMutex().lock();
     copySipHeaders(parameters(),*msg);

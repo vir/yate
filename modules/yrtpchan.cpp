@@ -1021,8 +1021,10 @@ void YRTPSession::rtpNewPayload(int payload, unsigned int timestamp)
 	silencePayload(payload);
     }
     else if (payload != m_newPayload) {
-	m_newPayload = payload;
-	Debug(&splugin,DebugMild,"Unexpected payload %d in wrapper %p",payload,m_wrap);
+	if (!receiver() || receiver()->dataPayload() != -1) {
+	    m_newPayload = payload;
+	    Debug(&splugin,DebugMild,"Unexpected payload %d in wrapper %p",payload,m_wrap);
+	}
     }
 }
 

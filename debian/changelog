@@ -1,4 +1,4 @@
-yate (4.3.1~svn5666) UNRELEASED; urgency=low
+yate (4.3.1~svn5668) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -761,8 +761,11 @@ yate (4.3.1~svn5666) UNRELEASED; urgency=low
   * Updated to SVN revision 5666: + Added post dial delay timeout in
     outgoing channel started from 'maxpdd' routing parameter. It stops
     when status is called with 'ringing', 'progressing' or 'answered'.
+  * Updated to SVN revision 5668: + Ignore new data payload notification
+    if the receiver is not initialized.  + Fixed bug: lock mutex to
+    reset media when processing received BYE.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 12 Oct 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 18 Oct 2013 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

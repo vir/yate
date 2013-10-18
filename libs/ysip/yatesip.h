@@ -70,6 +70,13 @@ public:
     virtual void* getTransport() = 0;
     void setAddr(const String& addr, int port, bool local);
     void getAddr(String& addr, int& port, bool local);
+    inline void appendAddr(String& buf, bool local, bool unsafe = true) {
+	    Lock lock(unsafe ? m_mutex : 0);
+	    if (local)
+		SocketAddr::appendTo(buf,m_local,m_localPort);
+	    else
+		SocketAddr::appendTo(buf,m_party,m_partyPort);
+	}
     inline Mutex* mutex()
 	{ return m_mutex; }
     inline const String& getLocalAddr() const

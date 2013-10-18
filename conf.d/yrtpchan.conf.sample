@@ -1,6 +1,13 @@
 [general]
 ; This section sets global network level variables
 
+; ipv6_support: boolean: Enable or disable IPv6 support
+; This parameter is applied on reload
+; This parameter is ignored if yate was not built with IPv6 support
+; It can be overridden in chan.rtp messages
+; Defaults to no
+;ipv6_support=no
+
 ; minport: int: Minimum port range to allocate
 ;minport=16384
 
@@ -8,6 +15,8 @@
 ;maxport=32768
 
 ; localip: ipaddress: Local IP address to use instead of guessing
+; IPv6: An interface name can be added at the end of the address to bind on a specific
+;  interface. This is mandatory for Link Local addresses (e.g. localip=fe80::1%eth0)
 ;localip=
 
 ; tos: keyword: Type Of Service or DiffServ to set in outgoing UDP packets

@@ -75,6 +75,7 @@ static TokenDict dict_yrtp_dir[] = {
     { 0 , 0 },
 };
 
+static bool s_ipv6 = false;              // IPv6 support enabled
 static int s_minport = MIN_PORT;
 static int s_maxport = MAX_PORT;
 static int s_bufsize = BUF_SIZE;
@@ -113,7 +114,8 @@ class YRTPWrapper : public RefObject
     friend class YRTPSession;
     friend class YUDPTLSession;
 public:
-    YRTPWrapper(const char *localip, CallEndpoint* conn, const char* media, RTPSession::Direction direction, Message& msg, bool udptl = false);
+    YRTPWrapper(const char *localip, CallEndpoint* conn, const char* media,
+	RTPSession::Direction direction, Message& msg, bool udptl = false, bool ipv6 = false);
     ~YRTPWrapper();
     virtual void* getObject(const String& name) const;
     bool setParams(const char* raddr, Message& msg);
@@ -157,7 +159,7 @@ public:
     void terminate(Message& msg);
     static YRTPWrapper* find(const CallEndpoint* conn, const String& media);
     static YRTPWrapper* find(const String& id);
-    static void guessLocal(const char* remoteip, String& localip);
+    static void guessLocal(const char* remoteip, String& localip, bool ipv6);
 private:
     void setupRTP(const char* localip, bool rtcp, bool warnSeq);
     void setupUDPTL(const char* localip, u_int16_t maxLen = 250, u_int8_t maxSec = 2);
@@ -186,6 +188,7 @@ private:
     unsigned int m_port;
     bool m_audio;
     bool m_valid;
+    bool m_ipv6;
 
     unsigned int m_noAudio;
     unsigned int m_lostAudio;
@@ -392,10 +395,11 @@ static Mutex s_srcMutex(false,"YRTPChan::source");
 static bool s_rtpWarnSeq = true;         // Warn on invalid rtp sequence number
 
 
-YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* media, RTPSession::Direction direction, Message& msg, bool udptl)
+YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* media,
+    RTPSession::Direction direction, Message& msg, bool udptl, bool ipv6)
     : m_rtp(0), m_udptl(0), m_dir(direction), m_conn(conn),
       m_source(0), m_consumer(0), m_media(media),
-      m_bufsize(0), m_port(0), m_valid(true), m_noAudio(0), m_lostAudio(0)
+      m_bufsize(0), m_port(0), m_valid(true), m_ipv6(ipv6), m_noAudio(0), m_lostAudio(0)
 {
     Debug(&splugin,DebugAll,"YRTPWrapper::YRTPWrapper('%s',%p,'%s',%s,%p,%s) [%p]",
 	localip,conn,media,lookup(direction,dict_yrtp_dir),
@@ -552,7 +556,7 @@ bool YRTPWrapper::bindLocal(const char* localip, bool rtcp)
 	maxport++;
 	attempt = 1;
     }
-    SocketAddr addr(AF_INET);
+    SocketAddr addr(m_ipv6 ? SocketAddr::Unknown : SocketAddr::IPv4);
     if (!addr.host(localip)) {
 	Debug(&splugin,DebugWarn,"Wrapper '%s' could not parse address '%s' [%p]",
 	    m_id.c_str(),localip,this);
@@ -564,13 +568,13 @@ bool YRTPWrapper::bindLocal(const char* localip, bool rtcp)
 	if (m_rtp ? m_rtp->localAddr(addr,rtcp) : m_udptl->localAddr(addr)) {
 	    m_host = addr.host();
 	    m_port = lport;
-	    Debug(&splugin,DebugInfo,"Session '%s' %p bound to %s:%u%s [%p]",
-		m_id.c_str(),session(),localip,m_port,(rtcp ? " +RTCP" : ""),this);
+	    Debug(&splugin,DebugInfo,"Session '%s' %p bound to %s%s [%p]",
+		m_id.c_str(),session(),addr.addr().c_str(),(rtcp ? " +RTCP" : ""),this);
 	    return true;
 	}
     }
-    Debug(&splugin,DebugWarn,"YRTPWrapper '%s' bind failed in range %d-%d [%p]",
-	m_id.c_str(),minport,maxport,this);
+    Debug(&splugin,DebugWarn,"YRTPWrapper '%s' bind failed in range %d-%d on '%s' [%p]",
+	m_id.c_str(),minport,maxport,localip,this);
     return false;
 }
 
@@ -588,9 +592,10 @@ bool YRTPWrapper::setRemote(const char* raddr, unsigned int rport, const Message
 {
     if (!session())
 	return false;
-    SocketAddr addr(AF_INET);
+    SocketAddr addr(m_ipv6 ? SocketAddr::Unknown : SocketAddr::IPv4);
     if (!(addr.host(raddr) && addr.port(rport) && session()->remoteAddr(addr,msg.getBoolValue(YSTRING("autoaddr"),s_autoaddr)))) {
-	Debug(&splugin,DebugWarn,"RTP failed to set remote address %s:%d [%p]",raddr,rport,this);
+	Debug(&splugin,DebugWarn,"RTP failed to set remote address %s [%p]",
+	    SocketAddr::appendTo(raddr,rport).c_str(),this);
 	return false;
     }
     return true;
@@ -884,14 +889,14 @@ void YRTPWrapper::timeout(bool initial)
     }
 }
 
-void YRTPWrapper::guessLocal(const char* remoteip, String& localip)
+void YRTPWrapper::guessLocal(const char* remoteip, String& localip, bool ipv6)
 {
     if (s_localip) {
 	localip = s_localip;
 	return;
     }
     localip.clear();
-    SocketAddr r(AF_INET);
+    SocketAddr r(ipv6 ? SocketAddr::Unknown : SocketAddr::IPv4);
     if (!r.host(remoteip)) {
 	Debug(&splugin,DebugNote,"Guess - Could not parse remote '%s'",remoteip);
 	return;
@@ -1355,9 +1360,10 @@ bool AttachHandler::received(Message &msg)
 	w = YRTPWrapper::find(msg[YSTRING("rtpid")]);
     if (!w) {
 	String lip(msg.getValue(YSTRING("localip")));
+	bool ipv6 = msg.getBoolValue(YSTRING("ipv6_support"),s_ipv6);
 	if (lip.null())
-	    YRTPWrapper::guessLocal(rip,lip);
-	w = new YRTPWrapper(lip,ch,media,RTPSession::SendRecv,msg);
+	    YRTPWrapper::guessLocal(rip,lip,ipv6);
+	w = new YRTPWrapper(lip,ch,media,RTPSession::SendRecv,msg,false,ipv6);
 	w->setMaster(msg.getValue(YSTRING("id")));
 
 	if (!src.null()) {
@@ -1457,15 +1463,16 @@ bool RtpHandler::received(Message &msg)
 	if (!(d_recv || d_send))
 	    return false;
 	String lip(msg.getValue(YSTRING("localip")));
+	bool ipv6 = msg.getBoolValue(YSTRING("ipv6_support"),s_ipv6);
 	if (lip.null())
-	    YRTPWrapper::guessLocal(rip,lip);
+	    YRTPWrapper::guessLocal(rip,lip,ipv6);
 	if (lip.null()) {
 	    Debug(&splugin,DebugWarn,"RTP request with no local address!");
 	    return false;
 	}
 
 	status = "created";
-	w = new YRTPWrapper(lip,ch,media,direction,msg,udptl);
+	w = new YRTPWrapper(lip,ch,media,direction,msg,udptl,ipv6);
 	w->setMaster(msg.getValue(YSTRING("id")));
 
 	w->deref();
@@ -1605,7 +1612,7 @@ bool YRTPPlugin::reflectSetup(Message& msg, const char* id, RTPTransport& rtp,
 {
     String lip(msg.getValue(YSTRING("rtp_localip")));
     if (lip.null())
-	YRTPWrapper::guessLocal(rHost,lip);
+	YRTPWrapper::guessLocal(rHost,lip,false);
     SocketAddr addr(AF_INET);
     if (!addr.host(lip)) {
 	Debug(this,DebugWarn,"Bad local RTP address '%s' for %s '%s'",
@@ -1840,6 +1847,8 @@ void YRTPPlugin::initialize()
 {
     Output("Initializing module YRTP");
     Configuration cfg(Engine::configFile("yrtpchan"));
+    s_ipv6 = SocketAddr::supports(SocketAddr::IPv6) &&
+	cfg.getBoolValue("general","ipv6_support",false);
     s_minport = cfg.getIntValue("general","minport",MIN_PORT);
     s_maxport = cfg.getIntValue("general","maxport",MAX_PORT);
     s_bufsize = cfg.getIntValue("general","buffer",BUF_SIZE);

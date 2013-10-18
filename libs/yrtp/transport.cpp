@@ -26,6 +26,21 @@ using namespace TelEngine;
 
 static unsigned long s_sleep = 5;
 
+// Set IPv6 sin6_scope_id for remote addresses from local address
+// recvFrom() will set the sin6_scope_id of the remote socket address
+// This will avoid socket address comparison mismatch (same address, different scope id)
+static inline void setScopeId(const SocketAddr& local, SocketAddr& sa1,
+    SocketAddr& sa2, SocketAddr* sa3 = 0)
+{
+    if (local.family() != SocketAddr::IPv6)
+	return;
+    unsigned int val = local.scopeId();
+    sa1.scopeId(val);
+    sa2.scopeId(val);
+    if (sa3)
+	sa3->scopeId(val);
+}
+
 
 RTPGroup::RTPGroup(int msec, Priority prio)
     : Mutex(true,"RTPGroup"),
@@ -263,8 +278,8 @@ static bool sendData(Socket& sock, const SocketAddr& to, const void* data, int l
 	    flag = false;
 	    SocketAddr local;
 	    sock.getSockName(local);
-	    Debug(DebugNote,"%s send failed (local=%s:%d): invalid remote address",
-		what,local.host().c_str(),local.port());
+	    Debug(DebugNote,"%s send failed (local=%s): invalid remote address",
+		what,local.addr().c_str());
 	}
 	return false;
     }
@@ -277,9 +292,8 @@ static bool sendData(Socket& sock, const SocketAddr& to, const void* data, int l
 	Thread::errorString(s,e);
 	SocketAddr local;
 	sock.getSockName(local);
-	Debug(DebugNote,"%s send failed (local=%s:%d remote=%s:%d): %d %s",
-	    what,local.host().c_str(),local.port(),to.host().c_str(),to.port(),
-	    e,s.c_str());
+	Debug(DebugNote,"%s send failed (local=%s remote=%s): %d %s",
+	    what,local.addr().c_str(),to.addr().c_str(),e,s.c_str());
     }
     return wr == len;
 }
@@ -344,6 +358,7 @@ bool RTPTransport::localAddr(SocketAddr& addr, bool rtcp)
 	    // RTCP not requested - we are done
 	    m_rtpSock.getSockName(addr);
 	    m_localAddr = addr;
+	    setScopeId(m_localAddr,m_remoteAddr,m_remotePref);
 	    return true;
 	}
 	if (!p) {
@@ -356,6 +371,7 @@ bool RTPTransport::localAddr(SocketAddr& addr, bool rtcp)
 		if (m_rtpSock.create(addr.family(),SOCK_DGRAM) && m_rtpSock.bind(addr)) {
 		    m_rtpSock.setBlocking(false);
 		    m_localAddr = addr;
+		    setScopeId(m_localAddr,m_remoteAddr,m_remoteRTCP,&m_remotePref);
 		    return true;
 		}
 		DDebug(DebugMild,"RTP Socket failed with code %d",m_rtpSock.error());
@@ -369,6 +385,7 @@ bool RTPTransport::localAddr(SocketAddr& addr, bool rtcp)
 	    m_rtcpSock.setBlocking(false);
 	    addr.port(p);
 	    m_localAddr = addr;
+	    setScopeId(m_localAddr,m_remoteAddr,m_remoteRTCP,&m_remotePref);
 	    return true;
 	}
 #ifdef DEBUG
@@ -401,6 +418,7 @@ bool RTPTransport::remoteAddr(SocketAddr& addr, bool sniff)
 	// if sniffing packets from other sources remember preferred address
 	if (sniff)
 	    m_remotePref = addr;
+	setScopeId(m_localAddr,m_remoteAddr,m_remoteRTCP,sniff ? &m_remotePref : 0);
 	return true;
     }
     return false;

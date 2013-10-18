@@ -17,6 +17,12 @@
 ;  UDP transport (if type is udp)
 ; The listener is always processed before other 'listener ' sections
 
+; ipv6_support: boolean: Enable or disable IPv6 support
+; This parameter is applied on reload
+; This parameter is ignored if yate was not built with IPv6 support
+; Defaults to no
+;ipv6_support=no
+
 ; type: keyword: Listener type
 ; Allowed values:
 ; udp: Build an UDP listener
@@ -31,11 +37,18 @@
 
 ; addr: ipaddress: IP address to bind to
 ; Leave it empty to listen on all available interfaces
+; IPv6: An interface name can be added at the end of the address to bind on a specific
+;  interface. This is mandatory for Link Local addresses (e.g. addr=fe80::1%eth0)
 ;addr=
 
 ; port: integer: Port to bind to
 ; Defaults to 5060 for UDP and TCP, 5061 for TLS listener
 ;port=5060
+
+; ipv6: boolean: Listen on IPv6 address(es)
+; Listen will fail if IPv6 support is not enabled or not supported
+; Defaults to no
+;ipv6=no
 
 ; udp_force_bind: boolean: Try to use a random port if failed to bind on configured one (UDP only)
 ; Defaults to yes
@@ -46,6 +59,8 @@
 ; TCP/TLS: this parameter is applied on reload for new connections only
 ; RTP local IP address will default to bound IP address if not binding on all interfaces
 ; Explicitly set it to empty string to avoid using bound IP address
+; IPv6: An interface name can be added at the end of the address to bind on a specific
+;  interface. This is mandatory for Link Local addresses (e.g. addr=fe80::1%eth0)
 ;rtp_localip=
 
 ; nat_address: ipaddress: IP address to advertise in SDP, empty to use the local RTP
@@ -79,6 +94,8 @@
 ; tcp_out_rtp_localip: ipaddress: IP address to bind local RTP to for outgoing
 ;  TCP connections, empty to guess best
 ; This parameter is applied on reload for new connections only
+; IPv6: An interface name can be added at the end of the address to bind on a specific
+;  interface. This is mandatory for Link Local addresses (e.g. addr=fe80::1%eth0)
 ;tcp_out_rtp_localip=
 
 ; thread: keyword: Default priority of the SIP handling threads
@@ -471,17 +488,26 @@
 
 ; addr: ipaddress: IP address to bind to
 ; Leave it empty to listen on all available interfaces
+; IPv6: An interface name can be added at the end of the address to bind on a specific
+;  interface. This is mandatory for Link Local addresses (e.g. addr=fe80::1%eth0)
 ;addr=
 
 ; port: integer: Port to bind to
 ; Defaults to 5060 for UDP and TCP, 5061 for TLS listeners
 ;port=
 
+; ipv6: boolean: Listen on IPv6 address(es)
+; Listen will fail if IPv6 support is not enabled or not supported
+; Defaults to no
+;ipv6=no
+
 ; rtp_localip: ipaddress: IP address to bind local RTP to
 ; This parameter is applied on reload
 ; TCP/TLS: this parameter is applied on reload for new connections only
 ; RTP local IP address will default to bound IP address if not binding on all interfaces
 ; Explicitly set it to empty string to avoid using bound IP address
+; IPv6: An interface name can be added at the end of the address to bind on a specific
+;  interface. This is mandatory for Link Local addresses (e.g. addr=fe80::1%eth0)
 ;rtp_localip=
 
 ; backlog: integer: Maximum length of the queue of pending connections

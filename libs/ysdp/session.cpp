@@ -31,7 +31,7 @@ SDPSession::SDPSession(SDPParser* parser)
       m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0),
       m_secure(m_parser->m_secure), m_rfc2833(m_parser->m_rfc2833),
-      m_enabler(0), m_ptr(0)
+      m_ipv6(false), m_enabler(0), m_ptr(0)
 {
     setSdpDebug();
 }
@@ -40,7 +40,7 @@ SDPSession::SDPSession(SDPParser* parser, NamedList& params)
     : m_parser(parser), m_mediaStatus(MediaMissing),
       m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0),
-      m_enabler(0), m_ptr(0)
+      m_ipv6(false), m_enabler(0), m_ptr(0)
 {
     setSdpDebug();
     m_rtpForward = params.getBoolValue("rtp_forward");
@@ -293,6 +293,31 @@ bool SDPSession::updateRtpSDP(const NamedList& params)
     return false;
 }
 
+// Utility used in createSDP
+static int addIP(String& buf, const char* addr, int family = SocketAddr::Unknown)
+{
+    if (family != SocketAddr::IPv4 && family != SocketAddr::IPv6) {
+	if (addr) {
+	    family = SocketAddr::family(addr);
+	    if (family != SocketAddr::IPv4 && family != SocketAddr::IPv6)
+		family = SocketAddr::IPv4;
+	}
+	else
+	    family = SocketAddr::IPv4;
+    }
+    if (family == SocketAddr::IPv4)
+	buf << "IN IP4 ";
+    else
+	buf << "IN IP6 ";
+    if (!TelEngine::null(addr))
+	buf << addr;
+    else if (family == SocketAddr::IPv4)
+	buf << SocketAddr::ipv4NullAddr();
+    else
+	buf << SocketAddr::ipv6NullAddr();
+    return family;
+}
+
 // Creates a SDP body from transport address and list of media descriptors
 // Use own list if given media list is 0
 MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
@@ -316,9 +341,10 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
     // no address means on hold or muted
     String origin;
     origin << "yate " << m_sdpSession << " " << m_sdpVersion;
-    origin << " IN IP4 " << m_originAddr;
+    origin << " ";
+    int f = addIP(origin,m_originAddr);
     String conn;
-    conn << "IN IP4 " << (addr ? addr : "0.0.0.0");
+    addIP(conn,addr,f);
 
     MimeSdpBody* sdp = new MimeSdpBody;
     sdp->addLine("v","0");
@@ -731,6 +757,7 @@ Message* SDPSession::buildChanRtp(SDPMedia* media, const char* addr, bool start,
     m->addParam("direction","bidir");
     if (media->format())
 	m->addParam("format",media->format());
+    m->addParam("ipv6_support",String::boolText(m_ipv6));
     if (m_rtpLocalAddr)
 	m->addParam("localip",m_rtpLocalAddr);
     m->addParam("remoteip",addr);

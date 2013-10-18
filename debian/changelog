@@ -1,4 +1,4 @@
-yate (4.3.1~svn5668) UNRELEASED; urgency=low
+yate (4.3.1~svn5673) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -764,8 +764,14 @@ yate (4.3.1~svn5668) UNRELEASED; urgency=low
   * Updated to SVN revision 5668: + Ignore new data payload notification
     if the receiver is not initialized.  + Fixed bug: lock mutex to
     reset media when processing received BYE.
+  * Updated to SVN revision 5673: + Ignore selected account and protocol
+    when called target contains '/'. Ignore selected account if called
+    target contains '@' or ':'.  + Added IPv6 support to rtp channel.  +
+    Set scope id when changing rtp addresses to avoid comparison
+    mismatch.  + Handle and set IPv6 addresses in SDP.  + Added SIP IPv6
+    support.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 18 Oct 2013 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 19 Oct 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

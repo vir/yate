@@ -135,7 +135,7 @@ void SIPParty::setAddr(const String& addr, int port, bool local)
     a = addr;
     p = port;
     DDebug(DebugAll,"SIPParty updated %s address '%s:%d' [%p]",
-	local ? "local" : "remote",a.c_str(),p,this);
+	local ? "local" : "remote",SocketAddr::appendTo(a,p).c_str(),this);
 }
 
 void SIPParty::getAddr(String& addr, int& port, bool local)

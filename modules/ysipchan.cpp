@@ -267,27 +267,52 @@ protected:
 class YateSIPListener
 {
 public:
-    YateSIPListener(const String& addr = String::empty(), int port = 0);
+    YateSIPListener(const char* name, int proto, const String& addr = String::empty(),
+	int port = 0);
+    inline const String& listenerName() const
+	{ return m_name; }
+    inline const char* lName() const
+	{ return m_name; }
     inline const String& address() const
 	{ return m_address; }
     inline int port() const
 	{ return m_port; }
+    inline bool ipv6() const
+	{ return m_ipv6; }
+    inline bool ipv6Support() const
+	{ return m_ipv6Support; }
+    // Check if address would change
+    inline bool addrWouldChange(Mutex* mutex, const String& addr, int port) {
+	    Lock lck(mutex);
+	    return m_port != port || m_cfgAddr != addr;
+	}
+protected:
     // Check bind now flag
     bool bindNow(Mutex* mutex);
-    // Check if address would change
-    bool addrWouldChange(Mutex* mutex, bool udp, const String& addr, int port);
-    // Set addr/port and bind flag. Return the bind flag
-    bool setAddr(const String& addr, int port);
+    // Set addr/port/IPv6 support. Set bind flag if changed
+    void setAddr(const String& addr, int port, bool ipv6);
+    // Update IPv6 support from global. Set bind flag if changed and we must use IPv6
+    void updateIPv6Support();
+    // Update rtp address. Return true if set rtp addr flag changed
+    bool updateRtpAddr(const NamedList& params, String& buf, Mutex* mutex = 0);
     // Initialize a socket
-    // Set m_addr
-    Socket* initSocket(int proto, const String& name, SocketAddr& addr, Mutex* mutex,
-	int backLogBuffer, bool forceBind, String& reason);
-protected:
+    Socket* initSocket(SocketAddr& addr, Mutex* mutex, int backLogBuffer, bool forceBind,
+	String& reason);
+
     unsigned int m_bindInterval;         // Interval to try binding
     u_int64_t m_nextBind;                // Next time to bind
     bool m_bind;                         // Re-bind flag
+    String m_cfgAddr;                    // Configured address
     String m_address;                    // Address to bind
     int m_port;                          // Port to bind
+    bool m_ipv6;                         // Listen on IPv6 address(es)
+    bool m_ipv6Support;                  // IPv6 supported
+    bool m_setRtpAddr;                   // Set rtp address from bind address
+    String m_bindRtpLocalAddr;           // Rtp local address set from bind address
+
+private:
+    String m_name;                       // Listener name
+    int m_proto;                         // Listener protocol
 };
 
 // SIP transport: keeps a socket, read data from it, send data through it
@@ -440,6 +465,8 @@ public:
 	{ return m_remoteAddr; }
     inline int remotePort() const
 	{ return m_remotePort; }
+    inline const String& localAddr() const
+	{ return m_localAddr; }
     // Safely return a reference to party
     YateTCPParty* getParty();
     virtual YateSIPTCPTransport* tcpTransport()
@@ -494,7 +521,7 @@ protected:
     // Outgoing (re-connect info)
     String m_remoteAddr;                 // Remote party address
     int m_remotePort;                    // Remote port
-    String m_localAddr;                  // Optional local addrress to bind to
+    String m_localAddr;                  // Optional local address to bind to
     unsigned int m_connectRetry;         // Number of re-connect
     u_int64_t m_nextConnect;             // Interval to try ro re-connect
 };
@@ -512,7 +539,7 @@ private:
     YateSIPTransport* m_transport;
 };
 
-class YateSIPTCPListener : public Thread, public String, public ProtocolHolder, public YateSIPListener
+class YateSIPTCPListener : public Thread, public GenObject, public ProtocolHolder, public YateSIPListener
 {
     friend class SIPDriver;
     friend class YateSIPEndPoint;
@@ -524,6 +551,10 @@ public:
 	{ return protocol() == Tls; }
     inline bool listening() const
 	{ return m_socket != 0; }
+    // Retrieve local address for this transport
+    // This method is not thread safe
+    inline const SocketAddr& local() const
+	{ return m_local; }
     inline void setReason(const char* reason) {
 	    if (!reason)
 		return;
@@ -531,6 +562,8 @@ public:
 	    m_reason = reason;
 	}
     virtual void run();
+    virtual const String& toString() const
+	{ return listenerName(); }
 private:
     // Close the socket. Remove from endpoint list
     void cleanup(bool final);
@@ -543,6 +576,7 @@ private:
     bool m_sslContextCheck;              // Check SSL context availability
     bool m_transParamsChanged;           // Transport parameters changed flag
     Socket* m_socket;                    // The socket
+    SocketAddr m_local;                  // Local ip/port
     unsigned int m_backlog;              // Pending connections queue length
     String m_sslContext;                 // SSL/TLS context
     NamedList m_transParams;             // Parameters for created transports
@@ -1172,6 +1206,7 @@ static bool s_ignoreVia = true;          // Ignore Via headers and send answer b
 static bool s_sipt_isup = false;         // Control the application/isup body processing
 static bool s_printMsg = true;           // Print sent/received SIP messages to output
 
+static bool s_ipv6 = false;              // IPv6 support enabled
 static u_int64_t s_waitActiveUdpTrans = 1000000; // Time to wait for active UDP transactions
                                                  // to complete when a listener is disabled
 static unsigned int s_tcpConnectRetry = 3; // Number of TCP connect attempts
@@ -1248,6 +1283,18 @@ const TokenDict SipHandler::s_bodyEnc[] = {
     { 0, 0 },
 };
 
+// Get an address. Check if enclosed in []
+static inline void getAddrCheckIPv6(String& dest, const String& src)
+{
+    if (!src)
+	return;
+    const char* s = src;
+    if (!(s[0] == '[' && s[src.length() - 1] == ']'))
+	dest = src;
+    else
+	dest.assign(s + 1,src.length() - 2);
+}
+
 // Generate a transport id index when needed
 static inline unsigned int getTransIndex()
 {
@@ -1264,6 +1311,15 @@ static inline void addSockError(String& buf, Socket& sock, const char* sep = " "
     String tmp;
     Thread::errorString(tmp,sock.error());
     buf << sep << tmp << " (" << sock.error() << ")";
+}
+
+// Build an address from host and interface part of another address
+static inline void addIfaceAddr(String& buf, const String& host, const String& addr)
+{
+    buf << host;
+    int p = addr.find('%');
+    if (p >= 0)
+	buf.append(addr.c_str() + p,addr.length() - p);
 }
 
 // Return default udp/tcp/tls port
@@ -1539,17 +1595,18 @@ static bool isPrivateAddr(const String& host)
     return (i >= 16) && (i <= 31) && s.startsWith(".");
 }
 
-// Check if an address is an 'all interfaces' one
-// This works for IPv4 addresses only
-static inline bool isAllIfacesAddr(const String& addr)
-{
-    return !addr || addr == YSTRING("0.0.0.0");
-}
-
 // Check if there may be a NAT between an address embedded in the protocol
 //  and an address obtained from the network layer
 static bool isNatBetween(const String& embAddr, const String& netAddr)
 {
+    if (embAddr == netAddr)
+	return false;
+    int embFamily = SocketAddr::family(embAddr);
+    if (embFamily != SocketAddr::IPv4)
+	return false;
+    int netFamily = SocketAddr::family(netAddr);
+    if (embFamily != netFamily)
+	return false;
     return isPrivateAddr(embAddr) && !isPrivateAddr(netAddr);
 }
 
@@ -2175,8 +2232,12 @@ bool YateSIPPartyHolder::setPartyChanged(SIPParty* party, DebugEnabler* enabler)
     crt = 0;
     bool changed = partyPort != crtPort || partyAddr != crtAddr;
     if (changed) {
-	Debug(enabler,DebugInfo,"YateSIPPartyHolder party addr changed '%s:%d' -> '%s:%d' [%p]",
-	    crtAddr.c_str(),crtPort,partyAddr.c_str(),partyPort,this);
+	String crt;
+	String p;
+	SocketAddr::appendTo(crt,crtAddr,crtPort);
+	SocketAddr::appendTo(p,partyAddr,partyPort);
+	Debug(enabler,DebugInfo,"YateSIPPartyHolder party addr changed '%s' -> '%s' [%p]",
+	    crt.c_str(),p.c_str(),this);
 	setParty(party);
     }
     return changed;
@@ -2232,11 +2293,11 @@ bool YateSIPPartyHolder::buildParty(bool force)
     }
     if (!(tcpTrans || udpTrans)) {
 	if (protocol() == Udp) {
-	    SocketAddr addr(AF_INET);
 	    if (plugin.ep()) {
 		if (!m_transLocalAddr)
 		    udpTrans = plugin.ep()->defTransport();
 		else {
+		    SocketAddr addr(s_ipv6 ? SocketAddr::Unknown : SocketAddr::IPv4);
 		    addr.host(m_transLocalAddr);
 		    udpTrans = plugin.ep()->findUdpTransport(addr.host(),m_transLocalPort);
 		}
@@ -2258,7 +2319,7 @@ bool YateSIPPartyHolder::buildParty(bool force)
     }
     SIPParty* p = 0;
     if (udpTrans) {
-	SocketAddr addr(AF_INET);
+	SocketAddr addr(s_ipv6 ? SocketAddr::Unknown : SocketAddr::IPv4);
 	addr.host(m_transRemoteAddr);
 	addr.port(m_transRemotePort);
 	addrValid = addr.host() && addr.port() > 0;
@@ -2274,8 +2335,8 @@ bool YateSIPPartyHolder::buildParty(bool force)
     TelEngine::destruct(p);
     if (!addrValid)
 	DDebug(&plugin,DebugNote,
-	    "Failed to build %s transport with invalid remote addr=%s:%d",
-	    protoName(),m_transRemoteAddr.c_str(),m_transRemotePort);
+	    "Failed to build %s transport with invalid remote addr=%s",
+	    protoName(),SocketAddr::appendTo(m_transRemoteAddr,m_transRemotePort).c_str());
     if (tcpTrans && initTcp) {
 	// TODO: handle other params: maxpkt, thread prio
 	tcpTrans->init(NamedList::empty(),true);
@@ -2340,9 +2401,12 @@ bool YateSIPPartyHolder::updateRemoteAddr(const NamedList& params, const String&
 	port = sipPort(protocol() != Tls);
     bool chg = change(m_transRemoteAddr,addr);
     chg = change(m_transRemotePort,port) || chg;
-    if (chg)
-	Debug(&plugin,DebugAll,"YateSIPPartyHolder remote addr changed to '%s:%d' [%p]",
-	    m_transRemoteAddr.c_str(),m_transRemotePort,this);
+    if (chg && plugin.debugAt(DebugAll)) {
+	String s;
+	SocketAddr::appendTo(s,m_transRemoteAddr,m_transRemotePort);
+	Debug(&plugin,DebugAll,"YateSIPPartyHolder remote addr changed to '%s' [%p]",
+	    s.c_str(),this);
+    }
     return chg;
 }
 
@@ -2352,9 +2416,12 @@ bool YateSIPPartyHolder::updateLocalAddr(const NamedList& params, const String& 
     bool chg = change(m_transLocalAddr,params[prefix + "ip_transport_localip"]);
     int port = params.getIntValue(prefix + "ip_transport_localport");
     chg = change(m_transLocalPort,port) || chg;
-    if (chg)
-	Debug(&plugin,DebugAll,"YateSIPPartyHolder local addr changed to '%s:%d' [%p]",
-	    m_transLocalAddr.c_str(),m_transLocalPort,this);
+    if (chg && plugin.debugAt(DebugAll)) {
+	String s;
+	SocketAddr::appendTo(s,m_transLocalAddr,m_transLocalPort);
+	Debug(&plugin,DebugAll,"YateSIPPartyHolder local addr changed to '%s' [%p]",
+	    s.c_str(),this);
+    }
     return chg;
 }
 
@@ -2379,9 +2446,11 @@ void YateSIPPartyHolder::setRtpLocalAddr(String& addr, Message* m)
 }
 
 
-YateSIPListener::YateSIPListener(const String& addr, int port)
+YateSIPListener::YateSIPListener(const char* name, int proto, const String& addr, int port)
     : m_bindInterval(0), m_nextBind(0),
-    m_bind(true), m_address(addr), m_port(port)
+    m_bind(true), m_address(addr), m_port(port),
+    m_ipv6(false), m_ipv6Support(false), m_setRtpAddr(false),
+    m_name(name), m_proto(proto)
 {
 }
 
@@ -2396,56 +2465,112 @@ bool YateSIPListener::bindNow(Mutex* mutex)
     return old;
 }
 
-// Check if address would change
-bool YateSIPListener::addrWouldChange(Mutex* mutex, bool udp, const String& addr, int port)
-{
-    SocketAddr existing(udp ? AF_INET : PF_INET);
-    Lock lck(mutex);
-    existing.host(m_address);
-    existing.port(m_port);
-    lck.drop();
-    SocketAddr newAddr(udp ? AF_INET : PF_INET);
-    newAddr.host(addr);
-    newAddr.port(port);
-    return existing != newAddr;
-}
-
 // Set addr/port and bind flag. Return the bind flag
-bool YateSIPListener::setAddr(const String& addr, int port)
+void YateSIPListener::setAddr(const String& addr, int port, bool ipv6)
 {
-    if (m_address != addr) {
+    if (m_cfgAddr != addr) {
 	m_bind = true;
-	m_address = addr;
+	SocketAddr::splitIface(addr,m_address);
+	m_cfgAddr = addr;
     }
     if (m_port != port) {
 	m_bind = true;
 	m_port = port;
     }
-    return m_bind;
+    if (m_ipv6 != ipv6) {
+	m_bind = true;
+	m_ipv6 = ipv6;
+    }
+}
+
+// Update IPv6 support from global
+void YateSIPListener::updateIPv6Support()
+{
+    if (m_ipv6Support == s_ipv6)
+	return;
+    m_ipv6Support = s_ipv6;
+    // Force re-bind if we are using IPv6
+    if (m_ipv6 && !m_bind) {
+	Debug(&plugin,DebugAll,"Listener(%s,'%s') IPv6 support changed. Forcing re-bind",
+	    ProtocolHolder::lookupProtoName(m_proto),lName());
+	m_bind = true;
+    }
+}
+
+// Update rtp address
+bool YateSIPListener::updateRtpAddr(const NamedList& params, String& buf, Mutex* mutex)
+{
+    Lock lck(mutex);
+    NamedString* ns = params.getParam(YSTRING("rtp_localip"));
+    if (ns)
+	buf = *ns;
+    else
+	buf.clear();
+    bool val = false;
+    if (m_proto == ProtocolHolder::Udp && params == YSTRING("general"))
+	val = false;
+    else if (ns && ns->null())
+	val = false;
+    else
+	val = buf.null();
+    // We should set rtp addr from bind address and we already have one
+    if (val && m_bindRtpLocalAddr) {
+	buf = m_bindRtpLocalAddr;
+	m_setRtpAddr = false;
+	return false;
+    }
+    if (val == m_setRtpAddr)
+	return false;
+    m_setRtpAddr = val;
+    return true;
 }
 
 // Initialize a socket
-Socket* YateSIPListener::initSocket(int proto, const String& name, SocketAddr& lAddr, Mutex* mutex,
+Socket* YateSIPListener::initSocket(SocketAddr& lAddr, Mutex* mutex,
     int backLogBuffer, bool forceBind, String& reason)
 {
     reason = "";
     Lock lck(mutex);
-    String addr = m_address;
+    String addr = m_cfgAddr;
     int port = m_port;
+    bool ipv6 = m_ipv6;
+    bool ipv6Support = m_ipv6Support;
     lck.drop();
-    bool udp = (proto == ProtocolHolder::Udp);
-    const char* type = ProtocolHolder::lookupProtoName(proto);
-    Debug(&plugin,DebugAll,"Listener(%s,'%s') initializing socket addr='%s:%d'",
-	type,name.c_str(),addr.c_str(),port);
+    bool udp = (m_proto == ProtocolHolder::Udp);
+    const char* type = ProtocolHolder::lookupProtoName(m_proto);
+    Debug(&plugin,DebugAll,
+	"Listener(%s,'%s') initializing socket addr='%s' port=%d",
+	type,lName(),addr.c_str(),port);
     Socket* sock = 0;
-    if (udp)
-	sock = new Socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP);
-    else
-	sock = new Socket(PF_INET,SOCK_STREAM);
     // Use a while() to break to the end
     while (true) {
+	if (!ipv6)
+	    lAddr.assign(SocketAddr::IPv4);
+	else {
+	    if (!ipv6Support) {
+		reason << "IPv6 support not enabled";
+		break;
+	    }
+	    if (!lAddr.assign(SocketAddr::IPv6)) {
+		reason << "IPv6 not available";
+		break;
+	    }
+	}
+	if (addr && !lAddr.host(addr)) {
+	    reason << "Invalid address";
+	    break;
+	}
+	lAddr.port(port);
+	if (udp)
+	    sock = new Socket(lAddr.family(),SOCK_DGRAM,IPPROTO_UDP);
+	else
+	    sock = new Socket(lAddr.family(),SOCK_STREAM);
 	if (!sock->valid()) {
 	    reason = "Create socket failed";
+	    break;
+	}
+	if (ipv6 && !sock->setIpv6OnlyOption(true)) {
+	    reason << "Failed to set option IPv6 only";
 	    break;
 	}
 	if (!udp)
@@ -2461,27 +2586,25 @@ Socket* YateSIPListener::initSocket(int proto, const String& name, SocketAddr& l
 		socklen_t sz = sizeof(buflen);
 		if (sock->getOption(SOL_SOCKET,SO_RCVBUF,&buflen,&sz))
 		    Debug(&plugin,DebugNote,"Listener(%s,'%s') buffer size is %d (requested %d)",
-			type,name.c_str(),buflen,backLogBuffer);
+			type,lName(),buflen,backLogBuffer);
 		else
 		    Debug(&plugin,DebugWarn,
 			"Listener(%s,'%s') could not get UDP buffer size (requested %d)",
-			type,name.c_str(),backLogBuffer);
+			type,lName(),backLogBuffer);
 	    }
 	    else
 		Debug(&plugin,DebugWarn,"Listener(%s,'%s') could not set buffer size %d",
-		    type,name.c_str(),buflen);
+		    type,lName(),buflen);
 	}
 #endif
 	// Bind the socket
-	lAddr.host(addr);
-	lAddr.port(port);
 	bool ok = sock->bind(lAddr);
 	if (!ok && forceBind) {
 	    String error;
 	    Thread::errorString(error,sock->error());
 	    Debug(&plugin,DebugWarn,
-		"Listener(%s,'%s') unable to bind on '%s:%d' - trying a random port. %d '%s'",
-		type,name.c_str(),lAddr.host().c_str(),lAddr.port(),sock->error(),error.c_str());
+		"Listener(%s,'%s') unable to bind on %s - trying a random port. %d '%s'",
+		type,lName(),lAddr.addr().c_str(),sock->error(),error.c_str());
 	    lAddr.port(0);
 	    ok = sock->bind(lAddr);
 	    if (ok && !sock->getSockName(lAddr)) {
@@ -2504,16 +2627,22 @@ Socket* YateSIPListener::initSocket(int proto, const String& name, SocketAddr& l
 	break;
     }
     if (!reason) {
-	Debug(&plugin,DebugInfo,"Listener(%s,'%s') started on '%s:%d'",
-	    type,name.c_str(),lAddr.host().safe(),lAddr.port());
+	Debug(&plugin,DebugInfo,"Listener(%s,'%s') started on '%s' (%s)",
+	    type,lName(),lAddr.addr().c_str(),lAddr.familyName());
 	m_nextBind = 0;
 	m_bindInterval = 0;
 	return sock;
     }
     String s;
-    Thread::errorString(s,sock->error());
-    Alarm(&plugin,"socket",DebugWarn,"Listener(%s,'%s') %s. %d: '%s'",
-	type,name.c_str(),reason.c_str(),sock->error(),s.c_str());
+    if (sock) {
+	String tmp;
+	Thread::errorString(tmp,sock->error());
+	s << " (" << sock->error() << " '" << tmp << "')";
+    }
+    Alarm(&plugin,"socket",DebugWarn,
+	"Listener(%s,'%s') failed to start on addr='%s' port=%d ipv6=%s: %s%s",
+	type,lName(),addr.safe(),port,String::boolText(ipv6),
+	reason.c_str(),s.safe());
     if (!m_bindInterval)
 	m_bindInterval = s_bindRetryMs;
     else if (m_bindInterval < BIND_RETRY_MAX)
@@ -2529,11 +2658,8 @@ YateSIPTransport::YateSIPTransport(int proto, const String& id, Socket* sock, in
     ProtocolHolder(proto),
     m_id(id), m_status(stat), m_statusChgTime(Time::secNow()),
     m_sock(sock), m_maxpkt(1500),
-    m_local(proto == Udp ? AF_INET : PF_INET),
-    m_remote(proto == Udp ? AF_INET : PF_INET),
     m_worker(0), m_initialized(false)
 {
-    Debug(&plugin,DebugAll,"Transport(%s) created [%p]",m_id.c_str(),this);
 }
 
 // Initialize transport
@@ -2543,24 +2669,19 @@ bool YateSIPTransport::init(const NamedList& params, const NamedList& defs,
     static String s_maxPkt = "maxpkt";
     lock();
     m_initialized = true;
-    m_rtpLocalAddr.clear();
     if (udpTransport()) {
 	int v = params.getIntValue(s_maxPkt,defs.getIntValue(s_maxPkt,m_maxpkt));
 	m_maxpkt = getMaxpkt(v,1500);
-	// Set RTP addr from bind address if the transport was not built from
-	// 'general' section
-	if (params != YSTRING("general") && !isAllIfacesAddr(m_local.host()))
-	    m_rtpLocalAddr = m_local.host();
     }
     else {
+	m_rtpLocalAddr = params.getValue(YSTRING("rtp_localip"));
 	m_maxpkt = getMaxpkt(params.getIntValue(YSTRING("tcp_maxpkt"),m_maxpkt),m_maxpkt);
-	// Override rtp ip for tcp outgoing 
-	if (tcpTransport() && tcpTransport()->outgoing()) {
+	// Set rtp ip for tcp outgoing 
+	if (!m_rtpLocalAddr && tcpTransport() && tcpTransport()->outgoing()) {
 	    Lock lck(s_globalMutex);
 	    m_rtpLocalAddr = s_tcpOutRtpip;
 	}
     }
-    m_rtpLocalAddr = params.getValue(YSTRING("rtp_localip"),m_rtpLocalAddr);
     m_rtpNatAddr = params.getValue(YSTRING("nat_address"));
     unlock();
     // Done if not first
@@ -2579,19 +2700,13 @@ void YateSIPTransport::printSendMsg(const SIPMessage* msg, const SocketAddr* add
 	return;
     if (!plugin.debugAt(DebugInfo))
 	return;
-    String raddr;
-    if (addr)
-	raddr << addr->host() << ":" << addr->port();
-    else
-	raddr << m_remote.host() << ":" << m_remote.port();
-    if (!plugin.filterDebug(raddr))
+    if (!plugin.filterDebug(addr ? addr->addr() : m_remote.addr()))
 	return;
     String tmp;
     getMsgLine(tmp,msg);
+    String raddr;
     if (addr)
-	raddr = " to " + raddr;
-    else
-	raddr.clear();
+	raddr = " to " + addr->addr();
     String buf((char*)msg->getBuffer().data(),msg->getBuffer().length());
     Debug(&plugin,DebugInfo,"'%s' sending %s %p%s [%p]\r\n------\r\n%s------",
 	m_protoAddr.c_str(),tmp.c_str(),msg,raddr.safe(),this,buf.c_str());
@@ -2604,15 +2719,13 @@ void YateSIPTransport::printRecvMsg(const char* buf, int len)
 	return;
     if (!plugin.debugAt(DebugInfo))
 	return;
-    String raddr;
-    raddr << m_remote.host() << ":" << m_remote.port();
-    if (!plugin.filterDebug(raddr))
+    if (!plugin.filterDebug(m_remote.addr()))
 	return;
     String tmp;
+    String raddr;
     if (udpTransport())
-	raddr = " from " + raddr;
+	raddr = " from " + m_remote.addr();
     else {
-	raddr.clear();
 	tmp.assign(buf,len);
 	buf = tmp;
     }
@@ -2812,32 +2925,42 @@ void YateSIPTransport::setProtoAddr(bool set)
 	m_protoAddr = "";
 	return;
     }
-    m_protoAddr << protoName(false) << ":" << m_local.host() << ":" << m_local.port();
+    m_protoAddr << protoName(false) << ":" << m_local.addr();
     if (!udpTransport())
-	m_protoAddr << "-" << m_remote.host() << ":" << m_remote.port();
+	m_protoAddr << "-" << m_remote.addr();
 }
 
 
 YateSIPUDPTransport::YateSIPUDPTransport(const String& id)
-    : YateSIPTransport(Udp,id,0,Idle),
+    : YateSIPTransport(Udp,id,0,Idle), YateSIPListener(id,Udp),
     m_default(false), m_forceBind(true), m_errored(false), m_bufferReq(0)
 {
+    Debug(&plugin,DebugAll,"Transport(%s) created [%p]",m_id.c_str(),this);
 }
 
 // (Re)Initialize the transport
 bool YateSIPUDPTransport::init(const NamedList& params, const NamedList& defs, bool first,
     Thread::Priority prio)
 {
-    bool ok = YateSIPTransport::init(params,defs,first,prio);
+    updateRtpAddr(params,m_rtpLocalAddr,this);
     m_default = params.getBoolValue("default",toString() == YSTRING("general"));
     m_forceBind = params.getBoolValue("udp_force_bind",true);
     m_bufferReq = params.getIntValue("buffer",defs.getIntValue("buffer"));
-    if (first)
-	setAddr(params.getValue("addr","0.0.0.0"),params.getIntValue("port",5060));
-    Debug(&plugin,DebugAll,
-	"Transport(%s) initialized addr='%s:%d' default=%s maxpkt=%u rtp_localip=%s nat_address=%s [%p]",
-	m_id.c_str(),m_address.c_str(),m_port,String::boolText(m_default),m_maxpkt,
-	m_rtpLocalAddr.c_str(),m_rtpNatAddr.c_str(),this);
+    if (first) {
+	setAddr(params.getValue("addr"),params.getIntValue("port",5060),
+	    params.getBoolValue("ipv6"));
+	m_ipv6Support = s_ipv6;
+    }
+    bool ok = YateSIPTransport::init(params,defs,first,prio);
+    if (plugin.debugAt(DebugAll)) {
+	Lock lck(this);
+	String s;
+	SocketAddr::appendTo(s,m_address,m_port);
+	Debug(&plugin,DebugAll,
+	    "Listener(%s,'%s') initialized addr='%s' default=%s maxpkt=%u rtp_localip=%s nat_address=%s [%p]",
+	    protoName(),lName(),s.c_str(),String::boolText(m_default),m_maxpkt,
+	    m_rtpLocalAddr.c_str(),m_rtpNatAddr.c_str(),this);
+    }
     if (ok && first)
 	ok = startWorker(prio);
     return ok;
@@ -2871,31 +2994,54 @@ int YateSIPUDPTransport::process()
 	    changeStatus(Idle);
 	    Lock lck(this);
 	    YateSIPTransport::resetSocket(m_sock,-1);
-	    m_local.host("");
-	    m_local.port(0);
+	    m_local.clear();
+	    m_bindRtpLocalAddr.clear();
 	    setProtoAddr(false);
 	}
 	if (!force && m_nextBind > Time::now())
 	    return Thread::idleUsec();
 	String reason;
-	SocketAddr addr(PF_INET);
-	Socket* sock = initSocket(ProtocolHolder::Udp,toString(),addr,this,
-	    m_bufferReq,m_forceBind,reason);
-	if (sock) {
-	    lock();
-	    m_sock = sock;
-	    m_local = addr;
-	    unlock();
-	    setProtoAddr(true);
-	    changeStatus(Connected);
-	}
-	else {
+	SocketAddr addr;
+	Socket* sock = initSocket(addr,this,m_bufferReq,m_forceBind,reason);
+	if (!sock) {
 	    changeStatus(Idle);
 	    Lock lck(this);
 	    m_reason = reason;
-	}
-	if (!m_sock)
 	    return Thread::idleUsec();
+	}
+	lock();
+	m_sock = sock;
+	m_local = addr;
+	m_reason.clear();
+	unlock();
+	setProtoAddr(true);
+	changeStatus(Connected);
+    }
+    else if (m_ipv6 && !m_ipv6Support) {
+	Lock lck(this);
+	if (m_ipv6 && !m_ipv6Support) {
+	    // Force re-bind
+	    Debug(&plugin,DebugInfo,
+		"Listener(%s,'%s') IPv6 support changed. Forcing re-bind [%p]",
+		protoName(),lName(),this);
+	    m_bind = true;
+	    return Thread::idleUsec();
+	}
+    }
+    // Set RTP addr from bind address
+    if (m_setRtpAddr) {
+	Lock lck(this);
+	if (m_setRtpAddr) {
+	    m_rtpLocalAddr.clear();
+	    if (!m_local.isNullAddr()) {
+		addIfaceAddr(m_rtpLocalAddr,m_local.host(),m_cfgAddr);
+		if (m_rtpLocalAddr)
+		    Debug(&plugin,DebugAll,"Listener(%s,'%s') set rtp_localip='%s' [%p]",
+			protoName(),lName(),m_rtpLocalAddr.c_str(),this);
+	    }
+	    m_bindRtpLocalAddr = m_rtpLocalAddr;
+	    m_setRtpAddr = false;
+	}
     }
     int& evc = YateSIPEndPoint::s_evCount;
     // Do nothing if the endpoint is flooded with events or terminating
@@ -2932,8 +3078,8 @@ int YateSIPUDPTransport::process()
     }
     if (res < 72) {
 	DDebug(&plugin,DebugInfo,
-	    "Transport(%s) received short SIP message of %d bytes from %s:%d [%p]",
-	    m_id.c_str(),res,m_remote.host().c_str(),m_remote.port(),this);
+	    "Transport(%s) received short SIP message of %d bytes from %s [%p]",
+	    m_id.c_str(),res,m_remote.addr().c_str(),this);
 	return 0;
     }
     char* b = (char*)m_buffer.data();
@@ -2974,7 +3120,9 @@ YateSIPTCPTransport::YateSIPTCPTransport(bool tls, const String& laddr, const St
     m_maxpkt = s_tcpMaxpkt;
     if (m_remotePort <= 0)
 	m_remotePort = sipPort(protocol() != Tls);
-    m_id << (tls ? "tls:" : "tcp:") << getTransIndex() << "-" << raddr << ":" << m_remotePort;
+    m_id << (tls ? "tls:" : "tcp:") << getTransIndex() << "-";
+    SocketAddr::appendTo(m_id,raddr,m_remotePort);
+    Debug(&plugin,DebugAll,"Transport(%s) created [%p]",m_id.c_str(),this);
     if (plugin.ep())
 	plugin.ep()->addTcpTransport(this);
 }
@@ -2993,12 +3141,12 @@ YateSIPTCPTransport::YateSIPTCPTransport(Socket* sock, bool tls)
     if (m_sock) {
     	m_sock->getSockName(m_local);
 	m_sock->getPeerName(m_remote);
-	m_id << m_local.host() << ":" << m_local.port();
-	m_id << "-" << m_remote.host() << ":" << m_remote.port();;
+	m_id << m_local.addr() << "-" << m_remote.addr();
 	setProtoAddr(true);
     }
     else
 	m_id << getTransIndex();
+    Debug(&plugin,DebugAll,"Transport(%s) created [%p]",m_id.c_str(),this);
     if (plugin.ep())
 	plugin.ep()->addTcpTransport(this);
 }
@@ -3202,7 +3350,7 @@ void YateSIPTCPTransport::resetParty(YateTCPParty* party, bool set)
 int YateSIPTCPTransport::connect(u_int64_t connToutUs)
 {
     resetConnection();
-    Socket* sock = new Socket(PF_INET,SOCK_STREAM);
+    Socket* sock = 0;
     int retVal = -1;
     m_reason.clear();
     // Use a while() to break to the end
@@ -3211,32 +3359,35 @@ int YateSIPTCPTransport::connect(u_int64_t connToutUs)
 	    m_reason = "Empty remote address";
 	    break;
 	}
-	bool ok = true;
-	// Bind to local ip
-	SocketAddr lip(PF_INET);
-	if (m_localAddr) {
-	    lip.host(m_localAddr);
-	    if (lip.host()) {
-		ok = sock->bind(lip);
-		if (!ok) {
-		    m_reason << "Failed to bind on '" << lip.host() << "' (" << m_localAddr << "). ";
-		    addSockError(m_reason,*sock);
-		}
-	    }
-	    else
-		m_reason << "Invalid local address '" << m_localAddr << "'";
-	}
-	if (!ok)
-	    break;
 	// Allow connect retry
 	retVal = 0;
-	ok = false;
-	SocketAddr a(PF_INET);
-	a.host(m_remoteAddr);
-	a.port(m_remotePort);
-	if (!a.host()) {
+	SocketAddr a(s_ipv6 ? SocketAddr::Unknown : SocketAddr::IPv4);
+	if (!a.host(m_remoteAddr)) {
 	    m_reason << "Failed to resolve '" << m_remoteAddr << "'";
 	    break;
+	}
+	a.port(m_remotePort);
+	sock = new Socket(a.family(),SOCK_STREAM);
+	if (!sock->valid()) {
+	    m_reason << "Failed to create socket";
+	    break;
+	}
+	// Bind to local ip
+	SocketAddr lip(s_ipv6 ? SocketAddr::Unknown : SocketAddr::IPv4);
+	if (m_localAddr) {
+	    if (!lip.host(m_localAddr)) {
+		m_reason << "Invalid local address '" << m_localAddr << "'";
+		// Don't allow connect retry
+		retVal = -1;
+		break;
+	    }
+	    if (!sock->bind(lip)) {
+		m_reason << "Failed to bind on '" << lip.host() << "' (" << m_localAddr << "). ";
+		addSockError(m_reason,*sock);
+		// Don't allow connect retry
+		retVal = -1;
+		break;
+	    }
 	}
 	// Use async connect
 	if (connToutUs && !(sock->canSelect() && sock->setBlocking(false))) {
@@ -3261,14 +3412,17 @@ int YateSIPTCPTransport::connect(u_int64_t connToutUs)
 	    if (!intervals)
 		intervals = 1;
 	}
-	String domain;
-	if (a.host() != m_remoteAddr)
-	    domain << " (" << m_remoteAddr << ")";
-	Debug(&plugin,DebugAll,
-	    "Transport(%s) attempt to connect to '%s:%d'%s localip=%s [%p]",
-	    m_id.c_str(),a.host().c_str(),a.port(),domain.safe(),
-	    lip.host().safe(),this);
-	ok = (0 != sock->connect(a));
+	if (plugin.debugAt(DebugAll)) {
+	    String s;
+	    s << "'" << a.addr() << "'";
+	    if (a.host() != m_remoteAddr)
+		s << " (" << m_remoteAddr << ")";
+	    if (m_localAddr)
+		s << " localip=" << lip.addr();
+	    Debug(&plugin,DebugAll,"Transport(%s) attempt to connect to %s [%p]",
+		m_id.c_str(),s.safe(),this);
+	}
+	bool ok = sock->connect(a);
 	bool timeout = false;
 	bool stop = false;
 	// Async connect in progress
@@ -3302,8 +3456,9 @@ int YateSIPTCPTransport::connect(u_int64_t connToutUs)
 	    }
 	}
 	else if (!stop) {
-	    m_reason << "Failed to connect to '" << a.host() << ":" << a.port() << "'";
-	    m_reason << domain;
+	    m_reason << "Failed to connect to '" << a.addr() << "'";
+	    if (a.host() != m_remoteAddr)
+		m_reason << " (" << m_remoteAddr << ")";
 	    if (timeout)
 		m_reason << " . Connect timeout";
 	    else
@@ -3512,9 +3667,8 @@ void YateSIPTCPTransport::resetConnection(Socket* sock)
 	m_sock->getSockName(m_local);
 	m_sock->getPeerName(m_remote);
 	setProtoAddr(true);
-	Debug(&plugin,DebugAll,"Transport(%s) connected local=%s:%d remote=%s:%d [%p]",
-	    m_id.c_str(),m_local.host().c_str(),m_local.port(),
-	    m_remote.host().c_str(),m_remote.port(),this);
+	Debug(&plugin,DebugAll,"Transport(%s) connected local=%s remote=%s [%p]",
+	    m_id.c_str(),m_local.addr().c_str(),m_remote.addr().c_str(),this);
     }
     // Update party local/remote ip/port
     if (m_party)
@@ -3620,8 +3774,8 @@ void YateSIPTransportWorker::cleanupTransport(bool final, bool terminate)
 
 YateSIPTCPListener::YateSIPTCPListener(int proto, const String& name, const NamedList& params)
     : Thread("YSIP Listener",Thread::priority(params.getValue("thread"))),
-    String(name),
     ProtocolHolder(proto),
+    YateSIPListener(name,proto),
     m_mutex(true,"YSIPListener"),
     m_sslContextChanged(true), m_sslContextCheck(true), m_transParamsChanged(true),
     m_socket(0), m_backlog(5), m_transParams(params), m_initialized(false)
@@ -3638,15 +3792,10 @@ YateSIPTCPListener::~YateSIPTCPListener()
 void YateSIPTCPListener::init(const NamedList& params, bool first)
 {
     m_initialized = true;
-    String addr = params.getValue("addr","0.0.0.0");
+    const String& addr = params["addr"];
     int port = params.getIntValue("port");
-    port = (port > 0 ? port : sipPort(!tls()));
-    String rtpLip;
-    SocketAddr lAddr(PF_INET);
-    lAddr.host(addr);
-    if (!isAllIfacesAddr(lAddr.host()))
-	rtpLip = lAddr.host();
-    rtpLip = params.getValue("rtp_localip",rtpLip);
+    if (port <= 0)
+	port = sipPort(!tls());
     String sslContext;
     m_mutex.lock();
     if (tls()) {
@@ -3655,28 +3804,35 @@ void YateSIPTCPListener::init(const NamedList& params, bool first)
 	m_sslContext = sslContext;
 	if (!m_sslContext)
 	    Alarm(&plugin,"config",DebugConf,"Listener(%s,'%s') ssl context is empty [%p]",
-		protoName(),c_str(),this);
+		protoName(),lName(),this);
 	// Always set check flag on re-init
 	m_sslContextCheck = true;
     }
     m_backlog = params.getIntValue("backlog",5,0);
-    m_bind = setAddr(addr,port) || first;
+    setAddr(addr,port,params.getBoolValue("ipv6"));
+    if (first)
+	m_bind = true;
+    updateIPv6Support();
     m_transParamsChanged = m_transParamsChanged || first;
-    if (rtpLip != m_transParams["rtp_localip"]) {
+    String rtp;
+    bool setRtpAddrChg = updateRtpAddr(params,rtp);
+    if (rtp != m_transParams["rtp_localip"]) {
 	m_transParamsChanged = true;
-	m_transParams.setParam("rtp_localip",rtpLip);
+	m_transParams.setParam("rtp_localip",rtp);
     }
-    m_mutex.unlock();
+    else if (setRtpAddrChg)
+	m_transParamsChanged = true;
     Debug(&plugin,DebugAll,
 	"Listener(%s,'%s') initialized addr='%s' port=%d sslcontext='%s' rtp_localip='%s' [%p]",
-	protoName(),c_str(),addr.c_str(),port,sslContext.safe(),rtpLip.c_str(),this);
+	protoName(),lName(),addr.c_str(),port,sslContext.safe(),rtp.c_str(),this);
+    m_mutex.unlock();
 }
 
 void YateSIPTCPListener::run()
 {
     DDebug(&plugin,DebugAll,"Listener(%s,'%s') start running [%p]",
-	protoName(),c_str(),this);
-    SocketAddr lAddr(PF_INET);
+	protoName(),lName(),this);
+    SocketAddr lAddr;
     NamedList transParams("");
     String sslContext;
     bool showWaitStart = true;
@@ -3684,6 +3840,7 @@ void YateSIPTCPListener::run()
     while (true) {
 	if (Thread::check(false))
 	    break;
+	bool setRtpAddr = false;
 	if (m_sslContextChanged || m_transParamsChanged) {
 	    Lock lock(m_mutex);
 	    if (m_sslContextChanged) {
@@ -3694,8 +3851,10 @@ void YateSIPTCPListener::run()
 		if (tls() && !sslContext)
 		    m_reason = "Empty SSL context";
 	    }
-	    if (m_transParamsChanged)
+	    if (m_transParamsChanged) {
 		transParams = m_transParams;
+		setRtpAddr = m_setRtpAddr;
+	    }
 	    m_sslContextChanged = false;
 	    m_transParamsChanged = false;
 	}
@@ -3710,7 +3869,7 @@ void YateSIPTCPListener::run()
 		    if (showWaitStart) {
 			Debug(&plugin,DebugAll,
 			    "Listener(%s,'%s') waiting for engine start to check SSL context [%p]",
-			    protoName(),c_str(),this);
+			    protoName(),lName(),this);
 			showWaitStart = false;
 		    }
 		    Thread::idle();
@@ -3725,7 +3884,7 @@ void YateSIPTCPListener::run()
 		if (!sslAvailable) {
 		    Alarm(&plugin,"config",DebugConf,
 			"Listener(%s,'%s') SSL context '%s' not available [%p]",
-			protoName(),c_str(),sslContext.c_str(),this);
+			protoName(),lName(),sslContext.c_str(),this);
 		    stopListening();
 		}
 	    }
@@ -3736,36 +3895,66 @@ void YateSIPTCPListener::run()
 	}
 	bool force = bindNow(&m_mutex);
 	if (force || !m_socket) {
-	    if (m_socket)
+	    if (m_socket) {
 		stopListening("Address changed",DebugInfo);
+		Lock lck(m_mutex);
+		m_bindRtpLocalAddr.clear();
+	    }
 	    if (!force && m_nextBind > Time::now()) {
 		Thread::idle();
 		continue;
 	    }
 	    String reason;
-	    Socket* sock = initSocket(protocol(),toString(),lAddr,&m_mutex,m_backlog,false,reason);
+	    Socket* sock = initSocket(lAddr,&m_mutex,m_backlog,false,reason);
 	    Lock lck(m_mutex);
 	    m_socket = sock;
 	    m_reason = reason;
 	    if (!m_socket)
 		continue;
+	    m_local = lAddr;
+	    setRtpAddr = m_setRtpAddr;
 	}
-	SocketAddr addr(PF_INET);
+	else if (m_ipv6 && !m_ipv6Support) {
+	    // Check if we should drop and re-bind
+	    Lock lck(m_mutex);
+	    bool disable = m_ipv6 && !m_ipv6Support;
+	    lck.drop();
+	    if (disable) {
+		stopListening("IPv6 support changed",DebugInfo);
+		Thread::idle();
+		continue;
+	    }
+	}
+	if (setRtpAddr) {
+	    // Set RTP addr from bind address
+	    String rtp;
+	    String old = transParams["rtp_localip"];
+	    if (!lAddr.isNullAddr())
+		addIfaceAddr(rtp,lAddr.host(),m_cfgAddr);
+	    if (rtp)
+		transParams.setParam("rtp_localip",rtp);
+	    else
+		transParams.clearParam("rtp_localip");
+	    if (rtp != old)
+		Debug(&plugin,DebugAll,"Listener(%s,'%s') set rtp_localip='%s' [%p]",
+		    protoName(),lName(),rtp.c_str(),this);
+	    m_bindRtpLocalAddr = rtp;
+	}
+	SocketAddr addr;
 	Socket* sock = m_socket->accept(addr);
 	if (!sock) {
 	    Thread::idle();
 	    continue;
 	}
-	Debug(&plugin,DebugAll,"Listener(%s,'%s') '%s:%d' got conn from '%s:%d' [%p]",
-	    protoName(),c_str(),lAddr.host().safe(),lAddr.port(),
-	    addr.host().c_str(),addr.port(),this);
+	Debug(&plugin,DebugAll,"Listener(%s,'%s') '%s' got conn from '%s' [%p]",
+	    protoName(),lName(),lAddr.addr().c_str(),addr.addr().c_str(),this);
 	if (!sock->setBlocking(false)) {
 	    String tmp;
 	    Thread::errorString(tmp,sock->error());
 	    Debug(&plugin,DebugAll,
-		"Listener(%s,'%s') '%s:%d' failed to set non-blocking mode for '%s:%d'. %d '%s' [%p]",
-		protoName(),c_str(),lAddr.host().safe(),lAddr.port(),
-		addr.host().c_str(),addr.port(),sock->error(),tmp.c_str(),this);
+		"Listener(%s,'%s') '%s' failed to set non-blocking mode for '%s'. %d '%s' [%p]",
+		protoName(),lName(),lAddr.addr().c_str(),addr.addr().c_str(),
+		sock->error(),tmp.c_str(),this);
 	    delete sock;
 	    Thread::idle();
 	    continue;
@@ -3777,7 +3966,7 @@ void YateSIPTCPListener::run()
 	}
 	else {
 	    Debug(&plugin,DebugWarn,"Listener(%s,'%s') failed to start SSL [%p]",
-		protoName(),c_str(),this);
+		protoName(),lName(),this);
 	    delete sock;
 	}
     }
@@ -3791,9 +3980,11 @@ void YateSIPTCPListener::cleanup(bool final)
 	plugin.ep()->removeListener(this);
     if (final) {
 	if (!m_socket)
-	    DDebug(&plugin,DebugInfo,"Listener(%s,'%s') terminated [%p]",protoName(),c_str(),this);
+	    DDebug(&plugin,DebugInfo,"Listener(%s,'%s') terminated [%p]",
+		protoName(),lName(),this);
 	else
-	    Alarm(&plugin,"system",DebugWarn,"Listener(%s,'%s') abnormally terminated [%p]",protoName(),c_str(),this);
+	    Alarm(&plugin,"system",DebugWarn,"Listener(%s,'%s') abnormally terminated [%p]",
+		protoName(),lName(),this);
     }
     m_mutex.lock();
     const char* reason = 0;
@@ -3809,12 +4000,13 @@ void YateSIPTCPListener::stopListening(const char* reason, int level)
     if (!m_socket)
 	return;
     Lock lck(m_mutex);
+    m_local.clear();
     if (!m_socket)
 	return;
     if (!reason)
 	reason = m_reason;
     Debug(&plugin,level,"Listener(%s,'%s') stop listening reason='%s' [%p]",
-	protoName(),c_str(),reason,this);
+	protoName(),lName(),reason,this);
     YateSIPTransport::resetSocket(m_socket,0);
 }
 
@@ -3839,15 +4031,16 @@ YateUDPParty::YateUDPParty(YateSIPUDPTransport* trans, const SocketAddr& addr,
     }
     m_party = m_addr.host();
     m_partyPort = m_addr.port();
-    if (isAllIfacesAddr(m_local)) {
-	SocketAddr laddr;
+    if (SocketAddr::isNullAddr(m_local)) {
+	SocketAddr laddr(s_ipv6 ? SocketAddr::Unknown : SocketAddr::IPv4);
 	if (laddr.local(addr))
 	    m_local = laddr.host();
 	else
 	    m_local = "localhost";
     }
-    DDebug(&plugin,DebugAll,"YateUDPParty local %s:%d party %s:%d transport=%p [%p]",
-	m_local.c_str(),m_localPort,m_party.c_str(),m_partyPort,m_transport,this);
+    DDebug(&plugin,DebugAll,"YateUDPParty local '%s' party '%s' transport=%p [%p]",
+	SocketAddr::appendTo(m_local,m_localPort).c_str(),m_addr.addr().c_str(),
+	m_transport,this);
 }
 
 YateUDPParty::~YateUDPParty()
@@ -3898,10 +4091,8 @@ bool YateUDPParty::setParty(const URI& uri)
     m_addr.port(port);
     m_party = uri.getHost();
     m_partyPort = port;
-    DDebug(&plugin,DebugInfo,"New UDP party is %s:%d (%s:%d) [%p]",
-	m_party.c_str(),m_partyPort,
-	m_addr.host().c_str(),m_addr.port(),
-	this);
+    DDebug(&plugin,DebugInfo,"New UDP party is %s (%s) [%p]",
+	SocketAddr::appendTo(m_party,m_partyPort).c_str(),m_addr.addr().c_str(),this);
     return true;
 }
 
@@ -3932,8 +4123,9 @@ YateTCPParty::YateTCPParty(YateSIPTCPTransport* trans)
 	trans->resetParty(this,true);
     }
     updateAddrs();
-    DDebug(&plugin,DebugAll,"YateTCPParty local %s:%d party %s:%d transport=%p [%p]",
-	m_local.c_str(),m_localPort,m_party.c_str(),m_partyPort,m_transport,this);
+    DDebug(&plugin,DebugAll,"YateTCPParty local %s party %s transport=%p [%p]",
+	SocketAddr::appendTo(m_local,m_localPort).c_str(),
+	SocketAddr::appendTo(m_party,m_partyPort).c_str(),m_transport,this);
 }
 
 YateTCPParty::~YateTCPParty()
@@ -3998,10 +4190,13 @@ void YateTCPParty::updateAddrs()
     int lport = m_transport->local().port();
     String raddr = m_transport->remote().host();
     int rport = m_transport->remote().port();
-    SocketAddr remote(PF_INET);
+    String transLocalAddr = m_transport->localAddr();
+    SocketAddr remote;
     if (raddr)
 	remote = m_transport->remote();
     else {
+	if (!s_ipv6)
+	    remote.assign(AF_INET);
 	remote.host(m_transport->remoteAddr());
 	remote.port(m_transport->remotePort());
 	raddr = remote.host();
@@ -4010,10 +4205,15 @@ void YateTCPParty::updateAddrs()
     m_transport->unlock();
     if (!laddr) {
 	SocketAddr addr;
-	if (addr.local(remote))
+	if (transLocalAddr && addr.host(transLocalAddr))
 	    laddr = addr.host();
-	else
-	    laddr = "localhost";
+	if (!laddr) {
+	    addr.clear();
+	    if (addr.local(remote))
+		laddr = addr.host();
+	    else
+		laddr = "localhost";
+	}
     }
     if (lport <= 0)
 	lport = sipPort(!m_transport->tls());
@@ -4133,7 +4333,7 @@ bool YateSIPEngine::hasActiveTransaction(YateSIPTransport* trans)
     for (ObjList* l = m_transList.skipNull(); l; l = l->skipNext()) {
 	SIPTransaction* t = static_cast<SIPTransaction*>(l->get());
 	if (t->isActive() && t->initialMessage() && t->initialMessage()->getParty() &&
-	    trans == t->initialMessage()->getParty()->getTransport()	    )
+	    trans == t->initialMessage()->getParty()->getTransport())
 	    return true;
     }
     return false;
@@ -4215,7 +4415,7 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
 	m.addParam("ip_port",port);
 	m.addParam("ip_transport",message->getParty()->getProtoName());
 	if (raddr)
-	    m.addParam("address",raddr + ":" + port);
+	    m.addParam("address",SocketAddr::appendTo(raddr,rport));
 	// a dialogless INVITE could create a new call
 	m.addParam("newcall",String::boolText((message->method == YSTRING("INVITE")) && !message->getParam("To","tag")));
 	const MimeHeaderLine* hl = message->getHeader("From");
@@ -4326,7 +4526,7 @@ bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port
 {
     if (message->isAnswer())
 	return false;
-    DDebug(&plugin,DebugAll,"YateSIPEndPoint::buildParty(%p,'%s',%d,%p)",
+    Debug(&plugin,DebugAll,"YateSIPEndPoint::buildParty(%p,'%s',%d,%p)",
 	message,host,port,line);
     if (line && line->setSipParty(message,line))
 	return true;
@@ -4352,14 +4552,18 @@ bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port
     }
     if (port <= 0)
 	port = 5060;
-    SocketAddr addr(AF_INET);
+    trans->lock();
+    int f = trans->local().family();
+    trans->unlock();
+    SocketAddr addr(f);
     if (!addr.host(host)) {
 	TelEngine::destruct(trans);
-	Debug(&plugin,DebugWarn,"Error resolving name '%s'",host);
+	Debug(&plugin,DebugWarn,"Error resolving name '%s' (address family '%s')",
+	    host,SocketAddr::lookupFamily(f));
 	return false;
     }
     addr.port(port);
-    DDebug(&plugin,DebugAll,"built addr: %s:%d",addr.host().c_str(),addr.port());
+    DDebug(&plugin,DebugAll,"built addr: %s",addr.addr().c_str());
     YateUDPParty* party = new YateUDPParty(trans,addr);
     TelEngine::destruct(trans);
     message->setParty(party);
@@ -4438,17 +4642,30 @@ bool YateSIPEndPoint::setupUdpTransport(const String& name, bool enabled,
 	return false;
     YateSIPUDPTransport* rd = findUdpTransport(name);
     if (rd) {
-	const char* addr = params.getValue("addr","0.0.0.0");
-	int port = params.getIntValue("port",5060);
-	bool stop = enabled && !rd->addrWouldChange(rd,true,addr,port);
-	if (stop)
+	if (enabled) {
+	    reason = 0;
+	    bool ipv6 = params.getBoolValue("ipv6");
+	    if (rd->ipv6() == ipv6 && (!rd->ipv6() || rd->ipv6Support() == s_ipv6)) {
+		const String& addr = params["addr"];
+		int port = params.getIntValue("port",5060);
+		if (rd->addrWouldChange(rd,addr,port))
+		    reason = "Address changed";
+	    }
+	    else if (rd->ipv6() == ipv6)
+		reason = "IPv6 support changed";
+	    else
+		reason = "Address family changed";
+	}
+	else if (!reason)
+	    reason = "Disabled";
+	if (!reason)
 	    rd->init(params,defs,false);
 	else {
-	    removeUdpTransport(name,enabled ? "Address changed" : (reason ? reason : "Disabled"));
+	    removeUdpTransport(name,reason);
 	    rd->deref();
 	}
 	TelEngine::destruct(rd);
-	if (stop)
+	if (!(enabled && reason))
 	    return true;
     }
     if (!enabled)
@@ -4470,7 +4687,8 @@ bool YateSIPEndPoint::removeUdpTransport(const String& name, const char* reason)
     YateSIPUDPTransport* rd = findUdpTransport(name);
     if (!rd)
 	return false;
-    Debug(&plugin,DebugAll,"Removing udp transport '%s': %s",name.c_str(),reason);
+    Debug(&plugin,DebugInfo,"Listener(%s,'%s') stop listening reason='%s' [%p]",
+	rd->protoName(),rd->lName(),reason,rd);
     removeTransport(rd,false);
     // Terminate channels, disconnect lines
     plugin.transportTerminated(rd);
@@ -4537,6 +4755,8 @@ void YateSIPEndPoint::clearUdpTransports(const char* reason)
 	if (!trans)
 	    break;
 	lock.drop();
+	Debug(&plugin,DebugInfo,"Listener(%s,'%s') stop listening reason='%s' [%p]",
+	    trans->protoName(),trans->lName(),reason,(YateSIPUDPTransport*)trans);
 	removeTransport(trans);
 	trans->terminate(reason);
 	trans->deref();
@@ -4951,17 +5171,21 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     }
     bool natChanged = false;
     if (msg.getBoolValue(YSTRING("nat_support"),s_auto_nat && nat)) {
-	Debug(&plugin,DebugInfo,"Registration NAT detected: private '%s:%d' public '%s:%d'",
-	    addr.getHost().c_str(),addr.getPort(),raddr.c_str(),rport);
-	String tmp(addr.getHost());
+	String tmp;
 	if (addr.getPort())
-	    tmp << ":" << addr.getPort();
+	    SocketAddr::appendTo(tmp,addr.getHost(),addr.getPort());
+	else
+	    tmp = addr.getHost();
+	String r;
+	SocketAddr::appendTo(r,raddr,rport);
+	Debug(&plugin,DebugInfo,"Registration NAT detected: private '%s' public '%s'",
+	    tmp.c_str(),r.c_str());
 	msg.addParam("reg_nat_addr",tmp);
 	int pos = data.find(tmp);
 	if (pos >= 0) {
 	    int len = tmp.length();
 	    tmp.clear();
-	    tmp << data.substr(0,pos) << raddr << ":" << rport << data.substr(pos + len);
+	    tmp << data.substr(0,pos) << r << data.substr(pos + len);
 	    data = tmp;
 	    natChanged = true;
 	}
@@ -5148,10 +5372,9 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     tmp = maxf-1;
     m.addParam("antiloop",tmp);
 
-    String port(portNum);
-    m.addParam("address",host + ":" + port);
+    m.addParam("address",SocketAddr::appendTo(host,portNum));
     m.addParam("ip_host",host);
-    m.addParam("ip_port",port);
+    m.addParam("ip_port",String(portNum));
     m.addParam("ip_transport",message->getParty()->getProtoName());
     m.addParam("sip_uri",t->getURI());
     m.addParam("sip_callid",t->getCallID());
@@ -5390,6 +5613,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       m_honorDtmfDetect(s_honorDtmfDetect),
       m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0), m_revert("")
 {
+    m_ipv6 = s_ipv6;
     setSdpDebug(this,this);
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
@@ -5398,7 +5622,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m_callid = m_tr->getCallID();
     m_dialog = *m_tr->initialMessage();
     m_tr->initialMessage()->getParty()->getAddr(m_host,m_port,false);
-    m_address << m_host << ":" << m_port;
+    SocketAddr::appendTo(m_address,m_host,m_port);
     filterDebug(m_address);
     m_uri = m_tr->initialMessage()->getHeader("From");
     m_uri.parse();
@@ -5564,6 +5788,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_honorDtmfDetect(s_honorDtmfDetect),
       m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0), m_revert("")
 {
+    m_ipv6 = msg.getBoolValue(YSTRING("ipv6_support"),s_ipv6);
     setSdpDebug(this,this);
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
@@ -5595,7 +5820,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	    if (uri.find('@') < 0 && !uri.startsWith("tel:")) {
 		if (!uri.startsWith("sip:"))
 		    tmp = "sip:";
-		tmp << uri << "@" << line->domain();
+		tmp << uri << "@";
+		SocketAddr::appendAddr(tmp,line->domain());
 	    }
 	    m_externalAddr = line->getLocalAddr();
 	}
@@ -5665,7 +5891,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     if (plugin.ep()->engine()->prack())
 	m->addHeader("Supported","100rel");
     m->getParty()->getAddr(m_host,m_port,false);
-    m_address << m_host << ":" << m_port;
+    SocketAddr::appendTo(m_address,m_host,m_port);
     filterDebug(m_address);
     m_dialog = *m;
     if (s_privacy)
@@ -5842,8 +6068,8 @@ void YateSIPConnection::hangup()
 		SIPMessage* m = new SIPMessage("CANCEL",m_uri);
 		setSipParty(m,plugin.findLine(m_line),true,m_host,m_port);
 		if (!m->getParty())
-		    Debug(this,DebugWarn,"Could not create party for '%s:%d' [%p]",
-			m_host.c_str(),m_port,this);
+		    Debug(this,DebugWarn,"Could not create party for '%s' [%p]",
+			SocketAddr::appendTo(m_host,m_port).c_str(),this);
 		else {
 		    const SIPMessage* i = m_tr->initialMessage();
 		    m->copyHeader(i,"Via");
@@ -5905,8 +6131,8 @@ SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
     m->addRoutes(m_routes);
     setSipParty(m,plugin.findLine(m_line),true,m_host,m_port);
     if (!m->getParty()) {
-	Debug(this,DebugWarn,"Could not create party for '%s:%d' [%p]",
-	    m_host.c_str(),m_port,this);
+	Debug(this,DebugWarn,"Could not create party for '%s' [%p]",
+	    SocketAddr::appendTo(m_host,m_port).c_str(),this);
 	m->destruct();
 	return 0;
     }
@@ -5950,7 +6176,8 @@ void YateSIPConnection::updateTarget(const SIPMessage* msg)
     if (party) {
 	party->getAddr(m_host,m_port,false);
 	setParty(party);
-	m_address = m_host + ":" + String(m_port);
+	m_address.clear();
+	SocketAddr::appendTo(m_address,m_host,m_port);
     }
 }
 
@@ -6242,7 +6469,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    if (hl) {
 		const NamedString* par = hl->getParam("received");
 		if (par && *par) {
-		    m_externalAddr = *par;
+		    getAddrCheckIPv6(m_externalAddr,*par);
 		    Debug(this,DebugInfo,"Detected local address '%s' [%p]",
 			m_externalAddr.c_str(),this);
 		}
@@ -6402,7 +6629,8 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	MimeSdpBody* sdp = getSdpBody(msg->body);
 	if (sdp) {
 	    DDebug(this,DebugInfo,"YateSIPConnection got reINVITE SDP [%p]",this);
-	    setMedia(plugin.parser().parse(sdp,m_rtpAddr,m_rtpMedia,String::empty(),m_rtpForward));
+	    setMedia(plugin.parser().parse(sdp,m_rtpAddr,m_rtpMedia,String::empty(),
+		m_rtpForward));
 	    // guess if the call comes from behind a NAT
 	    if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
 		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
@@ -6493,11 +6721,8 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 		bool addrChg = false;
 		SIPParty* party = t->initialMessage()->getParty();
 		if (party) {
-		    String host;
-		    int port;
-		    party->getAddr(host,port,false);
 		    String addr;
-		    addr << host << ":" << port;
+		    party->appendAddr(addr,false);
 		    if (addr != m_address) {
 			msg.setParam("address",addr);
 			msg.addParam("address_old",m_address);
@@ -7664,7 +7889,8 @@ SIPMessage* YateSIPLine::buildRegister(int expires) const
 {
     String exp(expires);
     String tmp;
-    tmp << "sip:" << m_registrar;
+    tmp << "sip:";
+    SocketAddr::appendAddr(tmp,m_registrar);
     SIPMessage* m = new SIPMessage("REGISTER",tmp);
     setSipParty(m,this);
     if (!m->getParty()) {
@@ -7678,14 +7904,13 @@ SIPMessage* YateSIPLine::buildRegister(int expires) const
 	tmp = MimeHeaderLine::quote(m_display) + " ";
     tmp << "<sip:";
     tmp << m_username << "@";
-    Lock lckParty(m->getParty()->mutex());
-    tmp << m->getParty()->getLocalAddr() << ":";
-    tmp << m->getParty()->getLocalPort() << ">";
-    lckParty.drop();
+    m->getParty()->appendAddr(tmp,true);
+    tmp << ">";
     m->addHeader("Contact",tmp);
     m->addHeader("Expires",exp);
     tmp = "<sip:";
-    tmp << m_username << "@" << domain() << ">";
+    tmp << m_username << "@";
+    SocketAddr::appendAddr(tmp,domain()) << ">";
     m->addHeader("To",tmp);
     if (m_callid)
 	m->addHeader("Call-ID",m_callid);
@@ -7718,7 +7943,7 @@ void YateSIPLine::login()
     buildParty(false);
     if (m_localAddr && !m_localDetect) {
 	if (!m_localPort)
-	    m_localPort = 5060;
+	    m_localPort = sipPort(protocol() != Tls);
 	SIPParty* p = party();
 	if (p) {
 	    p->setAddr(m_localAddr,m_localPort,true);
@@ -7845,8 +8070,8 @@ bool YateSIPLine::process(SIPEvent* ev)
 	    if (msg->getParty())
 		msg->getParty()->getAddr(m_partyAddr,m_partyPort,false);
 	    setValid(true);
-	    Debug(&plugin,DebugCall,"SIP line '%s' logon success to %s:%d",
-		c_str(),m_partyAddr.c_str(),m_partyPort);
+	    Debug(&plugin,DebugCall,"SIP line '%s' logon success to %s",
+		c_str(),SocketAddr::appendTo(m_partyAddr,m_partyPort).c_str());
 	    break;
 	default:
 	    // detect local address even from failed attempts - helps next time
@@ -7869,8 +8094,8 @@ void YateSIPLine::detectLocal(const SIPMessage* msg)
     MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(msg->getHeader("Via"));
     if (hl) {
 	const NamedString* par = hl->getParam("received");
-	if (par && *par)
-	    laddr = *par;
+	if (par)
+	    getAddrCheckIPv6(laddr,*par);
 	par = hl->getParam("rport");
 	if (par) {
 	    int port = par->toInteger(0,10);
@@ -7885,8 +8110,8 @@ void YateSIPLine::detectLocal(const SIPMessage* msg)
 	lport = msg->getParty()->getLocalPort();
     lckParty.drop();
     if ((laddr != m_localAddr) || (lport != m_localPort)) {
-	Debug(&plugin,DebugInfo,"Detected local address %s:%d for SIP line '%s'",
-	    laddr.c_str(),lport,c_str());
+	Debug(&plugin,DebugInfo,"Detected local address %s for SIP line '%s'",
+	    SocketAddr::appendTo(laddr,lport).c_str(),c_str());
 	m_localAddr = laddr;
 	m_localPort = lport;
 	// since local address changed register again in 2 seconds
@@ -7910,8 +8135,8 @@ void YateSIPLine::keepalive()
     YateUDPParty* udp = static_cast<YateUDPParty*>(m_party);
     YateSIPUDPTransport* t = static_cast<YateSIPUDPTransport*>(m_party->getTransport());
     if (t) {
-	Debug(&plugin,DebugAll,"Sending UDP keepalive to %s:%d for '%s'",
-	    udp->addr().host().c_str(),udp->addr().port(),c_str());
+	Debug(&plugin,DebugAll,"Sending UDP keepalive to %s for '%s'",
+	    udp->addr().addr().c_str(),c_str());
 	t->send("\r\n",2,udp->addr());
     }
     m_keepalive = m_alive ? m_alive*(int64_t)1000000 + Time::now() : 0;
@@ -7970,38 +8195,20 @@ bool YateSIPLine::update(const Message& msg)
 	    tmp.clear();
 	int port = 0;
 	if (tmp) {
-	    int sep = tmp.find(':');
-	    if (sep > 0) {
-		port = tmp.substr(sep+1).toInteger(5060);
-		tmp = tmp.substr(0,sep);
-	    }
-	    else if (sep < 0)
-		port = 5060;
+	    SocketAddr::split(tmp,tmp,port);
+	    if (!port)
+		port = sipPort(protocol() != Tls);
 	}
 	chg = change(m_localAddr,tmp) || chg;
 	chg = change(m_localPort,port) || chg;
     }
     String raddr;
     int rport = 0;
-    tmp = msg.getValue(YSTRING("outbound"));
-    if (tmp) {
-	int sep = tmp.find(':');
-	if (sep > 0) {
-	    rport = tmp.substr(sep + 1).toInteger(0);
-	    raddr = tmp.substr(0,sep);
-	}
-	else
-	    raddr = tmp;
-    }
-    if (!raddr) {
-	int sep = m_registrar.find(':');
-	if (sep > 0) {
-	    rport = m_registrar.substr(sep + 1).toInteger(0);
-	    raddr = m_registrar.substr(0,sep);
-	}
-	else
-	    raddr = m_registrar;
-    }
+    const String& out = msg[YSTRING("outbound")];
+    if (out)
+	SocketAddr::split(out,raddr,rport);
+    if (!raddr && m_registrar)
+	SocketAddr::split(m_registrar,raddr,rport);
     if (!raddr)
 	raddr = m_transRemoteAddr;
     if (rport <= 0)
@@ -8392,6 +8599,11 @@ void SIPDriver::initialize()
     s_update_target = s_cfg.getBoolValue("general","update_target",false);
     s_preventive_bye = s_cfg.getBoolValue("general","preventive_bye",true);
     s_ignoreVia = s_cfg.getBoolValue("general","ignorevia",true);
+    s_ipv6 = s_cfg.getBoolValue("general","ipv6_support",false);
+    if (s_ipv6 && !SocketAddr::supports(SocketAddr::IPv6)) {
+	Debug(this,DebugConf,"Ignoring IPv6 support enable: not supported");
+	s_ipv6 = false;
+    }
     s_printMsg = s_cfg.getBoolValue("general","printmsg",true);
     s_tcpMaxpkt = getMaxpkt(s_cfg.getIntValue("general","tcp_maxpkt",4096),4096);
     s_lineKeepTcpOffline = s_cfg.getBoolValue("general","line_keeptcpoffline",!Engine::clientMode());
@@ -8765,9 +8977,9 @@ void SIPDriver::msgStatusTransports(Message& msg, bool showUdp, bool showTcp, bo
 	    Lock lck(t);
 	    buf.append(String(n),",") << "=" << t->protoName() << "|";
 	    buf << YateSIPTransport::statusName(t->status()) << "|";
-	    buf << t->local().host() << ":" << t->local().port() << "|";
+	    buf << t->local().addr() << "|";
 	    if (tcp) {
-		buf << t->remote().host() << ":" << t->remote().port() << "|";
+		buf << t->remote().addr() << "|";
 		buf << String::boolText(tcp->outgoing());
 	    }
 	    else
@@ -8801,9 +9013,11 @@ void SIPDriver::msgStatusListener(Message& msg)
 	    if (!details)
 		continue;
 	    Lock lck(udp);
-	    buf.append(udp->toString(),",") << "=" << udp->protoName() <<"|";
-	    buf << udp->local().host() << ":" << udp->local().port() << "|";
-	    buf << (udp->status() == YateSIPTransport::Connected ? "Listening|" : "Idle|");
+	    buf.append(udp->toString(),",") << "=" << udp->protoName() << "|";
+	    if (udp->status() == YateSIPTransport::Connected)
+		buf << udp->local().addr() << "|Listening|";
+	    else
+		SocketAddr::appendTo(buf,udp->address(),udp->port()) << "|Idle|";
 	    buf << udp->m_reason;
 	}
 	if (details) {
@@ -8813,8 +9027,10 @@ void SIPDriver::msgStatusListener(Message& msg)
 		buf.append(l->toString(),",") << "=";
 		buf << l->protoName() << "|";
 		Lock lck(l->m_mutex);
-		buf << l->address() << ":" << l->port() << "|";
-		buf << (l->listening() ? "Listening|" : "Idle|");
+		if (l->listening())
+		    buf << l->local().addr() << "|Listening|";
+		else
+		    SocketAddr::appendTo(buf,l->address(),l->port()) << "|Idle|";
 		buf << l->m_reason;
 	    }
 	}
@@ -8842,9 +9058,9 @@ void SIPDriver::msgStatusTransport(Message& msg, const String& id)
 	msg.retValue() << ",protocol=" << t->protoName();
 	msg.retValue() << ",status=" << YateSIPTransport::statusName(t->status());
 	msg.retValue() << ",statustime=" << (msg.msgTime().sec() - t->m_statusChgTime);
-	msg.retValue() << ",local=" << t->local().host() << ":" << t->local().port();
+	msg.retValue() << ",local=" << t->local().addr();
 	if (tcp) {
-	    msg.retValue() << ",remote=" << t->remote().host() << ":" << t->remote().port();
+	    msg.retValue() << ",remote=" << t->remote().addr();
 	    msg.retValue() << ",outgoing=" << String::boolText(tcp->outgoing());
 	}
 	String lines;

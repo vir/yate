@@ -136,8 +136,8 @@ SIPMessage::SIPMessage(const SIPMessage* original, const SIPMessage* answer)
 	String tmp;
 	tmp << version << "/" << getParty()->getProtoName();
 	if (getParty()) {
-	    Lock lock(getParty()->mutex());
-	    tmp << " " << getParty()->getLocalAddr() << ":" << getParty()->getLocalPort();
+	    tmp << " ";
+	    getParty()->appendAddr(tmp,true);
 	}
 	hl = new MimeHeaderLine("Via",tmp);
 	header.append(hl);
@@ -229,7 +229,8 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!hl) {
 	String tmp;
 	tmp << version << "/" << getParty()->getProtoName();
-	tmp << " " << partyLAddr << ":" << partyLPort;
+	tmp << " ";
+	SocketAddr::appendTo(tmp,partyLAddr,partyLPort);
 	hl = new MimeHeaderLine("Via",tmp);
 	if (isReliable() && 0 == (flags & NoConnReuse))
 	    hl->setParam("alias");
@@ -260,7 +261,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	    String tmp = "<sip:";
 	    if (user)
 		tmp << String::uriEscape(user,'@',"+?&") << "@";
-	    tmp << domain << ">";
+	    SocketAddr::appendAddr(tmp,domain) << ">";
 	    hl = new MimeHeaderLine("From",tmp);
 	    header.append(hl);
 	}
@@ -316,8 +317,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	if (tmp)
 	    tmp = tmp.uriEscape('@',"+?&") + "@";
 	tmp = "<sip:" + tmp;
-	tmp << partyLAddr << ":";
-	tmp << partyLPort << ">";
+	SocketAddr::appendTo(tmp,partyLAddr,partyLPort) << ">";
 	addHeader("Contact",tmp);
     }
 

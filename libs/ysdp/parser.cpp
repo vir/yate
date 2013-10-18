@@ -103,7 +103,14 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 	if (tmp.startSkip("IN IP4")) {
 	    tmp.trimBlanks();
 	    // Handle the case media is muted
-	    if (tmp == YSTRING("0.0.0.0"))
+	    if (tmp == SocketAddr::ipv4NullAddr())
+		tmp.clear();
+	    addr = tmp;
+	}
+	else if (tmp.startSkip("IN IP6")) {
+	    tmp.trimBlanks();
+	    // Handle the case media is muted
+	    if (tmp == SocketAddr::ipv6NullAddr())
 		tmp.clear();
 	    addr = tmp;
 	}

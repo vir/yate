@@ -643,6 +643,7 @@ protected:
     String m_host;
     bool m_secure;
     int m_rfc2833;                       // Payload of RFC 2833 for remote party
+    bool m_ipv6;                         // IPv6 support
 
 private:
     DebugEnabler* m_enabler;             // Debug enabler used for output

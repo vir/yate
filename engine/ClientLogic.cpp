@@ -7682,22 +7682,47 @@ bool DefaultLogic::callIncoming(Message& msg, const String& dest)
 bool DefaultLogic::validateCall(NamedList& params, Window* wnd)
 {
     const String& ns = params[YSTRING("target")];
-    if (params[YSTRING("account")] || (ns.find('/') > 0))
+    int pos = ns.find('/');
+    if (pos > 0) {
+	params.clearParam(YSTRING("account"));
+	params.clearParam(YSTRING("protocol"));
+	params.clearParam(YSTRING("line"));
 	return true;
-    else if (params[YSTRING("protocol")]) {
-	if (ns.find('@') <= 0 && ns.find(':') <= 0) {
-	    // set in client the label
-	    Client::self()->setText(YSTRING("callto_hint"),YSTRING("This is not a valid protocol URI."),false,wnd);
-	    return false;
+    }
+    bool accountCleared = false;
+    for (unsigned int i = 0; i < ns.length(); i++) {
+	char c = ns[i];
+	if (c == '@' || c == ':') {
+	    NamedString* tmp = params.getParam(YSTRING("account"));
+	    if (tmp) {
+		accountCleared = true;
+		params.clearParam(tmp);
+		params.clearParam(YSTRING("line"));
+	    }
+	    else {
+		tmp = params.getParam(YSTRING("line"));
+		if (tmp) {
+		    accountCleared = true;
+		    params.clearParam(tmp);
+		}
+	    }
+	    break;
 	}
     }
-    else {
-	// set in client the label
-	Client::self()->setText(YSTRING("callto_hint"),YSTRING("You need a VoIP account to make calls."),false,wnd);
-	return false;
+    if (params[YSTRING("account")])
+	return true;
+    const char* error = 0;
+    if (params[YSTRING("protocol")]) {
+	if (ns.find('@') <= 0 && ns.find(':') <= 0)
+	    error = "This is not a valid protocol URI.";
     }
-
-    return true;
+    else if (accountCleared)
+	error = "Invalid target for selected account.";
+    else
+	error = "You need a VoIP account to make calls.";
+    if (error)
+	Client::self()->setText(YSTRING("callto_hint"),error,false,wnd);
+    return error == 0;
 }
 
 // Start an outgoing call

@@ -78,7 +78,7 @@ Source: "Release\yate-qt4.exe"; DestDir: "{app}"; Flags: replacesameversion; Com
 Source: "Runtimes\qtcore4.dll"; DestDir: "{app}"; Components: client\qt\run
 Source: "Runtimes\qtgui4.dll"; DestDir: "{app}"; Components: client\qt\run
 Source: "Runtimes\qtxml4.dll"; DestDir: "{app}"; Components: client\qt\run
-Source: "Runtimes\imageformats\qgif4.dll"; DestDir: "{app}\imageformats"; Components: client\qt\run
+Source: "Runtimes\imageformats\qgif4.dll"; DestDir: "{app}\imageformats"; Components: client\qt\run; Flags: skipifsourcedoesntexist
 Source: "Release\yate-service.exe"; DestDir: "{app}"; Flags: replacesameversion; Components: server
 Source: "Release\yate-console.exe"; DestDir: "{app}"; Flags: replacesameversion; Components: debug
 

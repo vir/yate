@@ -1,4 +1,4 @@
-yate (4.3.1~svn5673) UNRELEASED; urgency=low
+yate (4.3.1~svn5674) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -770,8 +770,10 @@ yate (4.3.1~svn5673) UNRELEASED; urgency=low
     Set scope id when changing rtp addresses to avoid comparison
     mismatch.  + Handle and set IPv6 addresses in SDP.  + Added SIP IPv6
     support.
+  * Updated to SVN revision 5674: + Fixed some Windows build
+    dependencies and packaging problems.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 19 Oct 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 20 Oct 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

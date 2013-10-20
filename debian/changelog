@@ -1,4 +1,4 @@
-yate (4.3.1~svn5674) UNRELEASED; urgency=low
+yate (5.0.1~svn5678) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -772,8 +772,11 @@ yate (4.3.1~svn5674) UNRELEASED; urgency=low
     support.
   * Updated to SVN revision 5674: + Fixed some Windows build
     dependencies and packaging problems.
+  * Updated to SVN revision 5678: + Added larger size images in icon.  +
+    Bumped version to 5.0.0 release.  + Bumped version to 5.0.1
+    development.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 20 Oct 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Mon, 21 Oct 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

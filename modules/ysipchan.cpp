@@ -944,8 +944,12 @@ public:
 	{ return m_dialog; }
     inline void setStatus(const char *stat, int state = -1)
 	{ status(stat); if (state >= 0) m_state = state; }
-    inline void setReason(const char* str = "Request Terminated", int code = 487)
-	{ m_reason = str; m_reasonCode = code; }
+    inline void setReason(const char* str = "Request Terminated", int code = 487,
+	Mutex* mtx = 0) {
+	    Lock lck(mtx);
+	    m_reason = str;
+	    m_reasonCode = code;
+	}
     inline SIPTransaction* getTransaction() const
 	{ return m_tr; }
     inline const String& callid() const
@@ -6046,13 +6050,14 @@ void YateSIPConnection::hangup()
     Debug(this,DebugAll,"YateSIPConnection::hangup() state=%d trans=%p error='%s' code=%d reason='%s' [%p]",
 	m_state,m_tr,error,m_reasonCode,m_reason.c_str(),this);
     setMedia(0);
+    String res = m_reason;
     mylock.drop();
     Message* m = message("chan.hangup");
-    if (m_reason)
-	m->setParam("reason",m_reason);
+    if (res)
+	m->setParam("reason",res);
     Engine::enqueue(m);
     if (!error)
-	error = m_reason.c_str();
+	error = res.c_str();
     bool sendBye = true;
     switch (m_state) {
 	case Cleared:
@@ -6083,7 +6088,7 @@ void YateSIPConnection::hangup()
 		    String tmp;
 		    tmp << i->getCSeq() << " CANCEL";
 		    m->addHeader("CSeq",tmp);
-		    if (m_reason == YSTRING("pickup")) {
+		    if (res == YSTRING("pickup")) {
 			MimeHeaderLine* hl = new MimeHeaderLine("Reason","SIP");
 			hl->setParam("cause","200");
 			hl->setParam("text","\"Call completed elsewhere\"");
@@ -6103,12 +6108,12 @@ void YateSIPConnection::hangup()
     if (sendBye && m_byebye && m_dialog.localTag && m_dialog.remoteTag) {
 	SIPMessage* m = createDlgMsg("BYE");
 	if (m) {
-	    if (m_reason) {
+	    if (res) {
 		// FIXME: add SIP and Q.850 cause codes, set the proper reason
 		MimeHeaderLine* hl = new MimeHeaderLine("Reason","SIP");
 		if ((m_reasonCode >= 300) && (m_reasonCode <= 699) && (m_reasonCode != 487))
 		    hl->setParam("cause",String(m_reasonCode));
-		hl->setParam("text",MimeHeaderLine::quote(m_reason));
+		hl->setParam("text",MimeHeaderLine::quote(res));
 		m->addHeader(hl);
 	    }
 	    paramMutex().lock();
@@ -6342,11 +6347,11 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	updateTags = false;
 	m_cancel = false;
 	m_byebye = false;
+	setReason(msg->reason,code,driver());
 	paramMutex().lock();
 	parameters().clearParams();
 	parameters().addParam("cause_sip",String(code));
 	parameters().addParam("reason_sip",msg->reason);
-	setReason(msg->reason,code);
 	if (msg->body) {
 	    paramMutex().unlock();
 	    Message tmp("isup.decode");
@@ -6402,7 +6407,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	parameters().setParam("cause_sip","408");
 	parameters().clearParam("reason_sip");
 	paramMutex().unlock();
-	setReason("Request Timeout",code);
+	setReason("Request Timeout",code,driver());
 	hangup();
     }
     else if (!m_hungup && code >= 100) {
@@ -6500,8 +6505,8 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    m_tr->deref();
 	    m_tr = 0;
 	}
-	lock.drop();
 	setReason("",0);
+	lock.drop();
 	setStatus("answered",Established);
 	Message *m = message("call.answered");
 	copySipHeaders(*m,*msg);
@@ -6906,7 +6911,7 @@ void YateSIPConnection::doBye(SIPTransaction* t)
     if (hl) {
 	const NamedString* text = hl->getParam("text");
 	if (text)
-	    m_reason = MimeHeaderLine::unquote(*text);
+	    setReason(MimeHeaderLine::unquote(*text),m_reasonCode,driver());
 	// FIXME: add SIP and Q.850 cause codes
     }
     t->setResponse(m);
@@ -7126,9 +7131,9 @@ void YateSIPConnection::disconnected(bool final, const char *reason)
     if (reason) {
 	int code = lookup(reason,dict_errors);
 	if (code >= 300 && code <= 699)
-	    setReason(lookup(code,SIPResponses,reason),code);
+	    setReason(lookup(code,SIPResponses,reason),code,driver());
 	else
-	    setReason(reason);
+	    setReason(reason,487,driver());
     }
     Channel::disconnected(final,reason);
 }
@@ -7294,10 +7299,8 @@ bool YateSIPConnection::msgDrop(Message& msg, const char* reason)
     if (!Channel::msgDrop(msg,reason))
 	return false;
     int code = lookup(reason,dict_errors);
-    if (code >= 300 && code <= 699) {
-	m_reasonCode = code;
-	m_reason = lookup(code,SIPResponses,reason);
-    }
+    if (code >= 300 && code <= 699)
+	setReason(lookup(code,SIPResponses,reason),code,driver());
     return true;
 }
 
@@ -7398,9 +7401,9 @@ void YateSIPConnection::endDisconnect(const Message& msg, bool handled)
     if (!TelEngine::null(reason)) {
 	int code = reason->toInteger(dict_errors);
 	if (code >= 300 && code <= 699)
-	    setReason(lookup(code,SIPResponses,*reason),code);
+	    setReason(lookup(code,SIPResponses,*reason),code,driver());
 	else
-	    setReason(*reason,m_reasonCode);
+	    setReason(*reason,m_reasonCode,driver());
     }
     const char* sPrefix = msg.getValue(YSTRING("osip-prefix"));
     const char* mPrefix = msg.getValue(YSTRING("message-prefix"));

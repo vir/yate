@@ -6554,12 +6554,15 @@ bool YateSIPConnection::process(SIPEvent* ev)
 // Process secondary transaction (reINVITE)  belonging to this connection
 bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg, int code)
 {
+    Lock mylock(driver());
     if (ev->getState() == SIPTransaction::Cleared) {
 	bool fatal = (m_reInviting == ReinviteRequest);
 	detachTransaction2();
 	if (fatal) {
 	    setReason("Request Timeout",408);
+	    mylock.drop();
 	    hangup();
+	    mylock.acquire(driver());
 	}
 	else {
 	    Message* m = message("call.update");
@@ -6610,6 +6613,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 		}
 		TelEngine::destruct(lst);
 		setReason("Media information changed during reINVITE",415);
+		mylock.drop();
 		hangup();
 		return false;
 	    }
@@ -6617,6 +6621,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	}
 	else
 	    setReason(msg->reason,code);
+	mylock.drop();
 	hangup();
 	return false;
     }
@@ -6670,6 +6675,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
     }
     detachTransaction2();
     m_revert.clearParams();
+    mylock.drop();
     Engine::enqueue(m);
     return false;
 }

@@ -6038,11 +6038,15 @@ void YateSIPConnection::hangup()
 {
     if (m_hungup)
 	return;
+    Lock mylock(driver());
+    if (m_hungup)
+	return;
     m_hungup = true;
     const char* error = lookup(m_reasonCode,dict_errors);
     Debug(this,DebugAll,"YateSIPConnection::hangup() state=%d trans=%p error='%s' code=%d reason='%s' [%p]",
 	m_state,m_tr,error,m_reasonCode,m_reason.c_str(),this);
     setMedia(0);
+    mylock.drop();
     Message* m = message("chan.hangup");
     if (m_reason)
 	m->setParam("reason",m_reason);

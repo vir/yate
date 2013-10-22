@@ -191,7 +191,7 @@ sub install($$$;$;$$) {
 
 	# filter-name and filter-value are optional.
 	if ($filter_name) {
-	    $filter_value = '' if (!$filter_value);
+	    $filter_value = '' unless defined $filter_value;
 	    $query .= sprintf(':%s:%s', $self->escape($filter_name, ':'), $self->escape($filter_value, ':'));
 	}
 
@@ -449,7 +449,7 @@ sub param($$;$) {
 	return undef;
     }
 
-    if ($value) {
+    if (defined $value) {
 	$self->{'params'}->{$key} = $value;
     } elsif (exists($self->{'params'}->{$key})) {
 	return $self->{'params'}->{$key};
@@ -548,7 +548,7 @@ sub return_message($$$) {
     if (ref($self->params()) eq 'HASH') {
 	while (my ($key, $value) = each(%{$self->params()})) {
 	    if ($key) {
-		$value = '' if (!$value);
+		$value = '' unless defined $value;
 		$params .= ':' . $self->escape($key, ':') . '=' . $self->escape($value, ':');
 	    }
 
@@ -613,7 +613,7 @@ sub message($$$;$;@) {
 	return 0;
     }
 
-    $return_value = '' if (!$return_value);
+    $return_value = '' unless defined $return_value;
 
     if (!$id) {
 	$id = generate_id();
@@ -622,7 +622,7 @@ sub message($$$;$;@) {
     my $params = '';
     while (my ($key, $value) = each(%params)) {
 	if ($key) {
-	    $value = '' if (!$value);
+	    $value = '' unless defined $value;
 	    $params .= ':' . $self->escape($key, ':') . '=' . $self->escape($value, ':');
 	}
     }

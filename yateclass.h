@@ -1286,6 +1286,14 @@ public:
     ObjList* append(const GenObject* obj, bool compact = true);
 
     /**
+     * Set unique entry in this list. If not found, append it to the list
+     * @param obj Pointer to the object to uniquely set in the list
+     * @param compact True to replace NULL values in list if possible
+     * @return A pointer to the set list item
+     */
+    ObjList* setUnique(const GenObject* obj, bool compact = true);
+
+    /**
      * Delete this list item
      * @param delobj True to delete the object (default)
      * @return Pointer to the object if not destroyed
@@ -4332,7 +4340,12 @@ public:
      * @param param Parameter to set or add
      * @return Reference to this NamedList
      */
-    NamedList& setParam(NamedString* param);
+    inline NamedList& setParam(NamedString* param)
+    {
+	if (param)
+	    m_params.setUnique(param);
+	return *this;
+    }
 
     /**
      * Set a named string in the parameter list.
@@ -4340,7 +4353,7 @@ public:
      * @param value Value of the string
      * @return Reference to this NamedList
      */
-    NamedList& setParam(const char* name, const char* value);
+    NamedList& setParam(const String& name, const char* value);
 
     /**
      * Clears all instances of a named string in the parameter list.

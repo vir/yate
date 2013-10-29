@@ -80,28 +80,26 @@ NamedList& NamedList::addParam(const char* name, const char* value, bool emptyOK
     return *this;
 }
 
-NamedList& NamedList::setParam(NamedString* param)
+NamedList& NamedList::setParam(const String& name, const char* value)
 {
-    XDebug(DebugInfo,"NamedList::setParam(%p) [\"%s\",\"%s\"]",
-        param,(param ? param->name().c_str() : ""),TelEngine::c_safe(param));
-    if (!param)
-	return *this;
-    ObjList* p = m_params.find(param->name());
+    XDebug(DebugInfo,"NamedList::setParam(\"%s\",\"%s\")",name.c_str(),value);
+    ObjList *p = m_params.skipNull();
+    while (p) {
+        NamedString *s = static_cast<NamedString*>(p->get());
+        if (s->name() == name) {
+            *s = value;
+	    return *this;
+	}
+	ObjList* next = p->skipNext();
+	if (next)
+	    p = next;
+	else
+	    break;
+    }
     if (p)
-	p->set(param);
+	p->append(new NamedString(name,value));
     else
-	m_params.append(param);
-    return *this;
-}
-
-NamedList& NamedList::setParam(const char* name, const char* value)
-{
-    XDebug(DebugInfo,"NamedList::setParam(\"%s\",\"%s\")",name,value);
-    NamedString *s = getParam(name);
-    if (s)
-	*s = value;
-    else
-	m_params.append(new NamedString(name, value));
+	m_params.append(new NamedString(name,value));
     return *this;
 }
 

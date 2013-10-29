@@ -210,6 +210,31 @@ ObjList* ObjList::append(const GenObject* obj, bool compact)
     return n;
 }
 
+ObjList* ObjList::setUnique(const GenObject* obj, bool compact)
+{
+    XDebug(DebugAll,"ObjList::setUnique(\"%p\") [%p]",obj,this);
+    if (!obj)
+	return 0;
+    const String& name = obj->toString();
+    ObjList* o = skipNull();
+    while (o) {
+	if (name.matches(o->get()->toString())) {
+	    o->set(obj);
+	    return const_cast<ObjList*>(o);
+	}
+	ObjList* n = o->skipNext();
+	if (n)
+	    o = n;
+	else
+	    break;
+    }
+    if (o)
+	o = o->append(obj,compact);
+    else
+	o = append(obj,compact);
+    return const_cast<ObjList*>(o);
+}
+
 GenObject* ObjList::remove(bool delobj)
 {
     GenObject *tmp = m_obj;

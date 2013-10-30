@@ -1,4 +1,4 @@
-yate (5.0.1~svn5683) UNRELEASED; urgency=low
+yate (5.0.1~svn5684) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -786,8 +786,14 @@ yate (5.0.1~svn5683) UNRELEASED; urgency=low
     ObjList::setUnique().  + Added ObjList::setUnique() to uniquely set
     an object in the list. If the object is not already present in the
     list, it appends it to the list.
+  * Updated to SVN revision 5684: + Inlined
+    NamedList::setParam(NamedString*) which now uses
+    ObjList::setUnique().  + Added ObjList::setUnique() to uniquely set
+    an object in the list. If the object is not already present in the
+    list, it appends it to the list.  + Updated TDM driver to work with
+    wanpipe 7.0.5.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 30 Oct 2013 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 31 Oct 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

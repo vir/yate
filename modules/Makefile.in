@@ -124,7 +124,7 @@ ifneq (@HAVE_WANPIPE@,no)
 ifeq (@BUILD_WPCARD@,yes)
 PROGS := $(PROGS) server/wpcard.yate
 endif
-ifeq (@HAVE_WANPIPE_API@,yes)
+ifeq (@HAVE_WANPIPE_TDM@,yes)
 ifeq (@BUILD_TDMCARD@,yes)
 PROGS := $(PROGS) server/tdmcard.yate
 endif

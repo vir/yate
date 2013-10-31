@@ -750,7 +750,9 @@ HAVE_WANPIPE="yes"
 CFLAGS="$SAVE_CFLAGS"
 AC_MSG_RESULT([$HAVE_WANPIPE])
 fi
-if [[ "x$HAVE_WANPIPE" = "xno" ]]; then
+if [[ "x$HAVE_WANPIPE" = "xyes" ]]; then
+WANPIPE_FLAGS="-DHAVE_WANPIPE_API -I/usr/include/wanpipe $WANPIPE_FLAGS"
+else
 AC_MSG_CHECKING([for Wanpipe linux headers])
 AC_TRY_COMPILE([
 #define __LINUX__
@@ -771,7 +773,7 @@ AC_MSG_RESULT([$HAVE_WANPIPE])
 fi
 fi
 AC_SUBST(HAVE_WANPIPE)
-HAVE_WANPIPE_API="no"
+HAVE_WANPIPE_TDM="no"
 if [[ "x$HAVE_WANPIPE" = "xyes" ]]; then
 AC_MSG_CHECKING([for Wanpipe TDM])
 SAVE_CFLAGS="$CFLAGS"
@@ -784,12 +786,12 @@ AC_TRY_COMPILE([
 #include <netinet/in.h>
 #include <wanpipe.h>
 ],[wanpipe_api_t tdm;],
-HAVE_WANPIPE_API="yes"
+HAVE_WANPIPE_TDM="yes"
 )
 CFLAGS="$SAVE_CFLAGS"
-AC_MSG_RESULT([$HAVE_WANPIPE_API])
+AC_MSG_RESULT([$HAVE_WANPIPE_TDM])
 fi
-AC_SUBST(HAVE_WANPIPE_API)
+AC_SUBST(HAVE_WANPIPE_TDM)
 
 AC_ARG_WITH(wphwec,AC_HELP_STRING([--with-wphwec=DIR],[use Wanpipe/Octasic headers from DIR]),[ac_cv_use_wphwec=$withval],[ac_cv_use_wphwec=/usr/include/wanpipe])
 if [[ "x$HAVE_WANPIPE" = "xyes" ]]; then

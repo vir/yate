@@ -705,7 +705,6 @@ AC_SUBST(BUILD_WPCARD)
 AC_SUBST(BUILD_TDMCARD)
 
 HAVE_WANPIPE=no
-HAVE_WANPIPE_API=no
 WANPIPE_FLAGS=""
 AC_ARG_ENABLE(wanpipe,AC_HELP_STRING([--enable-wanpipe],[Enable Wanpipe support (default: yes)]),want_wanpipe=$enableval,want_wanpipe=yes)
 if [[ "x$want_wanpipe" = "xyes" ]]; then
@@ -751,10 +750,7 @@ HAVE_WANPIPE="yes"
 CFLAGS="$SAVE_CFLAGS"
 AC_MSG_RESULT([$HAVE_WANPIPE])
 fi
-if [[ "x$HAVE_WANPIPE" = "xyes" ]]; then
-HAVE_WANPIPE_API="yes"
-WANPIPE_FLAGS="-DHAVE_WANPIPE_API -I/usr/include/wanpipe $WANPIPE_FLAGS"
-else
+if [[ "x$HAVE_WANPIPE" = "xno" ]]; then
 AC_MSG_CHECKING([for Wanpipe linux headers])
 AC_TRY_COMPILE([
 #define __LINUX__
@@ -775,6 +771,24 @@ AC_MSG_RESULT([$HAVE_WANPIPE])
 fi
 fi
 AC_SUBST(HAVE_WANPIPE)
+HAVE_WANPIPE_API="no"
+if [[ "x$HAVE_WANPIPE" = "xyes" ]]; then
+AC_MSG_CHECKING([for Wanpipe TDM])
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -I/usr/include/wanpipe"
+AC_TRY_COMPILE([
+#define __LINUX__
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <wanpipe.h>
+],[wanpipe_api_t tdm;],
+HAVE_WANPIPE_API="yes"
+)
+CFLAGS="$SAVE_CFLAGS"
+AC_MSG_RESULT([$HAVE_WANPIPE_API])
+fi
 AC_SUBST(HAVE_WANPIPE_API)
 
 AC_ARG_WITH(wphwec,AC_HELP_STRING([--with-wphwec=DIR],[use Wanpipe/Octasic headers from DIR]),[ac_cv_use_wphwec=$withval],[ac_cv_use_wphwec=/usr/include/wanpipe])

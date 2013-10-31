@@ -111,6 +111,11 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
     m.copyParam(msg,"timeout");
     m.copyParams(msg,msg.getValue("copyparams"));
 
+    if (msg.getBoolValue(YSTRING("add_billid"))) {
+    	Debug(this,DebugNote,"Call with 'add_billid' == true. Adding '%s' to call.route message.",c->billid().c_str());
+    	m.addParam("billid", c->billid());
+    }
+
     if (Engine::dispatch(m)) {
 	m = "call.execute";
 	m.addParam("callto",m.retValue());

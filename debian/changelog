@@ -1,4 +1,4 @@
-yate (5.0.1~svn5686) UNRELEASED; urgency=low
+yate (5.0.1~svn5687) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -796,8 +796,11 @@ yate (5.0.1~svn5686) UNRELEASED; urgency=low
     tdmcard module.  + Added TDM API detection in configure.in.  + Use
     HAVE_WANPIPE_TDM to verify if tdmcard module should be compiled.  +
     Include HAVE_WANPIPE_API flag for wpcard compile.
+  * Updated to SVN revision 5687: + Include HAVE_WANPIPE_API flag for
+    wpcard compile.  + Limit Javascript debug output to DebugTest, not
+    DebugGoOn.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 01 Nov 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 02 Nov 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

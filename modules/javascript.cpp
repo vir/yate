@@ -600,7 +600,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    TelEngine::destruct(op);
 	}
 	if (str) {
-	    int limit = s_allowAbort ? DebugFail : DebugGoOn;
+	    int limit = s_allowAbort ? DebugFail : DebugTest;
 	    if (level > DebugAll)
 		level = DebugAll;
 	    else if (level < limit)
@@ -639,7 +639,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    TelEngine::destruct(op);
 	}
 	if (str && level >= 0) {
-	    int limit = s_allowAbort ? DebugFail : DebugGoOn;
+	    int limit = s_allowAbort ? DebugFail : DebugTest;
 	    if (level > DebugAll)
 		level = DebugAll;
 	    else if (level < limit)

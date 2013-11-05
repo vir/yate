@@ -1,4 +1,4 @@
-yate (5.0.1~svn5687) UNRELEASED; urgency=low
+yate (5.0.1~svn5688) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -799,8 +799,10 @@ yate (5.0.1~svn5687) UNRELEASED; urgency=low
   * Updated to SVN revision 5687: + Include HAVE_WANPIPE_API flag for
     wpcard compile.  + Limit Javascript debug output to DebugTest, not
     DebugGoOn.
+  * Updated to SVN revision 5688: + Added JS static method
+    Engine.runParams() and Message member msgTime()
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 02 Nov 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 06 Nov 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

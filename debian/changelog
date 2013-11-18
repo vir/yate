@@ -1,4 +1,4 @@
-yate (5.0.1~svn5688) UNRELEASED; urgency=low
+yate (5.0.1~svn5689) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -801,8 +801,11 @@ yate (5.0.1~svn5688) UNRELEASED; urgency=low
     DebugGoOn.
   * Updated to SVN revision 5688: + Added JS static method
     Engine.runParams() and Message member msgTime()
+  * Updated to SVN revision 5689: + Added function to remove an object
+    from a HashList by its String value.  + Added option to remove an
+    object from a HashList using its hash.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 06 Nov 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 19 Nov 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

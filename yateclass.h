@@ -3148,9 +3148,22 @@ public:
      * Delete the list item that holds a given object
      * @param obj Object to search in the list
      * @param delobj True to delete the object (default)
+     * @param useHash True to use object hash to identify the list it belongs to
      * @return Pointer to the object if not destroyed
      */
-    GenObject* remove(GenObject* obj, bool delobj = true);
+    GenObject* remove(GenObject* obj, bool delobj = true, bool useHash = false);
+
+    /**
+     * Delete the item in the list that holds an object by String value
+     * @param str String value (toString) of the object to remove
+     * @param delobj True to delete the object (default)
+     * @return Pointer to the object if not destroyed
+     */
+    inline GenObject* remove(const String& str, bool delobj = true)
+    {
+	ObjList* n = find(str);
+	return n ? n->remove(delobj) : 0;
+    }
 
     /**
      * Clear the list and optionally delete all contained objects

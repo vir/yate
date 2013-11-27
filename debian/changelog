@@ -1,4 +1,4 @@
-yate (5.0.1~svn5689) UNRELEASED; urgency=low
+yate (5.0.1~svn5691) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -804,8 +804,13 @@ yate (5.0.1~svn5689) UNRELEASED; urgency=low
   * Updated to SVN revision 5689: + Added function to remove an object
     from a HashList by its String value.  + Added option to remove an
     object from a HashList using its hash.
+  * Updated to SVN revision 5691: + Added option to remove an object
+    from a HashList using its hash.  + Fixed debug message.  + Fixed
+    bug: use a binary buffer to accumulate read data on tcp connections.
+    Fixed keep alive request check. Avoid unnecessary buffer copy if
+    there is no data from a previous read.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 19 Nov 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 28 Nov 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

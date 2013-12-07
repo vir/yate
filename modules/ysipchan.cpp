@@ -499,9 +499,12 @@ protected:
     void setIdleTimeout(u_int64_t time = Time::now());
     // Send keep alive (or response to keep alive)
     bool sendKeepAlive(bool request);
-    // Method called on buffer overflow.
-    // Reset connection. Return false
-    bool overflow(unsigned int msglen);
+    inline bool sendPendingKeepAlive() {
+	    if (!m_keepAlivePending)
+		return true;
+	    m_keepAlivePending = false;
+	    return sendKeepAlive(false);
+	}
 
     bool m_outgoing;                     // Direction
     YateTCPParty* m_party;               // Transport party
@@ -515,7 +518,7 @@ protected:
     bool m_flowTimer;                    // Flow timer flag (RFC5626)
     bool m_keepAlivePending;             // Pending keep alive response
     SIPMessage* m_msg;                   // Partially received SIP message (expecting body)
-    String m_sipBuffer;                  // Accumulated read data
+    DataBlock m_sipBuffer;               // Accumulated read data
     unsigned int m_sipBufOffs;           // Offset in sip buffer for partial sip message
     unsigned int m_contentLen;           // Expected content length for partial sip message
     // Outgoing (re-connect info)
@@ -1358,35 +1361,72 @@ static unsigned int getMaxpkt(int val, int defVal)
 
 // Skip tabs, spaces, CR and LF from buffer start
 // Return true if the buffer changed
-static bool skipSpaces(String& buf, bool crlf = true)
+static inline bool skipSpaces(const char*& buf, unsigned int& len, bool crlf = true)
 {
     unsigned int i = 0;
     if (crlf) {
-	for (; i < buf.length(); i++)
+	for (; i < len; i++)
 	    if (buf[i] != '\r' && buf[i] != '\n' && buf[i] != ' ' && buf[i] != '\t')
 		break;
     }
     else
-	for (; i < buf.length(); i++)
+	for (; i < len; i++)
 	    if (buf[i] != ' ' && buf[i] != '\t')
 		break;
     if (!i)
 	return false;
-    buf = buf.substr(i);
+    buf += i;
+    len -= i;
     return true;
+}
+
+// Skip spaces at buffer start
+// Check for keep alive request
+// Return true if keep alive request was found
+static inline bool skipSpacesCheckKeepAlive(const char*& buf, unsigned int& len)
+{
+    static const char* s_keepAlive = "\r\n\r\n";
+    bool found = false;
+    while (len) {
+	skipSpaces(buf,len,false);
+	if (!len)
+	    break;
+	if (buf[0] != '\r') {
+	    if (buf[0] != '\n')
+		break;
+	    buf++;
+	    len--;
+	    continue;
+	}
+	unsigned int i = 1;
+	while (i < len && i < 4 && buf[i] == s_keepAlive[i])
+	    i++;
+	// End of buffer before full keep live: don't advance
+	if (i < 4 && i == len)
+	    break;
+	buf += i;
+	len -= i;
+	if (i == 4) {
+	    found = true;
+	    break;
+	}
+    }
+    if (found)
+	skipSpaces(buf,len);
+    return found;
 }
 
 // Find an empty line in a buffer
 // Return the position past it or buffer length + 1 if not found
 // NOTE: returned value may be buffer length
-static unsigned int getEmptyLine(const String& buf)
+static inline unsigned int getEmptyLine(const char* buf, unsigned int len)
 {
     int count = 0;
     unsigned int i = 0;
-    for (; count < 2 && i < buf.length(); i++) {
+    for (; count < 2 && i < len; i++) {
 	if (buf[i] == '\r') {
 	    i++;
-	    if (i < buf.length() && buf[i] == '\n')
+	    if (i < len && buf[i] == '\n')
 		count++;
 	    else
 		count = 0;
@@ -1396,7 +1436,7 @@ static unsigned int getEmptyLine(const String& buf)
 	else
 	    count = 0;
     }
-    return (count == 2) ? i : buf.length() + 1;
+    return (count == 2) ? i : len + 1;
 }
 
 // Fill a buffer with message method/code for debug purposes
@@ -3502,6 +3542,8 @@ bool YateSIPTCPTransport::sendPending(const Time& time, bool& sent)
 	SIPMessage* msg = o ? static_cast<SIPMessage*>(o->get()) : 0;
 	if (msg && m_sent < 0) {
 	    m_sent = 0;
+	    if (!sendPendingKeepAlive())
+		return false;
 	    XDebug(&plugin,DebugAll,"Transport(%s) dequeued (%p) [%p]",
 		m_id.c_str(),msg,this);
 	    if (s_printMsg)
@@ -3509,6 +3551,8 @@ bool YateSIPTCPTransport::sendPending(const Time& time, bool& sent)
 	}
 	else if (!msg) {
 	    m_sent = -1;
+	    if (!sendPendingKeepAlive())
+		return false;
 	    break;
 	}
 	const DataBlock& buf = msg->getBuffer();
@@ -3537,11 +3581,6 @@ bool YateSIPTCPTransport::sendPending(const Time& time, bool& sent)
 #endif
 	    o->remove();
 	    m_sent = -1;
-	    if (m_keepAlivePending) {
-		m_keepAlivePending = false;
-		if (!sendKeepAlive(false))
-		    return false;
-	    }
 	    continue;
 	}
 	break;
@@ -3574,70 +3613,107 @@ bool YateSIPTCPTransport::readData(const Time& time, bool& read)
 	return false;
     }
     read = true;
-    char* b = (char*)m_buffer.data();
-    b[res] = 0;
-    XDebug(&plugin,DebugAll,"%s current buffer '%s' read %d: %s [%p]",
-	m_id.c_str(),m_sipBuffer.c_str(),res,b,this);
-    m_sipBuffer << b;
-    if (!m_msg) {
-	// Always skip blanks before message start
-	skipSpaces(m_sipBuffer,false);
-	if (!m_outgoing && m_sipBuffer.startSkip("\r\n\r\n")) {
-	    // RFC5626: send CR/LF in response now or after the next message
-	    lock();
-	    m_keepAlivePending = (0 != m_queue.skipNull());
-	    unlock();
-	    if (!(m_keepAlivePending || sendKeepAlive(false)))
-		return false;
-	}
+#ifdef XDEBUG
+#if 0
+    String nb((const char*)m_buffer.data(),res);
+    String ob((const char*)m_sipBuffer.data(),m_sipBuffer.length());
+#else
+    String nb, ob;
+    nb.hexify(m_buffer.data(),res,' ');
+    ob.hexify(m_sipBuffer.data(),m_sipBuffer.length(),' ');
+#endif
+    Debug(&plugin,DebugAll,"%s current buffer %u '%s' read %d '%s' [%p]",
+	m_id.c_str(),m_sipBuffer.length(),ob.safe(),res,nb.safe(),this);
+#endif
+    const char* data = (const char*)m_buffer.data();
+    unsigned int len = res;
+    if (m_sipBuffer.length()) {
+	m_sipBuffer.append(m_buffer.data(),len);
+	len = m_sipBuffer.length();
+	data = (const char*)m_sipBuffer.data();
     }
-    while (m_sipBuffer.length() && m_sipBuffer.length() >= 72) {
+    bool ok = true;
+    unsigned int over = 0;
+    bool respond = false;
+    while (len > 3) {
+	ok = false;
 	if (!m_msg) {
 	    m_sipBufOffs = 0;
 	    m_contentLen = 0;
-	    // Skip spaces from message start: it might be keep alive
-	    if (skipSpaces(m_sipBuffer) && m_sipBuffer.length() < 72)
+	    // Skip spaces, check for keep alive
+	    if (m_outgoing || respond)
+		skipSpaces(data,len);
+	    else
+		respond = skipSpacesCheckKeepAlive(data,len);
+	    if (len < 72) {
+		ok = true;
 		break;
-	    // Find an empty line
-	    m_sipBufOffs = getEmptyLine(m_sipBuffer);
-	    if (m_sipBufOffs > m_sipBuffer.length()) {
-		m_sipBufOffs = 0;
-		if (m_sipBuffer.length() <= m_maxpkt)
-		    break;
-		return overflow(m_sipBuffer.length());
 	    }
-	    if (m_sipBufOffs > m_maxpkt)
-		return overflow(m_sipBufOffs);
+	    // Find an empty line
+	    m_sipBufOffs = getEmptyLine(data,len);
+	    if (m_sipBufOffs > len) {
+		m_sipBufOffs = 0;
+		if (len <= m_maxpkt)
+		    ok = true;
+		else
+		    over = len;
+		break;
+	    }
+	    if (m_sipBufOffs > m_maxpkt) {
+		over = m_sipBufOffs;
+		break;
+	    }
 	    // Parse the message headers
-	    m_msg = SIPMessage::fromParsing(0,m_sipBuffer,m_sipBufOffs,&m_contentLen);
+	    m_msg = SIPMessage::fromParsing(0,data,m_sipBufOffs,&m_contentLen);
 	    if (!m_msg) {
 		m_reason = "Received invalid message";
-		String tmp(m_sipBuffer,m_sipBufOffs);
+		String tmp(data,m_sipBufOffs);
 		Debug(&plugin,DebugNote,
-		    "'%s' got invalid message [%p]\r\n------\r\n%s------",
+		    "'%s' got invalid message [%p]\r\n------\r\n%s\r\n------",
 		    m_id.c_str(),this,tmp.c_str());
-		return false;
+		break;
 	    }
 	    // Check now if expected message length exceeds maxpkt
 	    unsigned int expected = m_sipBufOffs + m_contentLen;
-	    if (expected > m_maxpkt)
-		return overflow(expected);
+	    if (expected > m_maxpkt) {
+		over = expected;
+		break;
+	    }
 	}
+	ok = true;
 	// Expecting message body ?
 	if (m_contentLen) {
-	    if (m_sipBufOffs + m_contentLen > m_sipBuffer.length())
+	    if (m_sipBufOffs + m_contentLen > len)
 		break;
-	    m_msg->buildBody(m_sipBuffer + m_sipBufOffs,m_contentLen);
+	    m_msg->buildBody(data + m_sipBufOffs,m_contentLen);
 	    m_sipBufOffs += m_contentLen;
 	    m_contentLen = 0;
 	}
 	if (s_printMsg)
-	    printRecvMsg(m_sipBuffer,m_sipBufOffs);
+	    printRecvMsg(data,m_sipBufOffs);
 	SIPMessage* msg = m_msg;
 	m_msg = 0;
 	receiveMsg(msg);
-	m_sipBuffer = m_sipBuffer.substr(m_sipBufOffs);
+	data += m_sipBufOffs;
+	len -= m_sipBufOffs;
 	m_sipBufOffs = 0;
+    }
+    if (!len)
+	m_sipBuffer.clear();
+    else
+	m_sipBuffer.assign((void*)data,len);
+    if (!ok) {
+	if (over) {
+	    m_reason = "Buffer overflow (message too long)";
+	    Debug(&plugin,DebugNote,"'%s' %s len=%u maxpkt=%u [%p]",
+		m_id.c_str(),m_reason.c_str(),over,m_maxpkt,this);
+	}
+	return false;
+    }
+    if (respond) {
+	// RFC5626: send CR/LF in response
+	Lock lck(this);
+	m_keepAlivePending = true;
     }
     // Got data: reset timeout for incoming and connection check for all
     if (!m_outgoing)
@@ -3696,17 +3772,6 @@ bool YateSIPTCPTransport::sendKeepAlive(bool request)
     int wr = m_sock->writeData("\r\n\r\n",len);
     printWriteError(wr,len);
     return wr >= 0 || m_sock->canRetry();
-}
-
-// Method called on buffer overflow.
-// Reset connection. Return 0 for outgoing -1 otherwise
-bool YateSIPTCPTransport::overflow(unsigned int msglen)
-{
-    m_reason = "Buffer overflow (message too long)";
-    Debug(&plugin,DebugNote,"'%s' %s len=%u maxpkt=%u [%p]",
-	m_id.c_str(),m_reason.c_str(),msglen,m_maxpkt,this);
-    resetConnection();
-    return false;
 }
 
 

@@ -235,6 +235,7 @@ public:
 	    params().addParam(new ExpFunction("debugAt"));
 	    params().addParam(new ExpFunction("setDebug"));
 	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
+	    params().addParam(new ExpFunction("runParams"));
 	    params().addParam(new ExpFunction("setInterval"));
 	    params().addParam(new ExpFunction("clearInterval"));
 	    params().addParam(new ExpFunction("setTimeout"));
@@ -273,6 +274,7 @@ public:
 	    params().addParam(new ExpFunction("name"));
 	    params().addParam(new ExpFunction("broadcast"));
 	    params().addParam(new ExpFunction("retValue"));
+	    params().addParam(new ExpFunction("msgTime"));
 	    params().addParam(new ExpFunction("getColumn"));
 	    params().addParam(new ExpFunction("getRow"));
 	    params().addParam(new ExpFunction("getResult"));
@@ -809,6 +811,21 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	else
 	    return false;
     }
+    else if (oper.name() == YSTRING("runParams")) {
+	if (oper.number() == 0) {
+	    JsObject* jso = new JsObject("Object",mutex());
+	    jso->params().copyParams(Engine::runParams());
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jso,oper.name()));
+	}
+	else if (oper.number() == 1) {
+	    ExpOperation* op = popValue(stack,context);
+	    if (op)
+		ExpEvaluator::pushOne(stack,new ExpOperation(Engine::runParams()[*op]));
+	    TelEngine::destruct(op);
+	}
+	else
+	    return false;
+    }
     else if (oper.name() == YSTRING("setInterval") || oper.name() == YSTRING("setTimeout")) {
 	ObjList args;
 	if (extractArgs(stack,oper,context,args) < 2)
@@ -1018,6 +1035,14 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    default:
 		return false;
 	}
+    }
+    else if (oper.name() == YSTRING("msgTime")) {
+	if (oper.number() != 0)
+	    return false;
+	if (m_message)
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_message->msgTime().msec()));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("getColumn")) {
 	ObjList args;

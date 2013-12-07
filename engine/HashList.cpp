@@ -104,9 +104,13 @@ ObjList* HashList::append(const GenObject* obj)
     return m_lists[i]->append(obj);
 }
 
-GenObject* HashList::remove(GenObject* obj, bool delobj)
+GenObject* HashList::remove(GenObject* obj, bool delobj, bool useHash)
 {
-    ObjList *n = find(obj);
+    ObjList* n = 0;
+    if (useHash && obj)
+	n = find(obj,obj->toString().hash());
+    else
+	n = find(obj);
     return n ? n->remove(delobj) : 0;
 }
 

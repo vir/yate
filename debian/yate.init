@@ -57,6 +57,9 @@ start() {
 	test -x $DAEMON || exit 0
 	echo -n $"Starting YATE: "
 	unset DISPLAY
+	PIDDIR=`dirname ${PIDFILE}`
+	mkdir -p ${PIDDIR}
+	chown yate:yate ${PIDDIR}
 	touch $LOG
 	chown yate:yate $LOG
 	start-stop-daemon --start --quiet --pidfile $PIDFILE --chuid yate:yate --exec $DAEMON -- -d -p $PIDFILE $OPTS

@@ -1276,6 +1276,10 @@ bool ExtModReceiver::processLine(const char* line)
 		role.c_str(),chan.c_str(),type.c_str());
 	    if (role == "global") {
 		m_role = RoleGlobal;
+		if(! chan.null()) {
+		    Debug(DebugMild,"Renamed external '%s' to '%s'",m_script.safe(),chan.c_str());
+		    m_script = chan;
+		}
 		return false;
 	    }
 	    else if (role == "channel") {

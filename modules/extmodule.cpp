@@ -1404,6 +1404,14 @@ bool ExtModReceiver::processLine(const char* line)
 		    m_chan->setId(val);
 		ok = true;
 	    }
+	    else if (id == "scriptname") {
+		if (val.null())
+		    val = m_script;
+		else {
+		    Debug(DebugMild,"Renamed external '%s' to '%s'",m_script.safe(),val.c_str());
+		    m_script = val;
+		}
+	    }
 	    else if (m_chan && (id == "disconnected")) {
 		m_chan->setDisconn(val.toBoolean(m_chan->disconn()));
 		val = m_chan->disconn();

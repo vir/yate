@@ -1,3 +1,12 @@
+yate (5.0.1~vir2013121001) UNRELEASED; urgency=low
+
+  * external module: "scriptname" local variable added
+    to allow tcp-connected global script to set it's name
+  * enabled coredumps
+  * debug timestamps now will be in local timezone
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Tue, 10 Dec 2013 00:31:09 +0400
+
 yate (5.0.1~vir2013120801) UNRELEASED; urgency=low
 
   * Fixed pidfile creation after reboot.

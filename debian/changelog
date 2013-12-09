@@ -1,3 +1,10 @@
+yate (5.0.1~vir2013121002) UNRELEASED; urgency=low
+
+  * external module: allow setting "scriptname" of global script
+    from '%%>connect' line (using optional "id" parameter).
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Tue, 10 Dec 2013 00:52:35 +0400
+
 yate (5.0.1~vir2013121001) UNRELEASED; urgency=low
 
   * external module: "scriptname" local variable added

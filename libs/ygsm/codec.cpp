@@ -56,7 +56,7 @@ static uint8_t getUINT8(const uint8_t*& in, unsigned int& len, const IEParam* pa
 	return 0;
     if (param->length == 4) {
 	if (param->lowerBits)
-	    return *in && 0x0f;
+	    return *in & 0x0f;
 	len--;
 	return (*in++ >> 4);
     }
@@ -151,6 +151,12 @@ static const IEParam s_mmMessage[] = {
     {GSML3Codec::NoType, GSML3Codec::Skip,    0, "",              0,     0, 0,     0,             0,             0 },
 };
 
+static const IEParam s_epsMmMessage[] = {
+    {GSML3Codec::V,      GSML3Codec::XmlElem, 0, "SecurityHeader", false, 4,     false, 0, 0, 0},
+    {GSML3Codec::V,      GSML3Codec::XmlElem, 0, "MAC",            false, 8 * 4, false, 0, 0, 0},
+    {GSML3Codec::NoType, GSML3Codec::Skip,    0, "",               0,     0,     0,     0, 0, 0},
+};
+
 static const RL3Message s_protoMsg[] = {
     {GSML3Codec::GCC,        "GCC",     0},
     {GSML3Codec::BCC,        "BCC",     0},
@@ -159,7 +165,7 @@ static const RL3Message s_protoMsg[] = {
     {GSML3Codec::GTTP,       "GTTP",    0},
     {GSML3Codec::MM,         "MM",      s_mmMessage},
     {GSML3Codec::RRM,        "RRM",     0},
-    {GSML3Codec::EPS_MM,     "EPS_MM",  0},
+    {GSML3Codec::EPS_MM,     "EPS_MM",  s_epsMmMessage},
     {GSML3Codec::GPRS_MM,    "GPRS_MM", 0},
     {GSML3Codec::SMS,        "SMS",     0},
     {GSML3Codec::GPRS_SM,    "GPRS_SM", 0},
@@ -265,12 +271,12 @@ static unsigned int dumpUnknownIE(const GSML3Codec* codec, uint8_t proto, const 
 		dumpOctets = len;
 	    else {
 		uint16_t l = in[1];
-		l = (l << 8) | in[2];
-		dumpOctets = (len < (l + 3) ? len : l + 3);
+		l = ((l << 8) | in[2]) + 3;
+		dumpOctets = (len < l ? len : l + 3);
 	    }
 	}
 	else
-	    dumpOctets = (len < (in[1] + 2) ? len : in[1] + 2);
+	    dumpOctets = (len < (in[1] + 2u) ? len : in[1] + 2u);
     }
     if (dumpOctets) {
 	XmlElement* xml = new XmlElement("ie");
@@ -300,8 +306,8 @@ static unsigned int dumpParamValue(const GSML3Codec* codec, uint8_t proto, const
 		break;
 	    case GSML3Codec::V:
 	    {
-		uint8_t val = 0;
 		if (param->length == 4) {
+		    uint8_t val = 0;
 		    if (!param->lowerBits) {
 			val |= *in & 0xf0;
 			len--;
@@ -309,13 +315,10 @@ static unsigned int dumpParamValue(const GSML3Codec* codec, uint8_t proto, const
 		    }
 		    else
 			val |= *in & 0x0f;
+		    dumpStr.hexify(&val,1);
 		}
-		else {
-		    val = *in;
-		    len--;
-		    in++;
-		}
-		dumpStr.hexify(&val,1);
+		else
+		    skipOctets = param->length / 8;
 		break;
 	    }
 	    case GSML3Codec::TV:
@@ -350,8 +353,8 @@ static unsigned int dumpParamValue(const GSML3Codec* codec, uint8_t proto, const
 	    unsigned int lbuff = len;
 	    if (int status = skipParam(codec,proto,in,len,param))
 		return status;
-	    if (len + skipOctets <= lbuff)
-		dumpStr.hexify((void*)(buff + skipOctets), lbuff - len - skipOctets);
+	    if (len <= lbuff)
+		dumpStr.hexify((void*)buff, lbuff - len);
 	}
 	XmlElement* xml = new XmlElement(param->name);
 	addXMLElement(out,xml);
@@ -409,7 +412,9 @@ static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const u
 {
     if (!(codec && in && len > 2 && param))
 	return GSML3Codec::ParserErr;
-    while (param) {
+    DDebug(codec->dbg(),DebugAll,"decodeParams(in=%p,len=%u,out=%p,param=%s[%p]) [%p]",in,len,out,
+	   param->name.c_str(),param,codec->ptr());
+    while (param && param->type != GSML3Codec::NoType) {
 	int status = GSML3Codec::NoError;
 	switch (param->type) {
 	    case GSML3Codec::V:
@@ -427,6 +432,14 @@ static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const u
 	}
 	if (status)
 	    return status;
+	param++;
+    }
+    if (len && out) {
+	String str;
+	str.hexify((void*)in,len);
+	out->addChildSafe(new XmlElement("data",str));
+	in += len;
+	len = 0;
     }
     return GSML3Codec::NoError;
 };
@@ -481,6 +494,18 @@ unsigned int GSML3Codec::decode(const uint8_t* in, unsigned int len, XmlElement*
 }
 
 unsigned int GSML3Codec::encode(XmlElement* in, DataBlock& out)
+{
+    //TODO
+    return NoError;
+}
+
+unsigned int GSML3Codec::decode(XmlElement* xml, const NamedList& params)
+{
+    //TODO
+    return NoError;
+}
+
+unsigned int GSML3Codec::encode(XmlElement* xml, const NamedList& params)
 {
     //TODO
     return NoError;

@@ -47,17 +47,27 @@ class YGSM_API GSML3Codec
 {
     YNOCOPY(GSML3Codec);
 public:
+    /**
+     * Codec flags
+     */
     enum Flags {
 	XmlDumpMsg = 0x01,
 	XmlDumpIEs = 0x02,
     };
+
+    /**
+     * Codec return status
+     */
     enum Status {
 	NoError = 0,
 	MsgTooShort,
 	UnknownProto,
 	ParserErr,
     };
-    // Protocol discriminator according to ETSI TS 124 007 V11.0.0, section 11.2.3.1.1
+
+    /**
+     * Protocol discriminator according to ETSI TS 124 007 V11.0.0, section 11.2.3.1.1
+     */
     enum Protocol {
 	GCC       = 0x00, // Group Call Control
 	BCC       = 0x01, // Broadcast Call Control
@@ -76,6 +86,10 @@ public:
 	Test      = 0x0f, // used by tests procedures described in 3GPP TS 44.014, 3GPP TS 34.109 and 3GPP TS 36.509
 	Unknown   = 0xff,
     };
+
+    /**
+     * IE types
+     */
     enum Type {
 	NoType = 0,
 	T,
@@ -86,13 +100,52 @@ public:
 	LVE,
 	TLVE,
     };
+
+    /**
+     * Type of XML data to generate
+     */
     enum XmlType {
 	Skip,
 	XmlElem,
     };
-    GSML3Codec(DebugEnabler* dbg);
+
+    /**
+     * Constructor
+     */
+    GSML3Codec(DebugEnabler* dbg = 0);
+ 
+    /**
+     * Decode layer 3 message payload
+     * @param in Input buffer containing the data to be decoded
+     * @param len Length of input buffer
+     * @param out XmlElement into which the decoded data is returned
+     * @return Parsing result: 0 (NoError) if succeeded, error status otherwise
+     */
     unsigned int decode(const uint8_t* in, unsigned int len, XmlElement*& out);
+
+    /**
+     * Encode a layer 3 message 
+     * @param in Layer 3 message in XML form
+     * @param out Output buffer into which to put encoded data
+     * @return Parsing result: 0 (NoError) if succeeded, error status otherwise
+     */
     unsigned int encode(XmlElement* in, DataBlock& out);
+
+    /**
+     * Decode layer 3 message from an existing XML
+     * @param xml XML which contains layer 3 messages to decode and into which the decoded XML will be put
+     * @param params Decoder parameters
+     * @return Parsing result: 0 (NoError) if succeeded, error status otherwise
+     */
+    unsigned int decode(XmlElement* xml, const NamedList& params = NamedList::empty());
+
+    /**
+     * Encode a layer 3 message from an existing XML 
+     * @param in XML which contains a layer 3 message in XML form. The message will be replaced with its encoded buffer
+     * @param params Encoder parameters
+     * @return Parsing result: 0 (NoError) if succeeded, error status otherwise
+     */
+    unsigned int encode(XmlElement* xml, const NamedList& params = NamedList::empty());
 
     /**
      * Set data used in debug
@@ -132,14 +185,30 @@ public:
 	    m_flags = 0;
     }
 
+    /**
+     * Get DebugEnabler used by this codec
+     * @return DebugEnabler used by the codec
+     */
     inline DebugEnabler* dbg() const
 	{ return m_dbg; }
 
+    /**
+     * Retrieve the codec pointer used for debug messages
+     * @return Codec pointer used for debug messages
+     */
     inline void* ptr() const
 	{ return m_ptr; }
 
+    /**
+     * IE types dictionary
+     */
     static const TokenDict s_typeDict[];
+
+    /**
+     * L3 Protocols dictionary
+     */
     static const TokenDict s_protoDict[];
+
 private:
     uint8_t m_flags;                 // Codec flags
     // data used for debugging messages

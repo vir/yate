@@ -43,9 +43,9 @@
 
 namespace TelEngine {
 
-class YGSM_API RL3Codec
+class YGSM_API GSML3Codec
 {
-    YNOCOPY(RL3Codec);
+    YNOCOPY(GSML3Codec);
 public:
     enum Flags {
 	XmlDumpMsg = 0x01,
@@ -90,7 +90,7 @@ public:
 	Skip,
 	XmlElem,
     };
-    RL3Codec(DebugEnabler* dbg);
+    GSML3Codec(DebugEnabler* dbg);
     unsigned int decode(const uint8_t* in, unsigned int len, XmlElement*& out);
     unsigned int encode(XmlElement* in, DataBlock& out);
 

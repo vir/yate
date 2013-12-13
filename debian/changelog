@@ -1,4 +1,4 @@
-yate (5.0.1~svn5691) UNRELEASED; urgency=low
+yate (5.0.1~svn5694) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -809,8 +809,11 @@ yate (5.0.1~svn5691) UNRELEASED; urgency=low
     bug: use a binary buffer to accumulate read data on tcp connections.
     Fixed keep alive request check. Avoid unnecessary buffer copy if
     there is no data from a previous read.
+  * Updated to SVN revision 5694: + Work in progress on adding Radio
+    Layer 3 message decoders.  + Added GSM library.  + Renamed codec
+    class.  + Work in progress to the GSM library.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 28 Nov 2013 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 14 Dec 2013 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

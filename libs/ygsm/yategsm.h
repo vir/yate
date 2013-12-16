@@ -63,6 +63,7 @@ public:
 	MsgTooShort,
 	UnknownProto,
 	ParserErr,
+	MissingParam,
     };
 
     /**
@@ -110,6 +111,18 @@ public:
     };
 
     /**
+     * EPS Security Headers
+     */
+    enum EPSSecurityHeader {
+	PlainNAS                           = 0x00,
+	IntegrityProtect                   = 0x01,
+	IntegrityProtectCiphered           = 0x02,
+	IntegrityProtectNewEPSCtxt         = 0x03,
+	IntegrityProtectCipheredNewEPSCtxt = 0x04,
+	ServiceRequestHeader               = 0xa0,
+    };
+
+    /**
      * Constructor
      */
     GSML3Codec(DebugEnabler* dbg = 0);
@@ -119,17 +132,19 @@ public:
      * @param in Input buffer containing the data to be decoded
      * @param len Length of input buffer
      * @param out XmlElement into which the decoded data is returned
+     * @param params Encoder parameters
      * @return Parsing result: 0 (NoError) if succeeded, error status otherwise
      */
-    unsigned int decode(const uint8_t* in, unsigned int len, XmlElement*& out);
+    unsigned int decode(const uint8_t* in, unsigned int len, XmlElement*& out, const NamedList& params = NamedList::empty());
 
     /**
      * Encode a layer 3 message 
      * @param in Layer 3 message in XML form
      * @param out Output buffer into which to put encoded data
+     * @param params Encoder parameters
      * @return Parsing result: 0 (NoError) if succeeded, error status otherwise
      */
-    unsigned int encode(XmlElement* in, DataBlock& out);
+    unsigned int encode(const XmlElement* in, DataBlock& out, const NamedList& params = NamedList::empty());
 
     /**
      * Decode layer 3 message from an existing XML
@@ -209,7 +224,14 @@ public:
      */
     static const TokenDict s_protoDict[];
 
+    /**
+     * EPS Security Headers dictionary
+     */
+    static const TokenDict s_securityHeaders[];
+
 private:
+
+    unsigned int decodeXml(XmlElement* xml, const NamedList& params, const String& pduTag);
     uint8_t m_flags;                 // Codec flags
     // data used for debugging messages
     DebugEnabler* m_dbg;

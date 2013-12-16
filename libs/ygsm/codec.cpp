@@ -35,8 +35,9 @@ struct IEParam {
     bool isOptional;
     uint16_t length; // in bits
     bool lowerBits;
-    unsigned int (*decoder)(const GSML3Codec*,uint8_t,const IEParam*,const uint8_t*&, unsigned int&, XmlElement*&);
-    unsigned int (*encoder)(const GSML3Codec*,uint8_t,const IEParam*,XmlElement*,DataBlock&);
+    unsigned int (*decoder)(const GSML3Codec*,uint8_t,const IEParam*,const uint8_t*&, unsigned int&, XmlElement*&,
+	const NamedList&);
+    unsigned int (*encoder)(const GSML3Codec*,uint8_t,const IEParam*,XmlElement*,DataBlock&,const NamedList&);
     const void* data;
 };
 
@@ -47,8 +48,17 @@ struct RL3Message {
 };
 
 
+static const String s_pduDecode = "decodeTag";
+
+
 static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const uint8_t*& in, unsigned int& len,
-	XmlElement*& out, const IEParam* param);
+	XmlElement*& out, const IEParam* param, const NamedList& params = NamedList::empty());
+
+static unsigned int  decodeSecHeader(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params);
+
+static unsigned int encodeSecHeader(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params);
 
 static uint8_t getUINT8(const uint8_t*& in, unsigned int& len, const IEParam* param)
 {
@@ -75,14 +85,15 @@ static void addXMLElement(XmlElement*& dst, XmlElement* what)
 }
 
 static unsigned int decodeMsgType(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, const uint8_t*& in,
-	unsigned int& len, XmlElement*& out)
+	unsigned int& len, XmlElement*& out, const NamedList& params)
 {
     //TODO
     return GSML3Codec::NoError;
 }
 
 
-static unsigned int encodeMsgType(const GSML3Codec* codec, uint8_t proto, const IEParam* param, XmlElement* in,DataBlock& out)
+static unsigned int encodeMsgType(const GSML3Codec* codec, uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
 {
     //TODO
     return GSML3Codec::NoError;
@@ -101,7 +112,7 @@ static const RL3Message* findRL3Msg(uint16_t val, const RL3Message* where)
 }
 
 static unsigned int decodePD(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
-	unsigned int& len, XmlElement*& out)
+	unsigned int& len, XmlElement*& out, const NamedList& params)
 {
     if (!(codec && in && len && param))
 	return GSML3Codec::ParserErr;
@@ -125,7 +136,7 @@ static unsigned int decodePD(const GSML3Codec* codec, uint8_t proto, const IEPar
     else {
 	xml = new XmlElement(msg->name);
 	if (msg->params)
-	    status = decodeParams(codec,proto,in,len,xml,msg->params);
+	    status = decodeParams(codec,proto,in,len,xml,msg->params,params);
     }
     addXMLElement(out,xml);
     if (payload)
@@ -134,7 +145,8 @@ static unsigned int decodePD(const GSML3Codec* codec, uint8_t proto, const IEPar
 }
 
 
-static unsigned int encodePD(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,DataBlock& out)
+static unsigned int encodePD(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
 {
     //TODO
     return GSML3Codec::NoError;
@@ -151,11 +163,22 @@ static const IEParam s_mmMessage[] = {
     {GSML3Codec::NoType, GSML3Codec::Skip,    0, "",              0,     0, 0,     0,             0,             0 },
 };
 
+static const IEParam s_epsAttachRequestParams[] = {
+    {GSML3Codec::V,      GSML3Codec::XmlElem,    0, "EPSAttachType",       false, 4, true,  0,             0,             0},
+    {GSML3Codec::V,      GSML3Codec::XmlElem,    0, "NASKeySetIdentifier", false, 4, false, 0,             0,             0},
+    {GSML3Codec::NoType, GSML3Codec::Skip,    0, "",                    0,     0, 0,     0,             0,             0 },
+};
+
+static const RL3Message s_epsMmMsgs[] = {
+    {0x41,    "AttachRequest",     s_epsAttachRequestParams},
+    {0xff,    "",                  0},
+};
+
 static const IEParam s_epsMmMessage[] = {
-    {GSML3Codec::V,      GSML3Codec::XmlElem, 0, "SecurityHeader", false, 4,     false, 0, 0, 0},
-    {GSML3Codec::V,      GSML3Codec::XmlElem, 0, "MAC",            false, 8 * 4, false, 0, 0, 0},
+    {GSML3Codec::V,      GSML3Codec::XmlElem, 0, "SecurityHeader", false, 4,     false, decodeSecHeader, encodeSecHeader, 0},
     {GSML3Codec::NoType, GSML3Codec::Skip,    0, "",               0,     0,     0,     0, 0, 0},
 };
+
 
 static const RL3Message s_protoMsg[] = {
     {GSML3Codec::GCC,        "GCC",     0},
@@ -181,7 +204,94 @@ static const IEParam s_rl3Message[] = {
     {GSML3Codec::NoType,  GSML3Codec::Skip,    0,  "",  0,     0, 0,    0,        0,        0},
 };
 
+static unsigned int checkIntegrity(const GSML3Codec* codec, const String& mac, uint8_t seq,  const uint8_t*& in,
+	unsigned int& len, const NamedList& params)
+{
+    // TODO
+    return GSML3Codec::NoError;
+}
 
+static unsigned int decipherNASPdu(const GSML3Codec* codec, const String& mac, uint8_t seq,  const uint8_t*& in,
+	unsigned int& len, const NamedList& params)
+{
+    // TODO
+    return GSML3Codec::NoError;
+}
+
+static unsigned int  decodeSecHeader(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param && out))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugAll,"decodeSecHeader(param=%s(%p),in=%p,len=%u,out=%p [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    uint8_t secVal = getUINT8(in,len,param);
+    XmlElement* xml = new XmlElement(param->name,lookup(secVal,GSML3Codec::s_securityHeaders,String(secVal)));
+    out->addChildSafe(xml);
+
+    switch (secVal) {
+	case GSML3Codec::PlainNAS:
+	{
+	    if (len < 1)
+		return GSML3Codec::MsgTooShort;
+	    uint8_t msgType = in[0];
+	    unsigned int ok = GSML3Codec::NoError;
+	    in++;
+	    len--;
+	    const RL3Message* msg = findRL3Msg(msgType,s_epsMmMsgs);
+	    xml = 0;
+	    if (!msg) {
+		xml = new XmlElement(param->name ? param->name : YSTRING("ie"));
+		xml->setText(String(msgType));
+	    }
+	    else {
+		xml = new XmlElement(msg->name);
+		if (msg->params)
+		    ok = decodeParams(codec,proto,in,len,xml,msg->params,params);
+	    }
+	    out->addChildSafe(xml);
+	    return ok;
+	}
+	case GSML3Codec::IntegrityProtect:
+	case GSML3Codec::IntegrityProtectNewEPSCtxt:
+	case GSML3Codec::IntegrityProtectCiphered:
+    	case GSML3Codec::IntegrityProtectCipheredNewEPSCtxt:
+	{
+	    if (len < 5)
+		return GSML3Codec::MsgTooShort;
+	    String mac;
+	    mac.hexify((void*)in,4);
+	    out->addChildSafe(new XmlElement("MAC",mac));
+	    uint8_t seq = in[4];
+	    out->addChildSafe(new XmlElement("SequenceNumber",String(seq)));
+	    // skip over MAC
+	    in += 4;
+	    len -= 4;
+	    if (unsigned int ok = checkIntegrity(codec,mac,seq,in,len,params))
+		return ok;
+	    // skip over Sequence Number
+	    in++;
+	    len--;
+	    if (secVal == GSML3Codec::IntegrityProtectCiphered || secVal == GSML3Codec::IntegrityProtectCiphered)
+		decipherNASPdu(codec,mac,seq,in,len,params);
+	    return decodeParams(codec,proto,in,len,out,s_rl3Message);
+	}
+	default:
+	    if (secVal >= GSML3Codec::ServiceRequestHeader) {
+		//TODO 
+		DDebug(codec->dbg(),DebugStub,"decodeSecHeader() for ServiceRequestHeader not implemented [%p]",codec->ptr());
+	    }
+	    break;
+    }
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeSecHeader(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    //TODO
+    return GSML3Codec::NoError;
+}
 
 static unsigned int skipParam(const GSML3Codec* codec, uint8_t proto, const uint8_t*& in, unsigned int& len,const IEParam* param)
 {
@@ -368,7 +478,7 @@ static unsigned int dumpParamValue(const GSML3Codec* codec, uint8_t proto, const
 }
 
 static unsigned int decodeV(const GSML3Codec* codec, uint8_t proto, const uint8_t*& in, unsigned int& len, XmlElement*& out,
-	const IEParam* param)
+	const IEParam* param, const NamedList& params)
 {
     if (!(codec && in && len && param))
 	return GSML3Codec::ParserErr;
@@ -382,7 +492,7 @@ static unsigned int decodeV(const GSML3Codec* codec, uint8_t proto, const uint8_
 	    if (!(param->decoder || (param->data && param->name)))
 		return dumpParamValue(codec,proto,in,len,param,out);
 	    if (param->decoder)
-		return param->decoder(codec,proto,param,in,len,out);
+		return param->decoder(codec,proto,param,in,len,out,params);
 	    // decode an 1 byte value from a dictionary
 	    if (param->data && param->name) {
 		if (param->length > 8) {
@@ -408,7 +518,7 @@ static unsigned int decodeV(const GSML3Codec* codec, uint8_t proto, const uint8_
 
 
 static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const uint8_t*& in, unsigned int& len, XmlElement*& out, 
-	const IEParam* param)
+	const IEParam* param, const NamedList& params)
 {
     if (!(codec && in && len > 2 && param))
 	return GSML3Codec::ParserErr;
@@ -418,7 +528,7 @@ static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const u
 	int status = GSML3Codec::NoError;
 	switch (param->type) {
 	    case GSML3Codec::V:
-		status = decodeV(codec,proto,in,len,out,param);
+		status = decodeV(codec,proto,in,len,out,param,params);
 		break;
 		//TODO
 	    case GSML3Codec::T:
@@ -443,6 +553,8 @@ static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const u
     }
     return GSML3Codec::NoError;
 };
+
+
 
 const TokenDict GSML3Codec::s_typeDict[] = {
     {"T",    GSML3Codec::T},
@@ -475,6 +587,16 @@ const TokenDict GSML3Codec::s_protoDict[] = {
     {0, 0},
 };
 
+const TokenDict GSML3Codec::s_securityHeaders[] = {
+    {"plain-NAS-message",                                              GSML3Codec::PlainNAS},
+    {"integrity-protected",                                            GSML3Codec::IntegrityProtect},
+    {"integrity-protected-and-ciphered",                               GSML3Codec::IntegrityProtectCiphered},
+    {"integrity-protected-with-new-EPS-security- context",             GSML3Codec::IntegrityProtectNewEPSCtxt},
+    {"integrity-protected-and-ciphered-with-new-EPS-security-context", GSML3Codec::IntegrityProtectCipheredNewEPSCtxt},
+    {"security-header-for-the-SERVICE-REQUEST-message",                GSML3Codec::ServiceRequestHeader},
+    {0, 0},
+};
+
 GSML3Codec::GSML3Codec(DebugEnabler* dbg)
     : m_flags(0),
       m_dbg(0),
@@ -484,7 +606,7 @@ GSML3Codec::GSML3Codec(DebugEnabler* dbg)
     setCodecDebug(dbg);
 }
 
-unsigned int GSML3Codec::decode(const uint8_t* in, unsigned int len, XmlElement*& out)
+unsigned int GSML3Codec::decode(const uint8_t* in, unsigned int len, XmlElement*& out, const NamedList& params)
 {
     if (!in || len < 2)
 	return MsgTooShort;
@@ -493,7 +615,7 @@ unsigned int GSML3Codec::decode(const uint8_t* in, unsigned int len, XmlElement*
     return decodeParams(this,GSML3Codec::Unknown,buff,l,out,s_rl3Message);
 }
 
-unsigned int GSML3Codec::encode(XmlElement* in, DataBlock& out)
+unsigned int GSML3Codec::encode(const XmlElement* in, DataBlock& out, const NamedList& params)
 {
     //TODO
     return NoError;
@@ -501,14 +623,46 @@ unsigned int GSML3Codec::encode(XmlElement* in, DataBlock& out)
 
 unsigned int GSML3Codec::decode(XmlElement* xml, const NamedList& params)
 {
-    //TODO
-    return NoError;
+    const String& pduMark = params[s_pduDecode];
+    if (!(xml && pduMark))
+	return MissingParam;
+    return decodeXml(xml,params,pduMark);
 }
 
 unsigned int GSML3Codec::encode(XmlElement* xml, const NamedList& params)
 {
     //TODO
     return NoError;
+}
+
+
+unsigned int GSML3Codec::decodeXml(XmlElement* xml, const NamedList& params, const String& pduTag)
+{
+#ifdef DEBUG
+    Debugger d(DebugAll,"decodeXml()"," xml=%s (%p) pduTag=%s",xml ? xml->tag() : "",xml,pduTag.c_str());
+#endif
+    unsigned int status = NoError;
+    if (xml->getTag() == pduTag) {
+	const String& txt = xml->getText();
+	if (txt && xml->hasAttribute(YSTRING("enc"),YSTRING("hex"))) {
+	    DataBlock d;
+	    if (!d.unHexify(txt)) {
+		Debug(dbg(),DebugInfo,"Invalid hexified payload in XmlElement '%s'(%p) [%p]",xml->tag(),xml,ptr());
+		return ParserErr;
+	    }
+	    return  decode((const uint8_t*)d.data(),d.length(),xml,params);
+	}
+    }
+
+    XmlElement* child = xml->findFirstChild();
+    while (child) {
+	unsigned int ok = decodeXml(child,params,pduTag);
+	if (ok != NoError)
+	    status = ok;
+	child = xml->findNextChild(child);
+    }
+
+    return status;
 }
 
 void GSML3Codec::setCodecDebug(DebugEnabler* enabler, void* ptr)

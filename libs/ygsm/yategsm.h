@@ -64,6 +64,9 @@ public:
 	UnknownProto,
 	ParserErr,
 	MissingParam,
+	IncorrectOptionalIE,
+	IncorrectMandatoryIE,
+	MismatchedIEI,
     };
 
     /**

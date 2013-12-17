@@ -60,7 +60,7 @@ static unsigned int  decodeSecHeader(const GSML3Codec* codec, uint8_t proto, con
 static unsigned int encodeSecHeader(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
 	DataBlock& out, const NamedList& params);
 
-static uint8_t getUINT8(const uint8_t*& in, unsigned int& len, const IEParam* param)
+static inline uint8_t getUINT8(const uint8_t*& in, unsigned int& len, const IEParam* param)
 {
     if (!(in && len && param))
 	return 0;
@@ -70,11 +70,15 @@ static uint8_t getUINT8(const uint8_t*& in, unsigned int& len, const IEParam* pa
 	len--;
 	return (*in++ >> 4);
     }
+    if (param->length == 8 && param->type == GSML3Codec::TV) {
+	len--;
+	return (*in++ & 0x0f);
+    }
     len--;
     return *in++;
 }
 
-static void addXMLElement(XmlElement*& dst, XmlElement* what)
+static inline void addXMLElement(XmlElement*& dst, XmlElement* what)
 {
     if (!what)
 	return;
@@ -82,6 +86,34 @@ static void addXMLElement(XmlElement*& dst, XmlElement* what)
 	dst = what;
     else
 	dst->addChildSafe(what);
+}
+
+static inline void advanceBuffer(unsigned int bytes, const uint8_t*& in, unsigned int& len)
+{
+    if (!(in && len))
+	return;
+    bytes = (bytes > len ? len : bytes);
+    in += bytes;
+    len -= bytes;
+}
+
+static inline uint16_t getUINT16(const uint8_t* in, unsigned int len)
+{
+    if (!(in && len >= 2))
+	return 0;
+    uint16_t l = in[0];
+    l = (l << 8) | in[1];
+    return l;
+}
+
+static inline uint16_t getLE(const uint8_t*& in, unsigned int& len, bool advance = true)
+{
+    if (!(in && len >= 2))
+	return 0;
+    uint16_t l = getUINT16(in,len);
+    if (advance)
+	advanceBuffer(2,in,len);
+    return l;
 }
 
 static unsigned int decodeMsgType(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, const uint8_t*& in,
@@ -152,21 +184,144 @@ static unsigned int encodePD(const GSML3Codec* codec,  uint8_t proto, const IEPa
     return GSML3Codec::NoError;
 }
 
+// reference: ETSI TS 124 301 V11.8.0, section 9.9.3.21 NAS key set identifier
+static unsigned int decodeNASKeyId(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugAll,"decodeNASKeyId(param=%s(%p),in=%p,len=%u,out=%p [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    uint8_t val = getUINT8(in,len,param);
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+    if (val & 0x08)
+	xml->addChildSafe(new XmlElement("TSC","mapped-security-context-for-KSI_SGSN"));
+    else
+	xml->addChildSafe(new XmlElement("TSC","native-security-context-for-KSI_ASME"));
+    xml->addChildSafe(new XmlElement("NASKeySetId",String((val & 0x07))));
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeNASKeyId(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    //TODO
+    return GSML3Codec::NoError;
+}
+
+// reference: ETSI TS 124 301 V11.8.0, section 9.9.3.12 EPS mobile identity
+static unsigned int decodeEPSMobileIdent(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugAll,"decodeEPSMobileIdent(param=%s(%p),in=%p,len=%u,out=%p [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+
+    uint8_t type = in[0] & 0x07;
+//     bool odd = (in[0] & 0x08);
+    switch (type) {
+	case 1:
+	case 3:
+	{
+	    // IMSI / IMEI
+	    break;
+	}
+	case 6:
+	{
+	    // GUTI
+	    if (len < 11)
+		return (param->isOptional ? GSML3Codec::IncorrectOptionalIE : GSML3Codec::IncorrectMandatoryIE);
+	    String str = "";
+	    // get MCC
+	    str << (char)('0' + (in[1] & 0x0f)) << (char)('0' + ((in[1] >> 4) & 0x0f)) << (char)('0' + (in[2] & 0x0f));
+	    // get MNC
+	    str << (char)('0' + (in[3] & 0x0f)) << (char)('0' + ((in[3] >> 4) & 0x0f));
+	    uint8_t digit3 = (in[2] >> 4) & 0x0f;
+	    if (digit3 != 0x0f)
+		str << (char)('0' + digit3);
+	    xml->addChildSafe(new XmlElement("MCC_MNC",str));
+	    advanceBuffer(4,in,len);
+
+	    // get MME Group ID (16 bits)
+	    uint16_t groupID = getUINT16(in,len);
+	    xml->addChildSafe(new XmlElement("MMEGroupID",String(groupID)));
+	    advanceBuffer(2,in,len);
+	    // get MME COde (8 bits)
+	    xml->addChildSafe(new XmlElement("MMECode",String(in[0])));
+	    advanceBuffer(1,in,len);
+	    // get MTMSI (32 bits)
+	    str.clear();
+	    str.hexify((void*)in,4);
+	    xml->addChildSafe(new XmlElement("MTMSI",str));
+	    advanceBuffer(4,in,len);
+	    break;
+	}
+	default:
+	    return (param->isOptional ? GSML3Codec::IncorrectOptionalIE : GSML3Codec::IncorrectMandatoryIE);
+    }
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeEPSMobileIdent(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    //TODO
+    return GSML3Codec::NoError;
+}
+
+
+#define MAKE_IE_PARAM(type,xml,iei,name,optional,length,lowerBits,decoder,encoder,extra) \
+    {GSML3Codec::type,GSML3Codec::xml,iei,name,optional,length,lowerBits,decoder,encoder,extra}
 
 static const RL3Message s_mmMsgs[] = {
     //TODO
+    {0xff,    "",                  0},
 };
 
 static const IEParam s_mmMessage[] = {
-    {GSML3Codec::V,      GSML3Codec::Skip,    0, "SkipIndicator", false, 4, false, 0,             0,             0},
-    {GSML3Codec::V,      GSML3Codec::XmlElem, 0, "MessageType",   false, 8, false, decodeMsgType, encodeMsgType, s_mmMsgs},
-    {GSML3Codec::NoType, GSML3Codec::Skip,    0, "",              0,     0, 0,     0,             0,             0 },
+    MAKE_IE_PARAM(V,      Skip,    0, "SkipIndicator", false, 4, false, 0,             0,             0),
+    MAKE_IE_PARAM(V,      XmlElem, 0, "MessageType",   false, 8, false, decodeMsgType, encodeMsgType, s_mmMsgs),
+    MAKE_IE_PARAM(NoType, Skip,    0, "",              0,     0, 0,     0,             0,             0 ),
 };
 
+
+static const TokenDict s_epsAttachTypes[] = {
+    {"EPS-Attach", 1},
+    {"combined-EPS-IMSI-attach", 2},
+    {"EPS-emergency-attach",  6},
+    {"reserved",             7},
+    {"", 0},
+};
+
+
 static const IEParam s_epsAttachRequestParams[] = {
-    {GSML3Codec::V,      GSML3Codec::XmlElem,    0, "EPSAttachType",       false, 4, true,  0,             0,             0},
-    {GSML3Codec::V,      GSML3Codec::XmlElem,    0, "NASKeySetIdentifier", false, 4, false, 0,             0,             0},
-    {GSML3Codec::NoType, GSML3Codec::Skip,    0, "",                    0,     0, 0,     0,             0,             0 },
+    MAKE_IE_PARAM(V,      XmlElem,    0, "EPSAttachType",                          false,      4,  true, 0, 0, s_epsAttachTypes),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "NASKeySetIdentifier",                    false,      4, false, decodeNASKeyId,       encodeNASKeyId,0),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "EPSMobileIdentity",                      false, 12 * 8,  true, decodeEPSMobileIdent, encodeEPSMobileIdent, 0),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "UENetworkCapability",                    false, 14 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(LVE,    XmlElem,    0, "ESMMessageContainer",                    false,      0,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x19,"OldPTMSISignature",                        true,  4 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x50,"AdditionalGUTI",                           true, 13 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x52,"LastVisitedRegisteredTAI",                 true,  6 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x5C,"DRXParameter",                             true,  3 * 8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x31,"MSNetworkCapability",                      true, 10 * 8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x13,"OldLocationAreaIdentification",            true,  6 * 8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x90,"TMSIStatus",                               true,      8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x11,"MobileStationClassmark2",                  true,  5 * 8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x20,"MobileStationClassmark3",                  true, 34 * 8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x40,"SupportedCodecs",                          true,      0,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xF0,"AdditionalUpdateType",                     true,      8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x5D,"VoiceDomainPreferenceAndUEsUsageSetting",  true,  3 * 8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0,"DeviceProperties",                         true,      8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xE0,"OldGUTIType",                              true,      8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xC0,"MSNetworkFeatureSupport",                  true,      8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x10,"TMSIBasedNRIContainer",                    true,  4 * 8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
 };
 
 static const RL3Message s_epsMmMsgs[] = {
@@ -175,8 +330,8 @@ static const RL3Message s_epsMmMsgs[] = {
 };
 
 static const IEParam s_epsMmMessage[] = {
-    {GSML3Codec::V,      GSML3Codec::XmlElem, 0, "SecurityHeader", false, 4,     false, decodeSecHeader, encodeSecHeader, 0},
-    {GSML3Codec::NoType, GSML3Codec::Skip,    0, "",               0,     0,     0,     0, 0, 0},
+    MAKE_IE_PARAM(V,      XmlElem, 0, "SecurityHeader", false, 4,     false, decodeSecHeader, encodeSecHeader, 0),
+    MAKE_IE_PARAM(NoType, Skip,    0, "",               0,     0,     0,     0, 0, 0),
 };
 
 
@@ -200,8 +355,8 @@ static const RL3Message s_protoMsg[] = {
 };
 
 static const IEParam s_rl3Message[] = {
-    {GSML3Codec::V,       GSML3Codec::XmlElem, 0, "PD", false, 4, true, decodePD, encodePD, s_protoMsg},
-    {GSML3Codec::NoType,  GSML3Codec::Skip,    0,  "",  0,     0, 0,    0,        0,        0},
+    MAKE_IE_PARAM(V,       XmlElem, 0, "PD", false, 4, true, decodePD, encodePD, s_protoMsg),
+    MAKE_IE_PARAM(NoType,  Skip,    0,  "",  0,     0, 0,    0,        0,        0),
 };
 
 static unsigned int checkIntegrity(const GSML3Codec* codec, const String& mac, uint8_t seq,  const uint8_t*& in,
@@ -236,8 +391,7 @@ static unsigned int  decodeSecHeader(const GSML3Codec* codec, uint8_t proto, con
 		return GSML3Codec::MsgTooShort;
 	    uint8_t msgType = in[0];
 	    unsigned int ok = GSML3Codec::NoError;
-	    in++;
-	    len--;
+	    advanceBuffer(1,in,len);
 	    const RL3Message* msg = findRL3Msg(msgType,s_epsMmMsgs);
 	    xml = 0;
 	    if (!msg) {
@@ -265,13 +419,11 @@ static unsigned int  decodeSecHeader(const GSML3Codec* codec, uint8_t proto, con
 	    uint8_t seq = in[4];
 	    out->addChildSafe(new XmlElement("SequenceNumber",String(seq)));
 	    // skip over MAC
-	    in += 4;
-	    len -= 4;
+	    advanceBuffer(4,in,len);
 	    if (unsigned int ok = checkIntegrity(codec,mac,seq,in,len,params))
 		return ok;
 	    // skip over Sequence Number
-	    in++;
-	    len--;
+	    advanceBuffer(1,in,len);
 	    if (secVal == GSML3Codec::IntegrityProtectCiphered || secVal == GSML3Codec::IntegrityProtectCiphered)
 		decipherNASPdu(codec,mac,seq,in,len,params);
 	    return decodeParams(codec,proto,in,len,out,s_rl3Message);
@@ -303,55 +455,45 @@ static unsigned int skipParam(const GSML3Codec* codec, uint8_t proto, const uint
 	case GSML3Codec::V:
 	case GSML3Codec::T:
 	    if (param->length == 4) {
-		if (!param->lowerBits) {
-		    len--;
-		    in++;
-		}
+		if (!param->lowerBits)
+		    advanceBuffer(1,in,len);
 		break;
 	    }
 	    // intentional fall through
 	case GSML3Codec::TV:
 	    if (len * 8 < param->length)
 		return GSML3Codec::MsgTooShort;
-	    len -= param->length / 8;
-	    in += param->length / 8;
+	    advanceBuffer(param->length / 8,in,len);
 	    break;
 	case GSML3Codec::TLV:
 	    if (len < 2)
 		return GSML3Codec::MsgTooShort;
-	    in++;
-	    len--;
+	    advanceBuffer(1,in,len);
 	    // intentional fall through
 	case GSML3Codec::LV:
 	{
 	    if (len < 1)
 		return GSML3Codec::MsgTooShort;
-	    uint8_t l = *in++;
-	    len--;
+	    uint8_t l = *in;
+	    advanceBuffer(1,in,len);
 	    if (len < l)
 		return GSML3Codec::MsgTooShort;
-	    in += l;
-	    len -= l;
+	    advanceBuffer(l,in,len);
 	    break;
 	}
 	case GSML3Codec::TLVE:
 	    if (len < 3)
 		return GSML3Codec::MsgTooShort;
-	    in++;
-	    len--;
+	    advanceBuffer(1,in,len);
 	    // intentional fall through
 	case GSML3Codec::LVE:
 	{
 	    if (len < 2)
 		return GSML3Codec::MsgTooShort;
-	    uint16_t l = in[0];
-	    l = (l << 8) | in[1];
-	    in += 2;
-	    len -= 2;
+	    uint16_t l = getLE(in,len);
 	    if (len < l)
 		return GSML3Codec::MsgTooShort;
-	    in += l;
-	    len -= l;
+	    advanceBuffer(l,in,len);
 	    break;
 	}
 	case GSML3Codec::NoType:
@@ -380,9 +522,8 @@ static unsigned int dumpUnknownIE(const GSML3Codec* codec, uint8_t proto, const 
 	    if (len < 3)
 		dumpOctets = len;
 	    else {
-		uint16_t l = in[1];
-		l = ((l << 8) | in[2]) + 3;
-		dumpOctets = (len < l ? len : l + 3);
+		uint16_t l = getUINT16(in + 1u,len) + 3u;
+		dumpOctets = (len < l ? len : l);
 	    }
 	}
 	else
@@ -394,8 +535,7 @@ static unsigned int dumpUnknownIE(const GSML3Codec* codec, uint8_t proto, const 
 	String dumpStr;
 	dumpStr.hexify((void*)in,dumpOctets);
 	xml->setText(dumpStr);
-	in += dumpOctets;
-	len -= dumpOctets;
+	advanceBuffer(dumpOctets,in,len);
     }
     return GSML3Codec::NoError;
 }
@@ -420,8 +560,7 @@ static unsigned int dumpParamValue(const GSML3Codec* codec, uint8_t proto, const
 		    uint8_t val = 0;
 		    if (!param->lowerBits) {
 			val |= *in & 0xf0;
-			len--;
-			in++;
+			advanceBuffer(1,in,len);
 		    }
 		    else
 			val |= *in & 0x0f;
@@ -435,8 +574,7 @@ static unsigned int dumpParamValue(const GSML3Codec* codec, uint8_t proto, const
 	    {
 		if (param->length == 8) {
 		    uint8_t val = *in & 0x0f;
-		    len--;
-		    in++;
+		    advanceBuffer(1,in,len);
 		    dumpStr.hexify(&val,1);
 		}
 		else
@@ -464,7 +602,7 @@ static unsigned int dumpParamValue(const GSML3Codec* codec, uint8_t proto, const
 	    if (int status = skipParam(codec,proto,in,len,param))
 		return status;
 	    if (len <= lbuff)
-		dumpStr.hexify((void*)buff, lbuff - len);
+		dumpStr.hexify((void*)(buff + skipOctets), lbuff - len - skipOctets);
 	}
 	XmlElement* xml = new XmlElement(param->name);
 	addXMLElement(out,xml);
@@ -516,6 +654,139 @@ static unsigned int decodeV(const GSML3Codec* codec, uint8_t proto, const uint8_
     return GSML3Codec::NoError;
 }
 
+static unsigned int decodeLV_LVE(const GSML3Codec* codec, uint8_t proto, const uint8_t*& in, unsigned int& len, XmlElement*& out,
+	const IEParam* param, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugAll,"decodeLV_LVE(in=%p,len=%u,out=%p,param=%s[%p]) [%p]",in,len,out,param->name.c_str(),param,codec->ptr());
+    switch (param->xmlType) {
+	case GSML3Codec::Skip:
+	    return skipParam(codec,proto,in,len,param);
+	case GSML3Codec::XmlElem:
+	{
+	    if (!param->decoder)
+		return dumpParamValue(codec,proto,in,len,param,out);
+	    bool ext = (param->type == GSML3Codec::TLVE);
+	    if (len < (ext ? 2 : 1))
+		return GSML3Codec::MsgTooShort;
+	    unsigned int l = in[0];
+	    unsigned int advBytes = 1;
+	    if  (ext) {
+		l = getUINT16(in,len);
+		advBytes = 2;
+	    }
+	    if (l > len - advBytes)
+		return GSML3Codec::MsgTooShort;
+	    if (param->length && ((l + advBytes)* 8 > param->length))
+		return (param->isOptional ? GSML3Codec::IncorrectOptionalIE : GSML3Codec::IncorrectMandatoryIE);
+
+	    if (param->decoder) {
+		const uint8_t* buf = in + advBytes;
+		advanceBuffer(l + advBytes,in,len);
+		return param->decoder(codec,proto,param,buf,l,out,params);
+	    }
+	    break;
+	}
+	default:
+	    return GSML3Codec::ParserErr;
+    }
+    return GSML3Codec::NoError;
+}
+
+static unsigned int decodeTV(const GSML3Codec* codec, uint8_t proto, const uint8_t*& in, unsigned int& len, XmlElement*& out,
+	const IEParam* param, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugAll,"decodeTV(in=%p,len=%u,out=%p,param=%s[%p]) [%p]",in,len,out,param->name.c_str(),param,codec->ptr());
+    if (param->length && (len * 8 < param->length))
+	return (param->isOptional ? GSML3Codec::IncorrectOptionalIE : GSML3Codec::IncorrectMandatoryIE);
+    if (((~param->iei) & *in))
+	return GSML3Codec::MismatchedIEI;
+ 
+    switch (param->xmlType) {
+	case GSML3Codec::Skip:
+	    return skipParam(codec,proto,in,len,param);
+	case GSML3Codec::XmlElem:
+	{
+	    if (!(param->decoder || (param->data && param->name)))
+		return dumpParamValue(codec,proto,in,len,param,out);
+
+	    if (param->decoder) {
+		uint8_t skip = (param->length == 8 ? 0u : 1u);
+		const uint8_t* buf = in + skip;
+		unsigned int l = param->length / 8 - skip;
+		advanceBuffer(l + skip,in,len);
+		return param->decoder(codec,proto,param,buf,l,out,params);
+	    }
+	    // decode a max 1 byte value from a dictionary
+	    if (param->data && param->name) {
+		if (param->length > 8) {
+		    DDebug(codec->dbg(),DebugMild,"decodeTV() - decoding for TV longer than 1 byte not supported, dumping param=%s(%p) [%p]",
+			   param->name.c_str(),param,codec->ptr());
+		    return dumpParamValue(codec,proto,in,len,param,out);
+		}
+		uint8_t val = getUINT8(in,len,param);
+		XmlElement* xml = new XmlElement(param->name);
+	        addXMLElement(out,xml);
+		const TokenDict* dict = static_cast<const TokenDict*>(param->data);
+		if (!dict)
+		    xml->setText(String(val));
+		else
+		    xml->setText(lookup(val,dict,String(val)));
+		return GSML3Codec::NoError;
+	    }
+	    break;
+	}
+	default:
+	    return GSML3Codec::ParserErr;
+    }
+    return GSML3Codec::NoError;
+}
+
+static unsigned int decodeTLV_TLVE(const GSML3Codec* codec, uint8_t proto, const uint8_t*& in, unsigned int& len, XmlElement*& out,
+	const IEParam* param, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugAll,"decodeTLV_TLVE(in=%p,len=%u,out=%p,param=%s[%p]) [%p]",in,len,out,param->name.c_str(),param,codec->ptr());
+    bool ext = (param->type == GSML3Codec::TLVE);
+    if (len < (ext ? 3 : 2))
+	return GSML3Codec::MsgTooShort;
+    if (((~param->iei) & *in))
+	return GSML3Codec::MismatchedIEI;
+
+    switch (param->xmlType) {
+	case GSML3Codec::Skip:
+	    return skipParam(codec,proto,in,len,param);
+	case GSML3Codec::XmlElem:
+	{
+	    if (!param->decoder)
+		return dumpParamValue(codec,proto,in,len,param,out);
+	    unsigned int l = in[1];
+	    unsigned int advBytes = 2;
+	    if  (param->type == GSML3Codec::LVE) {
+		l = getUINT16(in + 1u,len - 1);
+		advBytes = 3;
+	    }
+	    if (l > len - advBytes)
+		return GSML3Codec::MsgTooShort;
+	    if (param->length && ((l + advBytes) * 8 > param->length))
+		return (param->isOptional ? GSML3Codec::IncorrectOptionalIE : GSML3Codec::IncorrectMandatoryIE);
+
+	    if (param->decoder) {
+		const uint8_t* buf = in + advBytes;
+		advanceBuffer(l + advBytes,in,len);
+		return param->decoder(codec,proto,param,buf,l,out,params);
+	    }
+	    break;
+	}
+	default:
+	    return GSML3Codec::ParserErr;
+    }
+    return GSML3Codec::NoError;
+}
 
 static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const uint8_t*& in, unsigned int& len, XmlElement*& out, 
 	const IEParam* param, const NamedList& params)
@@ -532,15 +803,23 @@ static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const u
 		break;
 		//TODO
 	    case GSML3Codec::T:
+		break;
 	    case GSML3Codec::TV:
+		status = decodeTV(codec,proto,in,len,out,param,params);
+		break;
 	    case GSML3Codec::LV:
-	    case GSML3Codec::TLV:
 	    case GSML3Codec::LVE:
+		status = decodeLV_LVE(codec,proto,in,len,out,param,params);
+		break;
+	    case GSML3Codec::TLV:
 	    case GSML3Codec::TLVE:
+		status = decodeTLV_TLVE(codec,proto,in,len,out,param,params);
+		break;
 	    case GSML3Codec::NoType:
 		break;
 	}
-	if (status)
+	Output("status=%u",status);
+	if (status && !param->isOptional)
 	    return status;
 	param++;
     }
@@ -548,8 +827,7 @@ static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const u
 	String str;
 	str.hexify((void*)in,len);
 	out->addChildSafe(new XmlElement("data",str));
-	in += len;
-	len = 0;
+	advanceBuffer(len,in,len);
     }
     return GSML3Codec::NoError;
 };

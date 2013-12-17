@@ -24,8 +24,7 @@ SLIBS:= $(YLIB) libyate.so \
 	libyatescript.so.@PACKAGE_VERSION@ libyatescript.so \
 	libyatesig.so.@PACKAGE_VERSION@ libyatesig.so \
 	libyatemgcp.so.@PACKAGE_VERSION@ libyatemgcp.so \
-	libyatejabber.so.@PACKAGE_VERSION@ libyatejabber.so \
-	libyategsm.so.@PACKAGE_VERSION@ libyategsm.so
+	libyatejabber.so.@PACKAGE_VERSION@ libyatejabber.so
 INCS := yateclass.h yatemime.h yatengine.h yatephone.h yatecbase.h
 GENS := yateversn.h
 LIBS :=

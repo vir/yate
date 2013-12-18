@@ -67,6 +67,7 @@ public:
 	IncorrectOptionalIE,
 	IncorrectMandatoryIE,
 	MismatchedIEI,
+	UnknownMsgType,
     };
 
     /**
@@ -231,6 +232,11 @@ public:
      * EPS Security Headers dictionary
      */
     static const TokenDict s_securityHeaders[];
+
+    /**
+     * Errors dictionary
+     */
+    static const TokenDict s_errorsDict[];
 
 private:
 

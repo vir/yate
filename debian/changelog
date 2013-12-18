@@ -1,4 +1,4 @@
-yate (5.0.1~svn5697) UNRELEASED; urgency=low
+yate (5.0.1~svn5698) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -820,8 +820,9 @@ yate (5.0.1~svn5697) UNRELEASED; urgency=low
     It was breaking making install process as the library is not built
     at the moment.  + Remove GSM library from list of installed
     libraries.  + Work in progress for GSM library.
+  * Updated to SVN revision 5698: + Work in progress for GSM library.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 18 Dec 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 19 Dec 2013 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

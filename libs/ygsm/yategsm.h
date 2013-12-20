@@ -66,7 +66,7 @@ public:
 	MissingParam,
 	IncorrectOptionalIE,
 	IncorrectMandatoryIE,
-	MismatchedIEI,
+	MissingMandatoryIE,
 	UnknownMsgType,
     };
 
@@ -112,6 +112,7 @@ public:
     enum XmlType {
 	Skip,
 	XmlElem,
+	XmlRoot,
     };
 
     /**
@@ -241,6 +242,8 @@ public:
 private:
 
     unsigned int decodeXml(XmlElement* xml, const NamedList& params, const String& pduTag);
+    unsigned int encodeXml(XmlElement* xml, const NamedList& params, const String& pduTag);
+
     uint8_t m_flags;                 // Codec flags
     // data used for debugging messages
     DebugEnabler* m_dbg;

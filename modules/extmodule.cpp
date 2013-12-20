@@ -203,6 +203,7 @@ private:
 class ExtModReceiver : public MessageReceiver, public Mutex
 {
     friend class MsgWatcher;
+    friend class ExtMessage;
 public:
     enum {
 	RoleUnknown,
@@ -269,6 +270,7 @@ private:
     ObjList m_relays;
     String m_trackName;
     String m_reason;
+    bool m_dumparray;
 };
 
 class ExtThread : public Thread
@@ -586,10 +588,44 @@ bool MsgHolder::decode(const char *s)
     return (m_msg.decode(s,m_ret,m_id) == -2);
 }
 
+static String escape(const char* str)
+{
+    String s;
+    if (TelEngine::null(str))
+	return s;
+    char c;
+    while ((c=*str++)) {
+	if (c == '\\' || c == '\t' || c == '\n')
+	    s += "\\";
+	s += c;
+    }
+    return s;
+}
+
+static String dumpArray(const Array *a)
+{
+    String r;
+    for (int j=0; j < a->getRows(); j++) {
+	for (int i=0; i<a->getColumns(); i++) {
+	    if(i)
+		r << "\t";
+	    const String* s = YOBJECT(String, a->get(i, j));
+	    if (s)
+		r << escape(*s);
+	}
+	r << "\n";
+    }
+    return r;
+}
 
 ExtMessage::~ExtMessage()
 {
     if (m_receiver) {
+	if(m_receiver->m_dumparray && userData()) {
+	    Array* a = static_cast<Array*>(userObject(YATOM("Array")));
+	    if(a)
+		retValue() = dumpArray(a);
+	}
 	m_receiver->returnMsg(this,m_id,m_accepted);
 	m_receiver->unuse();
     }
@@ -760,7 +796,7 @@ ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, i
       m_in(io), m_out(io), m_ain(0), m_aout(0),
       m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false), m_setdata(true),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
-      m_script(name), m_trackName(s_trackName)
+      m_script(name), m_trackName(s_trackName), m_dumparray(false)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",%p,%p) [%p]",name,io,chan,this);
     m_script.trimBlanks();
@@ -1491,6 +1527,11 @@ bool ExtModReceiver::processLine(const char* line)
 	    else if (id == "runid") {
 		ok = val.null();
 		val = Engine::runId();
+	    }
+	    else if (id == "dumparray") {
+		m_dumparray = val.toBoolean(m_dumparray);
+		val = m_dumparray;
+		ok = true;
 	    }
 	    DDebug("ExtModReceiver",DebugAll,"Set '%s'='%s' %s",
 		id.c_str(),val.c_str(),ok ? "ok" : "failed");

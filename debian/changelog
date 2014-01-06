@@ -1,4 +1,4 @@
-yate (5.0.1~svn5699) UNRELEASED; urgency=low
+yate (5.0.1~svn5700) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -823,8 +823,15 @@ yate (5.0.1~svn5699) UNRELEASED; urgency=low
   * Updated to SVN revision 5698: + Work in progress for GSM library.
   * Updated to SVN revision 5699: + Started adding encoders also.  +
     Work in progress for GSM library.
+  * Updated to SVN revision 5700: + Work in progress for GSM library.  +
+    Added encoders and decoders for MM Identity Request, Location
+    Updating Accept, TMSI Reallocation Complete.  + Added decoders for
+    MM Location Updating Request and Identity Response.  + Added
+    decoders/encoders for message type, LAI, mobile identity.  + Added
+    encoders for LV/LVE and TLV/TLVE IEs.  + Work in progress for GSM
+    library.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 21 Dec 2013 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 07 Jan 2014 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

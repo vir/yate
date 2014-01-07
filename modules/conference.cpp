@@ -420,7 +420,8 @@ void ConfRoom::addChannel(ConfChan* chan, bool player)
 	m->addParam("users",tmp);
 	if (m_playerId)
 	    m->addParam("player",m_playerId);
-	m->setParam("lastpeerid",chan->lastPeerId());
+	if (chan->getLastPeerId(tmp))
+	    m->setParam("lastpeerid",tmp);
 	Engine::enqueue(m);
     }
 }
@@ -456,7 +457,8 @@ void ConfRoom::delChannel(ConfChan* chan)
 	    m->addParam("lonely",String::boolText(alone));
 	if (m_playerId)
 	    m->addParam("player",m_playerId);
-	m->setParam("lastpeerid",chan->lastPeerId());
+	if (chan->getLastPeerId(tmp))
+	    m->setParam("lastpeerid",tmp);
 	Engine::enqueue(m);
     }
 
@@ -1164,7 +1166,9 @@ void ConfChan::alterMsg(Message& msg, const char* event)
 	msg.setParam("users",String(m_room->users()));
 	msg.setParam("full",String::boolText(m_room->full()));
 	msg.setParam("targetid",m_room->notify());
-	msg.setParam("lastpeerid",lastPeerId());
+	String tmp;
+	if (getLastPeerId(tmp))
+	    msg.setParam("lastpeerid",tmp);
     }
 }
 

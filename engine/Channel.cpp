@@ -68,6 +68,17 @@ static Mutex s_lastMutex(false,"CallEndpoint::last");
 static const String s_audioType = "audio";
 static const String s_copyParams = "copyparams";
 
+// Check if a Lock taken on the common mutex succeeded, wait up to 55s more in congestion
+static bool checkRetry(Lock& lock)
+{
+    if (lock.locked())
+	return true;
+    Engine::setCongestion("Call endpoint mutex busy");
+    bool ok = lock.acquire(s_mutex,55000000);
+    Engine::setCongestion();
+    return ok;
+}
+
 
 CallEndpoint::CallEndpoint(const char* id)
     : m_peer(0), m_lastPeer(0), m_id(id), m_mutex(0)
@@ -121,7 +132,7 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason, bool notify)
 
 #if 0
     Lock lock(s_mutex,5000000);
-    if (!lock.locked()) {
+    if (!checkRetry(lock)) {
 	Alarm("engine","bug",DebugFail,"Call connect failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
 	Engine::restart(0);
 	return false;
@@ -160,7 +171,7 @@ bool CallEndpoint::disconnect(bool final, const char* reason, bool notify, const
     DDebug(DebugAll,"CallEndpoint '%s' disconnecting peer %p from [%p]",m_id.c_str(),m_peer,this);
 
     Lock lock(s_mutex,5000000);
-    if (!lock.locked()) {
+    if (!checkRetry(lock)) {
 	Alarm("engine","bug",DebugFail,"Call disconnect failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
 	Engine::restart(0);
 	return false;
@@ -212,7 +223,7 @@ bool CallEndpoint::getPeerId(String& id) const
 	}
     }
     Lock lock(s_mutex,5000000);
-    if (!lock.locked()) {
+    if (!checkRetry(lock)) {
 	Alarm("engine","bug",DebugFail,"Peer ID failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
 	Engine::restart(0);
 	return false;
@@ -250,7 +261,7 @@ void CallEndpoint::setLastPeerId()
     if (m_peer == m_lastPeer)
 	return;
     Lock lock(s_mutex,5000000);
-    if (!lock.locked()) {
+    if (!checkRetry(lock)) {
 	Alarm("engine","bug",DebugGoOn,"Set last peer ID failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
 	return;
     }

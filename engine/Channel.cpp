@@ -64,12 +64,24 @@ static Mutex s_callidMutex(false,"CallID");
 // this is to protect against two threads trying to (dis)connect a pair
 //  of call endpoints at the same time
 static Mutex s_mutex(true,"CallEndpoint");
+static Mutex s_lastMutex(false,"CallEndpoint::last");
 static const String s_audioType = "audio";
 static const String s_copyParams = "copyparams";
 
+// Check if a Lock taken on the common mutex succeeded, wait up to 55s more in congestion
+static bool checkRetry(Lock& lock)
+{
+    if (lock.locked())
+	return true;
+    Engine::setCongestion("Call endpoint mutex busy");
+    bool ok = lock.acquire(s_mutex,55000000);
+    Engine::setCongestion();
+    return ok;
+}
+
 
 CallEndpoint::CallEndpoint(const char* id)
-    : m_peer(0), m_id(id), m_mutex(0)
+    : m_peer(0), m_lastPeer(0), m_id(id), m_mutex(0)
 {
 }
 
@@ -84,6 +96,7 @@ void CallEndpoint::destroyed()
 #endif
     disconnect(true,0,true,0);
     clearEndpoint();
+    m_lastPeer = 0;
 }
 
 Mutex& CallEndpoint::commonMutex()
@@ -119,7 +132,7 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason, bool notify)
 
 #if 0
     Lock lock(s_mutex,5000000);
-    if (!lock.locked()) {
+    if (!checkRetry(lock)) {
 	Alarm("engine","bug",DebugFail,"Call connect failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
 	Engine::restart(0);
 	return false;
@@ -158,7 +171,7 @@ bool CallEndpoint::disconnect(bool final, const char* reason, bool notify, const
     DDebug(DebugAll,"CallEndpoint '%s' disconnecting peer %p from [%p]",m_id.c_str(),m_peer,this);
 
     Lock lock(s_mutex,5000000);
-    if (!lock.locked()) {
+    if (!checkRetry(lock)) {
 	Alarm("engine","bug",DebugFail,"Call disconnect failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
 	Engine::restart(0);
 	return false;
@@ -202,8 +215,15 @@ bool CallEndpoint::getPeerId(String& id) const
     id.clear();
     if (!m_peer)
 	return false;
+    if (m_peer == m_lastPeer) {
+	Lock mylock(s_lastMutex);
+	if (m_peer == m_lastPeer) {
+	    id = m_lastPeerId;
+	    return !id.null();
+	}
+    }
     Lock lock(s_mutex,5000000);
-    if (!lock.locked()) {
+    if (!checkRetry(lock)) {
 	Alarm("engine","bug",DebugFail,"Peer ID failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
 	Engine::restart(0);
 	return false;
@@ -221,6 +241,36 @@ String CallEndpoint::getPeerId() const
     String id;
     getPeerId(id);
     return id;
+}
+
+bool CallEndpoint::getLastPeerId(String& id) const
+{
+    id.clear();
+    if (!m_lastPeer)
+	return false;
+    s_lastMutex.lock();
+    id = m_lastPeerId;
+    s_lastMutex.unlock();
+    return !id.null();
+}
+
+void CallEndpoint::setLastPeerId()
+{
+    if (!m_peer)
+	return;
+    if (m_peer == m_lastPeer)
+	return;
+    Lock lock(s_mutex,5000000);
+    if (!checkRetry(lock)) {
+	Alarm("engine","bug",DebugGoOn,"Set last peer ID failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
+	return;
+    }
+    if (m_peer) {
+	s_lastMutex.lock();
+	m_lastPeer = m_peer;
+	m_lastPeerId = m_peer->id();
+	s_lastMutex.unlock();
+    }
 }
 
 DataEndpoint* CallEndpoint::getEndpoint(const String& type) const
@@ -464,7 +514,7 @@ void Channel::connected(const char* reason)
 	m->setParam("reason",reason);
     if (!Engine::enqueue(m))
 	TelEngine::destruct(m);
-    getPeerId(m_lastPeerId);
+    setLastPeerId();
 }
 
 void Channel::disconnected(bool final, const char* reason)
@@ -607,8 +657,8 @@ void Channel::complete(Message& msg, bool minimal) const
     String peer;
     if (getPeerId(peer))
 	msg.setParam("peerid",peer);
-    if (m_lastPeerId)
-	msg.setParam("lastpeerid",m_lastPeerId);
+    if (getLastPeerId(peer))
+	msg.setParam("lastpeerid",peer);
     msg.setParam("answered",String::boolText(m_answered));
     msg.setParam("direction",direction());
 }
@@ -1484,7 +1534,7 @@ bool Driver::canAccept(bool routers)
 
 bool Driver::canRoute()
 {
-    if (Engine::exiting())
+    if (Engine::exiting() || (Engine::accept() >= Engine::Congestion))
 	return false;
     if (m_maxroute && (m_routing >= m_maxroute))
 	return false;

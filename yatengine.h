@@ -1154,7 +1154,7 @@ public:
      * @return Engine's call accept status as enumerated value
      */
     inline static CallAccept accept() {
-	return s_accept;
+	return (s_congestion && (s_accept < Congestion)) ? Congestion : s_accept;
     }
 
     /**
@@ -1172,6 +1172,19 @@ public:
     inline static const TokenDict* getCallAcceptStates() {
 	return s_callAccept;
     }
+
+    /**
+     * Alter the congestion state counter.
+     * @param reason Reason to enter congested state, NULL to leave congestion
+     */
+    static void setCongestion(const char* reason = 0);
+
+    /**
+     * Get the congestion state counter
+     * @return Zero if not congested else the number of congested components
+     */
+    static unsigned int getCongestion()
+	{ return s_congestion; }
 
     /**
      * Check if the engine is running as telephony client
@@ -1497,6 +1510,7 @@ private:
     static NamedList s_params;
     static int s_haltcode;
     static RunMode s_mode;
+    static unsigned int s_congestion;
     static CallAccept s_accept;
     static const TokenDict s_callAccept[];
 };

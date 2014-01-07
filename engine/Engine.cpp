@@ -227,6 +227,8 @@ static bool s_init = false;
 static bool s_dynplugin = false;
 static Engine::PluginMode s_loadMode = Engine::LoadFail;
 static int s_maxworkers = 10;
+unsigned int Engine::s_congestion = 0;
+static Mutex s_congMutex(false,"Congestion");
 static bool s_debug = true;
 static bool s_capture = CAPTURE_EVENTS;
 static int s_maxevents = 25;
@@ -430,6 +432,7 @@ bool EngineStatusHandler::received(Message &msg)
     if (locks >= 0)
 	msg.retValue() << ",waiting=" << locks;
     msg.retValue() << ",acceptcalls=" << lookup(Engine::accept(),Engine::getCallAcceptStates());
+    msg.retValue() << ",congestion=" << Engine::getCongestion();
     if (msg.getBoolValue("details",true)) {
 	NamedIterator iter(Engine::runParams());
 	char sep = ';';
@@ -1600,6 +1603,26 @@ Engine* Engine::self()
     if (!s_self)
 	s_self = new Engine;
     return s_self;
+}
+
+void Engine::setCongestion(const char* reason)
+{
+    unsigned int cong = 2;
+    s_congMutex.lock();
+    if (reason)
+	cong = ++s_congestion;
+    else if (s_congestion)
+	cong = --s_congestion;
+    s_congMutex.unlock();
+    switch (cong) {
+	case 0:
+	    Alarm("engine","performance",DebugNote,"Engine congestion ended");
+	    break;
+	case 1:
+	    if (reason)
+		Alarm("engine","performance",DebugWarn,"Engine is congested: %s",reason);
+	    break;
+    }
 }
 
 const char* Engine::pathSeparator()

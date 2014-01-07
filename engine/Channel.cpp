@@ -1523,7 +1523,7 @@ bool Driver::canAccept(bool routers)
 
 bool Driver::canRoute()
 {
-    if (Engine::exiting())
+    if (Engine::exiting() || (Engine::accept() >= Engine::Congestion))
 	return false;
     if (m_maxroute && (m_routing >= m_maxroute))
 	return false;

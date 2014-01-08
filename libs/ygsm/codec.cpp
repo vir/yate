@@ -5,7 +5,7 @@
  * GSM Radio Layer 3 messages coder and decoder
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -45,6 +45,7 @@ struct RL3Message {
     uint16_t value;
     const String name;
     const IEParam* params;
+    const IEParam* toMSParams;
 };
 
 
@@ -87,6 +88,25 @@ static unsigned int decodeRL3Msg(const GSML3Codec* codec, uint8_t proto, const I
 static unsigned int encodeRL3Msg(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
 	DataBlock& out, const NamedList& params);
 
+
+static bool getBCDDigits(const uint8_t*& in, unsigned int& len, String& digits)
+{
+    if (!(in && len))
+	return true;
+    static const char s_bcdDigits[] = "0123456789*#ABC";
+    while (len) {
+	digits += s_bcdDigits[(*in & 0x0f)];
+	uint8_t odd = (*in >> 4);
+	if ((odd & 0x0f) != 0x0f)
+	    digits += s_bcdDigits[odd];
+	else if (len > 1)
+	    return false;
+	in++;
+	len--;
+    }
+    XDebug(DebugAll,"Decoded BCD digits=%s",digits.c_str());
+    return true;
+}
 
 static inline uint8_t getUINT8(const uint8_t*& in, unsigned int& len, const IEParam* param)
 {
@@ -196,7 +216,7 @@ static inline const RL3Message* findRL3Msg(uint16_t val, const RL3Message* where
 static inline const RL3Message* findRL3Msg(XmlElement*& in, const RL3Message* where)
 {
     if (!(where && in))
-	return 0;String tmp;
+	return 0;
     while (where->name) {
 	XmlElement* child = in->findFirstChild(&where->name);
 	if (child) {
@@ -204,6 +224,29 @@ static inline const RL3Message* findRL3Msg(XmlElement*& in, const RL3Message* wh
 	    return where;
 	}
 	where++;
+    }
+    return 0;
+}
+
+static inline const IEParam* getParams(const GSML3Codec* codec, const RL3Message* msg, bool encode = false)
+{
+    if (!(codec && msg))
+	return 0;
+    if (!msg->toMSParams)
+	return msg->params;
+    switch (codec->flags() & GSML3Codec::MSCoder) {
+	case 0:
+	    // we are the network
+	    if (encode)
+		return msg->toMSParams;
+	    return msg->params;
+	case 1:
+	    // we have the role of a mobile station
+	    if (encode)
+		return msg->params;
+	    return msg->toMSParams;
+	default:
+	    return 0;
     }
     return 0;
 }
@@ -289,7 +332,7 @@ static unsigned int encodeInt(const GSML3Codec* codec, uint8_t proto, const IEPa
 	return GSML3Codec::NoError;
     DDebug(codec->dbg(),DebugAll,"encodeInt(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),param,
 	    in->tag(),in,codec->ptr());
-    const String* valStr = in->childText(&param->name);
+    const String* valStr = in->childText(param->name);
     const unsigned int* defVal = static_cast<const unsigned int*>(param->data);
     unsigned int val = (defVal ? *defVal : 0);
     if (TelEngine::null(valStr) && !defVal)
@@ -362,8 +405,8 @@ static unsigned int decodeMsgType(const GSML3Codec* codec,  uint8_t proto, const
 	return GSML3Codec::UnknownMsgType;
     XmlElement* xml = new XmlElement(msg->name);
     addXMLElement(out,xml);
-    if (msg->params)
-	return decodeParams(codec,proto,in,len,xml,msg->params,params);
+    if (const IEParam* msgParams = getParams(codec,msg))
+	return decodeParams(codec,proto,in,len,xml,msgParams,params);
     else {
 	String str;
 	str.hexify((void*)in,len);
@@ -381,19 +424,8 @@ static unsigned int encodeMsgType(const GSML3Codec* codec, uint8_t proto, const 
 	return GSML3Codec::NoError;
     DDebug(codec->dbg(),DebugAll,"encodeMsgType(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),param,
 	    in->tag(),in,codec->ptr());
-    const RL3Message* msg = static_cast<const RL3Message*>(param->data);
-    msg = findRL3Msg(in,msg);
-    if (!msg) {
-	DataBlock d;
-	if (!d.unHexify(in->getText())) {
-	    Debug(codec->dbg(),DebugWarn,"Failed to unhexify message payload in xml=%s(%p) [%p]",in->tag(),in, codec->ptr());
-	    return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
-	}
-	out.append(d);
-	return GSML3Codec::NoError;
-    }
 
-    uint8_t val = msg->value;
+    uint8_t val = 0;
     switch (proto) {
 	case GSML3Codec::GCC:
 	case GSML3Codec::BCC:
@@ -402,8 +434,7 @@ static unsigned int encodeMsgType(const GSML3Codec* codec, uint8_t proto, const 
 	case GSML3Codec::CC:
 	case GSML3Codec::SS:
 	{
-	    val  &= 0x3f;
-	    const String* nsd = in->childText(&s_NSD);
+	    const String* nsd = in->childText(s_NSD);
 	    if (!TelEngine::null(nsd)) {
 		uint8_t sd = nsd->toInteger();
 		if ((proto == GSML3Codec::GCC || proto == GSML3Codec::BCC || proto == GSML3Codec::LCS) && sd > 1)
@@ -415,10 +446,26 @@ static unsigned int encodeMsgType(const GSML3Codec* codec, uint8_t proto, const 
 	default:
 	    break;
     }
+    const RL3Message* msg = static_cast<const RL3Message*>(param->data);
+    msg = findRL3Msg(in,msg);
+    if (!msg) {
+	DataBlock d;
+	if (!d.unHexify(in->getText())) {
+	    Debug(codec->dbg(),DebugWarn,"Failed to unhexify message payload in xml=%s(%p) [%p]",in->tag(),in, codec->ptr());
+	    return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+	}
+	out.append(d);
+	return GSML3Codec::NoError;
+    }
+    val |= (msg->value & 0x3f);
     setUINT8(val,out,param);
-    if (msg->params)
-	return encodeParams(codec,proto,in,out,msg->params,params);
-
+    if (const IEParam* msgParams = getParams(codec,msg,true))
+	return encodeParams(codec,proto,in,out,msgParams,params);
+    else {
+	DataBlock d;
+	if (d.unHexify(in->getText()))
+	    out.append(d);
+    }
     return GSML3Codec::NoError;
 }
 
@@ -446,8 +493,8 @@ static unsigned int decodePD(const GSML3Codec* codec, uint8_t proto, const IEPar
 	return GSML3Codec::UnknownProto;
     }
     XmlElement* xml = new XmlElement(msg->name);
-    if (msg->params)
-	status = decodeParams(codec,msg->value,in,len,xml,msg->params,params);
+    if (const IEParam* msgParams = getParams(codec,msg))
+	status = decodeParams(codec,msg->value,in,len,xml,msgParams,params);
     addXMLElement(out,xml);
     if (payload)
 	xml->addChildSafe(payload);
@@ -471,8 +518,8 @@ static unsigned int encodePD(const GSML3Codec* codec,  uint8_t proto, const IEPa
     setUINT8(msg->value,out,param);
     String str;
     str.hexify(out.data(),out.length());
-    if (msg->params)
-	return encodeParams(codec,msg->value,in,out,msg->params,params);
+    if (const IEParam* msgParams = getParams(codec,msg,true))
+	return encodeParams(codec,msg->value,in,out,msgParams,params);
     return GSML3Codec::NoError;
 }
 
@@ -997,7 +1044,7 @@ static unsigned int encodeLAI(const GSML3Codec* codec,  uint8_t proto, const IEP
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     out.append(d);
     d.clear();
-    const String* lac = xml->childText(&s_LAC);
+    const String* lac = xml->childText(s_LAC);
     if (TelEngine::null(lac) || !d.unHexify(*lac))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     out.append(d);
@@ -1251,6 +1298,250 @@ static const TokenDict s_mmPriorityLevel[] = {
     {"", 0}
 };
 
+// reference ETSI TS 124 007 V11.0.0, section 11.2.3.1.3 Transaction identifier
+static const String s_TIFlag = "TIFlag";
+static const String s_TI = "TI";
+
+static unsigned int decodeTID(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugAll,"decodeTID(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+
+    uint8_t val = getUINT8(in,len,param);
+    xml->addChildSafe(new XmlElement(s_TIFlag,String::boolText(val & 0x08)));
+    val &= 0x07;
+    if (val == 7) {
+	if (!len)
+	    return GSML3Codec::MsgTooShort;
+	val = *in++;
+	len--;
+	if (!(val & 0x80)) {
+	    Debug(codec->dbg(),DebugWarn,"Decoding extended TIDs longer than 1 octet not implemented [%p]",codec->ptr());
+	    return GSML3Codec::ParserErr;
+	}
+	xml->addChildSafe(new XmlElement(s_TI,String(val & 0x7f)));
+    }
+    else
+	xml->addChildSafe(new XmlElement(s_TI,String(val)));
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeTID(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugAll,"encodeTID(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    const String* str = xml->childText(s_TIFlag);
+    if (TelEngine::null(str))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    uint8_t val = 0 | (str->toBoolean() ? 0x08 : 0);
+    str =  xml->childText(s_TI);
+    if (TelEngine::null(str))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    unsigned int ti = str->toInteger();
+    if (ti > 0x7f) {
+	Debug(codec->dbg(),DebugWarn,"Encoding extended TIDs longer than 1 octet not implemented [%p]",codec->ptr());
+	return GSML3Codec::ParserErr;
+    }
+    else if (ti >= 7) {
+	val |= 0x07;
+	setUINT8(val,out,param);
+	val = ti;
+	out.append(&val,1);
+    }
+    else {
+	val |= ti;
+	setUINT8(val,out,param);
+    }
+    return GSML3Codec::NoError;
+}
+
+// reference: ETSI TS 124 008 V11.6.0, 10.5.4.21 Progress indicator
+static const String s_progIndCoding = "coding";
+static const String s_progIndLocation = "location";
+static const String s_progInd = "progress";
+
+static const TokenDict s_progIndCoding_dict[] = {
+    {"CCITT",       0x00},
+    {"reserved",    0x20},
+    {"national",    0x40},
+    {"GSM-PLMN",    0x60},
+    {"", 0}
+};
+
+static const TokenDict s_progIndLocation_dict[] = {
+    {"U",    0x00},                  // User
+    {"LPN",  0x01},                  // Private network serving the local user
+    {"LN",   0x02},                  // Public network serving the local user
+    {"RLN",  0x04},                  // Public network serving the remote user
+    {"RPN",  0x05},                  // Private network serving the remote user
+    {"BI",   0x0a},                  // Network beyond the interworking point
+    {0,0}
+};
+
+static const TokenDict s_progInd_dict[] = {
+    {"call-is-not-end-to-end-PLMN/ISDN",         1},
+    {"destination-address-in-non-PLMN/ISDN",     2},
+    {"origination-address-in-non-PLMN/ISDN",     3},
+    {"call-has-returned-to-the-PLMN/ISDN",       4},
+    {"in-band-information-available",            8},
+    {"in-band-multimedia-CAT-available",         9},
+    {"call-is-end-to-end-PLMN/ISDN",            32},
+    {"queueing",                                64},
+    {"", 0}
+};
+
+static unsigned int decodeProgressInd(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugStub,"decodeProgressInd(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    if (len < 2 || !(in[0] & 0x80) || !(in[1] & 0x80))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+    xml->addChildSafe(new XmlElement(s_progIndCoding,lookup(in[0] & 0x60,s_progIndCoding_dict,"unknown")));
+    xml->addChildSafe(new XmlElement(s_progIndLocation,lookup(in[0] & 0x0f,s_progIndLocation_dict,"unknown")));
+    xml->addChildSafe(new XmlElement(s_progInd,lookup(in[1] & 0x7f,s_progInd_dict,"unspecified")));
+    return  CONDITIONAL_ERROR(param,NoError,ParserErr);
+}
+
+static unsigned int encodeProgressInd(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugAll,"encodeBCDNumber(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    const String* coding = xml->childText(s_progIndCoding);
+    const String* loc = xml->childText(s_progIndLocation);
+    const String* prog = xml->childText(s_progInd);
+    if (TelEngine::null(coding) || TelEngine::null(loc) || TelEngine::null(prog))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    uint8_t buf[2] = {0x80,0x80};
+    buf[0] |= lookup(*coding,s_progIndCoding_dict,0x60) & 0x60;
+    buf[0] |= lookup(*loc,s_progIndLocation_dict,0) & 0x0f;
+    buf[1] |= lookup(*prog,s_progInd_dict,0x7f) & 0x7f;
+    out.append(buf,2);
+    return  CONDITIONAL_ERROR(param,NoError,ParserErr);
+}
+
+// reference: ETSI TS 124 008 V11.6.0, section 10.5.4.7 Called Party BCD Number
+// reference: ETSI TS 124 008 V11.6.0, section 10.5.4.9 Calling party BCD number
+static const String s_numberPlan = "plan";
+static const String s_numberNature = "nature";
+static const String s_numberScreened = "screened";
+static const String s_numberRestrict = "restrict";
+static const String s_numberDigits = "digits";
+
+static const TokenDict s_dict_numNature[] = {
+    { "unknown",             0x00 },
+    { "international",       0x10 },
+    { "national",            0x20 },
+    { "network-specific",    0x30 },
+    { "dedicated-access",    0x40 },
+    { "reserved",            0x50 },
+    { "abbreviated",         0x60 },
+    { "extension-reserved",  0x70 },
+    { 0, 0 },
+};
+
+// Numbering Plan Indicator
+static const TokenDict s_dict_numPlan[] = {
+    { "unknown",      0 },
+    { "isdn",         1 },
+    { "data",         3 },
+    { "telex",        4 },
+    { "national",     8 },
+    { "private",      9 },
+    { "CTS-reserved", 11},
+    { "extension-reserved",      15 },
+    { 0, 0 },
+};
+
+// Address Presentation
+static const TokenDict s_dict_presentation[] = {
+    { "allowed",     0 },
+    { "restricted",  1 },
+    { "unavailable", 2 },
+    { "reserved",    3 },
+    // aliases for restrict=...
+    { "no",    0 },
+    { "false", 0 },
+    { "yes",   1 },
+    { "true",  1 },
+    { 0, 0 }
+};
+
+// Screening Indicator
+static const TokenDict s_dict_screening[] = {
+    { "user-provided",        0 },
+    { "user-provided-passed", 1 },
+    { "user-provided-failed", 2 },
+    { "network-provided",     3 },
+    // aliases for screened=...
+    { "no",    0 },
+    { "false", 0 },
+    { "yes",   1 },
+    { "true",  1 },
+    { 0, 0 }
+};
+
+static unsigned int decodeBCDNumber(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugAll,"decodeBCDNumber(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+
+    xml->addChildSafe(new XmlElement(s_numberNature,lookup((in[0] & 0x70),s_dict_numNature,"unknown")));
+    xml->addChildSafe(new XmlElement(s_numberPlan,lookup((in[0] & 0x0f),s_dict_numPlan,"unknown")));
+    if (!(in[0] & 0x80)) {
+	advanceBuffer(1,in,len);
+	if (!(len && (in[0] & 0x80)))
+	    return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+	xml->addChildSafe(new XmlElement(s_numberScreened,lookup((in[0] & 0x03),s_dict_screening,"unknown")));
+	xml->addChildSafe(new XmlElement(s_numberRestrict,lookup((in[0] & 0x60),s_dict_presentation,"unknown")));
+    }
+    advanceBuffer(1,in,len);
+
+    String bcdDigits;
+    if (!getBCDDigits(in,len,bcdDigits))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    xml->addChildSafe(new XmlElement(s_numberDigits,bcdDigits));
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return GSML3Codec::ParserErr;
+    DDebug(codec->dbg(),DebugStub,"Please implement encodeBCDNumber(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    //TODO
+    return  CONDITIONAL_ERROR(param,NoError,ParserErr);
+}
 
 #define MAKE_IE_PARAM(type,xml,iei,name,optional,length,lowerBits,decoder,encoder,extra) \
     {GSML3Codec::type,GSML3Codec::xml,iei,name,optional,length,lowerBits,decoder,encoder,extra}
@@ -1324,18 +1615,81 @@ static const IEParam s_mmAbortParams[] = {
 
 static const RL3Message s_mmMsgs[] = {
     //TODO
-    {0x02,    "LocationUpdatingAccept",    s_mmLocationUpdateAckParams},
-    {0x04,    "LocationUpdatingReject",    s_mmLocationUpdateRejParams},
-    {0x08,    "LocationUpdatingRequest",   s_mmLocationUpdateReqParams},
-    {0x18,    "IdentityRequest",           s_mmIdentityReqParams},
-    {0x19,    "IdentityResponse",          s_mmIdentityRespParams},
-    {0x1b,    "TMSIReallocationComplete",  0},
-    {0x21,    "CMServiceAccept",           0},
-    {0x22,    "CMServiceReject",           s_mmLocationUpdateRejParams},
-    {0x23,    "CMServiceAbort",            0},
-    {0x24,    "CMServiceRequest",          s_mmCMServiceReqParams},
-    {0x29,    "Abort",                     s_mmAbortParams},
-    {0xff,    "",                  0},
+    {0x02,    "LocationUpdatingAccept",    s_mmLocationUpdateAckParams,    0},
+    {0x04,    "LocationUpdatingReject",    s_mmLocationUpdateRejParams,    0},
+    {0x08,    "LocationUpdatingRequest",   s_mmLocationUpdateReqParams,    0},
+    {0x18,    "IdentityRequest",           s_mmIdentityReqParams,          0},
+    {0x19,    "IdentityResponse",          s_mmIdentityRespParams,         0},
+    {0x1b,    "TMSIReallocationComplete",  0,                              0},
+    {0x21,    "CMServiceAccept",           0,                              0},
+    {0x22,    "CMServiceReject",           s_mmLocationUpdateRejParams,    0},
+    {0x23,    "CMServiceAbort",            0,                              0},
+    {0x24,    "CMServiceRequest",          s_mmCMServiceReqParams,         0},
+    {0x29,    "Abort",                     s_mmAbortParams,                0},
+    {0xff,    "",                          0,                              0},
+};
+
+// reference: ETSI TS 124 008 V11.6.0, 9.3.1 Alerting
+static const IEParam s_ccAlertingParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",      true,     4 * 8,  true, decodeProgressInd, encodeProgressInd, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",               true,   131 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, 9.3.3 Call proceeding
+static const IEParam s_ccCallProceedParams[] = {
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "RepeatIndicator",        true,         8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",      true,    16 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",      true,     4 * 8,  true, decodeProgressInd, encodeProgressInd, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x80, "PriorityGranted",        true,         8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x2F, "NetworkCCCapabilities",  true,     3 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, 9.3.23.2 Setup (mobile originating call establishment)
+static const IEParam s_ccSetupFromMSParams[] = {
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",      true,         8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",     false,    16 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x5D, "CallingPartySubAddress", true,    23 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x5E, "CalledPartyBCDNumber",  false,    43 * 8,  true, decodeBCDNumber, encodeBCDNumber, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x6D, "CalledPartySubAddress",  true,    23 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "LLCRepeatIndicator",     true,         8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility1", true,    18 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility2", true,    18 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "HLCRepeatIndicator",     true,         8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility1",true,     5 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility2",true,     5 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",               true,    35 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",              true,     3 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(T,      XmlElem, 0xA1, "CLIRSuppresion",         true,         8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(T,      XmlElem, 0xA2, "CLIRInvocation",         true,         8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x15, "CCCapabilities",         true,     4 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1D, "FacilityCCBSAdvRA",      true,   255 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1B, "FacilityCCBSRANotEssent",true,   255 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x2D, "StreamIdentifier",       true,     3 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x40, "SupportedCodecs",        true,   255 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(T,      XmlElem, 0xA3, "Redial",                 true,         8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, 9.3.23.1 Setup (mobile terminated call establishment)
+static const IEParam s_ccSetupToMSParams[] = {
+    // TODO
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+
+static const RL3Message s_ccMsgs[] = {
+    //TODO
+    {0x01,    "Alerting",            s_ccAlertingParams,       0},
+    {0x02,    "CallProceeding",      s_ccCallProceedParams,    0},
+    {0x05,    "Setup",               s_ccSetupFromMSParams,    s_ccSetupToMSParams},
+    {0xff,    "",                    0,                        0},
 };
 
 const int s_skipIndDefVal = 0;
@@ -1345,6 +1699,13 @@ static const IEParam s_mmMessage[] = {
     MAKE_IE_PARAM(V,      XmlRoot, 0, "MessageType",   false, 8, false, decodeMsgType, encodeMsgType, s_mmMsgs),
     MAKE_IE_PARAM(NoType, Skip,    0, "",              0,     0, 0,     0,             0,             0 ),
 };
+
+static const IEParam s_ccMessage[] = {
+    MAKE_IE_PARAM(V,      XmlElem, 0, "TID",           false, 4, false, decodeTID,     encodeTID,    0),
+    MAKE_IE_PARAM(V,      XmlRoot, 0, "MessageType",   false, 8, false, decodeMsgType, encodeMsgType, s_ccMsgs),
+    MAKE_IE_PARAM(NoType, Skip,    0, "",              0,     0, 0,     0,             0,             0 ),
+};
+
 
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.4.14 Request type =>
 // section 10.5.6.17 in 3GPP TS 24.008
@@ -1386,30 +1747,30 @@ static const IEParam s_epsPdnConnReqParams[] = {
 // EPS Session Management Messages
 // reference: ETSI TS 124 301 V11.8.0, section 9.8
 static const RL3Message s_epsSmMsgs[] = {
-    {0xc1, "ActivateDefaultEPSBearerContextRequest",   0},
-    {0xc2, "ActivateDefaultEPSBearerContextAccept",    0},
-    {0xc3, "ActivateDefaultEPSBearerContextReject",    0},
-    {0xc5, "ActivateDedicatedEPSBearerContextRequest", 0},
-    {0xc6, "ActivateDedicatedEPSBearerContextAccept",  0},
-    {0xc7, "ActivateDedicatedEPSBearerContextReject",  0},
-    {0xc9, "ModifyEPSBearerContextRequest",            0},
-    {0xca, "ModifyEPSBearerContextAccept",             0},
-    {0xcb, "ModifyEPSBearerContextReject",             0},
-    {0xcd, "DeactivateEPSBearerContextRequest",        0},
-    {0xce, "DeactivateEPSBearerContextaccept",         0},
-    {0xd0, "PDNConnectivityRequest",                   s_epsPdnConnReqParams},
-    {0xd1, "PDNConnectivityReject",                    0},
-    {0xd2, "PDNDisconnectRequest",                     0},
-    {0xd3, "PDNDisconnectReject",                      0},
-    {0xd4, "BearerResourceAllocationRequest",          0},
-    {0xd5, "BearerResourceAllocationReject",           0},
-    {0xd6, "BearerResourceModificationRequest",        0},
-    {0xd7, "BearerResourceModificationReject",         0},
-    {0xd9, "ESMInformationRequest",                    0},
-    {0xda, "ESMInformationResponse",                   0},
-    {0xdb, "Notification",                             0},
-    {0xe8, "ESMStatus",                                0},
-    {0xff, "", 0},
+    {0xc1, "ActivateDefaultEPSBearerContextRequest",   0,    0},
+    {0xc2, "ActivateDefaultEPSBearerContextAccept",    0,    0},
+    {0xc3, "ActivateDefaultEPSBearerContextReject",    0,    0},
+    {0xc5, "ActivateDedicatedEPSBearerContextRequest", 0,    0},
+    {0xc6, "ActivateDedicatedEPSBearerContextAccept",  0,    0},
+    {0xc7, "ActivateDedicatedEPSBearerContextReject",  0,    0},
+    {0xc9, "ModifyEPSBearerContextRequest",            0,    0},
+    {0xca, "ModifyEPSBearerContextAccept",             0,    0},
+    {0xcb, "ModifyEPSBearerContextReject",             0,    0},
+    {0xcd, "DeactivateEPSBearerContextRequest",        0,    0},
+    {0xce, "DeactivateEPSBearerContextaccept",         0,    0},
+    {0xd0, "PDNConnectivityRequest",                   s_epsPdnConnReqParams,    0},
+    {0xd1, "PDNConnectivityReject",                    0,    0},
+    {0xd2, "PDNDisconnectRequest",                     0,    0},
+    {0xd3, "PDNDisconnectReject",                      0,    0},
+    {0xd4, "BearerResourceAllocationRequest",          0,    0},
+    {0xd5, "BearerResourceAllocationReject",           0,    0},
+    {0xd6, "BearerResourceModificationRequest",        0,    0},
+    {0xd7, "BearerResourceModificationReject",         0,    0},
+    {0xd9, "ESMInformationRequest",                    0,    0},
+    {0xda, "ESMInformationResponse",                   0,    0},
+    {0xdb, "Notification",                             0,    0},
+    {0xe8, "ESMStatus",                                0,    0},
+    {0xff, "", 0,    0},
 };
 
 // reference: ETSI TS 124 301 V11.8.0,section 8.3
@@ -1477,8 +1838,8 @@ static const IEParam s_epsAttachRequestParams[] = {
 };
 
 static const RL3Message s_epsMmMsgs[] = {
-    {0x41,    "AttachRequest",     s_epsAttachRequestParams},
-    {0xff,    "",                  0},
+    {0x41,    "AttachRequest",     s_epsAttachRequestParams,    0},
+    {0xff,    "",                  0,                           0},
 };
 
 static const IEParam s_epsMmMessage[] = {
@@ -1488,22 +1849,22 @@ static const IEParam s_epsMmMessage[] = {
 
 
 static const RL3Message s_protoMsg[] = {
-    {GSML3Codec::GCC,        "GCC",     0},
-    {GSML3Codec::BCC,        "BCC",     0},
-    {GSML3Codec::EPS_SM,     "EPS_SM",  s_epsSmMessage},
-    {GSML3Codec::CC,         "CC",      0},
-    {GSML3Codec::GTTP,       "GTTP",    0},
-    {GSML3Codec::MM,         "MM",      s_mmMessage},
-    {GSML3Codec::RRM,        "RRM",     0},
-    {GSML3Codec::EPS_MM,     "EPS_MM",  s_epsMmMessage},
-    {GSML3Codec::GPRS_MM,    "GPRS_MM", 0},
-    {GSML3Codec::SMS,        "SMS",     0},
-    {GSML3Codec::GPRS_SM,    "GPRS_SM", 0},
-    {GSML3Codec::SS,         "SS",      0},
-    {GSML3Codec::LCS,        "LCS",     0},
-    {GSML3Codec::Extension,  "EXT",     0},
-    {GSML3Codec::Test,       "TEST",    0},
-    {GSML3Codec::Unknown,    "",        0},
+    {GSML3Codec::GCC,        "GCC",     0,                 0},
+    {GSML3Codec::BCC,        "BCC",     0,                 0},
+    {GSML3Codec::EPS_SM,     "EPS_SM",  s_epsSmMessage,    0},
+    {GSML3Codec::CC,         "CC",      s_ccMessage,       0},
+    {GSML3Codec::GTTP,       "GTTP",    0,                 0},
+    {GSML3Codec::MM,         "MM",      s_mmMessage,       0},
+    {GSML3Codec::RRM,        "RRM",     0,                 0},
+    {GSML3Codec::EPS_MM,     "EPS_MM",  s_epsMmMessage,    0},
+    {GSML3Codec::GPRS_MM,    "GPRS_MM", 0,                 0},
+    {GSML3Codec::SMS,        "SMS",     0,                 0},
+    {GSML3Codec::GPRS_SM,    "GPRS_SM", 0,                 0},
+    {GSML3Codec::SS,         "SS",      0,                 0},
+    {GSML3Codec::LCS,        "LCS",     0,                 0},
+    {GSML3Codec::Extension,  "EXT",     0,                 0},
+    {GSML3Codec::Test,       "TEST",    0,                 0},
+    {GSML3Codec::Unknown,    "",        0,                 0},
 };
 
 static const IEParam s_rl3Message[] = {
@@ -1565,8 +1926,8 @@ static unsigned int  decodeSecHeader(const GSML3Codec* codec, uint8_t proto, con
 	    }
 	    else {
 		xml = new XmlElement(msg->name);
-		if (msg->params)
-		    ok = decodeParams(codec,proto,in,len,xml,msg->params,params);
+		if (const IEParam* msgParams = getParams(codec,msg))
+		    ok = decodeParams(codec,proto,in,len,xml,msgParams,params);
 	    }
 	    out->addChildSafe(xml);
 	    return ok;
@@ -1627,8 +1988,8 @@ static unsigned int encodeSecHeader(const GSML3Codec* codec,  uint8_t proto, con
 	    uint16_t type = msg->value;
 	    out.append(&type,1);
 	    setUINT8(msg->value,out,param);
-	    if (msg->params)
-		return encodeParams(codec,proto,in,out,msg->params,params);
+	    if (const IEParam* msgParams = getParams(codec,msg,true))
+		return encodeParams(codec,proto,in,out,msgParams,params);
 	    return GSML3Codec::NoError;
 	}
 	case GSML3Codec::IntegrityProtect:
@@ -2162,7 +2523,7 @@ static unsigned int decodeTV(const GSML3Codec* codec, uint8_t proto, const uint8
 	if ((param->iei & (*in & 0xf0)) != param->iei)
 	    return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
     }
-    else if ((~param->iei) & *in)
+    else if (param->iei != *in)
 	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
 
     switch (param->xmlType) {
@@ -2267,7 +2628,7 @@ static unsigned int decodeTLV_TLVE(const GSML3Codec* codec, uint8_t proto, const
     bool ext = (param->type == GSML3Codec::TLVE);
     if (len < (ext ? 3 : 2))
 	return GSML3Codec::MsgTooShort;
-    if ((~param->iei) & *in)
+    if (param->iei != *in)
 	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
 
     switch (param->xmlType) {

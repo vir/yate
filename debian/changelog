@@ -1,4 +1,4 @@
-yate (5.0.1~svn5704) UNRELEASED; urgency=low
+yate (5.0.1~svn5705) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -848,8 +848,15 @@ yate (5.0.1~svn5704) UNRELEASED; urgency=low
     override.  + This should allow recovering from performance problems
     as new calls are blocked.  + Retry taking the lock on CallEndpoint
     mutex keeping the Engine congested.
+  * Updated to SVN revision 5705: + Retry taking the lock on
+    CallEndpoint mutex keeping the Engine congested.  + Added message
+    definitions and started adding coders for CC MO Setup, Call
+    Proceeding and Alerting.  + Handle messages that have different
+    defintions depending upon message direction.  + Added decoder for CC
+    transaction identifier, BCD numbers, progress indicator.  + Fixed
+    encoding for message octet.  + Work in progress for GSM library.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 08 Jan 2014 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 09 Jan 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

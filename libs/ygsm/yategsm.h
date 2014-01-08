@@ -53,6 +53,7 @@ public:
     enum Flags {
 	XmlDumpMsg = 0x01,
 	XmlDumpIEs = 0x02,
+	MSCoder    = 0x04,
     };
 
     /**

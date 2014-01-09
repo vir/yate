@@ -1302,7 +1302,6 @@ static const TokenDict s_mmPriorityLevel[] = {
 
 // reference ETSI TS 124 007 V11.0.0, section 11.2.3.1.3 Transaction identifier
 static const String s_TIFlag = "TIFlag";
-static const String s_TI = "TI";
 
 static unsigned int decodeTID(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
 	unsigned int& len, XmlElement*& out, const NamedList& params)
@@ -1316,7 +1315,7 @@ static unsigned int decodeTID(const GSML3Codec* codec, uint8_t proto, const IEPa
     addXMLElement(out,xml);
 
     uint8_t val = getUINT8(in,len,param);
-    xml->addChildSafe(new XmlElement(s_TIFlag,String::boolText(val & 0x08)));
+    xml->setAttribute(s_TIFlag,String::boolText(val & 0x08));
     val &= 0x07;
     if (val == 7) {
 	if (!len)
@@ -1327,10 +1326,10 @@ static unsigned int decodeTID(const GSML3Codec* codec, uint8_t proto, const IEPa
 	    Debug(codec->dbg(),DebugWarn,"Decoding extended TIDs longer than 1 octet not implemented [%p]",codec->ptr());
 	    return GSML3Codec::ParserErr;
 	}
-	xml->addChildSafe(new XmlElement(s_TI,String(val & 0x7f)));
+	xml->setText(String(val & 0x7f));
     }
     else
-	xml->addChildSafe(new XmlElement(s_TI,String(val)));
+	xml->setText(String(val));
     return GSML3Codec::NoError;
 }
 
@@ -1344,14 +1343,14 @@ static unsigned int encodeTID(const GSML3Codec* codec,  uint8_t proto, const IEP
     XmlElement* xml = in->findFirstChild(&param->name);
     if (!xml)
 	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
-    const String* str = xml->childText(s_TIFlag);
+    const String* str = xml->getAttribute(s_TIFlag);
     if (TelEngine::null(str))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     uint8_t val = 0 | (str->toBoolean() ? 0x08 : 0);
-    str =  xml->childText(s_TI);
-    if (TelEngine::null(str))
+    const String& tiStr =  xml->getText();
+    if (TelEngine::null(tiStr))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
-    unsigned int ti = str->toInteger();
+    unsigned int ti = tiStr.toInteger();
     if (ti > 0x7f) {
 	Debug(codec->dbg(),DebugWarn,"Encoding extended TIDs longer than 1 octet not implemented [%p]",codec->ptr());
 	return GSML3Codec::ParserErr;
@@ -1441,7 +1440,7 @@ static unsigned int encodeProgressInd(const GSML3Codec* codec,  uint8_t proto, c
     buf[0] |= lookup(*loc,s_progIndLocation_dict,0) & 0x0f;
     buf[1] |= lookup(prog,s_progInd_dict,0x7f) & 0x7f;
     out.append(buf,2);
-    return  CONDITIONAL_ERROR(param,NoError,ParserErr);
+    return GSML3Codec::NoError;
 }
 
 // reference: ETSI TS 124 008 V11.6.0, section 10.5.4.7 Called Party BCD Number
@@ -1630,8 +1629,16 @@ static const RL3Message s_mmMsgs[] = {
     {0xff,    "",                          0,                              0},
 };
 
-// reference: ETSI TS 124 008 V11.6.0, 9.3.1 Alerting
-static const IEParam s_ccAlertingParams[] = {
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.1.2 Alerting (mobile station to network direction)
+static const IEParam s_ccAlertFromMSParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",               true,   131 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",              true,     3 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.1.1 Alerting (network to mobile station direction)
+static const IEParam s_ccAlertToMSParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, 0, 0, 0),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",      true,     4 * 8,  true, decodeProgressInd, encodeProgressInd, 0),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",               true,   131 * 8,  true, 0, 0, 0),
@@ -1678,6 +1685,7 @@ static const IEParam s_ccSetupFromMSParams[] = {
     MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
 };
 
+
 // reference: ETSI TS 124 008 V11.6.0, 9.3.23.1 Setup (mobile terminated call establishment)
 static const IEParam s_ccSetupToMSParams[] = {
     // TODO
@@ -1685,11 +1693,101 @@ static const IEParam s_ccSetupToMSParams[] = {
 };
 
 
+// reference: ETSI TS 124 008 V11.6.0, sectin 9.3.5.2 Connect (mobile station to network direction)
+static const IEParam s_ccConnFromMSParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x4D, "ConnectedSubAddress",    true,    23 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",               true,   131 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",              true,     3 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x2D, "StreamIdentifier",       true,     3 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.5.1 Connect (network to mobile station direction)
+static const IEParam s_ccConnToMSParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",      true,     4 * 8,  true, decodeProgressInd, encodeProgressInd, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x4C, "ConnectedNumber",        true,    14 * 8,  true, decodeBCDNumber,   encodeBCDNumber, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x4D, "ConnectedSubAddress",    true,    23 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",               true,   131 * 8,  true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.7.2 Disconnect (mobile station to network direction)
+static const IEParam s_ccDisconnFromMSParams[] = {
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "Cause",         false,    31 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       true,   255 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",       true,   131 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",      true,     3 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.7.1 Disconnect (network to mobile station direction)
+static const IEParam s_ccDisconnToMSParams[] = {
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "Cause",               false,    31 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",             true,   255 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",    true,     4 * 8, true, decodeProgressInd, encodeProgressInd, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",             true,   131 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7B, "AllowedActions",       true,     3 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.18.2 Release (mobile station to network direction)
+static const IEParam s_ccRelFromMSParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",         true,    32 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "SecondCause",   true,    32 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",      true,   255 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",      true,   131 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",     true,     3 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.18.1 Release (network to mobile station direction)
+static const IEParam s_ccRelToMSParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",          true,    32 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "SecondCause",    true,    32 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       true,   255 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",       true,   131 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.19.2 Release complete (mobile station to network direction)
+static const IEParam s_ccRelComplFromMSParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",         true,    32 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",      true,   255 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",      true,   131 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",     true,     3 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.19.1 Release complete (network to mobile station direction)
+static const IEParam s_ccRelComplToMSParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",          true,    32 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       true,   255 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",       true,   131 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.19.1 Release complete (network to mobile station direction)
+static const IEParam s_ccStatusParams[] = {
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "Cause",          false,    31 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "CallState",      false,         8, true, 0, 0, 0),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x24, "AuxiliaryStates", true,     3 * 8, true, 0, 0, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
 static const RL3Message s_ccMsgs[] = {
     //TODO
-    {0x01,    "Alerting",            s_ccAlertingParams,       0},
+    {0x01,    "Alerting",            s_ccAlertFromMSParams,    s_ccAlertToMSParams},
     {0x02,    "CallProceeding",      s_ccCallProceedParams,    0},
     {0x05,    "Setup",               s_ccSetupFromMSParams,    s_ccSetupToMSParams},
+    {0x07,    "Connect",             s_ccConnFromMSParams,     s_ccConnToMSParams},
+    {0x0f,    "ConnectAcknowledge",  0,                        0},
+    {0x25,    "Disconnect",          s_ccDisconnFromMSParams,  s_ccDisconnToMSParams},
+    {0x2d,    "Release",             s_ccRelFromMSParams,      s_ccRelToMSParams},
+    {0x2a,    "ReleaseComplete",     s_ccRelComplFromMSParams, s_ccRelComplToMSParams},
+    {0x34,    "StatusEnquiry",       0,                        0},
+    {0x3d,    "Status",              s_ccStatusParams,         0},
     {0xff,    "",                    0,                        0},
 };
 
@@ -2498,6 +2596,8 @@ static unsigned int encodeLV_LVE(const GSML3Codec* codec, uint8_t proto, XmlElem
 		if (!(xml && d.unHexify(xml->getText())))
 		    return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
 	    }
+	    if (param->isOptional && !d.length())
+		return GSML3Codec::NoError;
 	    if (param->type == GSML3Codec::LVE) {
 		uint16_t len = d.length();
 		uint8_t l[2];
@@ -2558,10 +2658,15 @@ static unsigned int decodeTV(const GSML3Codec* codec, uint8_t proto, const uint8
 		XmlElement* xml = new XmlElement(param->name);
 	        addXMLElement(out,xml);
 		const TokenDict* dict = static_cast<const TokenDict*>(param->data);
-		if (!dict)
-		    xml->setText(String(val));
+		const char* valStr = lookup(val,dict,0);
+		if (!valStr) {
+		    String defValStr;
+		    defValStr.hexify(&val,1);
+		    xml->setText(defValStr);
+		    xml->setAttribute(s_encAttr,"hex");
+		}
 		else
-		    xml->setText(lookup(val,dict,String(val)));
+		    xml->setText(valStr);
 		return GSML3Codec::NoError;
 	    }
 	    break;
@@ -2597,6 +2702,8 @@ static unsigned int encodeTV(const GSML3Codec* codec, uint8_t proto, XmlElement*
 		DataBlock d;
 		if (unsigned int status = param->encoder(codec,proto,param,in,d,params))
 		    return status;
+		if (param->isOptional && !d.length())
+		    return GSML3Codec::NoError;
 		uint8_t iei = param->iei;
 		out.append(&iei,1);
 		out.append(d);
@@ -2694,6 +2801,8 @@ static unsigned int encodeTLV_TLVE(const GSML3Codec* codec, uint8_t proto, XmlEl
 		if (!(xml && d.unHexify(xml->getText())))
 		    return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
 	    }
+	    if (param->isOptional && !d.length())
+		return GSML3Codec::NoError;
 	    uint8_t iei = param->iei;
 	    out.append(&iei,1);
 	    if (param->type == GSML3Codec::TLVE) {

@@ -1,4 +1,4 @@
-yate (5.0.1~svn5705) UNRELEASED; urgency=low
+yate (5.0.1~svn5710) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -855,8 +855,23 @@ yate (5.0.1~svn5705) UNRELEASED; urgency=low
     defintions depending upon message direction.  + Added decoder for CC
     transaction identifier, BCD numbers, progress indicator.  + Fixed
     encoding for message octet.  + Work in progress for GSM library.
+  * Updated to SVN revision 5710: + Handle messages that have different
+    defintions depending upon message direction.  + Added decoder for CC
+    transaction identifier, BCD numbers, progress indicator.  + Fixed
+    encoding for message octet.  + Work in progress for GSM library.  +
+    Do not return error if input buffer is empty and IE is optional.  +
+    Changed MCC_MNC tag to PLMNidentity.  + Changed the way BCD number
+    and ProgressIndicator are decoded.  + Changed message marking in
+    decoding.  + While encoding do not add the type and/or length for an
+    optional IE when it's missing.  + Added message definitions for CC
+    MS to Network Alerting, Connect, Connect Ack, Disconnect, Release,
+    Release Complete, Status and Status Enquiry.  + Changed decoding
+    format for CC transaction identifier.  + Print decoding failures.  +
+    Fixed decoding of Mobile Identity.  + Added MM IMSI Detach
+    Indication message definition.  + Added MM Status message definition
+    for coder and decoder.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 09 Jan 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 10 Jan 2014 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

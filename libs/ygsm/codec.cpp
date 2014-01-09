@@ -1546,6 +1546,13 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
 #define MAKE_IE_PARAM(type,xml,iei,name,optional,length,lowerBits,decoder,encoder,extra) \
     {GSML3Codec::type,GSML3Codec::xml,iei,name,optional,length,lowerBits,decoder,encoder,extra}
 
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.12 IMSI detach indication
+static const IEParam s_mmIMSIDetachIndParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "MobileStationClassmark",      false,       8,  true, 0,  0, 0),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, decodeMobileIdent, encodeMobileIdent, 0),
+    MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
+};
+
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.13 Location updating Accept
 static const IEParam s_mmLocationUpdateAckParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "LAI",                         false,   5 * 8,  true, decodeLAI, encodeLAI, 0),
@@ -1615,6 +1622,7 @@ static const IEParam s_mmAbortParams[] = {
 
 static const RL3Message s_mmMsgs[] = {
     //TODO
+    {0x01,    "IMSIDetachIndication",      s_mmIMSIDetachIndParams,        0},
     {0x02,    "LocationUpdatingAccept",    s_mmLocationUpdateAckParams,    0},
     {0x04,    "LocationUpdatingReject",    s_mmLocationUpdateRejParams,    0},
     {0x08,    "LocationUpdatingRequest",   s_mmLocationUpdateReqParams,    0},

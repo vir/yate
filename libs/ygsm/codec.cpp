@@ -1615,6 +1615,7 @@ static const IEParam s_mmCMServiceReqParams[] = {
 };
 
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.8 Abort
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.16 MM Status
 static const IEParam s_mmAbortParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "RejectCause",    false,       8,  true, 0,  0, s_mmRejectCause),
     MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, 0, 0, 0),
@@ -1634,6 +1635,7 @@ static const RL3Message s_mmMsgs[] = {
     {0x23,    "CMServiceAbort",            0,                              0},
     {0x24,    "CMServiceRequest",          s_mmCMServiceReqParams,         0},
     {0x29,    "Abort",                     s_mmAbortParams,                0},
+    {0x31,    "MMStatus",                  s_mmAbortParams,                0},
     {0xff,    "",                          0,                              0},
 };
 

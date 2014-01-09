@@ -1106,7 +1106,7 @@ static unsigned int decodeMobileIdent(const GSML3Codec* codec, uint8_t proto, co
 	    str.hexify((void*)in,len);
 	    child->addText(str);
 	    advanceBuffer(len,in,len);
-
+	    break;
 	}
 	case 5:
 	{
@@ -2857,7 +2857,11 @@ static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const u
 	    case GSML3Codec::NoType:
 		break;
 	}
-	XDebug(codec->dbg(),DebugAll,"Decoding parameter %s finished with status=%s [%p]",param->name.c_str(),
+	if (status)
+	    Debug(codec->dbg(),DebugWarn,"Decoding parameter %s failed with status=%s [%p]",param->name.c_str(),
+	       lookup(status,GSML3Codec::s_errorsDict,String(status)),codec->ptr());
+	else
+	    DDebug(codec->dbg(),DebugAll,"Decoding parameter %s finished with status=%s [%p]",param->name.c_str(),
 	       lookup(status,GSML3Codec::s_errorsDict,String(status)),codec->ptr());
 	if (status && !param->isOptional)
 	    return status;

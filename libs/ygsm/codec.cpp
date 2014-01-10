@@ -1547,15 +1547,105 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
     return  CONDITIONAL_ERROR(param,NoError,ParserErr);
 }
 
-// reference: ETSI TS 124 008 V11.6.0, section10.5.4.11 Cause
+// reference: ETSI TS 124 008 V11.6.0, section 10.5.4.11 Cause
+static const TokenDict s_cause_dict[] = {
+	// normal-event class
+	{"normal-event",                   0x00},
+	{"unallocated",                    0x01}, // Unallocated (unassigned) number
+	{"noroute",                        0x03}, // No route to destination
+	{"channel-unacceptable",           0x06}, // Channel unacceptable
+	{"operator-determined-barring",    0x08}, // Operator determined barring
+	{"normal-clearing",                0x10}, // Normal Clearing
+	{"busy",                           0x11}, // User busy
+	{"noresponse",                     0x12}, // No user responding
+	{"noanswer",                       0x13}, // No answer from user (user alerted)
+	{"rejected",                       0x15}, // Call Rejected
+	{"moved",                          0x16}, // Number changed
+	{"rejected-by-feature",            0x18}, // Call rejected due to feature at the destination
+	{"preemption",                     0x19}, // Preemption
+	{"answered",                       0x1a}, // Non-selected user clearing (answered elsewhere)
+	{"out-of-order",                   0x1b}, // Destination out of order
+	{"invalid-number",                 0x1c}, // Invalid number format
+	{"facility-rejected",              0x1d}, // Facility rejected
+	{"status-enquiry-rsp",             0x1e}, // Response to STATUS ENQUIRY
+	{"normal",                         0x1f}, // Normal, unspecified
+	// resource-unavailable class
+	{"congestion",                     0x22}, // No circuit/channel available
+	{"channel-congestion",             0x22},
+	{"net-out-of-order",               0x26}, // Network out of order
+	{"noconn",                         0x29},
+	{"temporary-failure",              0x29}, // Temporary failure
+	{"congestion",                     0x2a}, // Switching equipment congestion
+	{"switch-congestion",              0x2a},
+	{"access-info-discarded",          0x2b}, // Access information discarded
+	{"channel-unavailable",            0x2c}, // Requested channel not available
+	{"noresource",                     0x2f}, // Resource unavailable, unspecified
+	// service-unavailable class
+	{"qos-unavailable",                0x31}, // Quality of service unavailable
+	{"facility-not-subscribed",        0x32}, // Requested facility not subscribed
+	{"forbidden-in",                   0x37}, // Incoming call barred within CUG
+	{"bearer-cap-not-auth",            0x39}, // Bearer capability not authorized
+	{"bearer-cap-not-available",       0x3a}, // Bearer capability not presently available
+	{"nomedia",                        0x3a},
+	{"service-unavailable",            0x3f}, // Service or option not available
+	// service-not-implemented class
+	{"bearer-cap-not-implemented",     0x41}, // Bearer capability not implemented
+	{"acm-equal-or-greater-ACM-max",   0x44}, // ACM equal to or greater than ACMmax
+	{"facility-not-implemented",       0x45}, // Requested facility not implemented
+	{"restrict-bearer-cap-avail",      0x46}, // Only restricted digital information bearer capability is available
+	{"service-not-implemented",        0x4f}, // Service or option not implemented, unspecified
+	// invalid-message class
+	{"invalid-callref",                0x51}, // Invalid call reference value
+	{"not-subscribed",                 0x57}, // User not member of CUG
+	{"incompatible-dest",              0x58}, // Incompatible destination
+	{"invalid-transit-net",            0x5b}, // Invalid transit network selection
+	{"invalid-message",                0x5f}, // Invalid message, unspecified
+	// protocol-error class
+	{"missing-mandatory-ie",           0x60}, // Mandatory information element is missing
+	{"unknown-message",                0x61}, // Message type non-existent or not implemented
+	{"wrong-message",                  0x62}, // Message not compatible with call state, non-existent or not implemented
+	{"unknown-ie",                     0x63}, // Information element non-existent or not implemented
+	{"invalid-ie",                     0x64}, // Invalid information element contents
+	{"wrong-state-message",            0x65}, // Message not compatible with call state
+	{"timeout",                        0x66}, // Recovery on timer expiry
+	{"protocol-error",                 0x6f}, // Protocol error, unspecified
+	// interworking class
+	{"interworking",                   0x7f}, // Interworking, unspecified
+	{0,0}
+};
+
+static const String s_causeRec = "rec";
+static const String s_causeDiag = "diagnostic";
+
 static unsigned int decodeCause(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
 	unsigned int& len, XmlElement*& out, const NamedList& params)
 {
     if (!(codec && in && len && param))
 	return CONDITIONAL_ERROR(param,NoError,ParserErr);
-    DDebug(codec->dbg(),DebugStub,"Please implement decodeCause(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+    DDebug(codec->dbg(),DebugAll,"decodeCause(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
 	    in,len,out,codec->ptr());
-    // TODO
+    if (len < 2)
+	return CONDITIONAL_ERROR(param,NoError,IncorrectMandatoryIE);
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+
+    xml->setAttribute(s_progIndCoding,lookup(in[0] & 0x60,s_progIndCoding_dict,"unknown"));
+    xml->setAttribute(s_progIndLocation,lookup(in[0] & 0x0f,s_progIndLocation_dict,"unknown"));
+    if (!(in[0] & 0x80)) {
+	advanceBuffer(1,in,len);
+	xml->setAttribute(s_causeRec,String(in[0] & 0x7f));
+    }
+    advanceBuffer(1,in,len);
+    if (!len)
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    xml->setText(lookup(in[0] & 0x7f,s_cause_dict,"unspecified"));
+    advanceBuffer(1,in,len);
+    if (len) {
+	String s;
+	s.hexify((void*)in,len);
+	advanceBuffer(len,in,len);
+	xml->setAttribute(s_causeDiag,s);
+    }
     return GSML3Codec::NoError;
 }
 
@@ -1564,10 +1654,37 @@ static unsigned int encodeCause(const GSML3Codec* codec,  uint8_t proto, const I
 {
     if (!(codec && in && param))
 	return CONDITIONAL_ERROR(param,NoError,ParserErr);
-    DDebug(codec->dbg(),DebugStub,"Please implement encodeCause(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+    DDebug(codec->dbg(),DebugAll,"encodeCause(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
 	    in->tag(),in,codec->ptr());
-    // TODO
-    return  CONDITIONAL_ERROR(param,NoError,ParserErr);
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    const String* coding = xml->getAttribute(s_progIndCoding);
+    const String* loc = xml->getAttribute(s_progIndLocation);
+    const String& cause = xml->getText();
+    if (TelEngine::null(coding) || TelEngine::null(loc) || TelEngine::null(cause))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    const String* rec = xml->getAttribute(s_causeRec);
+    const String* diag = xml->getAttribute(s_causeDiag);
+    uint8_t buf[4] = {0x80,0x80,0x80};
+    uint8_t idx = 0;
+    buf[idx] |= lookup(*coding,s_progIndCoding_dict,0x60) & 0x60;
+    buf[idx] |= lookup(*loc,s_progIndLocation_dict,0) & 0x0f;
+    if (!TelEngine::null(rec)) {
+	buf[idx++] &= 0x7f;
+	buf[idx] |= rec->toInteger() & 0x7f;
+    }
+    idx++;
+    buf[idx] |= lookup(cause,s_cause_dict,0) & 0x7f;
+    out.append(buf,idx+1);
+    if (!TelEngine::null(diag)) {
+	DataBlock d;
+	if (!d.unHexify(*diag))
+	    Debug(codec->dbg(),DebugWarn,"Failed to unhexify Cause diagnostic, not encoding it");
+	else
+	    out.append(d);
+    }
+    return GSML3Codec::NoError;
 }
 
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.4.14 Request type =>

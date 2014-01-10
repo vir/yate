@@ -432,6 +432,7 @@ public:
 	    params().addParam(new ExpFunction("clearChildren"));
 	    params().addParam(new ExpFunction("addText"));
 	    params().addParam(new ExpFunction("getText"));
+	    params().addParam(new ExpFunction("setText"));
 	    params().addParam(new ExpFunction("getChildText"));
 	    params().addParam(new ExpFunction("xmlText"));
 	}
@@ -1848,6 +1849,14 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	else
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
+    else if (oper.name() == YSTRING("setText")) {
+	if (argc != 1)
+	    return false;
+	ExpOperation* text = static_cast<ExpOperation*>(args[0]);
+	if (!(m_xml && text))
+	    return false;
+	m_xml->setText(*text);
+    }
     else if (oper.name() == YSTRING("getChildText")) {
 	if (argc > 2)
 	    return false;
@@ -1880,7 +1889,8 @@ JsObject* JsXML::runConstructor(ObjList& stack, const ExpOperation& oper, GenObj
     XDebug(&__plugin,DebugAll,"JsXML::runConstructor '%s'("FMT64") [%p]",oper.name().c_str(),oper.number(),this);
     JsXML* obj = 0;
     ObjList args;
-    switch (extractArgs(stack,oper,context,args)) {
+    int n = extractArgs(stack,oper,context,args);
+    switch (n) {
 	case 1:
 	    {
 		ExpOperation* text = static_cast<ExpOperation*>(args[0]);
@@ -1891,12 +1901,15 @@ JsObject* JsXML::runConstructor(ObjList& stack, const ExpOperation& oper, GenObj
 	    }
 	    break;
 	case 2:
+	case 3:
 	    {
 		JsObject* jso = YOBJECT(JsObject,args[0]);
 		ExpOperation* name = static_cast<ExpOperation*>(args[1]);
 		if (!jso || !name)
 		    return 0;
-		XmlElement* xml = getXml(jso->getField(stack,*name,context),false);
+		ExpOperation* tmp = static_cast<ExpOperation*>(args[2]);
+		bool take = tmp && tmp->valBoolean();
+		XmlElement* xml = getXml(jso->getField(stack,*name,context),take);
 		if (!xml)
 		    return 0;
 		obj = new JsXML(mutex(),xml);

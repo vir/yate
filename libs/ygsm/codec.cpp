@@ -113,6 +113,45 @@ static bool getBCDDigits(const uint8_t*& in, unsigned int& len, String& digits)
     return true;
 }
 
+static bool setBCDDigits(uint8_t* in, unsigned int len, unsigned int& idx, const String& digits)
+{
+    if (!digits)
+	return true;
+    if (!(in && len))
+	return false;
+    bool odd = false;
+    const char* chars = digits.c_str();
+    char c = 0;
+    while((c = *chars++) && (idx < len)) {
+	uint8_t d = 0;
+	if (('0' <= c) && (c <= '9'))
+	    d = c - '0';
+	else if ('*' == c)
+	    d = 10;
+	else if ('#' == c)
+	    d = 11;
+	else if ('a' == c || 'A' == c)
+	    d = 12;
+	else if ('b' == c || 'B' == c)
+	    d = 13;
+	else if ('c' == c || 'C' == c)
+	    d = 14;
+	else {
+	    Debug(DebugWarn,"Invalid char=%c in BCD String",c);
+	    return false;
+	}
+	odd = !odd;
+	if (odd)
+	    in[idx] = d;
+	else
+	    in[idx++] |= (d << 4);
+    }
+    if (odd)
+	in[idx] |= 0xf0;
+
+    return true;
+}
+
 static inline uint8_t getUINT8(const uint8_t*& in, unsigned int& len, const IEParam* param)
 {
     if (!(in && len && param))
@@ -1429,7 +1468,7 @@ static unsigned int encodeProgressInd(const GSML3Codec* codec,  uint8_t proto, c
 {
     if (!(codec && in && param))
 	return CONDITIONAL_ERROR(param,NoError,ParserErr);
-    DDebug(codec->dbg(),DebugAll,"encodeBCDNumber(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+    DDebug(codec->dbg(),DebugAll,"encodeProgressInd(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
 	    in->tag(),in,codec->ptr());
     XmlElement* xml = in->findFirstChild(&param->name);
     if (!xml)
@@ -1541,10 +1580,33 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
 {
     if (!(codec && in && param))
 	return CONDITIONAL_ERROR(param,NoError,ParserErr);
-    DDebug(codec->dbg(),DebugStub,"Please implement encodeBCDNumber(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+    DDebug(codec->dbg(),DebugAll,"encodeBCDNumber(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
 	    in->tag(),in,codec->ptr());
-    //TODO
-    return  CONDITIONAL_ERROR(param,NoError,ParserErr);
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    const String digits =  xml->getText();
+    const String* nature = xml->getAttribute(s_numberNature);
+    const String* plan = xml->getAttribute(s_numberPlan);
+    const String* screen = xml->getAttribute(s_numberScreened);
+    const String* pres = xml->getAttribute(s_numberRestrict);
+
+    unsigned int len = 2 + digits.length() + (digits.length() % 2 ? 0 : 1);
+    uint8_t buff[len];
+    unsigned int idx = 0;
+    buff[idx] = (lookup(*nature,s_dict_numNature,0) & 0x70);
+    buff[idx] |= (lookup(*plan,s_dict_numPlan,0) & 0x0f);
+    if (TelEngine::null(screen) && TelEngine::null(pres))
+	buff[idx++] |= 0x80;
+    else {
+	buff[++idx] = 0x80;
+	buff[idx] |= ((screen ? lookup(*screen,s_dict_screening,0) : 0) & 0x03);
+	buff[idx++] |= ((pres ? lookup(*pres,s_dict_presentation,0) : 0) & 0x60);
+    }
+    if (!setBCDDigits(buff,len,idx,digits))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    out.append(buff,idx + 1);
+    return GSML3Codec::NoError;
 }
 
 // reference: ETSI TS 124 008 V11.6.0, section 10.5.4.11 Cause

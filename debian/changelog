@@ -1,4 +1,4 @@
-yate (5.0.1~svn5710) UNRELEASED; urgency=low
+yate (5.0.1~svn5715) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -870,8 +870,14 @@ yate (5.0.1~svn5710) UNRELEASED; urgency=low
     Fixed decoding of Mobile Identity.  + Added MM IMSI Detach
     Indication message definition.  + Added MM Status message definition
     for coder and decoder.
+  * Updated to SVN revision 5715: + Separated IE type defition from IE
+    parameter definition.  + Added setText function to XML object. Added
+    optional third argument to XML constructor used to take the xml from
+    list parameter instead of making a copy.  + Added coder and encoder
+    for Cause type.  + Added encoder for BCD number type.  +
+    Decode/encode unknown PLMN Identity.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 10 Jan 2014 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 11 Jan 2014 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

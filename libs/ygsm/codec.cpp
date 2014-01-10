@@ -60,15 +60,19 @@ static const String s_typeAttr = "type";
 static const char s_digits[] = "0123456789";
 
 #define GET_DIGIT(val,str,err,odd) \
-    if ((val > 9 && val != 0x0f) || (!odd && val == 0x0f) || (odd && val != 0x0f)) \
-	return err; \
+    if ((val > 9 && val != 0x0f) || (!odd && val == 0x0f) || (odd && val != 0x0f)) {\
+	Debug(DebugWarn,"GET_DIGIT: Invalid digit=%u",val);\
+	return err;\
+    }\
     else if (val != 0x0f) \
 	str << s_digits[val];
 
 #define SET_DIGIT(c,b,idx,highOctet,err) \
     { \
-	if (!(('0' <= c) && (c <= '9'))) \
+	if (!(('0' <= c) && (c <= '9'))) { \
+	    Debug(DebugWarn,"SET_DIGIT: Invalid digit=%c",c);\
 	    return err; \
+	}\
 	*(b + idx) |= (highOctet ? ((c - '0') << 4) : (c - '0')); \
     }
 
@@ -296,6 +300,11 @@ static inline unsigned int getMCCMNC(const uint8_t*& in, unsigned int& len, XmlE
 {
     if (len < 3 || !xml)
 	return GSML3Codec::ParserErr;
+    if (in[0] == 0xff && in[1] == 0xff && in[2] == 0xff) {
+	if (advance)
+	    advanceBuffer(3,in,len);
+	return GSML3Codec::NoError;
+    }
     String out;
     // get MCC
     GET_DIGIT((in[0] & 0x0f),out,GSML3Codec::ParserErr,false);
@@ -316,6 +325,14 @@ static inline unsigned int setMCCMNC(XmlElement* in, uint8_t*& out, unsigned int
     if (!(in && out && len >= 3))
 	return GSML3Codec::ParserErr;
     XmlElement* xml = in->findFirstChild(&YSTRING("PLMNidentity"));
+    if (!xml) {
+	*out = *(out+1) = *(out+2) =0xff;
+	if (advance) {
+	    out += 3;
+	    len -= 3;
+	}
+	return GSML3Codec::NoError;
+    }
     if (!(xml && (xml->getText().length() == 5 || xml->getText().length() == 6)))
 	return GSML3Codec::ParserErr;
     const String& text = xml->getText();

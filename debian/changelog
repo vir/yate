@@ -1,4 +1,4 @@
-yate (5.0.1~svn5715) UNRELEASED; urgency=low
+yate (5.0.1~svn5716) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -876,8 +876,12 @@ yate (5.0.1~svn5715) UNRELEASED; urgency=low
     list parameter instead of making a copy.  + Added coder and encoder
     for Cause type.  + Added encoder for BCD number type.  +
     Decode/encode unknown PLMN Identity.
+  * Updated to SVN revision 5716: + Added flag for printing debug
+    messages. Print debug message when exiting decoding/encoding
+    functions.  + Added encoder for Location Updating type.  + Added
+    encoder/decoder for IEs which only have type (IEI).
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 11 Jan 2014 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 14 Jan 2014 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

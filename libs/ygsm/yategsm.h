@@ -191,7 +191,7 @@ public:
     { 
 	if (reset)
 	    resetFlags();
-	m_flags |= flgs; 
+	m_flags |= flgs;
     }
 
     /**
@@ -205,6 +205,20 @@ public:
 	else
 	    m_flags = 0;
     }
+
+    /**
+     * Activate printing of debug messages
+     * @param on True to activate, false to disable
+     */
+    inline void setPrintDbg(bool on = false)
+	{ m_printDbg = on; }
+
+    /**
+     * Get printing of debug messages flag
+     * @return True if debugging is activated, false otherwise
+     */
+    inline bool printDbg() const
+	{ return m_printDbg; }
 
     /**
      * Get DebugEnabler used by this codec
@@ -244,11 +258,14 @@ private:
 
     unsigned int decodeXml(XmlElement* xml, const NamedList& params, const String& pduTag);
     unsigned int encodeXml(XmlElement* xml, const NamedList& params, const String& pduTag);
+    void printDbg(int dbgLevel, const uint8_t* in, unsigned int len, XmlElement* xml, bool encode = false);
 
     uint8_t m_flags;                 // Codec flags
     // data used for debugging messages
     DebugEnabler* m_dbg;
     void* m_ptr;
+    // activate debug
+    bool m_printDbg;
 };
 
 

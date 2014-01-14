@@ -57,6 +57,7 @@ static const String s_pduCodec = "codecTag";
 static const String s_epsSequenceNumber = "SequenceNumber";
 static const String s_encAttr = "enc";
 static const String s_typeAttr = "type";
+static const String s_flags = "Flags";
 static const char s_digits[] = "0123456789";
 
 #define GET_DIGIT(val,str,err,odd) \
@@ -248,6 +249,18 @@ static inline void getFlags(unsigned int bitmask, const TokenDict* dict, String&
 	    out.append(dict->token,",");
 }
 
+static inline unsigned int setFlags(const String& str, const TokenDict* dict)
+{
+    if (!dict)
+	return 0;
+    unsigned int bits = 0;
+    ObjList* list = str.split(',');
+    for (; dict->token; dict++)
+	if (list->find(dict->token))
+	    bits |= dict->value;
+    TelEngine::destruct(list);
+    return bits;
+}
 
 static inline const RL3Message* findRL3Msg(uint16_t val, const RL3Message* where)
 {
@@ -277,15 +290,16 @@ static inline const IEParam* getParams(const GSML3Codec* codec, const RL3Message
 {
     if (!(codec && msg))
 	return 0;
+    XDebug(codec->dbg(),DebugAll,"getParams(msg=%s,encode=%s) [%p]",msg->name.c_str(),String::boolText(encode),codec->ptr());
     if (!msg->toMSParams)
 	return msg->params;
-    switch (codec->flags() & GSML3Codec::MSCoder) {
+    switch ((codec->flags() & GSML3Codec::MSCoder)) {
 	case 0:
 	    // we are the network
 	    if (encode)
 		return msg->toMSParams;
 	    return msg->params;
-	case 1:
+	case GSML3Codec::MSCoder:
 	    // we have the role of a mobile station
 	    if (encode)
 		return msg->params;
@@ -294,6 +308,18 @@ static inline const IEParam* getParams(const GSML3Codec* codec, const RL3Message
 	    return 0;
     }
     return 0;
+}
+
+static void dumpData(const uint8_t*& in, unsigned int& len, XmlElement* xml, bool advance = true)
+{
+    if (!(in && len))
+	return;
+    String str;
+    str.hexify((void*)in,len);
+    XmlElement* child = new XmlElement("data",str);
+    child->setAttribute(s_encAttr,"hex");
+    xml->addChildSafe(child);
+    advanceBuffer(len,in,len);
 }
 
 static inline unsigned int getMCCMNC(const uint8_t*& in, unsigned int& len, XmlElement* xml, bool advance = true)
@@ -459,19 +485,20 @@ static unsigned int decodeMsgType(const GSML3Codec* codec,  uint8_t proto, const
     }
     const RL3Message* msg = static_cast<const RL3Message*>(param->ieType.data);
     msg = findRL3Msg(val,msg);
-    if (!msg)
-	return GSML3Codec::UnknownMsgType;
     XmlElement* xml = new XmlElement(param->name);
-    xml->setAttribute(s_typeAttr,msg->name);
+    if (msg)
+	xml->setAttribute(s_typeAttr,msg->name);
+    else
+	xml->setAttribute(s_typeAttr,String(val));
     addXMLElement(out,xml);
+    if (!msg) {
+	dumpData(in,len,xml);
+	return GSML3Codec::UnknownMsgType;
+    }
     if (const IEParam* msgParams = getParams(codec,msg))
 	return decodeParams(codec,proto,in,len,xml,msgParams,params);
-    else {
-	String str;
-	str.hexify((void*)in,len);
-	xml->addText(str);
-	advanceBuffer(len,in,len);
-    }
+    else
+	dumpData(in,len,xml);
     return GSML3Codec::NoError;
 }
 
@@ -1619,7 +1646,7 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
     const String* screen = xml->getAttribute(s_numberScreened);
     const String* pres = xml->getAttribute(s_numberRestrict);
 
-    unsigned int len = 2 + digits.length() + (digits.length() % 2 ? 0 : 1);
+    unsigned int len = 2 + digits.length() / 2 + (digits.length() % 2 ? 0 : 1);
     uint8_t buff[len];
     unsigned int idx = 0;
     buff[idx] = (lookup(*nature,s_dict_numNature,0) & 0x70);
@@ -1633,7 +1660,7 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
     }
     if (!setBCDDigits(buff,len,idx,digits))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
-    out.append(buff,idx + 1);
+    out.append(buff,idx);
     return GSML3Codec::NoError;
 }
 
@@ -1777,6 +1804,225 @@ static unsigned int encodeCause(const GSML3Codec* codec,  uint8_t proto, const I
     return GSML3Codec::NoError;
 }
 
+// reference: ETSI TS 124 008 V11.6.0, section 10.5.4.5a Call Control Capabilities
+const String s_maxSuppBearers = "MaxSupportedBearers";
+const String s_maxSpeechBearers = "MaxSpeechBearers";
+
+static const TokenDict s_CCCapab_flags[] = {
+    {"DTMF",  1},
+    {"PCP",   2},
+    {"ENICM", 4},
+    {"MCAT",  8},
+    {"", 0}
+};
+
+static unsigned int decodeCCCapab(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodeCCCapab(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    if (len < 2)
+	return CONDITIONAL_ERROR(param,NoError,IncorrectMandatoryIE);
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+    String flags;
+    getFlags(*in & 0x0f,s_CCCapab_flags,flags);
+    xml->addChildSafe(new XmlElement(s_flags,flags));
+    xml->addChildSafe(new XmlElement(s_maxSuppBearers,String((*in & 0xf0) >> 4)));
+    xml->addChildSafe(new XmlElement(s_maxSpeechBearers,String((*in + 1) & 0x0f)));
+    advanceBuffer(2,in,len);
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeCCCapab(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodeCCCapab(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    uint8_t buf[2] = {0,0};
+    const String* str = xml->childText(s_flags);
+    buf[0] = (TelEngine::null(str) ? 0 : (setFlags(*str,s_CCCapab_flags) & 0x0f));
+    str = xml->childText(s_maxSuppBearers);
+    buf[0] |= (TelEngine::null(str) ? 0 : (0xf0 & (str->toInteger() << 4)));
+    str = xml->childText(s_maxSpeechBearers);
+    buf[1] |= (TelEngine::null(str) ? 0 : (0x0f & str->toInteger()));
+    out.append(buf,2);
+    return GSML3Codec::NoError;
+}
+
+// reference: ETSI TS 124 008 V11.6.0, section 10.5.4.5 Bearer Capability
+static const String s_bearerCapabITC = "ITC";
+static const String s_bearerTransfMode = "TransferMode";
+static const String s_codingStd = "CodingStandard";
+static const String s_radioChanReq = "RadioChannelRequirement";
+static const String s_ctmTxtTel = "CTMTextTelephony";
+static const String s_speechVers = "SpeechVersions";
+
+static const TokenDict s_bearerCapabITC_types[] = {
+    {"speech",           0}, // speech
+    {"udi",              1}, // unrestricted digital information
+    {"3.1khz-audio",     2}, // 3.1kHz audio, ex PLMN
+    {"facsimile-group3", 3}, // facsimile group 3
+    {"other-ITC",        5}, // Other ITC (see octet 5a)
+    {"reserved",         7}, // reserved, to be used in the network
+    {"", 0},
+};
+
+static const TokenDict s_bearerTransfMode_types[] = {
+    {"circuit-mode",     0x00},
+    {"packet-mode",      0x08},
+    {"", 0},
+};
+
+static const TokenDict s_bearerCodingStd_types[] = {
+    {"GSM",       0x00},
+    {"reserved",  0x10},
+    {"", 0},
+};
+
+static const TokenDict s_radioChanNonSpeech[] = {
+    {"reserved",                   0x00},
+    {"FR-support-only-MS",         0x01},
+    {"DR-support-MS/HR-preferred", 0x02},
+    {"DR-support-MS/FR-preferred", 0x03},
+    {"", 0},
+};
+
+static const TokenDict s_radioChanSpeech[] = {
+    {"reserved",                                                0x00},
+    {"FR-support-only-MS/FR-speech-version1-supported",         0x01},
+    {"DR-support-MS/HR-speech-version1-preferred",              0x02},
+    {"DR-support-MS/FR-speech-version1-preferred",              0x03},
+    {"", 0},
+};
+
+static const TokenDict s_radioChanSpeechExt[] = {
+    {"reserved",                                                 0x00},
+    {"FR-speech-version1-supported",                             0x01},
+    {"FR-and-HR-speech-version1-supported/HR-speech-preferred",  0x02},
+    {"FR-and-HR-speech-version1-supported/FR-speech-preferred",  0x03},
+    {"", 0},
+};
+
+static const TokenDict s_speechVers_types[] = {
+    {"GSM-FR-speech-version1",       0x00},
+    {"GSM-FR-speech-version2",       0x02},
+    {"GSM-FR-speech-version3",       0x04},
+    {"GSM-FR-speech-version4",       0x06},
+    {"GSM-FR-speech-version5",       0x08},
+    {"GSM-HR-speech-version1",       0x01},
+    {"GSM-HR-speech-version3",       0x05},
+    {"GSM-HR-speech-version4",       0x07},
+    {"GSM-FR-speech-version6",       0x0b},
+    {"no-speech-version-for-GERAN",  0x0f},
+    {"", 0},
+};
+
+static const TokenDict s_bearerCapabStruct[] = {
+    {"service-data-unit-integrity",       0x00},
+    {"unstructured",                      0x30},
+    {"", 0},
+};
+
+static unsigned int decodeBearerCapab(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodeBearerCapab(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    if (len < 1)
+	return CONDITIONAL_ERROR(param,NoError,IncorrectMandatoryIE);
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+    // octet 3
+    uint8_t itc = *in & 0x07;
+    bool ext = ((*in & 0x80) == 0);
+    xml->addChildSafe(new XmlElement(s_bearerCapabITC,lookup(itc,s_bearerCapabITC_types,"unknown")));
+    xml->addChildSafe(new XmlElement(s_bearerTransfMode,lookup(*in & 0x08,s_bearerTransfMode_types,"unknown")));
+    xml->addChildSafe(new XmlElement(s_codingStd,lookup(*in & 0x10,s_bearerCodingStd_types,"unknown")));
+    uint8_t rcr = (*in & 0x60) >> 5;
+    advanceBuffer(1,in,len);
+    switch (itc) {
+	case 0: // speech
+	{
+	    if (!ext)
+		xml->addChildSafe(new XmlElement(s_radioChanReq,lookup(rcr,s_radioChanSpeech,"unknown")));
+	    else {
+		xml->addChildSafe(new XmlElement(s_radioChanReq,lookup(rcr,s_radioChanSpeechExt,"unknown")));
+		XmlElement* spVersInd = new XmlElement(s_speechVers);
+		xml->addChildSafe(spVersInd);
+		String speechVers;
+		// octet 3a*
+		while (ext) {
+		    if (!len) {
+			Debug(codec->dbg(),DebugWarn,"Invalid payload length for extended BearerCapability type [%p]",
+			    codec->ptr());
+			return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+		    }
+		    if (!(*in & 0x40)) {
+			if (!speechVers && (*in & 0x20))
+			    spVersInd->setAttribute(s_ctmTxtTel,"true");
+			speechVers.append(lookup(*in & 0x0f,s_speechVers_types,"TBD"),",");
+		    }
+		    ext = ((*in & 0x80) == 0);
+		    advanceBuffer(1,in,len);
+		}
+		spVersInd->addText(speechVers);
+	    }
+	    break;
+	}
+	default: // non-speech
+	    xml->addChildSafe(new XmlElement(s_radioChanReq,lookup(rcr,s_radioChanNonSpeech,"unknown")));
+	    break;
+    }
+    // octet 4
+    if (len) {
+	ext = ((*in & 0x80) == 0);
+	if (ext) {
+	    Debug(codec->dbg(),DebugWarn,"Extension bit set for specification octet 4 of Bearer Capability type [%p]",
+		    codec->ptr());
+	    return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+	}
+	xml->addChildSafe(new XmlElement("Establishment",(*in & 0x01) ? "reserved" : "demand"));
+	if (*in & 0x02)
+	    xml->addChildSafe(new XmlElement("NIRR","data-to-and-including-4.8kb/s,FR,non-transparent,6kb/s-radio-interface-requested")); 
+	xml->addChildSafe(new XmlElement("Configuration",(*in & 0x04) ? "reserved" : "point-to-point"));
+	xml->addChildSafe(new XmlElement("DuplexMode",(*in & 0x08) ? "full-duplex" : "half-duplex"));
+	xml->addChildSafe(new XmlElement("Compression",(*in & 0x40) ? "allowed" : "not-allowed"));
+	xml->addChildSafe(new XmlElement("Structure",lookup(*in & 0x30,s_bearerCapabStruct,"reserved")));
+	advanceBuffer(1,in,len);
+    }
+// TODO
+    if (len) {
+	String s;
+	s.hexify((void*)in,len);
+	xml->addChildSafe(new XmlElement("data",s));
+	advanceBuffer(len,in,len);
+    }
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeBearerCapab(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugStub,"Please implement encodeBearerCapab(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    return CONDITIONAL_ERROR(param,NoError,ParserErr);
+}
+
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.4.14 Request type =>
 // section 10.5.6.17 in 3GPP TS 24.008
 static const TokenDict s_epsReqType[] = {
@@ -1851,6 +2097,8 @@ MAKE_IE_TYPE(PrioLevel,0,0,s_mmPriorityLevel)
 MAKE_IE_TYPE(ProgressInd,decodeProgressInd,encodeProgressInd,0)
 MAKE_IE_TYPE(BCDNumber,decodeBCDNumber,encodeBCDNumber,0)
 MAKE_IE_TYPE(Cause,decodeCause,encodeCause,0)
+MAKE_IE_TYPE(CCCapabilities,decodeCCCapab,encodeCCCapab,0)
+MAKE_IE_TYPE(BearerCapab,decodeBearerCapab,encodeBearerCapab,0)
 
 const int s_skipIndDefVal = 0;
 MAKE_IE_TYPE(Int,decodeInt,encodeInt,&s_skipIndDefVal)
@@ -1996,8 +2244,8 @@ static const IEParam s_ccAlertToMSParams[] = {
 // reference: ETSI TS 124 008 V11.6.0, 9.3.3 Call proceeding
 static const IEParam s_ccCallProceedParams[] = {
     MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "RepeatIndicator",        true,         8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",      true,    16 * 8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",      true,    16 * 8,  true, s_type_BearerCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, s_type_BearerCapab),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",      true,     4 * 8,  true, s_type_ProgressInd),
     MAKE_IE_PARAM(TV,     XmlElem, 0x80, "PriorityGranted",        true,         8,  true, s_type_Undef),
@@ -2008,8 +2256,8 @@ static const IEParam s_ccCallProceedParams[] = {
 // reference: ETSI TS 124 008 V11.6.0, 9.3.23.2 Setup (mobile originating call establishment)
 static const IEParam s_ccSetupFromMSParams[] = {
     MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",      true,         8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",     false,    16 * 8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",     false,    16 * 8,  true, s_type_BearerCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, s_type_BearerCapab),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x5D, "CallingPartySubAddress", true,    23 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x5E, "CalledPartyBCDNumber",  false,    43 * 8,  true, s_type_BCDNumber),
@@ -2024,7 +2272,7 @@ static const IEParam s_ccSetupFromMSParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",              true,     3 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(T,      XmlElem, 0xA1, "CLIRSuppresion",         true,         8,  true, s_type_Undef),
     MAKE_IE_PARAM(T,      XmlElem, 0xA2, "CLIRInvocation",         true,         8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x15, "CCCapabilities",         true,     4 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x15, "CCCapabilities",         true,     4 * 8,  true, s_type_CCCapabilities),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1D, "FacilityCCBSAdvRA",      true,   255 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1B, "FacilityCCBSRANotEssent",true,   255 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x2D, "StreamIdentifier",       true,     3 * 8,  true, s_type_Undef),
@@ -2124,6 +2372,12 @@ static const IEParam s_ccStatusParams[] = {
     s_ie_EndDef,
 };
 
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.19.1 Release complete (network to mobile station direction)
+static const IEParam s_ccStartDTMF[] = {
+    MAKE_IE_PARAM(TV,     XmlElem,    0, "KeypadFacility",     false,    2 * 8, true, s_type_Undef),
+    s_ie_EndDef,
+};
+
 static const RL3Message s_ccMsgs[] = {
     //TODO
     {0x01,    "Alerting",            s_ccAlertFromMSParams,    s_ccAlertToMSParams},
@@ -2131,11 +2385,23 @@ static const RL3Message s_ccMsgs[] = {
     {0x05,    "Setup",               s_ccSetupFromMSParams,    s_ccSetupToMSParams},
     {0x07,    "Connect",             s_ccConnFromMSParams,     s_ccConnToMSParams},
     {0x0f,    "ConnectAcknowledge",  0,                        0},
+    {0x18,    "Hold",                0,                        0},
+    {0x19,    "HoldAck",             0,                        0},
+    {0x1a,    "HoldReject",          0,                        0},
+    {0x1c,    "Retrieve",            0,                        0},
+    {0x1d,    "RetrieveAck",         0,                        0},
+    {0x1e,    "RetrieveRject",       0,                        0},
     {0x25,    "Disconnect",          s_ccDisconnFromMSParams,  s_ccDisconnToMSParams},
     {0x2d,    "Release",             s_ccRelFromMSParams,      s_ccRelToMSParams},
     {0x2a,    "ReleaseComplete",     s_ccRelComplFromMSParams, s_ccRelComplToMSParams},
     {0x34,    "StatusEnquiry",       0,                        0},
     {0x3d,    "Status",              s_ccStatusParams,         0},
+    {0x35,    "StartDTMF",           s_ccStartDTMF,            0},
+    {0x36,    "StartDTMFAck",        0,                        0},
+    {0x37,    "StartDTMFReject",     0,                        0},
+    {0x31,    "StopDTMF",            0,                        0},
+    {0x32,    "StopDTMFAck",         0,                        0},
+    {0x3a,    "Facility",            0,                        0},
     {0xff,    "",                    0,                        0},
 };
 

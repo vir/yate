@@ -57,6 +57,7 @@ static const String s_pduCodec = "codecTag";
 static const String s_epsSequenceNumber = "SequenceNumber";
 static const String s_encAttr = "enc";
 static const String s_typeAttr = "type";
+static const String s_flags = "Flags";
 static const char s_digits[] = "0123456789";
 
 #define GET_DIGIT(val,str,err,odd) \
@@ -248,6 +249,18 @@ static inline void getFlags(unsigned int bitmask, const TokenDict* dict, String&
 	    out.append(dict->token,",");
 }
 
+static inline unsigned int setFlags(const String& str, const TokenDict* dict)
+{
+    if (!dict)
+	return 0;
+    unsigned int bits = 0;
+    ObjList* list = str.split(',');
+    for (; dict->token; dict++)
+	if (list->find(dict->token))
+	    bits |= dict->value;
+    TelEngine::destruct(list);
+    return bits;
+}
 
 static inline const RL3Message* findRL3Msg(uint16_t val, const RL3Message* where)
 {
@@ -277,15 +290,16 @@ static inline const IEParam* getParams(const GSML3Codec* codec, const RL3Message
 {
     if (!(codec && msg))
 	return 0;
+    XDebug(codec->dbg(),DebugAll,"getParams(msg=%s,encode=%s) [%p]",msg->name.c_str(),String::boolText(encode),codec->ptr());
     if (!msg->toMSParams)
 	return msg->params;
-    switch (codec->flags() & GSML3Codec::MSCoder) {
+    switch ((codec->flags() & GSML3Codec::MSCoder)) {
 	case 0:
 	    // we are the network
 	    if (encode)
 		return msg->toMSParams;
 	    return msg->params;
-	case 1:
+	case GSML3Codec::MSCoder:
 	    // we have the role of a mobile station
 	    if (encode)
 		return msg->params;
@@ -1619,7 +1633,7 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
     const String* screen = xml->getAttribute(s_numberScreened);
     const String* pres = xml->getAttribute(s_numberRestrict);
 
-    unsigned int len = 2 + digits.length() + (digits.length() % 2 ? 0 : 1);
+    unsigned int len = 2 + digits.length() / 2 + (digits.length() % 2 ? 0 : 1);
     uint8_t buff[len];
     unsigned int idx = 0;
     buff[idx] = (lookup(*nature,s_dict_numNature,0) & 0x70);
@@ -1633,7 +1647,7 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
     }
     if (!setBCDDigits(buff,len,idx,digits))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
-    out.append(buff,idx + 1);
+    out.append(buff,idx);
     return GSML3Codec::NoError;
 }
 
@@ -1777,6 +1791,59 @@ static unsigned int encodeCause(const GSML3Codec* codec,  uint8_t proto, const I
     return GSML3Codec::NoError;
 }
 
+// reference: ETSI TS 124 008 V11.6.0, section 10.5.4.5a Call Control Capabilities
+const String s_maxSuppBearers = "MaxSupportedBearers";
+const String s_maxSpeechBearers = "MaxSpeechBearers";
+
+static const TokenDict s_CCCapab_flags[] = {
+    {"DTMF",  1},
+    {"PCP",   2},
+    {"ENICM", 4},
+    {"MCAT",  8},
+    {"", 0}
+};
+
+static unsigned int decodeCCCapab(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodeCCCapab(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    if (len < 2)
+	return CONDITIONAL_ERROR(param,NoError,IncorrectMandatoryIE);
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+    String flags;
+    getFlags(*in & 0x0f,s_CCCapab_flags,flags);
+    xml->addChildSafe(new XmlElement(s_flags,flags));
+    xml->addChildSafe(new XmlElement(s_maxSuppBearers,String((*in & 0xf0) >> 4)));
+    xml->addChildSafe(new XmlElement(s_maxSpeechBearers,String((*in + 1) & 0x0f)));
+    advanceBuffer(2,in,len);
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeCCCapab(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodeCCCapab(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    uint8_t buf[2] = {0,0};
+    const String* str = xml->childText(s_flags);
+    buf[0] = (TelEngine::null(str) ? 0 : (setFlags(*str,s_CCCapab_flags) & 0x0f));
+    str = xml->childText(s_maxSuppBearers);
+    buf[0] |= (TelEngine::null(str) ? 0 : (0xf0 & (str->toInteger() << 4)));
+    str = xml->childText(s_maxSpeechBearers);
+    buf[1] |= (TelEngine::null(str) ? 0 : (0x0f & str->toInteger()));
+    out.append(buf,2);
+    return GSML3Codec::NoError;
+}
+
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.4.14 Request type =>
 // section 10.5.6.17 in 3GPP TS 24.008
 static const TokenDict s_epsReqType[] = {
@@ -1851,6 +1918,7 @@ MAKE_IE_TYPE(PrioLevel,0,0,s_mmPriorityLevel)
 MAKE_IE_TYPE(ProgressInd,decodeProgressInd,encodeProgressInd,0)
 MAKE_IE_TYPE(BCDNumber,decodeBCDNumber,encodeBCDNumber,0)
 MAKE_IE_TYPE(Cause,decodeCause,encodeCause,0)
+MAKE_IE_TYPE(CCCapabilities,decodeCCCapab,encodeCCCapab,0)
 
 const int s_skipIndDefVal = 0;
 MAKE_IE_TYPE(Int,decodeInt,encodeInt,&s_skipIndDefVal)
@@ -2024,7 +2092,7 @@ static const IEParam s_ccSetupFromMSParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",              true,     3 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(T,      XmlElem, 0xA1, "CLIRSuppresion",         true,         8,  true, s_type_Undef),
     MAKE_IE_PARAM(T,      XmlElem, 0xA2, "CLIRInvocation",         true,         8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x15, "CCCapabilities",         true,     4 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x15, "CCCapabilities",         true,     4 * 8,  true, s_type_CCCapabilities),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1D, "FacilityCCBSAdvRA",      true,   255 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1B, "FacilityCCBSRANotEssent",true,   255 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x2D, "StreamIdentifier",       true,     3 * 8,  true, s_type_Undef),

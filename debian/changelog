@@ -1,4 +1,4 @@
-yate (5.0.1~svn5716) UNRELEASED; urgency=low
+yate (5.0.1~svn5718) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -880,8 +880,17 @@ yate (5.0.1~svn5716) UNRELEASED; urgency=low
     messages. Print debug message when exiting decoding/encoding
     functions.  + Added encoder for Location Updating type.  + Added
     encoder/decoder for IEs which only have type (IEI).
+  * Updated to SVN revision 5718: + Added encoder for Location Updating
+    type.  + Added encoder/decoder for IEs which only have type (IEI).
+    + Added decoder and encoder for Call Control Capabilities type.  +
+    Added generic function for building a bit string from a list of
+    flags.  + Fixed solving of message definition table depending upon
+    message direction.  + Fixed encoding of BCD number.  + Added several
+    message type values to the Call Control message table.  + If message
+    type is unknown, dump integer value of the message type along with
+    its data.  + Added partial decoding for Bearer Capabilities.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 14 Jan 2014 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 15 Jan 2014 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

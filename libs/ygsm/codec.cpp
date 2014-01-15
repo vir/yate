@@ -319,7 +319,8 @@ static void dumpData(const uint8_t*& in, unsigned int& len, XmlElement* xml, boo
     XmlElement* child = new XmlElement("data",str);
     child->setAttribute(s_encAttr,"hex");
     xml->addChildSafe(child);
-    advanceBuffer(len,in,len);
+    if (advance)
+	advanceBuffer(len,in,len);
 }
 
 static inline unsigned int getMCCMNC(const uint8_t*& in, unsigned int& len, XmlElement* xml, bool advance = true)
@@ -1515,7 +1516,7 @@ static unsigned int decodeProgressInd(const GSML3Codec* codec, uint8_t proto, co
     xml->setAttribute(s_progIndCoding,lookup(in[0] & 0x60,s_progIndCoding_dict,"unknown"));
     xml->setAttribute(s_progIndLocation,lookup(in[0] & 0x0f,s_progIndLocation_dict,"unknown"));
     xml->setText(lookup(in[1] & 0x7f,s_progInd_dict,"unspecified"));
-    return  CONDITIONAL_ERROR(param,NoError,ParserErr);
+    return GSML3Codec::NoError;
 }
 
 static unsigned int encodeProgressInd(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
@@ -2000,13 +2001,9 @@ static unsigned int decodeBearerCapab(const GSML3Codec* codec, uint8_t proto, co
 	xml->addChildSafe(new XmlElement("Structure",lookup(*in & 0x30,s_bearerCapabStruct,"reserved")));
 	advanceBuffer(1,in,len);
     }
-// TODO
-    if (len) {
-	String s;
-	s.hexify((void*)in,len);
-	xml->addChildSafe(new XmlElement("data",s));
-	advanceBuffer(len,in,len);
-    }
+    // TODO - continue decoding of octets 5*, 6* and 7
+    if (len)
+	dumpData(in,len,xml);
     return GSML3Codec::NoError;
 }
 
@@ -2021,6 +2018,44 @@ static unsigned int encodeBearerCapab(const GSML3Codec* codec,  uint8_t proto, c
     if (!xml)
 	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
     return CONDITIONAL_ERROR(param,NoError,ParserErr);
+}
+
+// reference: ETSI TS 124 008 V11.6.0, 10.5.4.17 Keypad facility
+static unsigned int decodeIA5Chars(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodeIA5Chars(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+    String s;
+    while (len) {
+	s << (char)(*in & 0x7f);
+	advanceBuffer(1,in,len);
+    }
+    xml->addText(s);
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeIA5Chars(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodeIA5Chars(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    const String& txt = xml->getText();
+    unsigned int len = txt.length();
+    uint8_t buf[len];
+    for (unsigned int i = 0; i < len; i++)
+	buf[0] = txt[i] & 0x7f;
+    out.append(buf,len);
+    return GSML3Codec::NoError;
 }
 
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.4.14 Request type =>
@@ -2099,6 +2134,7 @@ MAKE_IE_TYPE(BCDNumber,decodeBCDNumber,encodeBCDNumber,0)
 MAKE_IE_TYPE(Cause,decodeCause,encodeCause,0)
 MAKE_IE_TYPE(CCCapabilities,decodeCCCapab,encodeCCCapab,0)
 MAKE_IE_TYPE(BearerCapab,decodeBearerCapab,encodeBearerCapab,0)
+MAKE_IE_TYPE(IA5Chars,decodeIA5Chars,encodeIA5Chars,0)
 
 const int s_skipIndDefVal = 0;
 MAKE_IE_TYPE(Int,decodeInt,encodeInt,&s_skipIndDefVal)
@@ -2372,9 +2408,17 @@ static const IEParam s_ccStatusParams[] = {
     s_ie_EndDef,
 };
 
-// reference: ETSI TS 124 008 V11.6.0, section 9.3.19.1 Release complete (network to mobile station direction)
-static const IEParam s_ccStartDTMF[] = {
-    MAKE_IE_PARAM(TV,     XmlElem,    0, "KeypadFacility",     false,    2 * 8, true, s_type_Undef),
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.12 Hold Reject
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.21 Retrieve Reject
+static const IEParam s_ccCauseRejParams[] = {
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "Cause", false,  31 * 8, true, s_type_Cause),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.24 Start DTMF
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.25 Start DTMF Acknowledge
+static const IEParam s_ccStartDTMFParams[] = {
+    MAKE_IE_PARAM(TV,     XmlElem,   0x2C, "KeypadFacility",     false,    2 * 8, true, s_type_IA5Chars),
     s_ie_EndDef,
 };
 
@@ -2387,18 +2431,18 @@ static const RL3Message s_ccMsgs[] = {
     {0x0f,    "ConnectAcknowledge",  0,                        0},
     {0x18,    "Hold",                0,                        0},
     {0x19,    "HoldAck",             0,                        0},
-    {0x1a,    "HoldReject",          0,                        0},
+    {0x1a,    "HoldReject",          s_ccCauseRejParams,       0},
     {0x1c,    "Retrieve",            0,                        0},
     {0x1d,    "RetrieveAck",         0,                        0},
-    {0x1e,    "RetrieveRject",       0,                        0},
+    {0x1e,    "RetrieveReject",      s_ccCauseRejParams,       0},
     {0x25,    "Disconnect",          s_ccDisconnFromMSParams,  s_ccDisconnToMSParams},
     {0x2d,    "Release",             s_ccRelFromMSParams,      s_ccRelToMSParams},
     {0x2a,    "ReleaseComplete",     s_ccRelComplFromMSParams, s_ccRelComplToMSParams},
     {0x34,    "StatusEnquiry",       0,                        0},
     {0x3d,    "Status",              s_ccStatusParams,         0},
-    {0x35,    "StartDTMF",           s_ccStartDTMF,            0},
-    {0x36,    "StartDTMFAck",        0,                        0},
-    {0x37,    "StartDTMFReject",     0,                        0},
+    {0x35,    "StartDTMF",           s_ccStartDTMFParams,      0},
+    {0x36,    "StartDTMFAck",        s_ccStartDTMFParams,      0},
+    {0x37,    "StartDTMFReject",     s_ccCauseRejParams,       0},
     {0x31,    "StopDTMF",            0,                        0},
     {0x32,    "StopDTMFAck",         0,                        0},
     {0x3a,    "Facility",            0,                        0},
@@ -3498,12 +3542,8 @@ static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const u
 	    return status;
 	param++;
     }
-    if (len && out) {
-	String str;
-	str.hexify((void*)in,len);
-	out->addChildSafe(new XmlElement("data",str));
-	advanceBuffer(len,in,len);
-    }
+    if (len && out)
+	dumpData(in,len,out);
     return GSML3Codec::NoError;
 };
 

@@ -1532,11 +1532,17 @@ static unsigned int encodeProgressInd(const GSML3Codec* codec,  uint8_t proto, c
     const String* coding = xml->getAttribute(s_progIndCoding);
     const String* loc = xml->getAttribute(s_progIndLocation);
     const String& prog = xml->getText();
-    if (TelEngine::null(coding) || TelEngine::null(loc) || TelEngine::null(prog))
+    if (TelEngine::null(prog))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     uint8_t buf[2] = {0x80,0x80};
-    buf[0] |= lookup(*coding,s_progIndCoding_dict,0x60) & 0x60;
-    buf[0] |= lookup(*loc,s_progIndLocation_dict,0) & 0x0f;
+    if (TelEngine::null(coding)) // set coding GSM PLMN if not provided
+	buf[0] |= 0x60;
+    else
+	buf[0] |= lookup(*coding,s_progIndCoding_dict,0x60) & 0x60;
+    if (TelEngine::null(loc)) // set location LPN if not provided
+	buf[0] |= 0x01;
+    else
+	buf[0] |= lookup(*loc,s_progIndLocation_dict,0x01) & 0x0f;
     buf[1] |= lookup(prog,s_progInd_dict,0x7f) & 0x7f;
     out.append(buf,2);
     return GSML3Codec::NoError;
@@ -1780,14 +1786,20 @@ static unsigned int encodeCause(const GSML3Codec* codec,  uint8_t proto, const I
     const String* coding = xml->getAttribute(s_progIndCoding);
     const String* loc = xml->getAttribute(s_progIndLocation);
     const String& cause = xml->getText();
-    if (TelEngine::null(coding) || TelEngine::null(loc) || TelEngine::null(cause))
+    if (TelEngine::null(cause))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     const String* rec = xml->getAttribute(s_causeRec);
     const String* diag = xml->getAttribute(s_causeDiag);
     uint8_t buf[4] = {0x80,0x80,0x80};
     uint8_t idx = 0;
-    buf[idx] |= lookup(*coding,s_progIndCoding_dict,0x60) & 0x60;
-    buf[idx] |= lookup(*loc,s_progIndLocation_dict,0) & 0x0f;
+    if (TelEngine::null(coding)) // set coding GSM PLMN if not provided
+	buf[idx] |= 0x60;
+    else
+	buf[idx] |= lookup(*coding,s_progIndCoding_dict,0x60) & 0x60;
+    if (TelEngine::null(loc)) // set location LPN if not provided
+	buf[idx] |= 0x01;
+    else
+	buf[idx] |= lookup(*loc,s_progIndLocation_dict,0x01) & 0x0f;
     if (!TelEngine::null(rec)) {
 	buf[idx++] &= 0x7f;
 	buf[idx] |= rec->toInteger() & 0x7f;
@@ -2445,6 +2457,25 @@ static const IEParam s_ccCallConfirmParams[] = {
     s_ie_EndDef,
 };
 
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.13 Modify
+static const IEParam s_ccModifyParams[] = {
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "BearerCapability",          false,    15 * 8,  true, s_type_BearerCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility",      true,    18 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility",     true,     5 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(T,      XmlElem, 0xA3, "ReverseCallSetupDirection",  true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(T,      XmlElem, 0xA4, "NIServiceUpgradeIndicator",  true,         8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.14 Modify Complete
+static const IEParam s_ccModifyComplParams[] = {
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "BearerCapability",          false,    15 * 8,  true, s_type_BearerCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility",      true,    18 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility",     true,     5 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(T,      XmlElem, 0xA3, "ReverseCallSetupDirection",  true,         8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.19.1 Release complete (network to mobile station direction)
 static const IEParam s_ccRelComplToMSParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",          true,    32 * 8, true, s_type_Cause),
@@ -2492,6 +2523,8 @@ static const RL3Message s_ccMsgs[] = {
     {0x08,    "CallConfirmed",       s_ccCallConfirmParams,    0},
     {0x0f,    "ConnectAcknowledge",  0,                        0},
     // Call information phase messages
+    {0x17,    "Modify",              s_ccModifyParams,         0},
+    {0x1f,    "ModifyComplete",      s_ccModifyComplParams,    0},
     {0x18,    "Hold",                0,                        0},
     {0x19,    "HoldAck",             0,                        0},
     {0x1a,    "HoldReject",          s_ccCauseRejParams,       0},
@@ -3293,6 +3326,7 @@ static unsigned int encodeLV_LVE(const GSML3Codec* codec, uint8_t proto, XmlElem
 		out.append(&len,1);
 	    }
 	    out.append(d);
+	    break;
 	}
 	default:
 	    return GSML3Codec::ParserErr;
@@ -3559,6 +3593,7 @@ static unsigned int encodeTLV_TLVE(const GSML3Codec* codec, uint8_t proto, XmlEl
 		out.append(&len,1);
 	    }
 	    out.append(d);
+	    break;
 	}
 	default:
 	    return GSML3Codec::ParserErr;
@@ -3633,25 +3668,27 @@ static unsigned int encodeParams(const GSML3Codec* codec, uint8_t proto, XmlElem
 		status = encodeT(codec,proto,in,out,param,params);
 		break;
 	    case GSML3Codec::TV:
-		encodeTV(codec,proto,in,out,param,params);
+		status = encodeTV(codec,proto,in,out,param,params);
 		break;
 	    case GSML3Codec::LV:
 	    case GSML3Codec::LVE:
-		encodeLV_LVE(codec,proto,in,out,param,params);
+		status = encodeLV_LVE(codec,proto,in,out,param,params);
 		break;
 	    case GSML3Codec::TLV:
 	    case GSML3Codec::TLVE:
-		encodeTLV_TLVE(codec,proto,in,out,param,params);
+		status = encodeTLV_TLVE(codec,proto,in,out,param,params);
 		break;
 	    case GSML3Codec::NoType:
 		break;
 	}
 	XDebug(codec->dbg(),DebugAll,"Encoding parameter %s finished with status=%s [%p]",param->name.c_str(),
 	       lookup(status,GSML3Codec::s_errorsDict,String(status)),codec->ptr());
-	if (status && !param->isOptional) {
-	    Debug(codec->dbg(),DebugMild,"Encoding of mandatory parameter %s finished with status=%s [%p]",param->name.c_str(),
-	       lookup(status,GSML3Codec::s_errorsDict,String(status)),codec->ptr());
-	    ok = status;
+	if (status) {
+	    Debug(codec->dbg(),param->isOptional ? DebugMild :DebugWarn,
+		"Encoding of %s parameter %s finished with status=%s [%p]",(param->isOptional ? "optional" : "mandatory"),
+		param->name.c_str(),lookup(status,GSML3Codec::s_errorsDict,String(status)),codec->ptr());
+	    if (!param->isOptional)
+		ok = status;
 	}
 	param++;
     }

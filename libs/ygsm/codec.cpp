@@ -1647,7 +1647,7 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
     const String* screen = xml->getAttribute(s_numberScreened);
     const String* pres = xml->getAttribute(s_numberRestrict);
 
-    unsigned int len = 2 + digits.length() / 2 + (digits.length() % 2 ? 0 : 1);
+    unsigned int len = 2 + digits.length() / 2 + (digits.length() % 2 ? 1 : 0);
     uint8_t buff[len];
     unsigned int idx = 0;
     buff[idx] = (lookup(*nature,s_dict_numNature,0) & 0x70);
@@ -1661,7 +1661,7 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
     }
     if (!setBCDDigits(buff,len,idx,digits))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
-    out.append(buff,idx);
+    out.append(buff,idx + 1);
     return GSML3Codec::NoError;
 }
 
@@ -2320,7 +2320,30 @@ static const IEParam s_ccSetupFromMSParams[] = {
 
 // reference: ETSI TS 124 008 V11.6.0, 9.3.23.1 Setup (mobile terminated call establishment)
 static const IEParam s_ccSetupToMSParams[] = {
-    // TODO
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",           true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",           true,    16 * 8,  true, s_type_BearerCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",           true,    16 * 8,  true, s_type_BearerCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",                    true,   255 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",           true,     4 * 8,  true, s_type_ProgressInd),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x34, "Signal",                      true,     2 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x5C, "CallingPartyBCDNumber",       true,    14 * 8,  true, s_type_BCDNumber),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x5D, "CallingPartySubAddress",      true,    23 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x5E, "CalledPartyBCDNumber",        true,    19 * 8,  true, s_type_BCDNumber),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x6D, "CalledPartySubAddress",       true,    23 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x74, "RedirectingPartyBCDNumber",   true,    19 * 8,  true, s_type_BCDNumber),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x75, "RedirectingPartySubAddress",  true,    23 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "LLCRepeatIndicator",          true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility1",      true,    18 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility2",      true,    18 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "HLCRepeatIndicator",          true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility1",     true,     5 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility2",     true,     5 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",                    true,    35 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x80, "Priority",                    true,         8,  true, s_type_PrioLevel),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x19, "Alert",                       true,     3 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x2F, "NetworkCCCapabilities",       true,     3 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x3A, "CauseOfNoCLI",                true,     3 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x41, "BackupBearerCapability",      true,    15 * 8,  true, s_type_Undef),
     s_ie_EndDef,
 };
 

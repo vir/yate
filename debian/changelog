@@ -1,4 +1,4 @@
-yate (5.0.1~svn5718) UNRELEASED; urgency=low
+yate (5.0.1~svn5723) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -889,8 +889,21 @@ yate (5.0.1~svn5718) UNRELEASED; urgency=low
     message type values to the Call Control message table.  + If message
     type is unknown, dump integer value of the message type along with
     its data.  + Added partial decoding for Bearer Capabilities.
+  * Updated to SVN revision 5723: + If message type is unknown, dump
+    integer value of the message type along with its data.  + Added
+    partial decoding for Bearer Capabilities.  + Replaced code to dump
+    non-decoded data with function.  + Added encoder and decoder for IA5
+    characters.  + Added message definitions for HoldReject,
+    RetrieveReject, StartDTMF, StartDTMFAcknowledge, StartDTMFReject.  +
+    Added message definition for CC Mobile Terminating Setup.  + Added
+    message definitions for Call Control messages: Call Confirmed,
+    Notify and Progress.  + Improved encoding debug.  + Assume default
+    values for coding and location if not provided when encoding Cause
+    si ProgressIndicator.  + Added message definitions for CC Modify and
+    Modify Complete.  + Allow encoding messages with hexified payload in
+    data element.  + Added CC Modify Reject to CC message table.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 15 Jan 2014 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 16 Jan 2014 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

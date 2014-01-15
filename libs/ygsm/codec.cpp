@@ -58,6 +58,7 @@ static const String s_epsSequenceNumber = "SequenceNumber";
 static const String s_encAttr = "enc";
 static const String s_typeAttr = "type";
 static const String s_flags = "Flags";
+static const String s_data = "data";
 static const char s_digits[] = "0123456789";
 
 #define GET_DIGIT(val,str,err,odd) \
@@ -316,11 +317,26 @@ static void dumpData(const uint8_t*& in, unsigned int& len, XmlElement* xml, boo
 	return;
     String str;
     str.hexify((void*)in,len);
-    XmlElement* child = new XmlElement("data",str);
+    XmlElement* child = new XmlElement(s_data,str);
     child->setAttribute(s_encAttr,"hex");
     xml->addChildSafe(child);
     if (advance)
 	advanceBuffer(len,in,len);
+}
+
+static void getData(DataBlock& out, XmlElement* xml)
+{
+    if (!xml)
+	return;
+    XmlElement* data = xml->findFirstChild(&s_data);
+    if (!data)
+	return;
+    DataBlock d;
+    if (!d.unHexify(data->getText())) {
+	Debug(DebugWarn,"Failed to unhexify data in xml=%s",xml->tag());
+	return;
+    }
+    out.append(d);
 }
 
 static inline unsigned int getMCCMNC(const uint8_t*& in, unsigned int& len, XmlElement* xml, bool advance = true)
@@ -551,11 +567,8 @@ static unsigned int encodeMsgType(const GSML3Codec* codec, uint8_t proto, const 
     setUINT8(val,out,param);
     if (const IEParam* msgParams = getParams(codec,msg,true))
 	return encodeParams(codec,proto,in,out,msgParams,params);
-    else {
-	DataBlock d;
-	if (d.unHexify(in->getText()))
-	    out.append(d);
-    }
+    else
+	getData(out,in);
     return GSML3Codec::NoError;
 }
 
@@ -2525,6 +2538,7 @@ static const RL3Message s_ccMsgs[] = {
     // Call information phase messages
     {0x17,    "Modify",              s_ccModifyParams,         0},
     {0x1f,    "ModifyComplete",      s_ccModifyComplParams,    0},
+    {0x13,    "ModifyReject",        0,                        0},
     {0x18,    "Hold",                0,                        0},
     {0x19,    "HoldAck",             0,                        0},
     {0x1a,    "HoldReject",          s_ccCauseRejParams,       0},

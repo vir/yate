@@ -2012,11 +2012,13 @@ static unsigned int encodeBearerCapab(const GSML3Codec* codec,  uint8_t proto, c
 {
     if (!(codec && in && param))
 	return CONDITIONAL_ERROR(param,NoError,ParserErr);
-    DDebug(codec->dbg(),DebugStub,"Please implement encodeBearerCapab(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),param,
-	    in->tag(),in,codec->ptr());
+
     XmlElement* xml = in->findFirstChild(&param->name);
     if (!xml)
 	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    else
+	DDebug(codec->dbg(),DebugStub,"Please implement encodeBearerCapab(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),
+	    param,in->tag(),in,codec->ptr());
     return CONDITIONAL_ERROR(param,NoError,ParserErr);
 }
 
@@ -2057,6 +2059,14 @@ static unsigned int encodeIA5Chars(const GSML3Codec* codec,  uint8_t proto, cons
     out.append(buf,len);
     return GSML3Codec::NoError;
 }
+
+// reference: ETSI TS 124 008 V11.6.0, 10.5.4.20 Notification Indicator
+static const TokenDict s_notifIndicatorType[] = {
+    {"user-suspended", 0x80},
+    {"user-resumed",   0x81},
+    {"bearer-changed", 0x82},
+    {"", 0},
+};
 
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.4.14 Request type =>
 // section 10.5.6.17 in 3GPP TS 24.008
@@ -2135,6 +2145,7 @@ MAKE_IE_TYPE(Cause,decodeCause,encodeCause,0)
 MAKE_IE_TYPE(CCCapabilities,decodeCCCapab,encodeCCCapab,0)
 MAKE_IE_TYPE(BearerCapab,decodeBearerCapab,encodeBearerCapab,0)
 MAKE_IE_TYPE(IA5Chars,decodeIA5Chars,encodeIA5Chars,0)
+MAKE_IE_TYPE(NotifIndicator,0,0,s_notifIndicatorType)
 
 const int s_skipIndDefVal = 0;
 MAKE_IE_TYPE(Int,decodeInt,encodeInt,&s_skipIndDefVal)
@@ -2289,6 +2300,13 @@ static const IEParam s_ccCallProceedParams[] = {
     s_ie_EndDef,
 };
 
+// reference: ETSI TS 124 008 V11.6.0, 9.3.17 Progress
+static const IEParam s_ccProgressParams[] = {
+    MAKE_IE_PARAM(LV,   XmlElem,    0, "ProgressIndicator",      false,     3 * 8,  true, s_type_ProgressInd),
+    MAKE_IE_PARAM(TLV,  XmlElem, 0x7E, "UserUser",                true,   131 * 8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
 // reference: ETSI TS 124 008 V11.6.0, 9.3.23.2 Setup (mobile originating call establishment)
 static const IEParam s_ccSetupFromMSParams[] = {
     MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",      true,         8,  true, s_type_Undef),
@@ -2415,11 +2433,29 @@ static const IEParam s_ccRelComplFromMSParams[] = {
     s_ie_EndDef,
 };
 
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.2 Call confirmed
+static const IEParam s_ccCallConfirmParams[] = {
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",      true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",      true,    16 * 8,  true, s_type_BearerCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, s_type_BearerCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",                  true,    32 * 8,  true, s_type_Cause),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x15, "CCCapabilities",         true,     4 * 8,  true, s_type_CCCapabilities),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x2D, "StreamIdentifier",       true,     3 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x40, "SupportedCodecs",        true,   255 * 8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.19.1 Release complete (network to mobile station direction)
 static const IEParam s_ccRelComplToMSParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",          true,    32 * 8, true, s_type_Cause),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       true,   255 * 8, true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",       true,   131 * 8, true, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.16 Notify
+static const IEParam s_ccNotifyParams[] = {
+    MAKE_IE_PARAM(V,    XmlElem,    0, "NotificationIndicator",    false,    8, true, s_type_NotifIndicator),
     s_ie_EndDef,
 };
 
@@ -2447,20 +2483,27 @@ static const IEParam s_ccStartDTMFParams[] = {
 
 static const RL3Message s_ccMsgs[] = {
     //TODO
+    // Call establishment messages
     {0x01,    "Alerting",            s_ccAlertFromMSParams,    s_ccAlertToMSParams},
     {0x02,    "CallProceeding",      s_ccCallProceedParams,    0},
+    {0x03,    "Progress",            s_ccProgressParams,       0},
     {0x05,    "Setup",               s_ccSetupFromMSParams,    s_ccSetupToMSParams},
     {0x07,    "Connect",             s_ccConnFromMSParams,     s_ccConnToMSParams},
+    {0x08,    "CallConfirmed",       s_ccCallConfirmParams,    0},
     {0x0f,    "ConnectAcknowledge",  0,                        0},
+    // Call information phase messages
     {0x18,    "Hold",                0,                        0},
     {0x19,    "HoldAck",             0,                        0},
     {0x1a,    "HoldReject",          s_ccCauseRejParams,       0},
     {0x1c,    "Retrieve",            0,                        0},
     {0x1d,    "RetrieveAck",         0,                        0},
     {0x1e,    "RetrieveReject",      s_ccCauseRejParams,       0},
+    // Call clearing messages
     {0x25,    "Disconnect",          s_ccDisconnFromMSParams,  s_ccDisconnToMSParams},
     {0x2d,    "Release",             s_ccRelFromMSParams,      s_ccRelToMSParams},
     {0x2a,    "ReleaseComplete",     s_ccRelComplFromMSParams, s_ccRelComplToMSParams},
+    // Miscellaneous messages
+    {0x3e,    "Notify",              s_ccNotifyParams,         0},
     {0x34,    "StatusEnquiry",       0,                        0},
     {0x3d,    "Status",              s_ccStatusParams,         0},
     {0x35,    "StartDTMF",           s_ccStartDTMFParams,      0},

@@ -402,7 +402,7 @@ static unsigned int decodeInt(const GSML3Codec* codec,  uint8_t proto, const IEP
 {
     if (!(codec && in && len && param && out))
 	return CONDITIONAL_ERROR(param,NoError,ParserErr);
-    DDebug(codec->dbg(),DebugAll,"decodeInt(param=%s(%p),in=%p,len=%u,out=%p [%p]",param->name.c_str(),param,
+    DDebug(codec->dbg(),DebugAll,"decodeInt(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
 	    in,len,out,codec->ptr());
     unsigned int val = 0;
     switch (param->length) {
@@ -467,6 +467,62 @@ static unsigned int encodeInt(const GSML3Codec* codec, uint8_t proto, const IEPa
 	    return GSML3Codec::ParserErr;
     }
 
+    return GSML3Codec::NoError;
+}
+
+
+static unsigned int decodeEnum(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param && out))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodeEnum(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    unsigned int val = 0;
+    switch (len) {
+	case 1:
+	    val = getUINT8(in,len,param);
+	    break;
+	case 2:
+	    val = getUINT16(in,len,true);
+	    break;
+	case 4:
+	    Debug(DebugStub,"Please implement decoding  of enumerated type on 4 bytes");
+	    break;
+	default:
+	    Debug(codec->dbg(),DebugNote,"Decoding of enum on %u bytes failed [%p]",len,codec->ptr());
+	    return GSML3Codec::ParserErr;
+    }
+    XmlElement* xml = new XmlElement(param->name,String(val));
+    addXMLElement(out,xml);
+    const TokenDict* dict = static_cast<const TokenDict*>(param->ieType.data);
+    xml->setText(lookup(val,dict,String(val)));
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeEnum(const GSML3Codec* codec, uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && param && in))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodeEnum(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    const String* valStr = in->childText(param->name);
+    if (TelEngine::null(valStr))
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    const TokenDict* dict = static_cast<const TokenDict*>(param->ieType.data);
+    unsigned int val = lookup(*valStr,dict,0);
+    if (val <= 0xff)
+	setUINT8(val,out,param);
+    else if (val <= 0xffff) {
+	uint8_t l[2];
+	setUINT16(val,l,2);
+	out.append(l,2);
+    }
+    else {
+	Debug(codec->dbg(),DebugNote,"Encoding of enum value on %u bytes not implemented [%p]",param->length,codec->ptr());
+	return GSML3Codec::ParserErr;
+    }
     return GSML3Codec::NoError;
 }
 
@@ -2150,6 +2206,51 @@ static const TokenDict s_repeatIndType[] = {
     {"", 0},
 };
 
+// reference: ETSI TS 124 008 V11.6.0, 10.5.4.29 Network Call Control Capabilities
+static const TokenDict s_networkCCCapabType[] = {
+    {"no-MCS", 0x00},
+    {"MCS",    0x01},
+    {"", 0},
+};
+
+// reference: ETSI TS 124 008 V11.6.0, 10.5.4.23 Signal
+static const TokenDict s_signalType[] = {
+    {"dial-tone-on",                 0x00},
+    {"ringback-tone-on",             0x01},
+    {"intercept-tone-on",            0x02},
+    {"network-congestion-tone-on",   0x03},
+    {"busy-tone-on",                 0x04},
+    {"confirm-tone-on",              0x05},
+    {"answer-tone-on",               0x06},
+    {"call-waiting-tone-on",         0x07},
+    {"off-hook-warning-tone-on",     0x08},
+    {"tones-off",                    0x3f},
+    {"alerting-off",                 0x4f},
+    {"", 0},
+};
+
+// reference: ETSI TS 124 008 V11.6.0, 10.5.4.26 Alerting Pattern
+static const TokenDict s_alertPattern[] = {
+    {"alertingLevel-0",    0x00},//   Alerting Pattern 1
+    {"alertingLevel-1",    0x01},//   Alerting Pattern 2
+    {"alertingLevel-2",    0x02},//   Alerting Pattern 3
+    {"alertingCategory-1", 0x04},//   Alerting Pattern 4
+    {"alertingCategory-2", 0x05},//   Alerting Pattern 5
+    {"alertingCategory-3", 0x06},//   Alerting Pattern 6
+    {"alertingCategory-4", 0x07},//   Alerting Pattern 7
+    {"alertingCategory-5", 0x08},//   Alerting Pattern 8
+    {0,0},
+};
+
+// reference: ETSI TS 124 008 V11.6.0, 10.5.4.30 Cause of No CLI
+static const TokenDict s_causeNoCLIType[] = {
+    {"unavailable",                       0x00},
+    {"user-reject",                       0x01},
+    {"interaction-with-other-service",    0x02},
+    {"payphone",                          0x03},
+    {0,0},
+};
+
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.4.14 Request type =>
 // section 10.5.6.17 in 3GPP TS 24.008
 static const TokenDict s_epsReqType[] = {
@@ -2236,6 +2337,10 @@ MAKE_IE_TYPE(IA5Chars,decodeIA5Chars,encodeIA5Chars,0)
 MAKE_IE_TYPE(NotifIndicator,0,0,s_notifIndicatorType)
 MAKE_IE_TYPE(RepeatInd,0,0,s_repeatIndType)
 MAKE_IE_TYPE(SSVersion,0,0,s_ssVersionType)
+MAKE_IE_TYPE(NetworkCCCapab,decodeEnum,encodeEnum,s_networkCCCapabType)
+MAKE_IE_TYPE(Signal,decodeEnum,encodeEnum,s_signalType)
+MAKE_IE_TYPE(AlertPattern,decodeEnum,encodeEnum,s_alertPattern)
+MAKE_IE_TYPE(CauseNoCLI,decodeEnum,encodeEnum,s_causeNoCLIType)
 
 const int s_skipIndDefVal = 0;
 MAKE_IE_TYPE(Int,decodeInt,encodeInt,&s_skipIndDefVal)
@@ -2385,8 +2490,8 @@ static const IEParam s_ccCallProceedParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, s_type_BearerCapab),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",      true,     4 * 8,  true, s_type_ProgressInd),
-    MAKE_IE_PARAM(TV,     XmlElem, 0x80, "PriorityGranted",        true,         8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x2F, "NetworkCCCapabilities",  true,     3 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x80, "Priority",               true,         8,  true, s_type_PrioLevel),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x2F, "NetworkCCCapabilities",  true,     3 * 8,  true, s_type_NetworkCCCapab),
     s_ie_EndDef,
 };
 
@@ -2433,7 +2538,7 @@ static const IEParam s_ccSetupToMSParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",           true,    16 * 8,  true, s_type_BearerCapab),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",                    true,   255 * 8,  true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",           true,     4 * 8,  true, s_type_ProgressInd),
-    MAKE_IE_PARAM(TV,     XmlElem, 0x34, "Signal",                      true,     2 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x34, "Signal",                      true,     2 * 8,  true, s_type_Signal),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x5C, "CallingPartyBCDNumber",       true,    14 * 8,  true, s_type_BCDNumber),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x5D, "CallingPartySubAddress",      true,    23 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x5E, "CalledPartyBCDNumber",        true,    19 * 8,  true, s_type_BCDNumber),
@@ -2448,9 +2553,9 @@ static const IEParam s_ccSetupToMSParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility2",     true,     5 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",                    true,    35 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TV,     XmlElem, 0x80, "Priority",                    true,         8,  true, s_type_PrioLevel),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x19, "Alert",                       true,     3 * 8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x2F, "NetworkCCCapabilities",       true,     3 * 8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x3A, "CauseOfNoCLI",                true,     3 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x19, "Alert",                       true,     3 * 8,  true, s_type_AlertPattern),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x2F, "NetworkCCCapabilities",       true,     3 * 8,  true, s_type_NetworkCCCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x3A, "CauseOfNoCLI",                true,     3 * 8,  true, s_type_CauseNoCLI),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x41, "BackupBearerCapability",      true,    15 * 8,  true, s_type_Undef),
     s_ie_EndDef,
 };

@@ -1890,7 +1890,8 @@ static const String s_codingStd = "CodingStandard";
 static const String s_radioChanReq = "RadioChannelRequirement";
 static const String s_ctmTxtTel = "CTMTextTelephony";
 static const String s_speechVers = "SpeechVersions";
-
+static const String s_bearerCapabNIRR = "NIRR";
+static const String s_bearerCapabNIRRStr = "data-to-and-including-4.8kb/s,FR,non-transparent,6kb/s-radio-interface-requested";
 static const TokenDict s_bearerCapabITC_types[] = {
     {"speech",           0}, // speech
     {"udi",              1}, // unrestricted digital information
@@ -2019,7 +2020,7 @@ static unsigned int decodeBearerCapab(const GSML3Codec* codec, uint8_t proto, co
 	}
 	xml->addChildSafe(new XmlElement("Establishment",(*in & 0x01) ? "reserved" : "demand"));
 	if (*in & 0x02)
-	    xml->addChildSafe(new XmlElement("NIRR","data-to-and-including-4.8kb/s,FR,non-transparent,6kb/s-radio-interface-requested")); 
+	    xml->addChildSafe(new XmlElement(s_bearerCapabNIRR,s_bearerCapabNIRRStr));
 	xml->addChildSafe(new XmlElement("Configuration",(*in & 0x04) ? "reserved" : "point-to-point"));
 	xml->addChildSafe(new XmlElement("DuplexMode",(*in & 0x08) ? "full-duplex" : "half-duplex"));
 	xml->addChildSafe(new XmlElement("Compression",(*in & 0x40) ? "allowed" : "not-allowed"));
@@ -2037,14 +2038,61 @@ static unsigned int encodeBearerCapab(const GSML3Codec* codec,  uint8_t proto, c
 {
     if (!(codec && in && param))
 	return CONDITIONAL_ERROR(param,NoError,ParserErr);
-
+    DDebug(codec->dbg(),DebugAll,"encodeBearerCapab(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),
+	    param,in->tag(),in,codec->ptr());
     XmlElement* xml = in->findFirstChild(&param->name);
     if (!xml)
 	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    const String* str = xml->childText(s_bearerCapabITC);
+    if (TelEngine::null(str))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    // does it need extension ?
+    XmlElement* speechVers = xml->findFirstChild(&s_speechVers);
+    bool ext = !TelEngine::null(speechVers->getText());
+    // encode bits 3-1
+    uint8_t itc = lookup(*str,s_bearerCapabITC_types,0) & 0x07;
+    // set bits 7-6
+    str = xml->childText(s_radioChanReq);
+    if (itc)
+	itc |= (lookup(*str,s_radioChanNonSpeech,0) << 5) & 0x60;
+    else if (ext)
+	itc |= (lookup(*str,s_radioChanSpeechExt,0) << 5) & 0x60;
     else
-	DDebug(codec->dbg(),DebugStub,"Please implement encodeBearerCapab(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),
-	    param,in->tag(),in,codec->ptr());
-    return CONDITIONAL_ERROR(param,NoError,ParserErr);
+	itc |= (lookup(*str,s_radioChanSpeech,0) << 5) & 0x60;
+    // set extension bit (bit 8)
+    itc |= (ext ? 0 : 0x80);
+    // set transfer mode (bit 4)
+    str = xml->childText(s_bearerTransfMode);
+    itc |= (TelEngine::null(str) ? 0 : lookup(*str,s_bearerTransfMode_types,0));
+    // set coding standard (bit 5)
+    str = xml->childText(s_codingStd);
+    itc |= (TelEngine::null(str) ? 0 : lookup(*str,s_bearerCodingStd_types,0));
+    // append octet
+    out.append(&itc,1);
+    // set octets 3a* 3b*
+    if (ext) { // speech versions
+	ObjList* list = speechVers->getText().split(',');
+	unsigned int len = list->count();
+	uint8_t buf[len];
+	unsigned int idx = 0;
+	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	    String* str = static_cast<String*>(o->get());
+	    buf[idx] = 0x00 | lookup(*str,s_speechVers_types,0x03);
+	    if (!idx) {
+		const String* ctm = speechVers->getAttribute(s_ctmTxtTel);
+		if (!TelEngine::null(ctm) && ctm->toBoolean())
+		    buf[idx] |= 0x20;
+	    }
+	    if (idx == len - 1)
+		buf[idx] |= 0x80;
+	    idx++;
+	}
+	out.append(buf,len);
+	TelEngine::destruct(list);
+    }
+    // TODO set octet 4,5*,6*,7
+    getData(out,xml);
+    return GSML3Codec::NoError;
 }
 
 // reference: ETSI TS 124 008 V11.6.0, 10.5.4.17 Keypad facility
@@ -2090,6 +2138,15 @@ static const TokenDict s_notifIndicatorType[] = {
     {"user-suspended", 0x80},
     {"user-resumed",   0x81},
     {"bearer-changed", 0x82},
+    {"", 0},
+};
+
+// reference: ETSI TS 124 008 V11.6.0, 10.5.4.22 Repeat Indicator
+static const TokenDict s_repeatIndType[] = {
+    {"circular",                    0x01},
+    {"fallback",                    0x02},
+    {"reserved",                    0x03},
+    {"service-change-and-fallback", 0x04},
     {"", 0},
 };
 
@@ -2149,6 +2206,12 @@ static const TokenDict s_epsGUTIType[] = {
     {"", 0},
 };
 
+// reference: ETSI TS 124 080 V11.0.0, section 3.7.2 Supplementary service version indicator
+static const TokenDict s_ssVersionType[] = {
+    {"phase2-service,ellipsis-notation-and-phase2-error-handling-supported",  0},
+    {"SS-protocol-version-3-and-phase2-error-handling-supported",             1},
+    {"", 0},
+};
 
 // IE Types
 #define MAKE_IE_TYPE(x,decoder,encoder,data) const IEType s_type_##x = {decoder,encoder,data};
@@ -2171,6 +2234,8 @@ MAKE_IE_TYPE(CCCapabilities,decodeCCCapab,encodeCCCapab,0)
 MAKE_IE_TYPE(BearerCapab,decodeBearerCapab,encodeBearerCapab,0)
 MAKE_IE_TYPE(IA5Chars,decodeIA5Chars,encodeIA5Chars,0)
 MAKE_IE_TYPE(NotifIndicator,0,0,s_notifIndicatorType)
+MAKE_IE_TYPE(RepeatInd,0,0,s_repeatIndType)
+MAKE_IE_TYPE(SSVersion,0,0,s_ssVersionType)
 
 const int s_skipIndDefVal = 0;
 MAKE_IE_TYPE(Int,decodeInt,encodeInt,&s_skipIndDefVal)
@@ -2299,15 +2364,15 @@ static const RL3Message s_mmMsgs[] = {
 
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.1.2 Alerting (mobile station to network direction)
 static const IEParam s_ccAlertFromMSParams[] = {
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",               true,   131 * 8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",              true,     3 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",              true,     3 * 8,  true, s_type_SSVersion),
     s_ie_EndDef,
 };
 
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.1.1 Alerting (network to mobile station direction)
 static const IEParam s_ccAlertToMSParams[] = {
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",      true,     4 * 8,  true, s_type_ProgressInd),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",               true,   131 * 8,  true, s_type_Undef),
     s_ie_EndDef,
@@ -2315,10 +2380,10 @@ static const IEParam s_ccAlertToMSParams[] = {
 
 // reference: ETSI TS 124 008 V11.6.0, 9.3.3 Call proceeding
 static const IEParam s_ccCallProceedParams[] = {
-    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "RepeatIndicator",        true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",      true,         8,  true, s_type_RepeatInd),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",      true,    16 * 8,  true, s_type_BearerCapab),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, s_type_BearerCapab),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",      true,     4 * 8,  true, s_type_ProgressInd),
     MAKE_IE_PARAM(TV,     XmlElem, 0x80, "PriorityGranted",        true,         8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x2F, "NetworkCCCapabilities",  true,     3 * 8,  true, s_type_Undef),
@@ -2334,21 +2399,21 @@ static const IEParam s_ccProgressParams[] = {
 
 // reference: ETSI TS 124 008 V11.6.0, 9.3.23.2 Setup (mobile originating call establishment)
 static const IEParam s_ccSetupFromMSParams[] = {
-    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",      true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",      true,         8,  true, s_type_RepeatInd),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",     false,    16 * 8,  true, s_type_BearerCapab),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, s_type_BearerCapab),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x5D, "CallingPartySubAddress", true,    23 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x5E, "CalledPartyBCDNumber",  false,    43 * 8,  true, s_type_BCDNumber),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x6D, "CalledPartySubAddress",  true,    23 * 8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "LLCRepeatIndicator",     true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "LLCRepeatIndicator",     true,         8,  true, s_type_RepeatInd),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility1", true,    18 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility2", true,    18 * 8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "HLCRepeatIndicator",     true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "HLCRepeatIndicator",     true,         8,  true, s_type_RepeatInd),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility1",true,     5 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility2",true,     5 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",               true,    35 * 8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",              true,     3 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",              true,     3 * 8,  true, s_type_SSVersion),
     MAKE_IE_PARAM(T,      XmlElem, 0xA1, "CLIRSuppresion",         true,         8,  true, s_type_Undef),
     MAKE_IE_PARAM(T,      XmlElem, 0xA2, "CLIRInvocation",         true,         8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x15, "CCCapabilities",         true,     4 * 8,  true, s_type_CCCapabilities),
@@ -2363,10 +2428,10 @@ static const IEParam s_ccSetupFromMSParams[] = {
 
 // reference: ETSI TS 124 008 V11.6.0, 9.3.23.1 Setup (mobile terminated call establishment)
 static const IEParam s_ccSetupToMSParams[] = {
-    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",           true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",           true,         8,  true, s_type_RepeatInd),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",           true,    16 * 8,  true, s_type_BearerCapab),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",           true,    16 * 8,  true, s_type_BearerCapab),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",                    true,   255 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",                    true,   255 * 8,  true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",           true,     4 * 8,  true, s_type_ProgressInd),
     MAKE_IE_PARAM(TV,     XmlElem, 0x34, "Signal",                      true,     2 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x5C, "CallingPartyBCDNumber",       true,    14 * 8,  true, s_type_BCDNumber),
@@ -2375,10 +2440,10 @@ static const IEParam s_ccSetupToMSParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x6D, "CalledPartySubAddress",       true,    23 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x74, "RedirectingPartyBCDNumber",   true,    19 * 8,  true, s_type_BCDNumber),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x75, "RedirectingPartySubAddress",  true,    23 * 8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "LLCRepeatIndicator",          true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "LLCRepeatIndicator",          true,         8,  true, s_type_RepeatInd),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility1",      true,    18 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility2",      true,    18 * 8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "HLCRepeatIndicator",          true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "HLCRepeatIndicator",          true,         8,  true, s_type_RepeatInd),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility1",     true,     5 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility2",     true,     5 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",                    true,    35 * 8,  true, s_type_Undef),
@@ -2393,17 +2458,17 @@ static const IEParam s_ccSetupToMSParams[] = {
 
 // reference: ETSI TS 124 008 V11.6.0, sectin 9.3.5.2 Connect (mobile station to network direction)
 static const IEParam s_ccConnFromMSParams[] = {
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x4D, "ConnectedSubAddress",    true,    23 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",               true,   131 * 8,  true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",              true,     3 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",              true,     3 * 8,  true, s_type_SSVersion),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x2D, "StreamIdentifier",       true,     3 * 8,  true, s_type_Undef),
     s_ie_EndDef,
 };
 
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.5.1 Connect (network to mobile station direction)
 static const IEParam s_ccConnToMSParams[] = {
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",               true,   255 * 8,  true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",      true,     4 * 8,  true, s_type_ProgressInd),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x4C, "ConnectedNumber",        true,    14 * 8,  true, s_type_BCDNumber),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x4D, "ConnectedSubAddress",    true,    23 * 8,  true, s_type_Undef),
@@ -2414,16 +2479,16 @@ static const IEParam s_ccConnToMSParams[] = {
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.7.2 Disconnect (mobile station to network direction)
 static const IEParam s_ccDisconnFromMSParams[] = {
     MAKE_IE_PARAM(LV,     XmlElem,    0, "Cause",         false,    31 * 8, true, s_type_Cause),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       true,   255 * 8, true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       true,   255 * 8, true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",       true,   131 * 8, true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",      true,     3 * 8, true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",      true,     3 * 8, true, s_type_SSVersion),
     s_ie_EndDef,
 };
 
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.7.1 Disconnect (network to mobile station direction)
 static const IEParam s_ccDisconnToMSParams[] = {
     MAKE_IE_PARAM(LV,     XmlElem,    0, "Cause",               false,    31 * 8, true, s_type_Cause),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",             true,   255 * 8, true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",             true,   255 * 8, true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x1E, "ProgressIndicator",    true,     4 * 8, true, s_type_ProgressInd),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",             true,   131 * 8, true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7B, "AllowedActions",       true,     3 * 8, true, s_type_Undef),
@@ -2433,18 +2498,18 @@ static const IEParam s_ccDisconnToMSParams[] = {
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.18.2 Release (mobile station to network direction)
 static const IEParam s_ccRelFromMSParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",         true,    32 * 8, true, s_type_Cause),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "SecondCause",   true,    32 * 8, true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",      true,   255 * 8, true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "SecondCause",   true,    32 * 8, true, s_type_Cause),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",      true,   255 * 8, true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",      true,   131 * 8, true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",     true,     3 * 8, true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",     true,     3 * 8, true, s_type_SSVersion),
     s_ie_EndDef,
 };
 
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.18.1 Release (network to mobile station direction)
 static const IEParam s_ccRelToMSParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",          true,    32 * 8, true, s_type_Cause),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "SecondCause",    true,    32 * 8, true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       true,   255 * 8, true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "SecondCause",    true,    32 * 8, true, s_type_Cause),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       true,   255 * 8, true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",       true,   131 * 8, true, s_type_Undef),
     s_ie_EndDef,
 };
@@ -2452,15 +2517,23 @@ static const IEParam s_ccRelToMSParams[] = {
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.19.2 Release complete (mobile station to network direction)
 static const IEParam s_ccRelComplFromMSParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",         true,    32 * 8, true, s_type_Cause),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",      true,   255 * 8, true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",      true,   255 * 8, true, s_type_RL3Msg),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",      true,   131 * 8, true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",     true,     3 * 8, true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",     true,     3 * 8, true, s_type_SSVersion),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.19.1 Release complete (network to mobile station direction)
+static const IEParam s_ccRelComplToMSParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",          true,    32 * 8, true, s_type_Cause),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       true,   255 * 8, true, s_type_RL3Msg),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",       true,   131 * 8, true, s_type_Undef),
     s_ie_EndDef,
 };
 
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.2 Call confirmed
 static const IEParam s_ccCallConfirmParams[] = {
-    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",      true,         8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",      true,         8,  true, s_type_RepeatInd),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",      true,    16 * 8,  true, s_type_BearerCapab),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, s_type_BearerCapab),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",                  true,    32 * 8,  true, s_type_Cause),
@@ -2489,14 +2562,6 @@ static const IEParam s_ccModifyComplParams[] = {
     s_ie_EndDef,
 };
 
-// reference: ETSI TS 124 008 V11.6.0, section 9.3.19.1 Release complete (network to mobile station direction)
-static const IEParam s_ccRelComplToMSParams[] = {
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",          true,    32 * 8, true, s_type_Cause),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       true,   255 * 8, true, s_type_Undef),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x7E, "UserUser",       true,   131 * 8, true, s_type_Undef),
-    s_ie_EndDef,
-};
-
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.16 Notify
 static const IEParam s_ccNotifyParams[] = {
     MAKE_IE_PARAM(V,    XmlElem,    0, "NotificationIndicator",    false,    8, true, s_type_NotifIndicator),
@@ -2522,6 +2587,19 @@ static const IEParam s_ccCauseRejParams[] = {
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.25 Start DTMF Acknowledge
 static const IEParam s_ccStartDTMFParams[] = {
     MAKE_IE_PARAM(TV,     XmlElem,   0x2C, "KeypadFacility",     false,    2 * 8, true, s_type_IA5Chars),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.9.2 Facility (mobile Station  to network direction)
+static const IEParam s_ccFacilityFromMSParams[] = {
+    MAKE_IE_PARAM(LV,     XmlElem,   0, "Facility",     false,    255 * 8, true, s_type_RL3Msg),
+    MAKE_IE_PARAM(TLV,    XmlElem,0x7F, "SSVersion",     true,      3 * 8, true, s_type_SSVersion),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.9.1 Facility (network to mobile Station direction)
+static const IEParam s_ccFacilityToMSParams[] = {
+    MAKE_IE_PARAM(LV,     XmlElem,   0, "Facility",     false,    255 * 8, true, s_type_RL3Msg),
     s_ie_EndDef,
 };
 
@@ -2558,7 +2636,7 @@ static const RL3Message s_ccMsgs[] = {
     {0x37,    "StartDTMFReject",     s_ccCauseRejParams,       0},
     {0x31,    "StopDTMF",            0,                        0},
     {0x32,    "StopDTMFAck",         0,                        0},
-    {0x3a,    "Facility",            0,                        0},
+    {0x3a,    "Facility",            s_ccFacilityFromMSParams, s_ccFacilityToMSParams},
     {0xff,    "",                    0,                        0},
 };
 
@@ -2641,11 +2719,49 @@ static const RL3Message s_epsMmMsgs[] = {
 };
 
 
+// SS (Supplementary services)message definitions
+
+// reference ETSI TS 124 080 V11.0.0, section 2.5 Release complete
+static const IEParam s_ssRelCompleteParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",          true,    32 * 8, true, s_type_Cause),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       true,   255 * 8, true, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference ETSI TS 124 080 V11.0.0, section 2.3 Facility
+static const IEParam s_ssFacilityParams[] = {
+    MAKE_IE_PARAM(LV,    XmlElem, 0, "Facility",       false,   255 * 8, true, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference ETSI TS 124 080 V11.0.0, section 2.4.2 Register (MS to network direction)
+static const IEParam s_ssRegistFromMSParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       false,   255 * 8, true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7F, "SSVersion",       true,     3 * 8, true, s_type_SSVersion),
+    s_ie_EndDef,
+};
+
+// reference ETSI TS 124 080 V11.0.0, section 2.4.1 Register (network to MS direction)
+static const IEParam s_ssRegistToMSParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1C, "Facility",       false,   255 * 8, true, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// SS message types
+// reference ETSI TS 124 080 V11.0.0, section 3.4 Message type
+static const RL3Message s_ssMsgs[] = {
+    {0x2a,    "ReleaseComplete",   s_ssRelCompleteParams,    0},
+    {0x3a,    "Facility",          s_ssFacilityParams,       0},
+    {0x3b,    "Register",          s_ssRegistFromMSParams,   s_ssRegistToMSParams},
+    {0xff,    "",                  0,                        0},
+};
+
 // Message definitions according to protocol discriminator type
 
 MAKE_IE_TYPE(MM_Msg,decodeMsgType,encodeMsgType,s_mmMsgs)
 MAKE_IE_TYPE(CC_Msg,decodeMsgType,encodeMsgType,s_ccMsgs)
 MAKE_IE_TYPE(EPS_SM_Msg,decodeMsgType,encodeMsgType,s_epsSmMsgs)
+MAKE_IE_TYPE(SS_Msg,decodeMsgType,encodeMsgType,s_ssMsgs)
 
 static const IEParam s_mmMessage[] = {
     MAKE_IE_PARAM(V,      XmlElem, 0, "SkipIndicator", false, 4, false, s_type_Int),
@@ -2672,6 +2788,13 @@ static const IEParam s_epsMmMessage[] = {
     s_ie_EndDef,
 };
 
+// reference ETSI TS 124 080 V11.0.0
+static const IEParam s_SsMessage[] = {
+    MAKE_IE_PARAM(V,      XmlElem, 0, "TID",           false, 4, false, s_type_TID),
+    MAKE_IE_PARAM(V,      XmlRoot, 0, "Message",       false, 8, false, s_type_SS_Msg),
+    s_ie_EndDef,
+};
+
 // reference ETSI TS 124 007 V11.0.0, section  11.2.3.1.1 Protocol discriminator
 static const RL3Message s_protoMsg[] = {
     {GSML3Codec::GCC,        "GCC",     0,                 0},
@@ -2685,7 +2808,7 @@ static const RL3Message s_protoMsg[] = {
     {GSML3Codec::GPRS_MM,    "GPRS_MM", 0,                 0},
     {GSML3Codec::SMS,        "SMS",     0,                 0},
     {GSML3Codec::GPRS_SM,    "GPRS_SM", 0,                 0},
-    {GSML3Codec::SS,         "SS",      0,                 0},
+    {GSML3Codec::SS,         "SS",      s_SsMessage,       0},
     {GSML3Codec::LCS,        "LCS",     0,                 0},
     {GSML3Codec::Extension,  "EXT",     0,                 0},
     {GSML3Codec::Test,       "TEST",    0,                 0},

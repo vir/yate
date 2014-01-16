@@ -1,4 +1,4 @@
-yate (5.0.1~svn5723) UNRELEASED; urgency=low
+yate (5.0.1~svn5725) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -902,8 +902,17 @@ yate (5.0.1~svn5723) UNRELEASED; urgency=low
     si ProgressIndicator.  + Added message definitions for CC Modify and
     Modify Complete.  + Allow encoding messages with hexified payload in
     data element.  + Added CC Modify Reject to CC message table.
+  * Updated to SVN revision 5725: + Added CC Modify Reject to CC message
+    table.  + Added Suplementary Services protocol message table and
+    message definitions for SS Facility, SS Register and SS Release
+    Complete.  + Added message definition for CC Facility message.  +
+    Added coders and decoders for IE types Facility, RepeatIndicator,
+    SSVersion.  + Added bearer capability encoding for type 3 octets.  +
+    Added type definition for Network CC Capabilities, Signal, Cause of
+    no CLI, Allert Pattern.  + Added general coder/decoder for
+    enumerated types.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 16 Jan 2014 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Jan 2014 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -2314,6 +2314,19 @@ static const TokenDict s_ssVersionType[] = {
     {"", 0},
 };
 
+// reference: ETSI TS 124 011 V11.1.0, section 8.1.4.2 CP-Cause element
+static const TokenDict s_cpCauseType[] = {
+    {"network-failure",                                     0x11},
+    {"congestion",                                          0x16},
+    {"invalid-tid",                                         0x51},
+    {"semantically-incorrect-message",                      0x5f},
+    {"invalid-mandatory-info",                              0x60},
+    {"message-type-non-existent-or-not-implemented",        0x61},
+    {"message-not-compatible-with-SM-protocol-state",       0x62},
+    {"information-element-non-existent-or-not-implemented", 0x63},
+    {"", 0},
+};
+
 // IE Types
 #define MAKE_IE_TYPE(x,decoder,encoder,data) const IEType s_type_##x = {decoder,encoder,data};
 
@@ -2361,7 +2374,8 @@ MAKE_IE_TYPE(AdditionalUpdateType,0,0,s_additionalUpdateType)
 MAKE_IE_TYPE(VoicePreference,decodeVoicePref,encodeVoicePref,0)
 MAKE_IE_TYPE(GUTIType,0,0,s_epsGUTIType)
 MAKE_IE_TYPE(SecurityHeader,decodeSecHeader,encodeSecHeader,0)
-
+// SMS types
+MAKE_IE_TYPE(CPCause,decodeEnum,encodeEnum,s_cpCauseType)
 
 #define MAKE_IE_PARAM(type,xml,iei,name,optional,length,lowerBits,ieType) \
     {GSML3Codec::type,GSML3Codec::xml,iei,name,optional,length,lowerBits,ieType}
@@ -2824,7 +2838,7 @@ static const RL3Message s_epsMmMsgs[] = {
 };
 
 
-// SS (Supplementary services)message definitions
+// SS (Supplementary services) message definitions
 
 // reference ETSI TS 124 080 V11.0.0, section 2.5 Release complete
 static const IEParam s_ssRelCompleteParams[] = {
@@ -2861,12 +2875,37 @@ static const RL3Message s_ssMsgs[] = {
     {0xff,    "",                  0,                        0},
 };
 
+
+// SMS  message definitions
+
+// reference ETSI TS 124 011 V11.1.0, section 7.2.1 CP-DATA
+static const IEParam s_smsCPDataParams[] = {
+    MAKE_IE_PARAM(LV,    XmlElem, 0, "RPDU",   false,   249 * 8, true, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference ETSI TS 124 011 V11.1.0, section 7.2.3 CP-ERROR
+static const IEParam s_smsCPErrorParams[] = {
+    MAKE_IE_PARAM(V,    XmlElem, 0, "CP-Cause",   false,  8, true, s_type_CPCause),
+    s_ie_EndDef,
+};
+
+// SMS message types
+// reference ETSI TS 124 011 V11.1.0, section 8.1.3 Message type
+static const RL3Message s_smsMsgs[] = {
+    {0x01,    "CP-Data",   s_smsCPDataParams,    0},
+    {0x04,    "CP-Ack",    0,                    0},
+    {0x10,    "CP-Error",  s_smsCPErrorParams,   0},
+    {0xff,    "",          0,                    0},
+};
+
 // Message definitions according to protocol discriminator type
 
 MAKE_IE_TYPE(MM_Msg,decodeMsgType,encodeMsgType,s_mmMsgs)
 MAKE_IE_TYPE(CC_Msg,decodeMsgType,encodeMsgType,s_ccMsgs)
 MAKE_IE_TYPE(EPS_SM_Msg,decodeMsgType,encodeMsgType,s_epsSmMsgs)
 MAKE_IE_TYPE(SS_Msg,decodeMsgType,encodeMsgType,s_ssMsgs)
+MAKE_IE_TYPE(SMS_Msg,decodeMsgType,encodeMsgType,s_smsMsgs)
 
 static const IEParam s_mmMessage[] = {
     MAKE_IE_PARAM(V,      XmlElem, 0, "SkipIndicator", false, 4, false, s_type_Int),
@@ -2900,6 +2939,13 @@ static const IEParam s_SsMessage[] = {
     s_ie_EndDef,
 };
 
+// reference ETSI TS 124 011 V11.1.0
+static const IEParam s_smsMessage[] = {
+    MAKE_IE_PARAM(V,      XmlElem, 0, "TID",           false, 4, false, s_type_TID),
+    MAKE_IE_PARAM(V,      XmlRoot, 0, "Message",       false, 8, false, s_type_SMS_Msg),
+    s_ie_EndDef,
+};
+
 // reference ETSI TS 124 007 V11.0.0, section  11.2.3.1.1 Protocol discriminator
 static const RL3Message s_protoMsg[] = {
     {GSML3Codec::GCC,        "GCC",     0,                 0},
@@ -2911,7 +2957,7 @@ static const RL3Message s_protoMsg[] = {
     {GSML3Codec::RRM,        "RRM",     0,                 0},
     {GSML3Codec::EPS_MM,     "EPS_MM",  s_epsMmMessage,    0},
     {GSML3Codec::GPRS_MM,    "GPRS_MM", 0,                 0},
-    {GSML3Codec::SMS,        "SMS",     0,                 0},
+    {GSML3Codec::SMS,        "SMS",     s_smsMessage,      0},
     {GSML3Codec::GPRS_SM,    "GPRS_SM", 0,                 0},
     {GSML3Codec::SS,         "SS",      s_SsMessage,       0},
     {GSML3Codec::LCS,        "LCS",     0,                 0},

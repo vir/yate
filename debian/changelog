@@ -1,4 +1,4 @@
-yate (5.0.1~svn5725) UNRELEASED; urgency=low
+yate (5.0.1~svn5728) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -911,8 +911,14 @@ yate (5.0.1~svn5725) UNRELEASED; urgency=low
     Added type definition for Network CC Capabilities, Signal, Cause of
     no CLI, Allert Pattern.  + Added general coder/decoder for
     enumerated types.
+  * Updated to SVN revision 5728: + Added general coder/decoder for
+    enumerated types.  + Added decoders and encoders for SMS messages.
+    + Properly set odd indication while encoding IMSI Mobile Identity.
+    + Added RR message table and RR Paging Response message defintion.
+    + Fixed end markings for dictionaries.  + Added encoders and
+    decoders for Mobile Classmark 1 and Mobile Classmark 2 types.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Jan 2014 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 18 Jan 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

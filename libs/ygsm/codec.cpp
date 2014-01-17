@@ -250,15 +250,23 @@ static inline void getFlags(unsigned int bitmask, const TokenDict* dict, String&
 	    out.append(dict->token,",");
 }
 
-static inline unsigned int setFlags(const String& str, const TokenDict* dict)
+static inline unsigned int setFlags(ObjList* flags, const TokenDict* dict)
 {
-    if (!dict)
+    if (!(flags && dict))
 	return 0;
     unsigned int bits = 0;
-    ObjList* list = str.split(',');
     for (; dict->token; dict++)
-	if (list->find(dict->token))
+	if (flags->find(dict->token))
 	    bits |= dict->value;
+    return bits;
+}
+
+static inline unsigned int setFlags(const String& str, const TokenDict* dict)
+{
+    if (!(dict && str))
+	return 0;
+    ObjList* list = str.split(',');
+    unsigned int bits = setFlags(list,dict);
     TelEngine::destruct(list);
     return bits;
 }
@@ -740,7 +748,7 @@ static const TokenDict s_epsMobileIdentType[] = {
     {"IMSI", 1},
     {"IMEI", 3},
     {"GUTI", 6},
-    {"",     0},
+    {0,      0},
 };
 
 static unsigned int decodeEPSMobileIdent(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
@@ -882,7 +890,7 @@ static const TokenDict s_UENetworkCapabMandatory[] =
     {"128-EEA2", 0x2000},
     {"128-EEA1", 0x4000},
     {"EEA0",     0x8000},
-    {"", 0}
+    {0, 0},
 };
 
 static const TokenDict s_UENetworkCapabOptional[] =
@@ -909,7 +917,7 @@ static const TokenDict s_UENetworkCapabOptional[] =
     {"LPP",       0x080000},
     {"ACC-CSFB",  0x100000},
     {"H.245-ASH", 0x200000},
-    {"", 0}
+    {0, 0},
 };
 
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.3.34 UE network capability
@@ -1016,7 +1024,7 @@ static const TokenDict s_splitPgCycle[] = {
     {"288",    96},
     {"320",    97},
     {"352",    98},
-    {"", 0}
+    {0, 0},
 };
 
 static const TokenDict s_nonDRXTimer[] = {
@@ -1028,7 +1036,7 @@ static const TokenDict s_nonDRXTimer[] = {
     {"max-16-sec-non-DRX-mode", 5},
     {"max-32-sec-non-DRX-mode", 6},
     {"max-64-sec-non-DRX-mode", 7},
-    {"", 0}
+    {0, 0},
 };
 
 static const TokenDict s_drxCycleLength[] = {
@@ -1037,7 +1045,7 @@ static const TokenDict s_drxCycleLength[] = {
     {"coefficient-7-and-T",     7},
     {"coefficient-8-and-T",     8},
     {"coefficient-9-and-T",     9},
-    {"", 0}
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.8.0, 10.5.5.6 DRX parameter
@@ -1081,7 +1089,7 @@ static const TokenDict s_voiceDomPref[] = {
     {"IMS-PS-voice only",      1},
     {"CS-voice-preferred",     2},
     {"IMS-PS-voice-preferred", 3},
-    {"", 0}
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.8.0, section 10.5.5.28 Voice domain preference and UE's usage setting
@@ -1121,7 +1129,7 @@ static const TokenDict s_mmLUTypes[] = {
     {"periodic-updating",        1},
     {"IMSI-attach",              2},
     {"reserved",                 3},
-    {"", 0},
+    {0, 0},
 };
 
 static unsigned int decodeLocUpdType(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
@@ -1167,7 +1175,7 @@ static const TokenDict s_ciphKeySN[] = {
     {"5", 5},
     {"6", 6},
     {"no-key/reserved", 7},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.6.0, section 10.5.1.3 Location area identification
@@ -1229,7 +1237,7 @@ static const TokenDict s_mobileIdentType[] = {
     {"IMEISV",         3},
     {"TMSI",           4},
     {"TMGI",           5},
-    {"", 0},
+    {0, 0},
 };
 
 static unsigned int decodeMobileIdent(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
@@ -1376,7 +1384,7 @@ static unsigned int encodeMobileIdent(const GSML3Codec* codec,  uint8_t proto, c
 static const TokenDict s_msNetworkFeatSupport[] = {
     {"MS-does-not-support-the-extended-periodic-timer-in-this-domain", 0},
     {"MS-supports-the-extended-periodic-timer-in-this-domain",         1},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.6.0, section 10.5.3.4 Identity type
@@ -1386,14 +1394,14 @@ static const TokenDict s_mmIdentType[] = {
     {"IMEISV",         3},
     {"TMSI",           4},
     {"TMGI",           5},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.6.0, section 10.5.5.29 P-TMSI type
 static const TokenDict s_pTMSIType[] = {
     {"native-P_TMSI",          0},
     {"mapped-P_TMSI",          1},
-    {"", 0},
+    {0, 0},
 };
 
 static const TokenDict s_mmRejectCause[] = {
@@ -1440,7 +1448,7 @@ static const TokenDict s_mmRejectCause[] = {
     {"conditional-IE-error",                                0x64},
     {"message-not-compatible-with-the-protocol-state",      0x65},
     {"protocol-error-unspecified",                          0x6f},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.6.0, section 10.5.3.3 CM service type
@@ -1452,7 +1460,7 @@ static const TokenDict s_mmCMServType[] = {
     {"voice-group-call-establishment",                       0x09},
     {"voice-broadcast-call-establishment",                   0x0a},
     {"location-services",                                    0x0b},
-    {"", 0}
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.6.0, 10.5.1.11 Priority Level
@@ -1465,7 +1473,7 @@ static const TokenDict s_mmPriorityLevel[] = {
     {"call-priority-level-0", 0x05},
     {"call-priority-level-B", 0x06},
     {"call-priority-level-A", 0x07},
-    {"", 0}
+    {0, 0},
 };
 
 // reference ETSI TS 124 007 V11.0.0, section 11.2.3.1.3 Transaction identifier
@@ -1546,7 +1554,7 @@ static const TokenDict s_progIndCoding_dict[] = {
     {"reserved",    0x20},
     {"national",    0x40},
     {"GSM-PLMN",    0x60},
-    {"", 0}
+    {0, 0},
 };
 
 static const TokenDict s_progIndLocation_dict[] = {
@@ -1556,7 +1564,7 @@ static const TokenDict s_progIndLocation_dict[] = {
     {"RLN",  0x04},                  // Public network serving the remote user
     {"RPN",  0x05},                  // Private network serving the remote user
     {"BI",   0x0a},                  // Network beyond the interworking point
-    {0,0}
+    {0, 0},
 };
 
 static const TokenDict s_progInd_dict[] = {
@@ -1568,7 +1576,7 @@ static const TokenDict s_progInd_dict[] = {
     {"in-band-multimedia-CAT-available",         9},
     {"call-is-end-to-end-PLMN/ISDN",            32},
     {"queueing",                                64},
-    {"", 0}
+    {0, 0},
 };
 
 static unsigned int decodeProgressInd(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
@@ -1895,7 +1903,7 @@ static const TokenDict s_CCCapab_flags[] = {
     {"PCP",   2},
     {"ENICM", 4},
     {"MCAT",  8},
-    {"", 0}
+    {0, 0},
 };
 
 static unsigned int decodeCCCapab(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
@@ -1955,19 +1963,19 @@ static const TokenDict s_bearerCapabITC_types[] = {
     {"facsimile-group3", 3}, // facsimile group 3
     {"other-ITC",        5}, // Other ITC (see octet 5a)
     {"reserved",         7}, // reserved, to be used in the network
-    {"", 0},
+    {0, 0},
 };
 
 static const TokenDict s_bearerTransfMode_types[] = {
     {"circuit-mode",     0x00},
     {"packet-mode",      0x08},
-    {"", 0},
+    {0, 0},
 };
 
 static const TokenDict s_bearerCodingStd_types[] = {
     {"GSM",       0x00},
     {"reserved",  0x10},
-    {"", 0},
+    {0, 0},
 };
 
 static const TokenDict s_radioChanNonSpeech[] = {
@@ -1975,7 +1983,7 @@ static const TokenDict s_radioChanNonSpeech[] = {
     {"FR-support-only-MS",         0x01},
     {"DR-support-MS/HR-preferred", 0x02},
     {"DR-support-MS/FR-preferred", 0x03},
-    {"", 0},
+    {0, 0},
 };
 
 static const TokenDict s_radioChanSpeech[] = {
@@ -1983,7 +1991,7 @@ static const TokenDict s_radioChanSpeech[] = {
     {"FR-support-only-MS/FR-speech-version1-supported",         0x01},
     {"DR-support-MS/HR-speech-version1-preferred",              0x02},
     {"DR-support-MS/FR-speech-version1-preferred",              0x03},
-    {"", 0},
+     {0, 0},
 };
 
 static const TokenDict s_radioChanSpeechExt[] = {
@@ -1991,7 +1999,7 @@ static const TokenDict s_radioChanSpeechExt[] = {
     {"FR-speech-version1-supported",                             0x01},
     {"FR-and-HR-speech-version1-supported/HR-speech-preferred",  0x02},
     {"FR-and-HR-speech-version1-supported/FR-speech-preferred",  0x03},
-    {"", 0},
+    {0, 0},
 };
 
 static const TokenDict s_speechVers_types[] = {
@@ -2005,13 +2013,13 @@ static const TokenDict s_speechVers_types[] = {
     {"GSM-HR-speech-version4",       0x07},
     {"GSM-FR-speech-version6",       0x0b},
     {"no-speech-version-for-GERAN",  0x0f},
-    {"", 0},
+    {0, 0},
 };
 
 static const TokenDict s_bearerCapabStruct[] = {
     {"service-data-unit-integrity",       0x00},
     {"unstructured",                      0x30},
-    {"", 0},
+    {0, 0},
 };
 
 static unsigned int decodeBearerCapab(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
@@ -2189,12 +2197,193 @@ static unsigned int encodeIA5Chars(const GSML3Codec* codec,  uint8_t proto, cons
     return GSML3Codec::NoError;
 }
 
+// reference ETSI TS 124 080 V11.0.0, section 3.7.1 Supplementary service screening indicator
+static const TokenDict s_ssScreenInd_dict[] = {
+    {"phase1",                                        0},
+    {"ellipsis-notation-and-phase2-error-handling",   1},
+    {0, 0},
+};
+
+// reference: ETSI TS 124 008 V11.6.0, 10.5.1.5 Mobile Station Classmark 1
+static const String s_revisionLevel = "RevisionLevel";
+static const String s_rfPowerCapab = "RFPowerCapability";
+
+static const TokenDict s_classmarkRFPowerCapab_dict[] = {
+    {"class1",     0},
+    {"class2",     1},
+    {"class3",     2},
+    {"class4",     3},
+    {"class5",     4},
+    {"irrelevant", 7},
+    {0, 0},
+};
+
+static const TokenDict s_classmarkRevLevel_dict[] = {
+    {"GSM-phase1",   0x00},
+    {"GSM-phase2",   0x20},
+    {"R99-or-later", 0x40},
+    {"reserved",     0x60},
+    {0, 0},
+};
+
+static const TokenDict s_msClassmarkOct1_flags[] = {
+    {"no-A5/1", 0x08},
+    {"ES-IND",  0x10},
+    {0, 0},
+};
+
+static unsigned int decodeMSClassmarkOctet1(XmlElement* xml, const uint8_t*& in, unsigned int& len, String& flags)
+{
+    if (!(xml && in && len))
+	return GSML3Codec::ParserErr;
+    // MS Classmark 1 & 2 first octet
+    xml->addChildSafe(new XmlElement(s_rfPowerCapab,lookup(*in & 0x07,s_classmarkRFPowerCapab_dict,"reserved")));
+    xml->addChildSafe(new XmlElement(s_revisionLevel,lookup(*in & 0x60,s_classmarkRevLevel_dict,"reserved")));
+    getFlags(*in,s_msClassmarkOct1_flags,flags);
+    advanceBuffer(1,in,len);
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeMSClassmarkOctet1(XmlElement* xml, DataBlock& out, ObjList* flags = 0)
+{
+    if (!xml)
+	return GSML3Codec::ParserErr;
+    // MS Classmark 1 & 2 first octet
+    uint8_t val = 0;
+    if (!flags) {
+	const String* flgs = xml->childText(s_flags);
+	val = TelEngine::null(flgs) ? 0 : setFlags(*flgs,s_msClassmarkOct1_flags);
+    }
+    else
+	val = setFlags(flags,s_msClassmarkOct1_flags);
+    const String* str = xml->childText(s_rfPowerCapab);
+    if (!TelEngine::null(str))
+	val |= lookup(*str,s_classmarkRFPowerCapab_dict,5) & 0x07; // reserved value if not found in dictionary
+    str = xml->childText(s_revisionLevel);
+    if (!TelEngine::null(str))
+	val |= lookup(*str,s_classmarkRevLevel_dict,0x60) ;
+
+    out.append(&val,1);
+    return GSML3Codec::NoError;
+}
+
+static unsigned int decodeMSClassmark1(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodeMSClassmark1(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+    String flgs;
+    if (decodeMSClassmarkOctet1(xml,in,len,flgs))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    xml->addChildSafe(new XmlElement(s_flags,flgs));
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeMSClassmark1(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodeMSClassmark1(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    if (encodeMSClassmarkOctet1(xml,out))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    return GSML3Codec::NoError;
+}
+
+// reference: ETSI TS 124 008 V11.6.0, 10.5.1.6 Mobile Station Classmark 2
+static const String s_ssScreenInd = "SSScreeningIndicator";
+
+static const TokenDict s_msClassmark2Oct2_flags[] = {
+    {"E-GSM-and-R-GSM-support",          0x01},
+    {"VGCS-capability",                  0x02},
+    {"VBS-capability",                   0x04},
+    {"MT-sms-point-to-point-capability", 0x08},
+    {"pseudo-sync-capability",           0x40},
+    {0, 0},
+};
+
+static const TokenDict s_msClassmark2Oct3_flags[] = {
+    {"A5/2-support",                                    0x01},
+    {"A5/3-support",                                    0x02},
+    {"CMSP-support",                                    0x04},
+    {"SoLSA-support",                                   0x08},
+    {"no-preference-between-default-alphabet-and-UCS2", 0x10},
+    {"LCS-VA-support",                                  0x20},
+    {"CM3-support",                                     0x80},
+    {0, 0},
+};
+
+static unsigned int decodeMSClassmark2(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodeMSClassmark2(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+    String flgs;
+    if (decodeMSClassmarkOctet1(xml,in,len,flgs))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    if (len != 2) {
+	Debug(codec->dbg(),DebugWarn,"Invalid length %u for MS Classmark2 [%p]",len+1,codec->ptr());
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    }
+    // octet 2
+    getFlags(*in,s_msClassmark2Oct2_flags,flgs);
+    xml->addChildSafe(new XmlElement(s_ssScreenInd,lookup((*in & 0x30) >> 4,s_ssScreenInd_dict,String(*in & 0x30))));
+    advanceBuffer(1,in,len);
+    // octet 3
+    getFlags(*in,s_msClassmark2Oct3_flags,flgs);
+    xml->addChildSafe(new XmlElement(s_flags,flgs));
+    advanceBuffer(1,in,len);
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeMSClassmark2(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodeMSClassmark2(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    const String* str = xml->childText(s_flags);
+    ObjList* flgs = (TelEngine::null(str) ? 0 : str->split(','));
+    // octet 1
+    if (encodeMSClassmarkOctet1(xml,out,flgs)) {
+	TelEngine::destruct(flgs);
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    }
+    // octet 2
+    str = xml->childText(s_ssScreenInd);
+    uint8_t buf[2];
+    buf[0] = setFlags(flgs,s_msClassmark2Oct2_flags);
+    buf[0] |= (str && *str ? (lookup(*str,s_ssScreenInd_dict,3) << 4) : 0x30) & 0x30;
+    // octet 3
+    buf[1] = setFlags(flgs,s_msClassmark2Oct3_flags);
+
+    out.append(buf,2);
+    TelEngine::destruct(flgs);
+    return GSML3Codec::NoError;
+}
+
 // reference: ETSI TS 124 008 V11.6.0, 10.5.4.20 Notification Indicator
 static const TokenDict s_notifIndicatorType[] = {
     {"user-suspended", 0x80},
     {"user-resumed",   0x81},
     {"bearer-changed", 0x82},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.6.0, 10.5.4.22 Repeat Indicator
@@ -2203,14 +2392,14 @@ static const TokenDict s_repeatIndType[] = {
     {"fallback",                    0x02},
     {"reserved",                    0x03},
     {"service-change-and-fallback", 0x04},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.6.0, 10.5.4.29 Network Call Control Capabilities
 static const TokenDict s_networkCCCapabType[] = {
     {"no-MCS", 0x00},
     {"MCS",    0x01},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.6.0, 10.5.4.23 Signal
@@ -2226,7 +2415,7 @@ static const TokenDict s_signalType[] = {
     {"off-hook-warning-tone-on",     0x08},
     {"tones-off",                    0x3f},
     {"alerting-off",                 0x4f},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.6.0, 10.5.4.26 Alerting Pattern
@@ -2258,7 +2447,7 @@ static const TokenDict s_epsReqType[] = {
     {"handover",       2},
     {"unused",         3},
     {"emergency",      4},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.4.10 PDN type
@@ -2267,14 +2456,14 @@ static const TokenDict s_epsPdnType[] = {
     {"IPv6",    2},
     {"IPv4v6",  3},
     {"unused",  4},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.4.10 PDN type
 static const TokenDict s_esmEITFlag[] = {
     {"security-protected-ESM-information-transfer-not-required",    0},
     {"security-protected-ESM-information-transfer-required",        1},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.3.11
@@ -2283,35 +2472,35 @@ static const TokenDict s_epsAttachTypes[] = {
     {"combined-EPS-IMSI-attach", 2},
     {"EPS-emergency-attach",     6},
     {"reserved",                 7},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 008 V11.8.0, section 10.5.5.4 TMSI status
 static const TokenDict s_tmsiStatus[] = {
     {"no-valid-TMSI-available",  0},
     {"valid-TMSI-available",     1},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 301 V11.8.0,9.9.3.0B Additional update type
 static const TokenDict s_additionalUpdateType[] = {
     {"no-additional-information",  0},
     {"SMS-only",     1},
-    {"", 0},
+     {0, 0},
 };
 
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.3.45 GUTI type
 static const TokenDict s_epsGUTIType[] = {
     {"native-GUTI",  0},
     {"mapped-GUTI",  1},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 080 V11.0.0, section 3.7.2 Supplementary service version indicator
 static const TokenDict s_ssVersionType[] = {
     {"phase2-service,ellipsis-notation-and-phase2-error-handling-supported",  0},
     {"SS-protocol-version-3-and-phase2-error-handling-supported",             1},
-    {"", 0},
+    {0, 0},
 };
 
 // reference: ETSI TS 124 011 V11.1.0, section 8.1.4.2 CP-Cause element
@@ -2324,7 +2513,7 @@ static const TokenDict s_cpCauseType[] = {
     {"message-type-non-existent-or-not-implemented",        0x61},
     {"message-not-compatible-with-SM-protocol-state",       0x62},
     {"information-element-non-existent-or-not-implemented", 0x63},
-    {"", 0},
+    {0, 0},
 };
 
 // IE Types
@@ -2354,6 +2543,8 @@ MAKE_IE_TYPE(NetworkCCCapab,decodeEnum,encodeEnum,s_networkCCCapabType)
 MAKE_IE_TYPE(Signal,decodeEnum,encodeEnum,s_signalType)
 MAKE_IE_TYPE(AlertPattern,decodeEnum,encodeEnum,s_alertPattern)
 MAKE_IE_TYPE(CauseNoCLI,decodeEnum,encodeEnum,s_causeNoCLIType)
+MAKE_IE_TYPE(MSClassmark1,decodeMSClassmark1,encodeMSClassmark1,0)
+MAKE_IE_TYPE(MSClassmark2,decodeMSClassmark2,encodeMSClassmark2,0)
 
 const int s_skipIndDefVal = 0;
 MAKE_IE_TYPE(Int,decodeInt,encodeInt,&s_skipIndDefVal)
@@ -2387,7 +2578,7 @@ const IEParam s_ie_EndDef = MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, s_type_U
 
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.12 IMSI detach indication
 static const IEParam s_mmIMSIDetachIndParams[] = {
-    MAKE_IE_PARAM(V,      XmlElem,    0, "MobileStationClassmark",      false,       8,  true, s_type_Undef),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "MobileStationClassmark",      false,       8,  true, s_type_MSClassmark1),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
     s_ie_EndDef,
 };
@@ -2417,9 +2608,9 @@ static const IEParam s_mmLocationUpdateReqParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "LocationUpdatingType",        false,       4,  true, s_type_LocUpdType),
     MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4, false, s_type_CiphKeySN),
     MAKE_IE_PARAM(V,      XmlElem,    0, "LAI",                         false,   5 * 8,  true, s_type_LAI),
-    MAKE_IE_PARAM(V,      XmlElem,    0, "MobileStationClassmark",      false,       8,  true, s_type_Undef),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "MobileStationClassmark",      false,       8,  true, s_type_MSClassmark1),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x33, "MobileStationClassmarkForUMTS",true,   5 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x33, "MobileStationClassmark2",      true,   5 * 8,  true, s_type_MSClassmark2),
     MAKE_IE_PARAM(TV,     XmlElem, 0xC0, "AdditionalUpdateParameters",   true,       8,  true, s_type_Undef),
     MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "DeviceProperties",             true,       8,  true, s_type_Undef),
     MAKE_IE_PARAM(TV,     XmlElem, 0xE0, "MSNetworkFeatureSupport",      true,       8,  true, s_type_MSNetFeatSupp),
@@ -2445,7 +2636,7 @@ static const IEParam s_mmIdentityRespParams[] = {
 static const IEParam s_mmCMServiceReqParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "CMServiceType",               false,       4,  true, s_type_CMServType),
     MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4, false, s_type_CiphKeySN),
-    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileStationClassmark",      false,   4 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileStationClassmark2",     false,   4 * 8,  true, s_type_MSClassmark2),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
     MAKE_IE_PARAM(TV,     XmlElem, 0x80, "Priority",                     true,       8,  true, s_type_PrioLevel),
     MAKE_IE_PARAM(TV,     XmlElem, 0xC0, "AdditionalUpdateParameters",   true,       8,  true, s_type_Undef),
@@ -2819,7 +3010,7 @@ static const IEParam s_epsAttachRequestParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x31,"MSNetworkCapability",                      true, 10 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TV,     XmlElem, 0x13,"OldLocationAreaIdentification",            true,  6 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TV,     XmlElem, 0x90,"TMSIStatus",                               true,      8,  true, s_type_TMSIStatus),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x11,"MobileStationClassmark2",                  true,  5 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x11,"MobileStationClassmark2",                  true,  5 * 8,  true, s_type_MSClassmark2),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x20,"MobileStationClassmark3",                  true, 34 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x40,"SupportedCodecs",                          true,      0,  true, s_type_Undef),
     MAKE_IE_PARAM(TV,     XmlElem, 0xF0,"AdditionalUpdateType",                     true,      8,  true, s_type_AdditionalUpdateType),
@@ -2906,7 +3097,7 @@ static const RL3Message s_smsMsgs[] = {
 static const IEParam s_rrPagingRespParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4,  true, s_type_CiphKeySN),
     MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",              false,       4, false, s_type_Undef),
-    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileStationClassmark2",     false,   4 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileStationClassmark2",     false,   4 * 8,  true, s_type_MSClassmark2),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
     MAKE_IE_PARAM(TV,     XmlElem, 0xC0, "AdditionalUpdateParameters",   true,       8,  true, s_type_Undef),
     s_ie_EndDef,

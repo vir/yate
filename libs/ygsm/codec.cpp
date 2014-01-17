@@ -1346,7 +1346,7 @@ static unsigned int encodeMobileIdent(const GSML3Codec* codec,  uint8_t proto, c
 	    *buf |= (type & 0x07);
 	    bool odd = (digits.length() % 2);
 	    if (odd)
-		*buf |= 0x80;
+		*buf |= 0x08;
 	    GSML3Codec::Status err = CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
 	    const char* str = digits.c_str();
 	    SET_DIGIT(*str,buf,0,true,err)
@@ -2899,6 +2899,27 @@ static const RL3Message s_smsMsgs[] = {
     {0xff,    "",          0,                    0},
 };
 
+
+// RR message definitions
+
+// reference ETSI TS 124 011 V11.1.0, section 7.2.3 CP-ERROR
+static const IEParam s_rrPagingRespParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4,  true, s_type_CiphKeySN),
+    MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",              false,       4, false, s_type_Undef),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileStationClassmark2",     false,   4 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xC0, "AdditionalUpdateParameters",   true,       8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// Radio Resource Management message types
+// reference ETSI TS 144 018 V11.5.0, section 10.4 Message type
+static const RL3Message s_rrMsgs[] = {
+    //Paging and Notification messages
+    {0x27,    "PagingResponse",   s_rrPagingRespParams,    0},
+    {0xff,    "",                 0,                       0},
+};
+
 // Message definitions according to protocol discriminator type
 
 MAKE_IE_TYPE(MM_Msg,decodeMsgType,encodeMsgType,s_mmMsgs)
@@ -2906,10 +2927,18 @@ MAKE_IE_TYPE(CC_Msg,decodeMsgType,encodeMsgType,s_ccMsgs)
 MAKE_IE_TYPE(EPS_SM_Msg,decodeMsgType,encodeMsgType,s_epsSmMsgs)
 MAKE_IE_TYPE(SS_Msg,decodeMsgType,encodeMsgType,s_ssMsgs)
 MAKE_IE_TYPE(SMS_Msg,decodeMsgType,encodeMsgType,s_smsMsgs)
+MAKE_IE_TYPE(RR_Msg,decodeMsgType,encodeMsgType,s_rrMsgs)
 
 static const IEParam s_mmMessage[] = {
     MAKE_IE_PARAM(V,      XmlElem, 0, "SkipIndicator", false, 4, false, s_type_Int),
     MAKE_IE_PARAM(V,      XmlRoot, 0, "Message",       false, 8, false, s_type_MM_Msg),
+    s_ie_EndDef,
+};
+
+// reference ETSI TS 144 018 V11.5.0
+static const IEParam s_rrMessage[] = {
+    MAKE_IE_PARAM(V,      XmlElem, 0, "SkipIndicator", false, 4, false, s_type_Int),
+    MAKE_IE_PARAM(V,      XmlRoot, 0, "Message",       false, 8, false, s_type_RR_Msg),
     s_ie_EndDef,
 };
 
@@ -2954,7 +2983,7 @@ static const RL3Message s_protoMsg[] = {
     {GSML3Codec::CC,         "CC",      s_ccMessage,       0},
     {GSML3Codec::GTTP,       "GTTP",    0,                 0},
     {GSML3Codec::MM,         "MM",      s_mmMessage,       0},
-    {GSML3Codec::RRM,        "RRM",     0,                 0},
+    {GSML3Codec::RRM,        "RRM",     s_rrMessage,       0},
     {GSML3Codec::EPS_MM,     "EPS_MM",  s_epsMmMessage,    0},
     {GSML3Codec::GPRS_MM,    "GPRS_MM", 0,                 0},
     {GSML3Codec::SMS,        "SMS",     s_smsMessage,      0},

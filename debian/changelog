@@ -1,4 +1,4 @@
-yate (5.0.1~svn5728) UNRELEASED; urgency=low
+yate (5.0.1~svn5731) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -917,8 +917,21 @@ yate (5.0.1~svn5728) UNRELEASED; urgency=low
     + Added RR message table and RR Paging Response message defintion.
     + Fixed end markings for dictionaries.  + Added encoders and
     decoders for Mobile Classmark 1 and Mobile Classmark 2 types.
+  * Updated to SVN revision 5731: + Added encoders and decoders for
+    Mobile Classmark 1 and Mobile Classmark 2 types.  + Fixed dumping of
+    undefined IEs of type value.  + Added message definitions for MM
+    Authentication Request, Authentication Response, Authentication
+    Reject and Authentication Failure.  + Renamed Authentication
+    Response parameter 'xres' to 'xres2'.  + Added message definition
+    for CC Modify Reject.  + Added message definitions for MM TMSI
+    Reallocation Command, CM Service Prompt, CM Re-establishment
+    Request, MM Null and MM Information.  + Fixed decoded of maximum
+    speech bearers from Call Control Capabilities.  + Added message
+    definitions for CC User Information, Congestion Control, StartCC,
+    Recall, Emergency Setup, CC Establishment, CC Establishment
+    Confirmed.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 18 Jan 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 21 Jan 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

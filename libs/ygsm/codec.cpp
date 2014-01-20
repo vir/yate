@@ -2617,6 +2617,29 @@ static const IEParam s_mmLocationUpdateReqParams[] = {
     s_ie_EndDef,
 };
 
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.2 Authentication request
+static const IEParam s_mmAuthReqParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4,  true, s_type_CiphKeySN),
+    MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",              false,       4, false, s_type_Undef),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "rand",                        false,  16 * 8, false, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x20, "autn",                         true,  18 * 8, false, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.3 Authentication Response
+static const IEParam s_mmAuthRespParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,     0, "res",      false,   4 * 8, false, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem,  0x21, "xres",      true,  14 * 8, false, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.3a Authentication Failure
+static const IEParam s_mmAuthFailParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "RejectCause",    false,       8,  true, s_type_MMRejectCause),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x22, "auts",            true,  16 * 8, false, s_type_Undef),
+    s_ie_EndDef,
+};
+
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.10 Identity Request
 static const IEParam s_mmIdentityReqParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "IdentityType",        false,       8,  true, s_type_MMIdentType),
@@ -2653,18 +2676,26 @@ static const IEParam s_mmAbortParams[] = {
 
 static const RL3Message s_mmMsgs[] = {
     //TODO
+    // Registration messages
     {0x01,    "IMSIDetachIndication",      s_mmIMSIDetachIndParams,        0},
     {0x02,    "LocationUpdatingAccept",    s_mmLocationUpdateAckParams,    0},
     {0x04,    "LocationUpdatingReject",    s_mmLocationUpdateRejParams,    0},
     {0x08,    "LocationUpdatingRequest",   s_mmLocationUpdateReqParams,    0},
+    // Security messages
+    {0x11,    "AuthenticationReject",      0,                              0},
+    {0x12,    "AuthenticationRequest",     s_mmAuthReqParams,              0},
+    {0x14,    "AuthenticationResponse",    s_mmAuthRespParams,             0},
+    {0x1c,    "AuthenticationFailure",     s_mmAuthFailParams,             0},
     {0x18,    "IdentityRequest",           s_mmIdentityReqParams,          0},
     {0x19,    "IdentityResponse",          s_mmIdentityRespParams,         0},
     {0x1b,    "TMSIReallocationComplete",  0,                              0},
+    // Connection management messages
     {0x21,    "CMServiceAccept",           0,                              0},
     {0x22,    "CMServiceReject",           s_mmLocationUpdateRejParams,    0},
     {0x23,    "CMServiceAbort",            0,                              0},
     {0x24,    "CMServiceRequest",          s_mmCMServiceReqParams,         0},
     {0x29,    "Abort",                     s_mmAbortParams,                0},
+    // Miscellaneous messages
     {0x31,    "MMStatus",                  s_mmAbortParams,                0},
     {0xff,    "",                          0,                              0},
 };
@@ -3525,8 +3556,6 @@ static unsigned int dumpParamValue(const GSML3Codec* codec, uint8_t proto, const
 			val |= *in & 0x0f;
 		    dumpStr.hexify(&val,1);
 		}
-		else
-		    skipOctets = param->length / 8;
 		break;
 	    }
 	    case GSML3Codec::TV:
@@ -3555,14 +3584,13 @@ static unsigned int dumpParamValue(const GSML3Codec* codec, uint8_t proto, const
 	    case GSML3Codec::NoType:
 		break;
 	}
-	if (skipOctets) {
-	    const uint8_t* buff = in;
-	    unsigned int lbuff = len;
-	    if (int status = skipParam(codec,proto,in,len,param))
-		return status;
-	    if (len <= lbuff)
-		dumpStr.hexify((void*)(buff + skipOctets), lbuff - len - skipOctets);
-	}
+	const uint8_t* buff = in;
+	unsigned int lbuff = len;
+	if (int status = skipParam(codec,proto,in,len,param))
+	    return status;
+	if (len <= lbuff)
+	    dumpStr.hexify((void*)(buff + skipOctets), lbuff - len - skipOctets);
+
 	XmlElement* xml = new XmlElement(param->name);
 	addXMLElement(out,xml);
 	if (dumpStr) {

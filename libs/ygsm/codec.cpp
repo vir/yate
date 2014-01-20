@@ -59,6 +59,9 @@ static const String s_encAttr = "enc";
 static const String s_typeAttr = "type";
 static const String s_flags = "Flags";
 static const String s_data = "data";
+static const String s_PD = "PD";
+static const String s_SAPI = "SAPI";
+
 static const char s_digits[] = "0123456789";
 
 #define GET_DIGIT(val,str,err,odd) \
@@ -1189,7 +1192,7 @@ static unsigned int decodeLAI(const GSML3Codec* codec, uint8_t proto, const IEPa
     DDebug(codec->dbg(),DebugAll,"decodeLAI(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
 	    in,len,out,codec->ptr());
 
-    if (len * 8 < param->length)
+    if (len != 5)
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     XmlElement* xml = new XmlElement(param->name);
     addXMLElement(out,xml);
@@ -1921,7 +1924,7 @@ static unsigned int decodeCCCapab(const GSML3Codec* codec, uint8_t proto, const 
     getFlags(*in & 0x0f,s_CCCapab_flags,flags);
     xml->addChildSafe(new XmlElement(s_flags,flags));
     xml->addChildSafe(new XmlElement(s_maxSuppBearers,String((*in & 0xf0) >> 4)));
-    xml->addChildSafe(new XmlElement(s_maxSpeechBearers,String((*in + 1) & 0x0f)));
+    xml->addChildSafe(new XmlElement(s_maxSpeechBearers,String(*(in + 1) & 0x0f)));
     advanceBuffer(2,in,len);
     return GSML3Codec::NoError;
 }
@@ -2112,7 +2115,7 @@ static unsigned int encodeBearerCapab(const GSML3Codec* codec,  uint8_t proto, c
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     // does it need extension ?
     XmlElement* speechVers = xml->findFirstChild(&s_speechVers);
-    bool ext = !TelEngine::null(speechVers->getText());
+    bool ext = speechVers && !TelEngine::null(speechVers->getText());
     // encode bits 3-1
     uint8_t itc = lookup(*str,s_bearerCapabITC_types,0) & 0x07;
     // set bits 7-6
@@ -2378,6 +2381,46 @@ static unsigned int encodeMSClassmark2(const GSML3Codec* codec,  uint8_t proto, 
     return GSML3Codec::NoError;
 }
 
+// reference: ETSI TS 124 008 V11.6.0, 10.5.1.10a PD and SAPI $(CCBS)$
+static unsigned int decodePDAndSAPI(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodePDAndSAPI(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+    xml->addChildSafe(new XmlElement(s_PD,lookup(*in & 0x0f,GSML3Codec::s_protoDict,String(*in & 0x0f))));
+    xml->addChildSafe(new XmlElement(s_SAPI,String((*in & 0x30) >> 4)));
+    advanceBuffer(1,in,len);
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodePDAndSAPI(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodePDAndSAPI(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    uint8_t val = 0;
+    // encode PD
+    const String* str = xml->childText(s_PD);
+    if (TelEngine::null(str))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    val |= lookup(*str,GSML3Codec::s_protoDict,0) & 0x0f;
+    // encode SAPI
+    str = xml->childText(s_SAPI);
+    if (!TelEngine::null(str))
+	val |= (str->toInteger() & 0x03) << 4;
+    out.append(&val,1);
+    return GSML3Codec::NoError;
+}
+
 // reference: ETSI TS 124 008 V11.6.0, 10.5.4.20 Notification Indicator
 static const TokenDict s_notifIndicatorType[] = {
     {"user-suspended", 0x80},
@@ -2437,6 +2480,20 @@ static const TokenDict s_causeNoCLIType[] = {
     {"user-reject",                       0x01},
     {"interaction-with-other-service",    0x02},
     {"payphone",                          0x03},
+    {0,0},
+};
+
+// reference: ETSI TS 124 008 V11.6.0,section 10.5.4.12 Congestion level
+static const TokenDict s_congestLvl_type[] = {
+    {"receiver-ready",        0x00},
+    {"receiver-not-ready",    0x0f},
+    {0,0},
+};
+
+// reference: ETSI TS 124 008 V11.6.0,section 10.5.4.21a Recall type $(CCBS)$
+static const TokenDict s_recallType[] = {
+    {"CCBS",        0x00},
+    {"reserved",    0x07},
     {0,0},
 };
 
@@ -2545,6 +2602,9 @@ MAKE_IE_TYPE(AlertPattern,decodeEnum,encodeEnum,s_alertPattern)
 MAKE_IE_TYPE(CauseNoCLI,decodeEnum,encodeEnum,s_causeNoCLIType)
 MAKE_IE_TYPE(MSClassmark1,decodeMSClassmark1,encodeMSClassmark1,0)
 MAKE_IE_TYPE(MSClassmark2,decodeMSClassmark2,encodeMSClassmark2,0)
+MAKE_IE_TYPE(PDAndSAPI,decodePDAndSAPI,encodePDAndSAPI,0)
+MAKE_IE_TYPE(CongestLvl,0,0,s_congestLvl_type)
+MAKE_IE_TYPE(RecallType,0,0,s_recallType)
 
 const int s_skipIndDefVal = 0;
 MAKE_IE_TYPE(Int,decodeInt,encodeInt,&s_skipIndDefVal)
@@ -2617,6 +2677,29 @@ static const IEParam s_mmLocationUpdateReqParams[] = {
     s_ie_EndDef,
 };
 
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.2 Authentication request
+static const IEParam s_mmAuthReqParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4,  true, s_type_CiphKeySN),
+    MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",              false,       4, false, s_type_Undef),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "rand",                        false,  16 * 8, false, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x20, "autn",                         true,  18 * 8, false, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.3 Authentication Response
+static const IEParam s_mmAuthRespParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,     0, "res",      false,   4 * 8, false, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem,  0x21, "xres2",     true,  14 * 8, false, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.3a Authentication Failure
+static const IEParam s_mmAuthFailParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "RejectCause",    false,       8,  true, s_type_MMRejectCause),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x22, "auts",            true,  16 * 8, false, s_type_Undef),
+    s_ie_EndDef,
+};
+
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.10 Identity Request
 static const IEParam s_mmIdentityReqParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "IdentityType",        false,       8,  true, s_type_MMIdentType),
@@ -2632,6 +2715,13 @@ static const IEParam s_mmIdentityRespParams[] = {
     s_ie_EndDef,
 };
 
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.17 TMSI reallocation command
+static const IEParam s_mmTMSIReallocCmdParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "LAI",             false,   5 * 8,  true, s_type_LAI),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",  false,   9 * 8,  true, s_type_MobileIdent),
+    s_ie_EndDef,
+};
+
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.9 CM service request
 static const IEParam s_mmCMServiceReqParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "CMServiceType",               false,       4,  true, s_type_CMServType),
@@ -2644,6 +2734,23 @@ static const IEParam s_mmCMServiceReqParams[] = {
     s_ie_EndDef,
 };
 
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.5a CM service prompt $(CCBS)$
+static const IEParam s_mmCMServicePromptParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "PDAndSAPI",   false,   8,  true, s_type_PDAndSAPI),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.4 CM Re-establishment request
+static const IEParam s_mmCMReEstablishReqParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4,  true, s_type_CiphKeySN),
+    MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",              false,       4, false, s_type_Undef),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileStationClassmark2",     false,   4 * 8,  true, s_type_MSClassmark2),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x13, "LAI",                          true,   6 * 8,  true, s_type_LAI),
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "DeviceProperties",             true,       8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.8 Abort
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.16 MM Status
 static const IEParam s_mmAbortParams[] = {
@@ -2651,21 +2758,45 @@ static const IEParam s_mmAbortParams[] = {
     s_ie_EndDef,
 };
 
+// reference: ETSI TS 124 008 V11.6.0, section 9.2.15a MM information
+static const IEParam s_mmInformationParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x43, "NetworkFullName",              true,    255 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x45, "NetworkShortName",             true,    255 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x46, "LocalTimezone",                true,      2 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x47, "UniversalTimeAndTimezone",     true,      8 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x48, "LSAIdentity",                  true,      5 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x49, "NetworkDST",                   true,      3 * 8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
 static const RL3Message s_mmMsgs[] = {
-    //TODO
+    // Registration messages
     {0x01,    "IMSIDetachIndication",      s_mmIMSIDetachIndParams,        0},
     {0x02,    "LocationUpdatingAccept",    s_mmLocationUpdateAckParams,    0},
     {0x04,    "LocationUpdatingReject",    s_mmLocationUpdateRejParams,    0},
     {0x08,    "LocationUpdatingRequest",   s_mmLocationUpdateReqParams,    0},
+    // Security messages
+    {0x11,    "AuthenticationReject",      0,                              0},
+    {0x12,    "AuthenticationRequest",     s_mmAuthReqParams,              0},
+    {0x14,    "AuthenticationResponse",    s_mmAuthRespParams,             0},
+    {0x1c,    "AuthenticationFailure",     s_mmAuthFailParams,             0},
     {0x18,    "IdentityRequest",           s_mmIdentityReqParams,          0},
     {0x19,    "IdentityResponse",          s_mmIdentityRespParams,         0},
+    {0x1a,    "TMSIReallocationCommand",   s_mmTMSIReallocCmdParams,       0},
     {0x1b,    "TMSIReallocationComplete",  0,                              0},
+    // Connection management messages
     {0x21,    "CMServiceAccept",           0,                              0},
     {0x22,    "CMServiceReject",           s_mmLocationUpdateRejParams,    0},
     {0x23,    "CMServiceAbort",            0,                              0},
     {0x24,    "CMServiceRequest",          s_mmCMServiceReqParams,         0},
+    {0x25,    "CMServicePrompt",           s_mmCMServicePromptParams,      0},
+    {0x28,    "CMReEstablishmentRequest",  s_mmCMReEstablishReqParams,     0},
+    // CM re-establishment request 0x28
     {0x29,    "Abort",                     s_mmAbortParams,                0},
+    // Miscellaneous messages
+    {0x30,    "MMNull",                    0,                              0},
     {0x31,    "MMStatus",                  s_mmAbortParams,                0},
+    {0x32,    "MMInformation",             s_mmInformationParams,          0},
     {0xff,    "",                          0,                              0},
 };
 
@@ -2704,6 +2835,12 @@ static const IEParam s_ccCallProceedParams[] = {
 static const IEParam s_ccProgressParams[] = {
     MAKE_IE_PARAM(LV,   XmlElem,    0, "ProgressIndicator",      false,     3 * 8,  true, s_type_ProgressInd),
     MAKE_IE_PARAM(TLV,  XmlElem, 0x7E, "UserUser",                true,   131 * 8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, 9.3.17a CC-Establishment $(CCBS)$
+static const IEParam s_ccEstablishmentParams[] = {
+    MAKE_IE_PARAM(LV,   XmlElem,    0, "SetupContainer",      false,     255 * 8,  true, s_type_RL3Msg),
     s_ie_EndDef,
 };
 
@@ -2765,6 +2902,15 @@ static const IEParam s_ccSetupToMSParams[] = {
     s_ie_EndDef,
 };
 
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.17b CC-Establishment confirmed $(CCBS)$
+static const IEParam s_ccEstablCnfParams[] = {
+    MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "BCRepeatIndicator",      true,         8,  true, s_type_RepeatInd),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability1",      true,    16 * 8,  true, s_type_BearerCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability2",      true,    16 * 8,  true, s_type_BearerCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",                  true,    32 * 8,  true, s_type_Cause),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x40, "SupportedCodecs",        true,   255 * 8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
 
 // reference: ETSI TS 124 008 V11.6.0, sectin 9.3.5.2 Connect (mobile station to network direction)
 static const IEParam s_ccConnFromMSParams[] = {
@@ -2853,6 +2999,35 @@ static const IEParam s_ccCallConfirmParams[] = {
     s_ie_EndDef,
 };
 
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.23a Start CC $(CCBS)$
+static const IEParam s_ccStartCCParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x15, "CCCapabilities",         true,     4 * 8,  true, s_type_CCCapabilities),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, sections 9.3.18a Recall $(CCBS)$
+static const IEParam s_ccRecallParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,   0, "RecallType",   false,          8, true, s_type_RecallType),
+    MAKE_IE_PARAM(LV,     XmlElem,   0, "Facility",     false,    255 * 8, true, s_type_RL3Msg),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.8 Emergency setup
+static const IEParam s_ccEmergencySetupParams[] = {
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x04, "BearerCapability",        true,    11 * 8,  true, s_type_BearerCapab),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x2D, "StreamIdentifier",        true,     3 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x40, "SupportedCodecs",         true,   255 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x2D, "EmergencyCategory",       true,     3 * 8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, 9.3.31 User information
+static const IEParam s_ccUserInfoParams[] = {
+    MAKE_IE_PARAM(LV,   XmlElem,    0, "UserUser",    false,   130 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(T,    XmlElem, 0xA0, "MoreData",     true,         8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
 // reference: ETSI TS 124 008 V11.6.0, section 9.3.13 Modify
 static const IEParam s_ccModifyParams[] = {
     MAKE_IE_PARAM(LV,     XmlElem,    0, "BearerCapability",          false,    15 * 8,  true, s_type_BearerCapab),
@@ -2869,6 +3044,22 @@ static const IEParam s_ccModifyComplParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility",      true,    18 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility",     true,     5 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(T,      XmlElem, 0xA3, "ReverseCallSetupDirection",  true,         8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.15 Modify Reject
+static const IEParam s_ccModifyRejParams[] = {
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "Cause",                     false,    31 * 8,  true, s_type_Cause),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7C, "LowLayerCompatibility",      true,    18 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x7D, "HighLayerCompatibility",     true,     5 * 8,  true, s_type_Undef),
+    s_ie_EndDef,
+};
+
+// reference: ETSI TS 124 008 V11.6.0, section 9.3.4 Congestion control
+static const IEParam s_ccCongestionCtrlParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "CongestionLevel",     false,       4,  true, s_type_CongestLvl),
+    MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",      false,       4, false, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x08, "Cause",                true,  32 * 8,  true, s_type_Cause),
     s_ie_EndDef,
 };
 
@@ -2919,14 +3110,20 @@ static const RL3Message s_ccMsgs[] = {
     {0x01,    "Alerting",            s_ccAlertFromMSParams,    s_ccAlertToMSParams},
     {0x02,    "CallProceeding",      s_ccCallProceedParams,    0},
     {0x03,    "Progress",            s_ccProgressParams,       0},
+    {0x04,    "CCEstablishment",     s_ccEstablishmentParams,  0},
     {0x05,    "Setup",               s_ccSetupFromMSParams,    s_ccSetupToMSParams},
+    {0x06,    "CCEstablishmentConfirmed", s_ccEstablCnfParams, 0},
     {0x07,    "Connect",             s_ccConnFromMSParams,     s_ccConnToMSParams},
     {0x08,    "CallConfirmed",       s_ccCallConfirmParams,    0},
+    {0x09,    "StartCC",             s_ccStartCCParams,        0},
+    {0x0b,    "Recall",              s_ccRecallParams,         0},
+    {0x0e,    "EmergencySetup",      s_ccEmergencySetupParams, 0},
     {0x0f,    "ConnectAcknowledge",  0,                        0},
     // Call information phase messages
+    {0x10,    "UserInformation",     s_ccUserInfoParams,       0},
     {0x17,    "Modify",              s_ccModifyParams,         0},
     {0x1f,    "ModifyComplete",      s_ccModifyComplParams,    0},
-    {0x13,    "ModifyReject",        0,                        0},
+    {0x13,    "ModifyReject",        s_ccModifyRejParams,      0},
     {0x18,    "Hold",                0,                        0},
     {0x19,    "HoldAck",             0,                        0},
     {0x1a,    "HoldReject",          s_ccCauseRejParams,       0},
@@ -2938,6 +3135,7 @@ static const RL3Message s_ccMsgs[] = {
     {0x2d,    "Release",             s_ccRelFromMSParams,      s_ccRelToMSParams},
     {0x2a,    "ReleaseComplete",     s_ccRelComplFromMSParams, s_ccRelComplToMSParams},
     // Miscellaneous messages
+    {0x39,    "CongestionControl",   s_ccCongestionCtrlParams, 0},
     {0x3e,    "Notify",              s_ccNotifyParams,         0},
     {0x34,    "StatusEnquiry",       0,                        0},
     {0x3d,    "Status",              s_ccStatusParams,         0},
@@ -3525,8 +3723,6 @@ static unsigned int dumpParamValue(const GSML3Codec* codec, uint8_t proto, const
 			val |= *in & 0x0f;
 		    dumpStr.hexify(&val,1);
 		}
-		else
-		    skipOctets = param->length / 8;
 		break;
 	    }
 	    case GSML3Codec::TV:
@@ -3555,14 +3751,13 @@ static unsigned int dumpParamValue(const GSML3Codec* codec, uint8_t proto, const
 	    case GSML3Codec::NoType:
 		break;
 	}
-	if (skipOctets) {
-	    const uint8_t* buff = in;
-	    unsigned int lbuff = len;
-	    if (int status = skipParam(codec,proto,in,len,param))
-		return status;
-	    if (len <= lbuff)
-		dumpStr.hexify((void*)(buff + skipOctets), lbuff - len - skipOctets);
-	}
+	const uint8_t* buff = in;
+	unsigned int lbuff = len;
+	if (int status = skipParam(codec,proto,in,len,param))
+	    return status;
+	if (len <= lbuff)
+	    dumpStr.hexify((void*)(buff + skipOctets), lbuff - len - skipOctets);
+
 	XmlElement* xml = new XmlElement(param->name);
 	addXMLElement(out,xml);
 	if (dumpStr) {

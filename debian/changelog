@@ -1,4 +1,4 @@
-yate (5.0.1~svn5731) UNRELEASED; urgency=low
+yate (5.0.1~svn5735) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -930,8 +930,24 @@ yate (5.0.1~svn5731) UNRELEASED; urgency=low
     definitions for CC User Information, Congestion Control, StartCC,
     Recall, Emergency Setup, CC Establishment, CC Establishment
     Confirmed.
+  * Updated to SVN revision 5735: + Added message definitions for CC
+    User Information, Congestion Control, StartCC, Recall, Emergency
+    Setup, CC Establishment, CC Establishment Confirmed.  + Decode and
+    encode Cause type according to coding standard.  + Modified some
+    type definitions to use enumerated type decoder and encoder.  + When
+    decoding V types to an XML element, only pass the payload for that
+    type towards the decoder, not the whole input buffer.  + Fixed
+    encoding of TV types on 1 byte.  + Fixed IEI matching in decoder for
+    TV types on 1 byte.  + Added message definition for RR Status.  +
+    Added definition for octet string type and use it for types that are
+    decoded into an octet string.  + Added type definitions for Stream
+    Identifier, Additional Update Parameters and Device Properties.  +
+    Added encoder and decoder for types that represent a list of flags.
+    + Use those functions for decoding and encoding integer and
+    enumerated types.  + Added generic function for decoding and
+    encoding an integer value.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 21 Jan 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 22 Jan 2014 02:19:17 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

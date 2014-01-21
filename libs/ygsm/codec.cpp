@@ -2688,23 +2688,23 @@ static const TokenDict s_cpCauseType[] = {
 MAKE_IE_TYPE(Undef,0,0,0)
 MAKE_IE_TYPE(MobileIdent,decodeMobileIdent, encodeMobileIdent,0)
 MAKE_IE_TYPE(LAI,decodeLAI,encodeLAI,0)
-MAKE_IE_TYPE(MMRejectCause,0,0,s_mmRejectCause)
-MAKE_IE_TYPE(LocUpdType,decodeLocUpdType, encodeLocUpdType,0)
-MAKE_IE_TYPE(CiphKeySN,0,0,s_ciphKeySN)
-MAKE_IE_TYPE(MSNetFeatSupp,0,0,s_msNetworkFeatSupport)
-MAKE_IE_TYPE(MMIdentType,0,0,s_mmIdentType)
-MAKE_IE_TYPE(PTMSIType,0,0,s_pTMSIType)
-MAKE_IE_TYPE(CMServType,0,0,s_mmCMServType)
-MAKE_IE_TYPE(PrioLevel,0,0,s_mmPriorityLevel)
+MAKE_IE_TYPE(MMRejectCause,decodeEnum,encodeEnum,s_mmRejectCause)
+MAKE_IE_TYPE(LocUpdType,decodeLocUpdType,encodeLocUpdType,0)
+MAKE_IE_TYPE(CiphKeySN,decodeEnum,encodeEnum,s_ciphKeySN)
+MAKE_IE_TYPE(MSNetFeatSupp,decodeEnum,encodeEnum,s_msNetworkFeatSupport)
+MAKE_IE_TYPE(MMIdentType,decodeEnum,encodeEnum,s_mmIdentType)
+MAKE_IE_TYPE(PTMSIType,decodeEnum,encodeEnum,s_pTMSIType)
+MAKE_IE_TYPE(CMServType,decodeEnum,encodeEnum,s_mmCMServType)
+MAKE_IE_TYPE(PrioLevel,decodeEnum,encodeEnum,s_mmPriorityLevel)
 MAKE_IE_TYPE(ProgressInd,decodeProgressInd,encodeProgressInd,0)
 MAKE_IE_TYPE(BCDNumber,decodeBCDNumber,encodeBCDNumber,0)
 MAKE_IE_TYPE(Cause,decodeCause,encodeCause,0)
 MAKE_IE_TYPE(CCCapabilities,decodeCCCapab,encodeCCCapab,0)
 MAKE_IE_TYPE(BearerCapab,decodeBearerCapab,encodeBearerCapab,0)
 MAKE_IE_TYPE(IA5Chars,decodeIA5Chars,encodeIA5Chars,0)
-MAKE_IE_TYPE(NotifIndicator,0,0,s_notifIndicatorType)
-MAKE_IE_TYPE(RepeatInd,0,0,s_repeatIndType)
-MAKE_IE_TYPE(SSVersion,0,0,s_ssVersionType)
+MAKE_IE_TYPE(NotifIndicator,decodeEnum,encodeEnum,s_notifIndicatorType)
+MAKE_IE_TYPE(RepeatInd,decodeEnum,encodeEnum,s_repeatIndType)
+MAKE_IE_TYPE(SSVersion,decodeEnum,encodeEnum,s_ssVersionType)
 MAKE_IE_TYPE(NetworkCCCapab,decodeEnum,encodeEnum,s_networkCCCapabType)
 MAKE_IE_TYPE(Signal,decodeEnum,encodeEnum,s_signalType)
 MAKE_IE_TYPE(AlertPattern,decodeEnum,encodeEnum,s_alertPattern)
@@ -2712,8 +2712,8 @@ MAKE_IE_TYPE(CauseNoCLI,decodeEnum,encodeEnum,s_causeNoCLIType)
 MAKE_IE_TYPE(MSClassmark1,decodeMSClassmark1,encodeMSClassmark1,0)
 MAKE_IE_TYPE(MSClassmark2,decodeMSClassmark2,encodeMSClassmark2,0)
 MAKE_IE_TYPE(PDAndSAPI,decodePDAndSAPI,encodePDAndSAPI,0)
-MAKE_IE_TYPE(CongestLvl,0,0,s_congestLvl_type)
-MAKE_IE_TYPE(RecallType,0,0,s_recallType)
+MAKE_IE_TYPE(CongestLvl,decodeEnum,encodeEnum,s_congestLvl_type)
+MAKE_IE_TYPE(RecallType,decodeEnum,encodeEnum,s_recallType)
 
 const int s_skipIndDefVal = 0;
 MAKE_IE_TYPE(Int,decodeInt,encodeInt,&s_skipIndDefVal)
@@ -3977,12 +3977,20 @@ static unsigned int decodeV(const GSML3Codec* codec, uint8_t proto, const uint8_
     switch (param->xmlType) {
 	case GSML3Codec::Skip:
 	    return skipParam(codec,proto,in,len,param);
-	case GSML3Codec::XmlElem:
 	case GSML3Codec::XmlRoot:
-	    if (!(param->ieType.decoder || (param->name && param->length <= 8)))
-		return dumpParamValue(codec,proto,in,len,param,out);
 	    if (param->ieType.decoder)
 		return param->ieType.decoder(codec,proto,param,in,len,out,params);
+	case GSML3Codec::XmlElem:
+
+	    if (!(param->ieType.decoder || (param->name && param->length <= 8)))
+		return dumpParamValue(codec,proto,in,len,param,out);
+	    if (param->ieType.decoder) {
+		const uint8_t* buf = in;
+		unsigned int l = (param->length <= 8 ? 1 : param->length / 8);
+		if (!(param->length < 8 && param->lowerBits))
+		    advanceBuffer(l,in,len);
+		return param->ieType.decoder(codec,proto,param,buf,l,out,params);
+	    }
 	    // decode an 1 byte value from a dictionary
 	    if (param->name) {
 		if (param->length > 8) {
@@ -4214,7 +4222,7 @@ static unsigned int decodeTV(const GSML3Codec* codec, uint8_t proto, const uint8
     if (param->length && (len * 8 < param->length))
 	return (param->isOptional ? GSML3Codec::IncorrectOptionalIE : GSML3Codec::IncorrectMandatoryIE);
     if (param->type == GSML3Codec::TV && param->length == 8) {
-	if ((param->iei & (*in & 0xf0)) != param->iei)
+	if ((*in & 0xf0) != param->iei)
 	    return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
     }
     else if (param->iei != *in)
@@ -4294,8 +4302,14 @@ static unsigned int encodeTV(const GSML3Codec* codec, uint8_t proto, XmlElement*
 		if (param->isOptional && !d.length())
 		    return GSML3Codec::NoError;
 		uint8_t iei = param->iei;
-		out.append(&iei,1);
-		out.append(d);
+		if (param->length == 8) {
+		    iei |= d[0];
+		    out.append(&iei,1);
+		}
+		else {
+		    out.append(&iei,1);
+		    out.append(d);
+		}
 	    }
 	    else {
 		XmlElement* xml = in->findFirstChild(&param->name);

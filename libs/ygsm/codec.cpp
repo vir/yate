@@ -1752,7 +1752,7 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
 }
 
 // reference: ETSI TS 124 008 V11.6.0, section 10.5.4.11 Cause
-static const TokenDict s_cause_dict[] = {
+static const TokenDict s_causeGSM_dict[] = {
 	// normal-event class
 	{"normal-event",                   0x00},
 	{"unallocated",                    0x01}, // Unallocated (unassigned) number
@@ -1818,6 +1818,98 @@ static const TokenDict s_cause_dict[] = {
 	{0,0}
 };
 
+// Q.850 2.2.5. Cause class: Bits 4-6
+// Q.850 Table 1. Cause value: Bits 0-6
+// Defined for CCITT coding standard
+static const TokenDict s_causeCCITT_dict[] = {
+	// normal-event class
+	{"normal-event",                   0x00},
+	{"unallocated",                    0x01}, // Unallocated (unassigned) number
+	{"noroute-to-network",             0x02}, // No route to specified transit network
+	{"noroute",                        0x03}, // No route to destination
+	{"send-info-tone",                 0x04}, // Send special information tone
+	{"misdialed-trunk-prefix",         0x05}, // Misdialed trunk prefix
+	{"channel-unacceptable",           0x06}, // Channel unacceptable
+	{"call-delivered",                 0x07}, // Call awarded and being delivered in an established channel
+	{"preemption",                     0x08}, // Preemption
+	{"preemption-circuit-reserved",    0x09}, // Preemption circuit reserved for re-use
+	{"ported-number",                  0x0e}, // QoR: ported number Q.850 Addendum 1 (06/2000)
+	{"excess-digits",                  0x0e}, // Excess digits received, call is proceeding
+	{"normal-clearing",                0x10}, // Normal Clearing
+	{"busy",                           0x11}, // User busy
+	{"noresponse",                     0x12}, // No user responding
+	{"noanswer",                       0x13}, // No answer from user (user alerted)
+	{"offline",                        0x14}, // Subscriber absent
+	{"rejected",                       0x15}, // Call Rejected
+	{"moved",                          0x16}, // Number changed
+	{"redirection",                    0x17}, // Redirection to new destination Q.850 05/98
+	{"rejected-by-feature",            0x18}, // Call rejected due to feature at the destination Q.850 Amendment 1 (07/2001)
+	{"looping",                        0x19}, // Exchange routing error (hop counter) Q.850 05/98
+	{"answered",                       0x1a}, // Non-selected user clearing (answered elsewhere)
+	{"out-of-order",                   0x1b}, // Destination out of order
+	{"invalid-number",                 0x1c}, // Invalid number format
+	{"facility-rejected",              0x1d}, // Facility rejected
+	{"status-enquiry-rsp",             0x1e}, // Response to STATUS ENQUIRY
+	{"normal",                         0x1f}, // Normal, unspecified
+	// resource-unavailable class
+	{"resource-unavailable",           0x20}, // Resource unavailable
+	{"congestion",                     0x22}, // No circuit/channel available
+	{"channel-congestion",             0x22},
+	{"net-out-of-order",               0x26}, // Network out of order
+	{"frame-mode-conn-down",           0x27}, // Permanent frame mode connection out of service
+	{"frame-mode-conn-up",             0x28}, // Permanent frame mode connection operational
+	{"noconn",                         0x29},
+	{"temporary-failure",              0x29}, // Temporary failure
+	{"congestion",                     0x2a}, // Switching equipment congestion
+	{"switch-congestion",              0x2a},
+	{"access-info-discarded",          0x2b}, // Access information discarded
+	{"channel-unavailable",            0x2c}, // Requested channel not available
+	{"preemption-congestion",          0x2e}, // Precedence call blocked
+	{"noresource",                     0x2f}, // Resource unavailable, unspecified
+	{"service-unavailable",            0x30}, // Service or option not available
+	{"qos-unavailable",                0x31}, // Quality of service unavailable
+	{"facility-not-subscribed",        0x32}, // Requested facility not subscribed
+	{"forbidden-out",                  0x35}, // Outgoing call barred within CUG
+	{"forbidden-in",                   0x37}, // Incoming call barred within CUG
+	{"bearer-cap-not-auth",            0x39}, // Bearer capability not authorized
+	{"bearer-cap-not-available",       0x3a}, // Bearer capability not presently available
+	{"nomedia",                        0x3a},
+	{"invalid-access-info-out",        0x3e}, // Inconsistency in designated outgoing access information and subscriber class
+	{"service-unavailable",            0x3f}, // Service or option not available
+	// service-not-implemented class
+	{"bearer-cap-not-implemented",     0x41}, // Bearer capability not implemented
+	{"channel-type-not-implemented",   0x42}, // Channel type not implemented
+	{"facility-not-implemented",       0x45}, // Requested facility not implemented
+	{"restrict-bearer-cap-avail",      0x46}, // Only restricted digital information bearer capability is available
+	{"service-not-implemented",        0x4f}, // Service or option not implemented, unspecified
+	// invalid-message class
+	{"invalid-callref",                0x51}, // Invalid call reference value
+	{"unknown-channel",                0x52}, // Identified channel does not exist
+	{"unknown-callid",                 0x53}, // A suspended call exists, but this call identity does not
+	{"duplicate-callid",               0x54}, // Call identity in use
+	{"no-call-suspended",              0x55}, // No call suspended
+	{"suspended-call-cleared",         0x56}, // Call having the requested call identity has been cleared
+	{"not-subscribed",                 0x57}, // User not member of CUG
+	{"incompatible-dest",              0x58}, // Incompatible destination
+	{"unknown-group",                  0x5a}, // Non-existent CUG
+	{"invalid-transit-net",            0x5b}, // Invalid transit network selection
+	{"invalid-message",                0x5f}, // Invalid message, unspecified
+	// protocol-error class 
+	{"missing-mandatory-ie",           0x60}, // Mandatory information element is missing
+	{"unknown-message",                0x61}, // Message type non-existent or not implemented
+	{"wrong-message",                  0x62}, // Message not compatible with call state, non-existent or not implemented
+	{"unknown-ie",                     0x63}, // Information element non-existent or not implemented
+	{"invalid-ie",                     0x64}, // Invalid information element contents
+	{"wrong-state-message",            0x65}, // Message not compatible with call state
+	{"timeout",                        0x66}, // Recovery on timer expiry
+	{"unknown-param-passed-on",        0x67}, // Parameter non-existent or not implemented, passed on
+	{"unknown-param-message-droppped", 0x6e}, // Message with unrecognized parameter, discarded
+	{"protocol-error",                 0x6f}, // Protocol error, unspecified
+	// interworking class
+	{"interworking",                   0x7f}, // Interworking, unspecified
+	{0,0}
+};
+
 static const String s_causeRec = "rec";
 static const String s_causeDiag = "diagnostic";
 
@@ -1833,8 +1925,17 @@ static unsigned int decodeCause(const GSML3Codec* codec, uint8_t proto, const IE
     XmlElement* xml = new XmlElement(param->name);
     addXMLElement(out,xml);
 
-    xml->setAttribute(s_progIndCoding,lookup(in[0] & 0x60,s_progIndCoding_dict,"unknown"));
+    uint8_t coding = in[0] & 0x60;
+    xml->setAttribute(s_progIndCoding,lookup(coding,s_progIndCoding_dict,"unknown"));
     xml->setAttribute(s_progIndLocation,lookup(in[0] & 0x0f,s_progIndLocation_dict,"unknown"));
+    if (!(coding == 0x60 /* GSM PLMN */ || coding == 0x00 /* Q.931 */)) {
+	Debug(codec->dbg(),DebugNote,"Unknown Cause coding standard=%s (%u), dumping data [%p]",
+	    lookup(coding,s_progIndCoding_dict,"unknown"),coding >> 5,codec->ptr());
+	advanceBuffer(1,in,len);
+	dumpData(in,len,xml);
+	return GSML3Codec::NoError;
+    }
+
     if (!(in[0] & 0x80)) {
 	advanceBuffer(1,in,len);
 	xml->setAttribute(s_causeRec,String(in[0] & 0x7f));
@@ -1842,7 +1943,7 @@ static unsigned int decodeCause(const GSML3Codec* codec, uint8_t proto, const IE
     advanceBuffer(1,in,len);
     if (!len)
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
-    xml->setText(lookup(in[0] & 0x7f,s_cause_dict,"unspecified"));
+    xml->setText(lookup(in[0] & 0x7f,(coding == 0 ? s_causeCCITT_dict : s_causeGSM_dict),"unspecified"));
     advanceBuffer(1,in,len);
     if (len) {
 	String s;
@@ -1865,27 +1966,35 @@ static unsigned int encodeCause(const GSML3Codec* codec,  uint8_t proto, const I
 	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
     const String* coding = xml->getAttribute(s_progIndCoding);
     const String* loc = xml->getAttribute(s_progIndLocation);
+
+    uint8_t buf[4] = {0x80,0x80,0x80};
+    uint8_t idx = 0;
+    uint8_t cdg = 0x60; // set coding GSM PLMN if not provided
+    if (!TelEngine::null(coding))
+	cdg = lookup(*coding,s_progIndCoding_dict,0x60) & 0x60;
+    buf[idx] |= cdg;
+    if (TelEngine::null(loc)) // set location LPN if not provided
+	buf[idx] |= 0x01;
+    else
+	buf[idx] |= lookup(*loc,s_progIndLocation_dict,0x01) & 0x0f;
+    if (!(cdg == 0x00 || cdg == 0x60)) {
+	Debug(codec->dbg(),DebugNote,"Unknown Cause coding standard=%s (%u), encoding from hexified <data> element [%p]",
+	    lookup(cdg,s_progIndCoding_dict,"unknown"),cdg >> 5,codec->ptr());
+	out.append(buf,idx+1);
+	getData(out,xml);
+	return GSML3Codec::NoError;
+    }
     const String& cause = xml->getText();
     if (TelEngine::null(cause))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     const String* rec = xml->getAttribute(s_causeRec);
     const String* diag = xml->getAttribute(s_causeDiag);
-    uint8_t buf[4] = {0x80,0x80,0x80};
-    uint8_t idx = 0;
-    if (TelEngine::null(coding)) // set coding GSM PLMN if not provided
-	buf[idx] |= 0x60;
-    else
-	buf[idx] |= lookup(*coding,s_progIndCoding_dict,0x60) & 0x60;
-    if (TelEngine::null(loc)) // set location LPN if not provided
-	buf[idx] |= 0x01;
-    else
-	buf[idx] |= lookup(*loc,s_progIndLocation_dict,0x01) & 0x0f;
     if (!TelEngine::null(rec)) {
 	buf[idx++] &= 0x7f;
 	buf[idx] |= rec->toInteger() & 0x7f;
     }
     idx++;
-    buf[idx] |= lookup(cause,s_cause_dict,0) & 0x7f;
+    buf[idx] |= lookup(cause,(coding == 0 ? s_causeCCITT_dict : s_causeGSM_dict),0) & 0x7f;
     out.append(buf,idx+1);
     if (!TelEngine::null(diag)) {
 	DataBlock d;

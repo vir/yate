@@ -2682,6 +2682,31 @@ static const TokenDict s_cpCauseType[] = {
     {0, 0},
 };
 
+// reference: ETSI TS 144 018 V11.5.0,, section 10.5.2.31 RR Cause
+static const TokenDict s_rrCauseType[] = {
+    {"normal-event",                                        0x00}, // Normal event
+    {"unspecified",                                         0x01}, // Abnormal release, unspecified
+    {"channel-unacceptable",                                0x02}, // Abnormal release, channel unacceptable
+    {"timeout",                                             0x03}, // Abnormal release, timer expired
+    {"no-activity-on-radio-path",                           0x04}, // Abnormal release, no activity on the radio path
+    {"preeemtive-release",                                  0x05}, // Preemptive release
+    {"UTRAN-config-unknown",                                0x06}, // UTRAN configuration unknown
+    {"ho-impossible",                                       0x08}, // Handover impossible, timing advance out of range
+    {"channel-mode-unacceptable",                           0x09}, // Channel mode unacceptable
+    {"frequency-not-implemented",                           0x0a}, // Frequency not implemented
+    {"talker-leaving-GC-area ",                             0x0b}, // Originator or talker leaving group call area
+    {"lower-layer-failure",                                 0x0c}, // Lower layer failure
+    {"call-already-cleared",                                0x41}, // Call already cleared
+    {"semantically-incorrect-message",                      0x5f}, // Semantically incorrect message
+    {"invalid-mandatory-information",                       0x60}, // Invalid mandatory information
+    {"message-type-non-existent-or-not-implemented",        0x61}, // Message type non-existent or not implemented
+    {"message-type-not-compatible-with-the-protocol-state", 0x62}, // Message type not compatible with protocol state
+    {"conditional-IE-error",                                0x64}, // Conditional IE error
+    {"no-cell-allocation-available",                        0x65}, // No cell allocation available
+    {"protocol-error-unspecified",                          0x6f}, // Protocol error unspecified
+    {0, 0},
+};
+
 // IE Types
 #define MAKE_IE_TYPE(x,decoder,encoder,data) const IEType s_type_##x = {decoder,encoder,data};
 
@@ -2736,6 +2761,8 @@ MAKE_IE_TYPE(GUTIType,0,0,s_epsGUTIType)
 MAKE_IE_TYPE(SecurityHeader,decodeSecHeader,encodeSecHeader,0)
 // SMS types
 MAKE_IE_TYPE(CPCause,decodeEnum,encodeEnum,s_cpCauseType)
+// RR types
+MAKE_IE_TYPE(RRCause,decodeEnum,encodeEnum,s_rrCauseType)
 
 #define MAKE_IE_PARAM(type,xml,iei,name,optional,length,lowerBits,ieType) \
     {GSML3Codec::type,GSML3Codec::xml,iei,name,optional,length,lowerBits,ieType}
@@ -3400,7 +3427,7 @@ static const RL3Message s_smsMsgs[] = {
 
 // RR message definitions
 
-// reference ETSI TS 124 011 V11.1.0, section 7.2.3 CP-ERROR
+// reference ETSI TS 144 018 V11.5.0, section 9.1.25 Paging response
 static const IEParam s_rrPagingRespParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4,  true, s_type_CiphKeySN),
     MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",              false,       4, false, s_type_Undef),
@@ -3410,11 +3437,19 @@ static const IEParam s_rrPagingRespParams[] = {
     s_ie_EndDef,
 };
 
+// reference ETSI TS 144 018 V11.5.0, section 9.1.29 RR Status
+static const IEParam s_rrStatusParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "RRCause",    false,       8,  true, s_type_RRCause),
+    s_ie_EndDef,
+};
+
 // Radio Resource Management message types
 // reference ETSI TS 144 018 V11.5.0, section 10.4 Message type
 static const RL3Message s_rrMsgs[] = {
     //Paging and Notification messages
     {0x27,    "PagingResponse",   s_rrPagingRespParams,    0},
+    // Miscellaneous messages
+    {0x12,    "RRStatus",         s_rrStatusParams,        0},
     {0xff,    "",                 0,                       0},
 };
 

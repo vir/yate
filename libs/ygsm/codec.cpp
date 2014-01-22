@@ -1197,7 +1197,7 @@ static unsigned int encodeLocUpdType(const GSML3Codec* codec,  uint8_t proto, co
 {
     if (!(codec && in && param))
 	return CONDITIONAL_ERROR(param,NoError,ParserErr);
-    DDebug(codec->dbg(),DebugAll,"encodeLAI(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+    DDebug(codec->dbg(),DebugAll,"encodeLocUpdType(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),param,
 	    in->tag(),in,codec->ptr());
     XmlElement* xml = in->findFirstChild(&param->name);
     if (!xml && !param->isOptional)
@@ -1226,6 +1226,39 @@ static const TokenDict s_ciphKeySN[] = {
 // reference: ETSI TS 124 008 V11.6.0, section 10.5.1.3 Location area identification
 const String& s_LAC = "LAC";
 
+static inline bool getPLMN_LAC(const uint8_t*& in, unsigned int& len, XmlElement* xml)
+{
+    if (!(in && len >= 5 && xml))
+	return false;
+    // get MCC_MNC
+    if (getMCCMNC(in,len,xml))
+	return false;
+    // get LAC(16 bits)
+    String lac;
+    lac.hexify((void*)in,2);
+    advanceBuffer(2,in,len);
+    xml->addChildSafe(new XmlElement(s_LAC,lac));
+    return true;
+}
+
+static inline bool setPLMN_LAC(XmlElement* xml, DataBlock& d)
+{
+    if (!xml)
+	return false;
+    uint8_t buf[3] = {0, 0, 0};
+    uint8_t* b = buf;
+    unsigned int len = 3;
+    if (setMCCMNC(xml,b,len,false))
+	return false;
+    d.append(buf,len);
+    DataBlock l;
+    const String* lac = xml->childText(s_LAC);
+    if (TelEngine::null(lac) || !l.unHexify(*lac))
+	return false;
+    d.append(l);
+    return true;
+}
+
 static unsigned int decodeLAI(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
 	unsigned int& len, XmlElement*& out, const NamedList& params)
 {
@@ -1238,15 +1271,8 @@ static unsigned int decodeLAI(const GSML3Codec* codec, uint8_t proto, const IEPa
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     XmlElement* xml = new XmlElement(param->name);
     addXMLElement(out,xml);
-
-    // get MCC_MNC
-    if (getMCCMNC(in,len,xml))
+    if (!getPLMN_LAC(in,len,xml))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
-    // get LAC(16 bits)
-    String lac;
-    lac.hexify((void*)in,2);
-    advanceBuffer(2,in,len);
-    xml->addChildSafe(new XmlElement(s_LAC,lac));
     return GSML3Codec::NoError;
 }
 
@@ -1258,16 +1284,59 @@ static unsigned int encodeLAI(const GSML3Codec* codec,  uint8_t proto, const IEP
     DDebug(codec->dbg(),DebugAll,"encodeLAI(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
 	    in->tag(),in,codec->ptr());
     XmlElement* xml = in->findFirstChild(&param->name);
-    if (!xml && !param->isOptional)
-	return GSML3Codec::MissingMandatoryIE;
-    DataBlock d(0,3);
-    uint8_t* buf = (uint8_t*)d.data();
-    unsigned int len = 5;
-    if (setMCCMNC(xml,buf,len))
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    DataBlock d;
+    if (!setPLMN_LAC(xml,d))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    out.append(d);
+    return GSML3Codec::NoError;
+}
+
+// reference: ETSI TS 124 008 V11.6.0, section 10.5.5.15 Routing area identification
+// reference: ETSI TS 124 008 V11.6.0, section 10.5.5.15a Routing area identification 2
+
+const String s_RAC = "RAC";
+
+static unsigned int decodeRAI(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodeRAI(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    if (len != 6)
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+    // get MCC_MNC & LAC
+    if (!getPLMN_LAC(in,len,xml))
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    // get RAC(8 bits)
+    String rac;
+    rac.hexify((void*)in,len);
+    advanceBuffer(len,in,len);
+    xml->addChildSafe(new XmlElement(s_RAC,rac));
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeRAI(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodeRAI(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    DataBlock d;
+    if (!setPLMN_LAC(xml,d))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     out.append(d);
     d.clear();
-    const String* lac = xml->childText(s_LAC);
+    // encode RAC
+    const String* lac = xml->childText(s_RAC);
     if (TelEngine::null(lac) || !d.unHexify(*lac))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     out.append(d);
@@ -1778,8 +1847,8 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
     unsigned int len = 2 + digits.length() / 2 + (digits.length() % 2 ? 1 : 0);
     uint8_t buff[len];
     unsigned int idx = 0;
-    buff[idx] = (lookup(*nature,s_dict_numNature,0) & 0x70);
-    buff[idx] |= (lookup(*plan,s_dict_numPlan,0) & 0x0f);
+    buff[idx] = ((nature ? lookup(*nature,s_dict_numNature,0) : 0) & 0x70);
+    buff[idx] |= (( plan ? lookup(*plan,s_dict_numPlan,0) :0) & 0x0f);
     if (TelEngine::null(screen) && TelEngine::null(pres))
 	buff[idx++] |= 0x80;
     else {
@@ -2272,11 +2341,11 @@ static unsigned int encodeBearerCapab(const GSML3Codec* codec,  uint8_t proto, c
     // set bits 7-6
     str = xml->childText(s_radioChanReq);
     if (itc)
-	itc |= (lookup(*str,s_radioChanNonSpeech,0) << 5) & 0x60;
+	itc |= ((str ? lookup(*str,s_radioChanNonSpeech,0) : 0) << 5) & 0x60;
     else if (ext)
-	itc |= (lookup(*str,s_radioChanSpeechExt,0) << 5) & 0x60;
+	itc |= ((str ? lookup(*str,s_radioChanSpeechExt,0) : 0) << 5) & 0x60;
     else
-	itc |= (lookup(*str,s_radioChanSpeech,0) << 5) & 0x60;
+	itc |= ((str ? lookup(*str,s_radioChanSpeech,0) : 0) << 5) & 0x60;
     // set extension bit (bit 8)
     itc |= (ext ? 0 : 0x80);
     // set transfer mode (bit 4)
@@ -2295,7 +2364,7 @@ static unsigned int encodeBearerCapab(const GSML3Codec* codec,  uint8_t proto, c
 	unsigned int idx = 0;
 	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
 	    String* str = static_cast<String*>(o->get());
-	    buf[idx] = 0x00 | lookup(*str,s_speechVers_types,0x03);
+	    buf[idx] = 0x00 | (str ? lookup(*str,s_speechVers_types,0x03) : 0x03);
 	    if (!idx) {
 		const String* ctm = speechVers->getAttribute(s_ctmTxtTel);
 		if (!TelEngine::null(ctm) && ctm->toBoolean())
@@ -2613,6 +2682,50 @@ static unsigned int encodePLMNList(const GSML3Codec* codec,  uint8_t proto, cons
     return GSML3Codec::NoError;
 }
 
+// reference: ETSI TS 124 008 V11.6.0, 10.5.3.16
+static const String s_timerUnit = "unit";
+
+static const TokenDict s_mmTimerUnit_dict[] = {
+    {"2-seconds",   0x00},
+    {"1-minute",    0x20},
+    {"decihours",   0x60},
+    {"deactivated", 0xe0},
+    {0, 0},
+};
+
+static unsigned int decodeMMTimer(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodeMMTimer(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    XmlElement* xml = new XmlElement(param->name,String(*in & 0x1f));
+    addXMLElement(out,xml);
+    xml->setAttribute(s_timerUnit,lookup((*in & 0xe0) ,s_mmTimerUnit_dict,"1-minute"));
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeMMTimer(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodeMMTimer(param=%s(%p),xml=%s(%p)) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    uint8_t val = (xml->getText().toInteger() & 0x1f);
+    const String* str = xml->getAttribute(s_timerUnit);
+    if (TelEngine::null(str))
+	val |= 0x20;
+    else
+	val |= lookup(*str,s_mmTimerUnit_dict,0x20);
+    out.append(&val,1);
+    return GSML3Codec::NoError;
+}
+
 // reference: ETSI TS 124 008 V11.6.0, 10.5.4.20 Notification Indicator
 static const TokenDict s_notifIndicatorType[] = {
     {"user-suspended", 0x80},
@@ -2839,6 +2952,8 @@ MAKE_IE_TYPE(RecallType,decodeEnum,encodeEnum,s_recallType)
 MAKE_IE_TYPE(AdditUpdParams,decodeFlags,encodeFlags,s_additionalUpdateParams_type)
 MAKE_IE_TYPE(DevProperties,decodeFlags,encodeFlags,s_DeviceProperties)
 MAKE_IE_TYPE(PLMNList,decodePLMNList,encodePLMNList,0)
+MAKE_IE_TYPE(MMTimer,decodeMMTimer,encodeMMTimer,0)
+MAKE_IE_TYPE(RAI,decodeRAI,encodeRAI,0)
 
 const int s_skipIndDefVal = 0;
 MAKE_IE_TYPE(Int,decodeInt,encodeInt,&s_skipIndDefVal)
@@ -2895,7 +3010,7 @@ static const IEParam s_mmLocationUpdateAckParams[] = {
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.6 CM Service reject
 static const IEParam s_mmLocationUpdateRejParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "RejectCause",    false,       8,  true, s_type_MMRejectCause),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x36, "T3246Value",      true,   3 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x36, "T3246Value",      true,   3 * 8,  true, s_type_MMTimer),
     s_ie_EndDef,
 };
 
@@ -2946,7 +3061,7 @@ static const IEParam s_mmIdentityReqParams[] = {
 static const IEParam s_mmIdentityRespParams[] = {
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",  false,   10 * 8,  true, s_type_MobileIdent),
     MAKE_IE_PARAM(TV,     XmlElem, 0xE0, "P_TMSIType",       true,        8,  true, s_type_PTMSIType),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x1B, "RAI",              true,    8 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x1B, "RAI",              true,    8 * 8,  true, s_type_RAI),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x19, "P_TMSISignature",  true,    5 * 8,  true, s_type_Hex),
     s_ie_EndDef,
 };

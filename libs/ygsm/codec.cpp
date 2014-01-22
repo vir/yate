@@ -374,11 +374,12 @@ static inline unsigned int getMCCMNC(const uint8_t*& in, unsigned int& len, XmlE
     return GSML3Codec::NoError;
 }
 
-static inline unsigned int setMCCMNC(XmlElement* in, uint8_t*& out, unsigned int& len, bool advance = true)
+static inline unsigned int setMCCMNC(XmlElement* in, uint8_t*& out, unsigned int& len, bool advance = true, 
+					bool findChild = true)
 {
     if (!(in && out && len >= 3))
 	return GSML3Codec::ParserErr;
-    XmlElement* xml = in->findFirstChild(&YSTRING("PLMNidentity"));
+    XmlElement* xml = findChild ? in->findFirstChild(&YSTRING("PLMNidentity")) : in;
     if (!xml) {
 	*out = *(out+1) = *(out+2) =0xff;
 	if (advance) {
@@ -1073,7 +1074,7 @@ static const TokenDict s_splitPgCycle[] = {
 
 static const TokenDict s_nonDRXTimer[] = {
     {"no-non-DRX-mode" ,        0},
-    {"max-1-sec-non-DRX mode",  1},
+    {"max-1-sec-non-DRX-mode",  1},
     {"max-2-sec-non-DRX-mode",  2},
     {"max-4-sec-non-DRX-mode",  3},
     {"max-8-sec-non-DRX-mode",  4},
@@ -1130,7 +1131,7 @@ static unsigned int encodeDRX(const GSML3Codec* codec,  uint8_t proto, const IEP
 
 static const TokenDict s_voiceDomPref[] = {
     {"CS-voice-only",          0},
-    {"IMS-PS-voice only",      1},
+    {"IMS-PS-voice-only",      1},
     {"CS-voice-preferred",     2},
     {"IMS-PS-voice-preferred", 3},
     {0, 0},
@@ -1455,9 +1456,9 @@ static const TokenDict s_mmRejectCause[] = {
     {"IMEI-not-accepted",                                   0x05},
     {"illegal-ME",                                          0x06},
     {"PLMN-not-allowed",                                    0x0b},
-    {"location-Area-not-allowed",                           0x0c},
+    {"location-area-not-allowed",                           0x0c},
     {"roaming-not-allowed-in-this-location-area",           0x0d},
-    {"no-Suitable-Cells-In-Location Area",                  0x0f},
+    {"no-suitable-cells-in-location-area",                  0x0f},
     {"network-failure",                                     0x11},
     {"MAC-failure",                                         0x14},
     {"synch-failure",                                       0x15},
@@ -2571,6 +2572,47 @@ static unsigned int encodePDAndSAPI(const GSML3Codec* codec,  uint8_t proto, con
     return GSML3Codec::NoError;
 }
 
+// reference: ETSI TS 124 008 V11.6.0, 10.5.1.13 PLMNList
+static unsigned int decodePLMNList(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len >= 3 && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodePLMNList(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    XmlElement* xml = new XmlElement(param->name);
+    addXMLElement(out,xml);
+    while (len)
+	if (getMCCMNC(in,len,xml))
+	    return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodePLMNList(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodePLMNList(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* xml = in->findFirstChild(&param->name);
+    if (!xml)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    XmlElement* c = xml->findFirstChild();
+    if (!c)
+	return GSML3Codec::NoError;
+    while (c) {
+	uint8_t buf[3] = {0,0,0};
+	uint8_t* b = buf;
+	unsigned int len = 3;
+	if (setMCCMNC(c,b,len,false,false))
+	    return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+	out.append(buf,len);
+	c = xml->findNextChild(c);
+    }
+    return GSML3Codec::NoError;
+}
+
 // reference: ETSI TS 124 008 V11.6.0, 10.5.4.20 Notification Indicator
 static const TokenDict s_notifIndicatorType[] = {
     {"user-suspended", 0x80},
@@ -2748,7 +2790,7 @@ static const TokenDict s_rrCauseType[] = {
     {"ho-impossible",                                       0x08}, // Handover impossible, timing advance out of range
     {"channel-mode-unacceptable",                           0x09}, // Channel mode unacceptable
     {"frequency-not-implemented",                           0x0a}, // Frequency not implemented
-    {"talker-leaving-GC-area ",                             0x0b}, // Originator or talker leaving group call area
+    {"talker-leaving-GC-area",                              0x0b}, // Originator or talker leaving group call area
     {"lower-layer-failure",                                 0x0c}, // Lower layer failure
     {"call-already-cleared",                                0x41}, // Call already cleared
     {"semantically-incorrect-message",                      0x5f}, // Semantically incorrect message
@@ -2796,6 +2838,7 @@ MAKE_IE_TYPE(CongestLvl,decodeEnum,encodeEnum,s_congestLvl_type)
 MAKE_IE_TYPE(RecallType,decodeEnum,encodeEnum,s_recallType)
 MAKE_IE_TYPE(AdditUpdParams,decodeFlags,encodeFlags,s_additionalUpdateParams_type)
 MAKE_IE_TYPE(DevProperties,decodeFlags,encodeFlags,s_DeviceProperties)
+MAKE_IE_TYPE(PLMNList,decodePLMNList,encodePLMNList,0)
 
 const int s_skipIndDefVal = 0;
 MAKE_IE_TYPE(Int,decodeInt,encodeInt,&s_skipIndDefVal)
@@ -2842,7 +2885,7 @@ static const IEParam s_mmLocationUpdateAckParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x17, "MobileIdentity",               true,  10 * 8,  true, s_type_MobileIdent),
     MAKE_IE_PARAM(T,      XmlElem, 0xA1, "FollowOnProceed",              true,       8,  true, s_type_Hex),
     MAKE_IE_PARAM(T,      XmlElem, 0xA2, "CTSPermission",                true,       8,  true, s_type_Hex),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x4A, "EquivalentPLMNs",              true,  47 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x4A, "EquivalentPLMNs",              true,  47 * 8,  true, s_type_PLMNList),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x34, "EmergencyNumberList",          true,  50 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x35, "PerMST3212",                   true,   3 * 8,  true, s_type_Undef),
     s_ie_EndDef,
@@ -3779,8 +3822,14 @@ static unsigned int decodeRL3Msg(const GSML3Codec* codec, uint8_t proto, const I
 static unsigned int encodeRL3Msg(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
 	DataBlock& out, const NamedList& params)
 {
-    //TODO
-    return GSML3Codec::NoError;
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodeRL3Msg(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    XmlElement* child = in->findFirstChild(&param->name);
+    if (!(child && (child = child->findFirstChild())))
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    return encodeParams(codec,proto,child,out,s_rl3Message,params);
 }
 
 
@@ -4651,7 +4700,7 @@ const TokenDict GSML3Codec::s_securityHeaders[] = {
     {"plain-NAS-message",                                              GSML3Codec::PlainNAS},
     {"integrity-protected",                                            GSML3Codec::IntegrityProtect},
     {"integrity-protected-and-ciphered",                               GSML3Codec::IntegrityProtectCiphered},
-    {"integrity-protected-with-new-EPS-security- context",             GSML3Codec::IntegrityProtectNewEPSCtxt},
+    {"integrity-protected-with-new-EPS-security-context",              GSML3Codec::IntegrityProtectNewEPSCtxt},
     {"integrity-protected-and-ciphered-with-new-EPS-security-context", GSML3Codec::IntegrityProtectCipheredNewEPSCtxt},
     {"security-header-for-the-SERVICE-REQUEST-message",                GSML3Codec::ServiceRequestHeader},
     {0, 0},
@@ -4695,7 +4744,7 @@ unsigned int GSML3Codec::encode(const XmlElement* in, DataBlock& out, const Name
 {
     if (!in)
 	return NoError;
-    unsigned int stat =  encodeParams(this,GSML3Codec::Unknown,(XmlElement*)in,out,s_rl3Message,params);
+    unsigned int stat = encodeParams(this,GSML3Codec::Unknown,(XmlElement*)in,out,s_rl3Message,params);
     printDbg(DebugInfo,(const uint8_t*)out.data(),out.length(),(XmlElement*)in,true);
     return stat;
 }

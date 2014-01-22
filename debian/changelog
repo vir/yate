@@ -1,4 +1,4 @@
-yate (5.0.1~svn5735) UNRELEASED; urgency=low
+yate (5.0.1~svn5739) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -946,8 +946,21 @@ yate (5.0.1~svn5735) UNRELEASED; urgency=low
     + Use those functions for decoding and encoding integer and
     enumerated types.  + Added generic function for decoding and
     encoding an integer value.
+  * Updated to SVN revision 5739: + Added type definitions for Stream
+    Identifier, Additional Update Parameters and Device Properties.  +
+    Added encoder and decoder for types that represent a list of flags.
+    + Use those functions for decoding and encoding integer and
+    enumerated types.  + Added generic function for decoding and
+    encoding an integer value.  + Fixed dictionary entries that
+    contained spaces.  + Added encoder for imbricated Radio Layer 3
+    message.  + Added type definition for PLMN list.  + Check String
+    pointers before using them while encoding a BCD number or Bearer
+    Capability.  + Improved some debug messages.  + Added type
+    definitions for MM Timer and Routing Area Identification.  + Added
+    type definition for Facility parameters specified in MO Setup.  +
+    Fixed encoding of even BCD numbers.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 22 Jan 2014 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 23 Jan 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

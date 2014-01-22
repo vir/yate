@@ -156,7 +156,7 @@ static bool setBCDDigits(uint8_t* in, unsigned int len, unsigned int& idx, const
 	    in[idx++] |= (d << 4);
     }
     if (odd)
-	in[idx] |= 0xf0;
+	in[idx++] |= 0xf0;
 
     return true;
 }
@@ -1838,7 +1838,7 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
     XmlElement* xml = in->findFirstChild(&param->name);
     if (!xml)
 	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
-    const String digits =  xml->getText();
+    const String& digits =  xml->getText();
     const String* nature = xml->getAttribute(s_numberNature);
     const String* plan = xml->getAttribute(s_numberPlan);
     const String* screen = xml->getAttribute(s_numberScreened);
@@ -1858,7 +1858,7 @@ static unsigned int encodeBCDNumber(const GSML3Codec* codec,  uint8_t proto, con
     }
     if (!setBCDDigits(buff,len,idx,digits))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
-    out.append(buff,idx + 1);
+    out.append(buff,idx);
     return GSML3Codec::NoError;
 }
 

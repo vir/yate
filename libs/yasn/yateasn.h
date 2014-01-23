@@ -22,7 +22,7 @@
 #ifndef __YATEASN_H
 #define __YATEASN_H
 
-#include <yatengine.h>
+#include <yateclass.h>
 
 #ifdef _WINDOWS
 
@@ -49,7 +49,6 @@ namespace TelEngine {
 
 class AsnObject;
 class AsnValue;
-class AsnMibTree;
 class ASNObjId;
 class ASNLib;
 class ASNError;
@@ -384,74 +383,6 @@ private:
     unsigned int m_index;
     
     static TokenDict s_access[];
-};
-
-/**
- * Tree of OIDs.
- */
-class YASN_API AsnMibTree : public GenObject {
-    YCLASS(AsnMibTree, GenObject)
-public:
-    /**
-     * Constructor
-     */
-    inline AsnMibTree()
-	{}
-
-    /**
-     * Constructor
-     * @param fileName File from which the tree is to be built
-     */
-    AsnMibTree(const String& fileName);
-
-    /**
-     * Destructor
-     */
-    virtual ~AsnMibTree();
-
-    /**
-     * Find a MIB object given the object id
-     * @param id The object id
-     * @return A pointer to the MIB with the searched object id, 0 if not found
-     */
-    AsnMib* find(const ASNObjId& id);
-
-    /**
-     * Find a MIB given the MIB name
-     * @param name The name of the MIB object
-     * @return A pointer to the MIB with the searched object id, 0 if not found
-     */
-    AsnMib* find(const String& name);
-
-    /**
-     * Find the next MIB object in the tree
-     * @param id Object id of the current MIB object
-     * @return A pointer to the next MIB object in the tree, 0 if there is no next
-     */
-    AsnMib* findNext(const ASNObjId& id);
-
-    /**
-     * Get access level for the given object id
-     * @param oid Object id for which the access level is required
-     * @return Enum value describing the access level required for this object
-     */
-    int getAccess(const ASNObjId& oid);
-
-    /**
-     * Build the tree of MIB objects
-     */
-    void buildTree();
-
-    /**
-     *  Find the module revision of which this OID is part of
-     * @param name Name of the OID
-     * @return String value of the module revision
-     */
-    String findRevision(const String& name);
-
-private:
-    String m_treeConf;
-    ObjList m_mibs;
 };
 
 /**

@@ -3,8 +3,8 @@ AC_INIT(Yate, 5.0.1)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
 
-if echo "$srcdir" | grep -q '[[[:space:]\$\"'\'']]'; then
-    AC_ERROR([Unsupported character(s) in source directory name])
+if echo "$ac_confdir/$ac_pwd" | grep -q '[[[:space:]\\\$\"'\'']]'; then
+    AC_ERROR([Unsupported character(s) in source or current directory name])
 fi
 
 PACKAGE_RELEASE="1"

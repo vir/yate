@@ -63,6 +63,7 @@ class SnmpUser;
 
 class SnmpUdpListener;
 class TrapHandler;
+class AsnMibTree;
 
 /**
   *	TransportType
@@ -518,6 +519,35 @@ private:
     Cipher* m_cipher;
 };
 
+/**
+ * Tree of OIDs.
+ */
+class AsnMibTree : public GenObject {
+    YCLASS(AsnMibTree, GenObject)
+public:
+    inline AsnMibTree()
+	{}
+    // Constructor with file name from which the tree is to be built
+    AsnMibTree(const String& fileName);
+    virtual ~AsnMibTree();
+    // Find a MIB object given the object id
+    AsnMib* find(const ASNObjId& id);
+    // Find a MIB given the MIB name
+    AsnMib* find(const String& name);
+    // Find the next MIB object in the tree
+    AsnMib* findNext(const ASNObjId& id);
+    // Get access level for the given object id
+    int getAccess(const ASNObjId& oid);
+    // Build the tree of MIB objects
+    void buildTree();
+    //Find the module revision of which this OID is part of
+    String findRevision(const String& name);
+
+private:
+    String m_treeConf;
+    ObjList m_mibs;
+};
+
 const TokenDict TransportType::s_typeText[] = {
     {"UDP",	UDP},
     {"TCP",	TCP},
@@ -633,6 +663,160 @@ UNLOAD_PLUGIN(unloadNow)
     return true;
 }
 
+/**
+  * AsnMibTree
+  */
+AsnMibTree::AsnMibTree(const String& fileName)
+{
+    DDebug(&__plugin,DebugAll,"AsnMibTree object created from %s", fileName.c_str());
+    m_treeConf = fileName;
+    buildTree();
+}
+
+AsnMibTree::~AsnMibTree()
+{
+    m_mibs.clear();
+}
+
+void AsnMibTree::buildTree()
+{
+    Configuration cfgTree;
+    cfgTree = m_treeConf;
+    if(!cfgTree.load())
+	Debug(&__plugin,DebugWarn,"Failed to load MIB tree");
+    else {
+    	for (unsigned int i = 0; i < cfgTree.sections(); i++) {
+    	    NamedList* sect = cfgTree.getSection(i);
+    	    if (sect) {
+	    	AsnMib* mib = new AsnMib(*sect);
+	    	m_mibs.append(mib);
+	    }
+    	}
+    }
+}
+
+String AsnMibTree::findRevision(const String& name)
+{
+    AsnMib* mib = find(name);
+    if (!mib)
+    	return "";
+    String revision = "";
+    while (revision.null()) {
+    	ASNObjId parentID = mib->getParent();
+    	AsnMib* parent = find(parentID);
+    	if (!parent)
+    	    return revision;
+    	revision = parent->getRevision();
+    	mib = parent;
+    }
+    return revision;
+}
+
+AsnMib* AsnMibTree::find(const String& name)
+{
+    DDebug(&__plugin,DebugAll,"AsnMibTree::find('%s')",name.c_str());
+    const ObjList *n = m_mibs.skipNull();
+    AsnMib* mib = 0;
+    while (n) {
+	mib = static_cast<AsnMib*>(n->get());
+	if (name == mib->getName())
+	    break;
+	n = n->skipNext();
+	mib = 0;
+    }
+    return mib;
+}
+
+AsnMib* AsnMibTree::find(const ASNObjId& id)
+{
+    DDebug(&__plugin,DebugAll,"AsnMibTree::find('%s')",id.toString().c_str());
+
+    String value = id.toString();
+    int pos = 0;
+    int index = 0;
+    AsnMib* searched = 0;
+    unsigned int cycles = 0;
+    while (cycles < 2) {
+ 	ObjList* n = m_mibs.find(value);
+	searched = n ? static_cast<AsnMib*>(n->get()) : 0;
+	if (searched) {	    
+	    searched->setIndex(index);
+	    return searched;
+	}
+	pos = value.rfind('.');
+	if (pos < 0)
+	    return 0;
+	index = value.substr(pos + 1).toInteger();
+	value = value.substr(0,pos);
+	cycles++;
+    }
+    return searched;
+}
+
+AsnMib* AsnMibTree::findNext(const ASNObjId& id)
+{
+    DDebug(&__plugin,DebugAll,"AsnMibTree::findNext('%s')",id.toString().c_str());
+    String searchID = id.toString();
+    // check it the oid is in our known tree
+    AsnMib* root = static_cast<AsnMib*>(m_mibs.get());
+    if (root && !(id.toString().startsWith(root->toString()))) {
+    	NamedList p(id.toString());
+    	AsnMib oid(p);
+    	int comp = oid.compareTo(root);
+    	if (comp < 0)
+    	    searchID = root->toString();
+    	else if (comp > 0)
+    	    return 0;
+    }
+    AsnMib* searched = static_cast<AsnMib*>(m_mibs[searchID.toString()]);
+    if (searched) {
+    	if (searched->getAccessValue() > AsnMib::accessibleForNotify) {
+	    DDebug(&__plugin,DebugInfo,"AsnMibTree::findNext('%s') - found an exact match to be '%s'",
+			id.toString().c_str(), searched->toString().c_str());
+	    return searched;
+	}
+    }
+    String value = searchID.toString();
+    int pos = 0;
+    int index = 0;
+    while (true) {
+ 	ObjList* n = m_mibs.find(value);
+	searched = n ? static_cast<AsnMib*>(n->get()) : 0;
+	if (searched) {
+	    if (id.toString() == searched->getOID() || id.toString() == searched->toString()) {
+	    	ObjList* aux = n->skipNext();
+	    	if (!aux)
+	    	    return 0;
+	    	while (aux) {
+		    AsnMib* mib = static_cast<AsnMib*>(aux->get());
+		    if (mib && mib->getAccessValue() > AsnMib::accessibleForNotify)
+			return mib;
+		    aux = aux->skipNext();
+	    	}
+		return 0;
+	    }
+	    else {
+	    	searched->setIndex(index + 1);
+	    	return searched;
+	    }
+	}
+	pos = value.rfind('.');
+	if (pos < 0)
+	    return 0;
+	index = value.substr(pos + 1).toInteger();
+	value = value.substr(0,pos);
+    }
+    return 0;
+}
+
+int AsnMibTree::getAccess(const ASNObjId& id)
+{
+    DDebug(&__plugin,DebugAll,"AsnMibTree::getAccess('%s')",id.toString().c_str());
+    AsnMib* mib = find(id);
+    if (!mib)
+	return 0;
+    return mib->getAccessValue();
+}
 
 /**
   * TrapHandler - message handler for incoming notifications

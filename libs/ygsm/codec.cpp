@@ -354,7 +354,7 @@ static inline unsigned int getMCCMNC(const uint8_t*& in, unsigned int& len, XmlE
 {
     if (len < 3 || !xml)
 	return GSML3Codec::ParserErr;
-    if (in[0] == 0xff && in[1] == 0xff && in[2] == 0xff) {
+    if ((in[0] == 0xff && in[1] == 0xff && in[2] == 0xff) || (in[0] == 0 && (in[1] & 0x0f) == 0)){
 	if (advance)
 	    advanceBuffer(3,in,len);
 	return GSML3Codec::NoError;
@@ -367,7 +367,9 @@ static inline unsigned int getMCCMNC(const uint8_t*& in, unsigned int& len, XmlE
     // get MNC
     GET_DIGIT((in[2] & 0x0f),out,GSML3Codec::ParserErr,false);
     GET_DIGIT(((in[2] >> 4) & 0x0f),out,GSML3Codec::ParserErr,false);
-    GET_DIGIT(((in[1] >> 4) & 0x0f),out,GSML3Codec::ParserErr,true);
+    if ((in[1] & 0xf0) != 0xf0) {
+	GET_DIGIT(((in[1] >> 4) & 0x0f),out,GSML3Codec::ParserErr,false);
+    }
     xml->addChildSafe(new XmlElement("PLMNidentity",out));
     if (advance)
 	advanceBuffer(3,in,len);

@@ -896,12 +896,12 @@ static unsigned int encodeEPSMobileIdent(const GSML3Codec* codec,  uint8_t proto
 	    // MMEGroupID
 	    XmlElement* child = xml->findFirstChild(&YSTRING("MMEGroupID"));
 	    unsigned int val = -1;
-	    if (!(child && (val = child->getText().toInteger(val) > 0xffff)))
+	    if (!(child && ((val = child->getText().toInteger(val)) <= 0xffff)))
 		return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
 	    setUINT16(val,buf,len,true);
 	    // MME Code
 	    child = xml->findFirstChild(&YSTRING("MMECode"));
-	    if (!(child && (val = child->getText().toInteger(-1) > 0xff)))
+	    if (!(child && ((val = child->getText().toInteger(-1)) <= 0xff)))
 		return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
 	    *buf++ = (uint8_t) val;
 	    out.append(d);
@@ -3674,6 +3674,7 @@ static const RL3Message s_rrMsgs[] = {
 MAKE_IE_TYPE(MM_Msg,decodeMsgType,encodeMsgType,s_mmMsgs)
 MAKE_IE_TYPE(CC_Msg,decodeMsgType,encodeMsgType,s_ccMsgs)
 MAKE_IE_TYPE(EPS_SM_Msg,decodeMsgType,encodeMsgType,s_epsSmMsgs)
+MAKE_IE_TYPE(EPS_MM_Msg,decodeMsgType,encodeMsgType,s_epsMmMsgs)
 MAKE_IE_TYPE(SS_Msg,decodeMsgType,encodeMsgType,s_ssMsgs)
 MAKE_IE_TYPE(SMS_Msg,decodeMsgType,encodeMsgType,s_smsMsgs)
 MAKE_IE_TYPE(RR_Msg,decodeMsgType,encodeMsgType,s_rrMsgs)
@@ -3705,8 +3706,10 @@ static const IEParam s_epsSmMessage[] = {
     s_ie_EndDef,
 };
 
+static const IEParam s_epsMMMessagePDU = MAKE_IE_PARAM(V,XmlRoot,0,"Message",false,8,false,s_type_EPS_MM_Msg);
+
 static const IEParam s_epsMmMessage[] = {
-    MAKE_IE_PARAM(V,      XmlElem, 0, "SecurityHeader", false, 4,     false, s_type_SecurityHeader),
+    MAKE_IE_PARAM(V,      XmlRoot, 0, "SecurityHeader", false, 4,     false, s_type_SecurityHeader),
     s_ie_EndDef,
 };
 
@@ -3797,22 +3800,7 @@ static unsigned int  decodeSecHeader(const GSML3Codec* codec, uint8_t proto, con
 	{
 	    if (len < 1)
 		return GSML3Codec::MsgTooShort;
-	    uint8_t msgType = in[0];
-	    unsigned int ok = GSML3Codec::NoError;
-	    advanceBuffer(1,in,len);
-	    const RL3Message* msg = findRL3Msg(msgType,s_epsMmMsgs);
-	    xml = 0;
-	    if (!msg) {
-		xml = new XmlElement(param->name ? param->name : YSTRING("ie"));
-		xml->setText(String(msgType));
-	    }
-	    else {
-		xml = new XmlElement(msg->name);
-		if (const IEParam* msgParams = getParams(codec,msg))
-		    ok = decodeParams(codec,proto,in,len,xml,msgParams,params);
-	    }
-	    out->addChildSafe(xml);
-	    return ok;
+	    return decodeMsgType(codec,proto,&s_epsMMMessagePDU,in,len,out,params);
 	}
 	case GSML3Codec::IntegrityProtect:
 	case GSML3Codec::IntegrityProtectNewEPSCtxt:
@@ -3862,20 +3850,7 @@ static unsigned int encodeSecHeader(const GSML3Codec* codec,  uint8_t proto, con
 	case GSML3Codec::PlainNAS:
 	{
 	    setUINT8(secVal,out,param);
-	    in = in->findFirstChild(&YSTRING("Message"));
-	    if (!in)
-		return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
-	    const RL3Message* msg = findRL3Msg(in->attribute(s_typeAttr),s_epsMmMsgs);
-	    if (!msg) {
-		Debug(codec->dbg(),DebugWarn,"Did not find message type for Plain NAS PDU in %s [%p]",in->tag(),codec->ptr());
-		return GSML3Codec::UnknownMsgType;
-	    }
-	    uint16_t type = msg->value;
-	    out.append(&type,1);
-	    setUINT8(msg->value,out,param);
-	    if (const IEParam* msgParams = getParams(codec,msg,true))
-		return encodeParams(codec,proto,in,out,msgParams,params);
-	    return GSML3Codec::NoError;
+	    return encodeMsgType(codec,proto,&s_epsMMMessagePDU,in,out,params);
 	}
 	case GSML3Codec::IntegrityProtect:
 	case GSML3Codec::IntegrityProtectNewEPSCtxt:
@@ -3896,8 +3871,9 @@ static unsigned int encodeSecHeader(const GSML3Codec* codec,  uint8_t proto, con
 		}
 		seq = child->getText().toInteger();
 	    }
+	    child = in->findNextChild(child);
 	    DataBlock d;
-	    if (unsigned int stat = encodeParams(codec,proto,in,d,s_rl3Message,params))
+	    if (unsigned int stat = encodeParams(codec,proto,child,d,s_rl3Message,params))
 		return stat;
 	    if (secVal == GSML3Codec::IntegrityProtectCiphered || secVal == GSML3Codec::IntegrityProtectCiphered)
  		if (unsigned int stat = cipherNASPdu(codec,seq,d,params))

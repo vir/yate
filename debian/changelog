@@ -1,4 +1,4 @@
-yate (5.0.1~svn5743) UNRELEASED; urgency=low
+yate (5.0.1~svn5744) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -966,8 +966,9 @@ yate (5.0.1~svn5743) UNRELEASED; urgency=low
     decoding of PLMN Identity.
   * Updated to SVN revision 5743: + Fixed decoding of PLMN Identity.  +
     Fixed encoding/decoding  of EPS Security Header.
+  * Updated to SVN revision 5744: + Added missing CP Cause value.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 25 Jan 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 29 Jan 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

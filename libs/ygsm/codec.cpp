@@ -2890,6 +2890,7 @@ static const TokenDict s_cpCauseType[] = {
     {"message-type-non-existent-or-not-implemented",        0x61},
     {"message-not-compatible-with-SM-protocol-state",       0x62},
     {"information-element-non-existent-or-not-implemented", 0x63},
+    {"protocol-error-unspecified",                          0x6f},
     {0, 0},
 };
 

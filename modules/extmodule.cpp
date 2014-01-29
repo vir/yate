@@ -312,12 +312,21 @@ public:
 class ExtModCommand : public MessageHandler
 {
 public:
-    ExtModCommand(const char *name)
-	: MessageHandler(name,100,__plugin.name())
+    ExtModCommand()
+	: MessageHandler("engine.command",100,__plugin.name())
 	{ }
     virtual bool received(Message &msg);
 private:
     bool complete(const String& partLine, const String& partWord, String& rval) const;
+};
+
+class ExtModStatus : public MessageHandler
+{
+public:
+    ExtModStatus()
+	: MessageHandler("engine.status",110,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
 };
 
 class ExtListener : public Thread
@@ -1717,14 +1726,14 @@ bool ExtModCommand::complete(const String& partLine, const String& partWord, Str
 {
     if (partLine.null() && partWord.null())
 	return false;
-    if (partLine.null())
+    if (partLine.null() || partLine == YSTRING("status"))
 	Module::itemComplete(rval,"external",partWord);
-    else if (partLine == "external") {
+    else if (partLine == YSTRING("external")) {
 	for (const char** list = s_cmds; *list; list++)
 	    Module::itemComplete(rval,*list,partWord);
 	return true;
     }
-    else if (partLine == "external restart" || partLine == "external stop") {
+    else if (partLine == YSTRING("external restart") || partLine == YSTRING("external stop")) {
 	ObjList mod;
 	s_mutex.lock();
 	ObjList *l = &s_modules;
@@ -1741,6 +1750,20 @@ bool ExtModCommand::complete(const String& partLine, const String& partWord, Str
 	    Module::itemComplete(rval,l->get()->toString(),partWord);
     }
     return false;
+}
+
+
+bool ExtModStatus::received(Message& msg)
+{
+    const String& dest = msg[YSTRING("module")];
+    if (dest && (dest != YSTRING("external")))
+	return false;
+    s_mutex.lock();
+    msg.retValue() << "name=" << __plugin.name()
+	<< ",type=misc;scripts=" << s_modules.count()
+	<< ",chans=" << s_chans.count() << "\r\n";
+    s_mutex.unlock();
+    return !dest.null();
 }
 
 
@@ -1883,7 +1906,8 @@ void ExtModulePlugin::initialize()
     if (!m_handler) {
 	m_handler = new ExtModHandler("call.execute",s_cfg.getIntValue("general","priority",100));
 	Engine::install(m_handler);
-	Engine::install(new ExtModCommand("engine.command"));
+	Engine::install(new ExtModCommand);
+	Engine::install(new ExtModStatus);
 	NamedList *sect = 0;
 	int n = s_cfg.sections();
 	for (int i = 0; i < n; i++) {

@@ -1127,7 +1127,8 @@ public:
     unsigned int transportTerminated(YateSIPTransport* trans);
     bool validLine(const String& line);
     bool commandComplete(Message& msg, const String& partLine, const String& partWord);
-    void msgStatus(Message& msg);
+    virtual void msgStatus(Message& msg);
+    virtual void statusParams(String& str);
     // Build and dispatch a socket.ssl message
     bool socketSsl(Socket** sock, bool server, const String& context = String::empty());
     // Send a SIP method
@@ -8870,6 +8871,13 @@ void SIPDriver::msgStatus(Message& msg)
 	else if (str.startSkip("listeners"))
 	    msgStatusListener(msg);
     }
+}
+
+void SIPDriver::statusParams(String& str)
+{
+    Driver::statusParams(str);
+    if (m_endpoint->engine())
+	str.append("transactions=",",") << m_endpoint->engine()->transactionCount();
 }
 
 // Build and dispatch a socket.ssl message

@@ -42,6 +42,7 @@ static ObjList s_extra;
 static NamedList s_vars("");
 static int s_dispatching = 0;
 
+
 class RouteHandler : public MessageHandler
 {
 public:
@@ -50,6 +51,71 @@ public:
 	{ }
     virtual bool received(Message &msg);
 };
+
+class PrerouteHandler : public MessageHandler
+{
+public:
+    PrerouteHandler(int prio)
+	: MessageHandler("call.preroute",prio,s_trackName)
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class StatusHandler : public MessageHandler
+{
+public:
+    StatusHandler(int prio)
+	: MessageHandler("engine.status",prio,s_trackName)
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class CommandHandler : public MessageHandler
+{
+public:
+    CommandHandler(int prio)
+	: MessageHandler("engine.command",prio,s_trackName)
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class GenericHandler : public MessageHandler
+{
+public:
+    GenericHandler(const char* name, int prio, const char* context, const char* match)
+	: MessageHandler(name,prio,s_trackName),
+	  m_context(context), m_match(match)
+	{
+	    Debug(DebugAll,"Generic handler for '%s' prio %d to [%s] match '%s%s%s' [%p]",
+		c_str(),prio,context,
+		(match ? "${" : ""),(match ? match : c_str()),(match ? "}" : ""),
+		this);
+	    s_extra.append(this);
+	}
+    ~GenericHandler()
+	{ s_extra.remove(this,false); }
+    virtual bool received(Message &msg);
+private:
+    String m_context;
+    String m_match;
+};
+
+class RegexRoutePlugin : public Plugin
+{
+public:
+    RegexRoutePlugin();
+    virtual void initialize();
+private:
+    void initVars(NamedList* sect);
+    PrerouteHandler* m_preroute;
+    RouteHandler* m_route;
+    StatusHandler* m_status;
+    CommandHandler* m_command;
+    bool m_first;
+};
+
+INIT_PLUGIN(RegexRoutePlugin);
+
 
 static String& vars(String& s, String* vName = 0)
 {
@@ -321,15 +387,31 @@ static void evalFunc(String& str, Message& msg)
 		if (par.null())
 		    par = ",";
 		str.clear();
-		unsigned int n = msg.length();
-		for (unsigned int i = 0; i < n; i++) {
-		    NamedString* s = msg.getParam(i);
-		    if (s && s->name())
-			str.append(s->name(),par);
-		}
+		for (const ObjList* l = msg.paramList()->skipNull(); l; l = l->skipNext())
+		    str.append(static_cast<const NamedString*>(l->get())->name(),par);
 	    }
 	    else
 		str.clear();
+	}
+	else if (str == YSTRING("variables")) {
+	    if (sep >= 0) {
+		str = par.substr(sep+1).trimBlanks();
+		par = par.substr(0,sep).trimBlanks();
+	    }
+	    else
+		str.clear();
+	    if (par.null() || par == YSTRING("count"))
+		str = s_vars.count();
+	    else if (par == YSTRING("list")) {
+		par = str;
+		if (par.null())
+		    par = ",";
+		str.clear();
+		for (const ObjList* l = s_vars.paramList()->skipNull(); l; l = l->skipNext())
+		    str.append(static_cast<const NamedString*>(l->get())->name(),par);
+	    }
+	    else
+		str = !!s_vars.getParam(par);
 	}
 	else if (str == YSTRING("runid")) {
 	    str.clear();
@@ -744,15 +826,6 @@ bool RouteHandler::received(Message &msg)
 };
 
 
-class PrerouteHandler : public MessageHandler
-{
-public:
-    PrerouteHandler(int prio)
-	: MessageHandler("call.preroute",prio,s_trackName)
-	{ }
-    virtual bool received(Message &msg);
-};
-
 bool PrerouteHandler::received(Message &msg)
 {
     u_int64_t tmr = Time::now();
@@ -781,27 +854,6 @@ bool PrerouteHandler::received(Message &msg)
 };
 
 
-class GenericHandler : public MessageHandler
-{
-public:
-    GenericHandler(const char* name, int prio, const char* context, const char* match)
-	: MessageHandler(name,prio,s_trackName),
-	  m_context(context), m_match(match)
-	{
-	    Debug(DebugAll,"Generic handler for '%s' prio %d to [%s] match '%s%s%s' [%p]",
-		c_str(),prio,context,
-		(match ? "${" : ""),(match ? match : c_str()),(match ? "}" : ""),
-		this);
-	    s_extra.append(this);
-	}
-    ~GenericHandler()
-	{ s_extra.remove(this,false); }
-    virtual bool received(Message &msg);
-private:
-    String m_context;
-    String m_match;
-};
-
 bool GenericHandler::received(Message &msg)
 {
     DDebug(DebugAll,"Handling message '%s' [%p]",c_str(),this);
@@ -815,20 +867,37 @@ bool GenericHandler::received(Message &msg)
 }
 
 
-class RegexRoutePlugin : public Plugin
+bool StatusHandler::received(Message &msg)
 {
-public:
-    RegexRoutePlugin();
-    virtual void initialize();
-private:
-    void initVars(NamedList* sect);
-    MessageHandler *m_preroute, *m_route;
-    bool m_first;
-};
+    const String& dest = msg[YSTRING("module")];
+    if (dest && (dest != __plugin.name()))
+	return false;
+    Lock lock(s_mutex);
+    msg.retValue() << "name=" << __plugin.name()
+	<< ",type=route;sections=" << s_cfg.count()
+	<< ",extra=" << s_extra.count()
+	<< ",variables=" << s_vars.count() << "\r\n";
+    return !dest.null();
+}
+
+
+bool CommandHandler::received(Message &msg)
+{
+    if (msg.getValue(YSTRING("line")))
+	return false;
+    const String& partLine = msg[YSTRING("partline")];
+    if (partLine != YSTRING("status"))
+	return false;
+    const String& partWord = msg[YSTRING("partword")];
+    if (partWord)
+	Module::itemComplete(msg.retValue(),__plugin.name(),partWord);
+    return false;
+}
+
 
 RegexRoutePlugin::RegexRoutePlugin()
     : Plugin("regexroute"),
-      m_preroute(0), m_route(0), m_first(true)
+      m_preroute(0), m_route(0), m_status(0), m_first(true)
 {
     Output("Loaded module RegexRoute");
 }
@@ -850,9 +919,11 @@ void RegexRoutePlugin::initialize()
     Output("Initializing module RegexRoute");
     TelEngine::destruct(m_preroute);
     TelEngine::destruct(m_route);
+    TelEngine::destruct(m_status);
+    TelEngine::destruct(m_command);
     s_extra.clear();
     Lock lock(s_mutex);
-    s_cfg = Engine::configFile("regexroute");
+    s_cfg = Engine::configFile(name());
     s_cfg.load();
     if (m_first) {
 	m_first = false;
@@ -865,14 +936,15 @@ void RegexRoutePlugin::initialize()
     s_insensitive = s_cfg.getBoolValue("priorities","insensitive",false);
     s_prerouteall = s_cfg.getBoolValue("priorities","prerouteall",false);
     unsigned priority = s_cfg.getIntValue("priorities","preroute",100);
-    if (priority) {
-	m_preroute = new PrerouteHandler(priority);
-	Engine::install(m_preroute);
-    }
+    if (priority)
+	Engine::install(m_preroute = new PrerouteHandler(priority));
     priority = s_cfg.getIntValue("priorities","route",100);
+    if (priority)
+	Engine::install(m_route = new RouteHandler(priority));
+    priority = s_cfg.getIntValue("priorities","status",110);
     if (priority) {
-	m_route = new RouteHandler(priority);
-	Engine::install(m_route);
+	Engine::install(m_status = new StatusHandler(priority));
+	Engine::install(m_command = new CommandHandler(priority));
     }
     int depth = s_cfg.getIntValue("priorities","maxdepth",5);
     if (depth < 5)
@@ -904,8 +976,6 @@ void RegexRoutePlugin::initialize()
 	}
     }
 }
-
-INIT_PLUGIN(RegexRoutePlugin);
 
 }; // anonymous namespace
 

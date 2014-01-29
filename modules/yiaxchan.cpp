@@ -434,6 +434,7 @@ public:
 protected:
     virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
     virtual void msgStatus(Message& msg);
+    virtual void statusParams(String& str);
     void msgStatusAccounts(Message& msg);
     void msgStatusListeners(Message& msg);
     virtual void genUpdate(Message& msg);
@@ -2196,6 +2197,18 @@ void YIAXDriver::msgStatus(Message& msg)
 	}
     }
     Driver::msgStatus(msg);
+}
+
+void YIAXDriver::statusParams(String& str)
+{
+    Driver::statusParams(str);
+    m_enginesMutex.lock();
+    unsigned int cnt = 0;
+    ListIterator iter(m_engines);
+    while (YIAXEngine* eng = static_cast<YIAXEngine*>(iter.get()))
+	cnt += eng->transactionCount();
+    m_enginesMutex.unlock();
+    str.append("transactions=",",") << cnt;
 }
 
 void YIAXDriver::msgStatusAccounts(Message& msg)

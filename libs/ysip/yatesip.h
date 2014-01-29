@@ -1360,6 +1360,13 @@ public:
     inline void insert(SIPTransaction* transaction)
 	{ lock(); m_transList.insert(transaction); unlock(); }
 
+    /**
+     * Get the number of active SIP transactions
+     * @return Count of transactions in the list
+     */
+    inline unsigned int transactionCount()
+	{ Lock mylock(this); return m_transList.count(); }
+
 protected:
     /**
      * The list that holds all the SIP transactions.

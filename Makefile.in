@@ -23,8 +23,10 @@ YLIB := libyate.so.@PACKAGE_VERSION@
 SLIBS:= $(YLIB) libyate.so \
 	libyatescript.so.@PACKAGE_VERSION@ libyatescript.so \
 	libyatesig.so.@PACKAGE_VERSION@ libyatesig.so \
+	libyategsm.so.@PACKAGE_VERSION@ libyategsm.so \
 	libyatemgcp.so.@PACKAGE_VERSION@ libyatemgcp.so \
 	libyatejabber.so.@PACKAGE_VERSION@ libyatejabber.so
+ILIBS:= ygsm yxml
 INCS := yateclass.h yatemime.h yatengine.h yatephone.h yatecbase.h
 GENS := yateversn.h
 LIBS :=
@@ -73,7 +75,7 @@ APIDOCS := apidocs
 endif
 
 .PHONY: all everything debug ddebug xdebug ndebug
-all: engine modules clients
+all: engine modules clients ilibs
 
 everything: engine libs modules clients test apidocs
 
@@ -125,7 +127,7 @@ distclean: check-topdir clean clean-config-files
 cvsclean: check-topdir clean clean-apidocs clean-packing clean-config-files
 	-rm -f configure yate-config.in
 
-.PHONY: engine libs modules clients test apidocs-build apidocs-kdoc apidocs-doxygen apidocs-everything check-topdir check-ldconfig windows
+.PHONY: engine libs ilibs modules clients test apidocs-build apidocs-kdoc apidocs-doxygen apidocs-everything check-topdir check-ldconfig windows
 engine: library libyate.so $(PROGS)
 
 apidocs-kdoc: check-topdir
@@ -181,6 +183,11 @@ libs: engine
 	    test ! -f "$$i/Makefile" || $(MAKE) -C "$$i" all ; \
 	done
 
+ilibs: engine
+	@for i in $(ILIBS); do \
+	    test ! -f "libs/$$i/Makefile" || $(MAKE) -C "libs/$$i" all ; \
+	done
+
 yatepaths.h: $(MKDEPS)
 	@echo '#define CFG_PATH "$(confdir)"' > $@
 	@echo '#define MOD_PATH "$(moddir)"' >> $@
@@ -225,10 +232,15 @@ install-noconf: all
 	@for i in $(GENS) ; do \
 	    install -m 0644 $$i "$(DESTDIR)$(incdir)/" ; \
 	done
+	@for i in $(ILIBS) ; do \
+		for f in @srcdir@/libs/$$i/*.h ; do \
+		    install -m 0644 $$f "$(DESTDIR)$(incdir)/" ; \
+		done ; \
+	done
 	@mkdir -p "$(DESTDIR)$(docdir)/api/" && \
 	for i in $(DOCS) ; do \
 	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(docdir)/" ; \
-	done ;
+	done
 
 install-api: $(APIDOCS)
 	@mkdir -p "$(DESTDIR)$(docdir)/api/" && \
@@ -250,6 +262,11 @@ uninstall uninstall-root:
 	@-for i in $(INCS) $(GENS) ; do \
 	    rm "$(DESTDIR)$(incdir)/$$i" ; \
 	done; \
+	for i in $(ILIBS) ; do \
+		for f in @srcdir@/libs/$$i/*.h ; do \
+		    rm "$(DESTDIR)$(incdir)/"`basename $$f` ; \
+		done ; \
+	done ; \
 	rmdir "$(DESTDIR)$(incdir)"
 	@-for i in $(MAN8) ; do \
 	    rm "$(DESTDIR)$(mandir)/man8/$$i" ; \

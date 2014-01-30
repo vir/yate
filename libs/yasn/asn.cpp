@@ -1334,18 +1334,6 @@ ASNObjId::~ASNObjId()
     m_ids.clear();
 }
 
-ASNObjId& ASNObjId::operator=(const String& val)
-{
-    m_value = val;
-    return *this;
-}
-
-ASNObjId& ASNObjId::operator=(const char* val)
-{
-    m_value.assign(val);
-    return *this;
-}
-
 void ASNObjId::toDataBlock()
 {
     DDebug(s_libName.c_str(),DebugAll,"ASNObjId::toDataBlock() '%s'", m_value.c_str());

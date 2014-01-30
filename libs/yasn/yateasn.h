@@ -114,13 +114,14 @@ public:
      */
     inline AsnObject()
 	{}
+
     /**
-     * Constructor
-     * @param data Data from which the object is built
-     * @param len Length of the given data
+     * Copy constructor
+     * @param original Value object to copy
      */
-    AsnObject(void* data, int len)
+    inline AsnObject(const AsnObject& original)
 	{}
+
     /**
      * Destructor
      */
@@ -180,6 +181,14 @@ public:
     inline AsnValue()
 	: m_type(0), m_data("")
 	{}
+
+    /**
+     * Copy constructor
+     * @param original Value object to copy
+     */
+    inline AsnValue(const AsnValue& original)
+	: m_type(original.m_type), m_data(original.m_data)
+	{ }
 
     /**
      * Constructor
@@ -381,7 +390,7 @@ private:
     int maxVal;
     int minVal;
     unsigned int m_index;
-    
+
     static TokenDict s_access[];
 };
 
@@ -395,6 +404,14 @@ public:
      * Constructor
      */
     ASNObjId();
+
+    /**
+     * Copy constructor
+     * @param original OID object to copy
+     */
+    inline ASNObjId(const ASNObjId& original)
+	: m_value(original.m_value), m_name(original.m_name)
+	{ }
 
     /**
      * Constructor
@@ -421,14 +438,22 @@ public:
     ~ASNObjId();
 
     /**
+     * Assignment operator from OID
+     */
+    inline ASNObjId& operator=(const ASNObjId& original)
+	{ m_value = original.toString(); return *this; }
+
+    /**
      * Assign operator from a string value
      */
-    ASNObjId& operator=(const String& val);
+    inline ASNObjId& operator=(const String& val)
+	{ m_value = val; return *this; }
 
     /**
      * Assign operator from a const char* value
      */
-    ASNObjId& operator=(const char* val);
+    inline ASNObjId& operator=(const char* val)
+	{ m_value = val; return *this; }
 
     /**
      * Transform the value of this OID from a string value to a sequence of numbers

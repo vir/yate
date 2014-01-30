@@ -579,8 +579,6 @@ public:
 	const NamedList& params);
     virtual ~ZapCircuit()
 	{ cleanup(false); }
-    inline const ZapDevice device() const
-	{ return m_device; }
     virtual void destroyed()
 	{ cleanup(true); }
     // Change circuit status. Clear events on status change

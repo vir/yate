@@ -794,7 +794,13 @@ void operator=(const type&)
  */
 class YATE_API GenObject
 {
+    YNOCOPY(GenObject); // no automatic copies please
 public:
+    /**
+     * Default constructor
+     */
+    inline GenObject() { }
+
     /**
      * Destructor.
      */

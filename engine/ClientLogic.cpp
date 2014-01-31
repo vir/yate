@@ -8119,8 +8119,10 @@ bool DefaultLogic::callContact(NamedList* params, Window* wnd)
 	return false;
     NamedList dummy("");
     if (!params) {
+	String sel;
+	Client::self()->getSelect(s_contactList,sel);
+	dummy.assign(sel);
 	params = &dummy;
-	Client::self()->getSelect(s_contactList,*params);
     }
     if (!Client::self()->getTableRow(s_contactList,*params,params))
 	return false;

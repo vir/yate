@@ -1,4 +1,4 @@
-yate (5.0.1~svn5751) UNRELEASED; urgency=low
+yate (5.0.1~svn5752) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -981,8 +981,10 @@ yate (5.0.1~svn5751) UNRELEASED; urgency=low
     and assignment operator of GenObject.  + Build and install the
     yategsm library and its headers.  + Fixed bug: properly retrieve
     selected contact when handling call action from address book.
+  * Updated to SVN revision 5752: + Added support for counting allocated
+    objects for memory leaks troubleshooting.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 01 Feb 2014 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 05 Feb 2014 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

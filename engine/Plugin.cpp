@@ -26,6 +26,7 @@ Plugin::Plugin(const char* name, bool earlyInit)
 {
     Debug(DebugAll,"Plugin::Plugin(\"%s\",%s) [%p]",name,String::boolText(earlyInit),this);
     debugName(m_name);
+    m_counter = getObjCounter(m_name);
     Engine::Register(this);
 }
 

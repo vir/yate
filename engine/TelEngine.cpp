@@ -79,6 +79,23 @@ static int _localtime_s(struct tm* _tm, const time_t* time)
 #include <sys/resource.h>
 #endif
 
+namespace { // anonymous
+
+class ObjCounterList : public TelEngine::ObjList
+{
+public:
+    inline ObjCounterList()
+	: m_invalid(false)
+	{ }
+    ~ObjCounterList()
+	{ m_invalid = true; }
+    inline bool invalid() const
+	{ return m_invalid; }
+private:
+    bool m_invalid;
+};
+
+}; // anonymous namespace
 
 namespace TelEngine {
 
@@ -815,6 +832,18 @@ void Random::srandom(unsigned int seed)
 }
 
 
+bool GenObject::s_counting = false;
+static ObjCounterList s_counters;
+static Mutex s_countersMutex(false,"Counters");
+
+GenObject::GenObject()
+    : m_counter(0)
+{
+    NamedCounter* counter = Thread::getCurrentObjCounter();
+    if (counter && counter->enabled())
+	setObjCounter(counter);
+}
+
 bool GenObject::alive() const
 {
     return true;
@@ -823,6 +852,43 @@ bool GenObject::alive() const
 void GenObject::destruct()
 {
     delete this;
+}
+
+NamedCounter* GenObject::setObjCounter(NamedCounter* counter)
+{
+    if (counter == m_counter)
+	return counter;
+    if (s_counters.invalid())
+	return 0;
+    Lock mylock(0);
+    if (Mutex::count() >= 0)
+	mylock.acquire(s_countersMutex);
+    NamedCounter* oldCounter = m_counter;
+    if (counter != oldCounter) {
+	m_counter = counter;
+	mylock.drop();
+	if (counter)
+	    counter->inc();
+	if (oldCounter)
+	    oldCounter->dec();
+    }
+    return oldCounter;
+}
+
+NamedCounter* GenObject::getObjCounter(const String& name, bool create)
+{
+    if (name.null() || s_counters.invalid())
+	return 0;
+    Lock mylock(s_countersMutex);
+    NamedCounter* cnt = static_cast<NamedCounter*>(s_counters[name]);
+    if (create && !cnt)
+	s_counters.append(cnt = new NamedCounter(name));
+    return cnt;
+}
+
+ObjList& GenObject::getObjCounters()
+{
+    return s_counters;
 }
 
 
@@ -960,6 +1026,43 @@ void RefPointerBase::assign(RefObject* oldptr, RefObject* newptr, void* pointer)
     m_pointer = (newptr && newptr->ref()) ? pointer : 0;
     if (oldptr)
 	oldptr->deref();
+}
+
+
+NamedCounter::NamedCounter(const String& name)
+    : String(name), m_count(0), m_enabled(getObjCounting()), m_mutex(0)
+{
+#ifndef ATOMIC_OPS
+    m_mutex = s_refMutex.mutex(this);
+#endif
+}
+
+int NamedCounter::inc()
+{
+#ifdef ATOMIC_OPS
+#ifdef _WINDOWS
+    return InterlockedIncrement((LONG*)&m_count);
+#else
+    return __sync_add_and_fetch(&m_count,1);
+#endif
+#else
+    Lock lock(m_mutex);
+    return ++m_count;
+#endif
+}
+
+int NamedCounter::dec()
+{
+#ifdef ATOMIC_OPS
+#ifdef _WINDOWS
+    return InterlockedDecrement((LONG*)&m_count);
+#else
+    return __sync_fetch_and_sub(&m_count,1);
+#endif
+#else
+    Lock lock(m_mutex);
+    return --m_count;
+#endif
 }
 
 

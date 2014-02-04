@@ -831,7 +831,7 @@ protected:
      */
     inline explicit TranslatorFactory(const char* name = 0)
 	: m_name(name ? name : "?")
-	{ DataTranslator::install(this); }
+	{ m_counter = Thread::getCurrentObjCounter(true); DataTranslator::install(this); }
 
 public:
     /**
@@ -893,8 +893,16 @@ public:
     virtual const char* name() const
 	{ return m_name; }
 
+    /**
+     * Retrive the objects counter associated to this factory
+     * @return Pointer to factory's objects counter or NULL
+     */
+    inline NamedCounter* objectsCounter() const
+	{ return m_counter; }
+
 private:
     const char* m_name;
+    NamedCounter* m_counter;
 };
 
 /**

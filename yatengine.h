@@ -526,6 +526,13 @@ public:
 	{ if (!m_dispatcher) m_trackName = name; }
 
     /**
+     * Retrive the objects counter associated to this handler
+     * @return Pointer to handler's objects counter or NULL
+     */
+    inline NamedCounter* objectsCounter() const
+	{ return m_counter; }
+
+    /**
      * Retrieve the filter (if installed) associated to this handler
      */
     inline const NamedString* filter() const
@@ -566,6 +573,7 @@ private:
     int m_unsafe;
     MessageDispatcher* m_dispatcher;
     NamedString* m_filter;
+    NamedCounter* m_counter;
 };
 
 /**
@@ -983,6 +991,13 @@ public:
 	{ return m_name; }
 
     /**
+     * Retrive the objects counter associated to this plugin
+     * @return Pointer to plugin's objects counter or NULL
+     */
+    inline NamedCounter* objectsCounter() const
+	{ return m_counter; }
+
+    /**
      * Check if the module is to be initialized early
      * @return True if the module should be initialized before regular ones
      */
@@ -992,6 +1007,7 @@ public:
 private:
     Plugin(); // no default constructor please
     String m_name;
+    NamedCounter* m_counter;
     bool m_early;
 };
 

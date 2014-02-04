@@ -667,6 +667,8 @@ struct TokenDict {
 
 class String;
 class Mutex;
+class ObjList;
+class NamedCounter;
 
 #if 0 /* for documentation generator */
 /**
@@ -799,12 +801,12 @@ public:
     /**
      * Default constructor
      */
-    inline GenObject() { }
+    GenObject();
 
     /**
      * Destructor.
      */
-    virtual ~GenObject() { }
+    virtual ~GenObject() { setObjCounter(0); }
 
     /**
      * Check if the object is still valid and safe to access.
@@ -842,6 +844,52 @@ public:
      */
     static inline void* getObject(const String& name, const GenObject* obj)
 	{ return obj ? obj->getObject(name) : 0; }
+
+    /**
+     * Get the global state of object counting
+     * @return True if object counting is enabled
+     */
+    static inline bool getObjCounting()
+	{ return s_counting; }
+
+    /**
+     * Set the global state of object counting
+     * @param enable True to enable object counting, false to disable
+     */
+    static inline void setObjCounting(bool enable)
+	{ s_counting = enable; }
+
+    /**
+     * Get the counter of this object
+     * @return Pointer to current counter object
+     */
+    inline NamedCounter* getObjCounter() const
+	{ return m_counter; }
+
+    /**
+     * Set the counter of this object
+     * @param counter New counter object or NULL
+     * @return Pointer to old counter object
+     */
+    NamedCounter* setObjCounter(NamedCounter* counter);
+
+    /**
+     * Retrieve or allocate an object counter
+     * @param name Name of the counter
+     * @param create True to create a new counter if needed
+     * @return Pointer to existing or new counter object
+     */
+    static NamedCounter* getObjCounter(const String& name, bool create = true);
+
+    /**
+     * Access the object counters list
+     * @return Reference to the global object counters list
+     */
+    static ObjList& getObjCounters();
+
+private:
+    NamedCounter* m_counter;
+    static bool s_counting;
 };
 
 /**
@@ -3044,6 +3092,59 @@ protected:
 private:
     NamedPointer(); // no default constructor please
     GenObject* m_data;
+};
+
+/**
+ * An atomic counter with an associated name
+ * @short Atomic counter with name
+ */
+class YATE_API NamedCounter : public String
+{
+    YNOCOPY(NamedCounter); // no automatic copies please
+public:
+    /**
+     * Constructor
+     * @param name Name of the counter
+     */
+    explicit NamedCounter(const String& name);
+
+    /**
+     * Check if the counter is enabled
+     * @return True if the counter is enabled
+     */
+    inline bool enabled() const
+	{ return m_enabled; }
+
+    /**
+     * Enable or disable the counter
+     * @param val True to enable counter, false to disable
+     */
+    inline void enable(bool val)
+	{ m_enabled = val; }
+
+    /**
+     * Increment the counter
+     * @return Post-increment value of the counter
+     */
+    int inc();
+
+    /**
+     * Decrement the counter
+     * @return Post-decrement value of the counter
+     */
+    int dec();
+
+    /**
+     * Get the current value of the counter
+     * @return Value of the counter
+     */
+    inline int count() const
+	{ return m_count; }
+
+private:
+    int m_count;
+    bool m_enabled;
+    Mutex* m_mutex;
 };
 
 /**
@@ -5394,6 +5495,32 @@ public:
     inline bool isCurrent() const
 	{ return current() == this; }
 
+    /**
+     * Get the object counter of this thread
+     * @return Pointer to thread's counter for new objects
+     */
+    NamedCounter* getObjCounter() const;
+
+    /**
+     * Set the object counter of this thread
+     * @param counter New counter object or NULL
+     * @return Pointer to old counter object
+     */
+    NamedCounter* setObjCounter(NamedCounter* counter);
+
+    /**
+     * Get the object counter of the current thread
+     * @param always Return the object even if counting is disabled
+     * @return Pointer to current counter for new objects
+     */
+    static NamedCounter* getCurrentObjCounter(bool always = false);
+
+    /**
+     * Set the object counter of the current thread
+     * @param counter New counter object or NULL
+     * @return Pointer to old counter object
+     */
+    static NamedCounter* setCurrentObjCounter(NamedCounter* counter);
 
     /**
      * Convert a priority name to a thread priority level
@@ -5474,6 +5601,52 @@ private:
     ThreadPrivate* m_private;
     int m_locks;
     bool m_locking;
+};
+
+/**
+ * This class changes the current thread's object counter for its lifetime
+ * @short Ephemeral object counter changer
+ */
+class YATE_API TempObjectCounter
+{
+    YNOCOPY(TempObjectCounter); // no automatic copies please
+public:
+    /**
+     * Constructor, changes object counter if counting is enabled
+     * @param counter Object counter to apply on the current thread
+     * @param enable True to enable change, false to take no action
+     */
+    inline TempObjectCounter(NamedCounter* counter, bool enable = GenObject::getObjCounting())
+	: m_saved(0), m_enabled(enable)
+	{ if (m_enabled) m_saved = Thread::setCurrentObjCounter(counter); }
+
+    /**
+     * Constructor, changes object counter if counting is enabled
+     * @param obj Object to copy the counter from
+     * @param enable True to enable change, false to take no action
+     */
+    inline TempObjectCounter(const GenObject* obj, bool enable = GenObject::getObjCounting())
+	: m_saved(0), m_enabled(enable && obj)
+	{ if (m_enabled) m_saved = Thread::setCurrentObjCounter(obj->getObjCounter()); }
+
+    /**
+     * Constructor, changes object counter if counting is enabled
+     * @param obj Object to copy the counter from
+     * @param enable True to enable change, false to take no action
+     */
+    inline TempObjectCounter(const GenObject& obj, bool enable = GenObject::getObjCounting())
+	: m_saved(0), m_enabled(enable)
+	{ if (m_enabled) m_saved = Thread::setCurrentObjCounter(obj.getObjCounter()); }
+
+    /**
+     * Destructor, restores saved object counter
+     */
+    inline ~TempObjectCounter()
+	{ if (m_enabled) Thread::setCurrentObjCounter(m_saved); }
+
+private:
+    NamedCounter* m_saved;
+    bool m_enabled;
 };
 
 class Socket;

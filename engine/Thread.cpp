@@ -68,6 +68,7 @@ public:
     static ThreadPrivate* current();
     Thread* m_thread;
     HTHREAD thread;
+    NamedCounter* m_counter;
     bool m_running;
     bool m_started;
     bool m_updest;
@@ -134,6 +135,7 @@ static TokenDict s_prio[] = {
 static unsigned long s_idleMs = 1000 * THREAD_IDLE_MSEC;
 static ObjList s_threads;
 static Mutex s_tmutex(true,"Thread");
+static NamedCounter* s_counter = 0;
 
 ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority prio)
 {
@@ -235,11 +237,14 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority
 }
 
 ThreadPrivate::ThreadPrivate(Thread* t,const char* name)
-    : m_thread(t), m_running(false), m_started(false), m_updest(true), m_cancel(false), m_name(name)
+    : m_thread(t), m_counter(0),
+      m_running(false), m_started(false), m_updest(true), m_cancel(false), m_name(name)
 {
 #ifdef DEBUG
     Debugger debug("ThreadPrivate::ThreadPrivate","(%p,\"%s\") [%p]",t,name,this);
 #endif
+    // Inherit object counter of creating thread
+    m_counter = Thread::getCurrentObjCounter(true);
     Lock lock(s_tmutex);
     s_threads.append(this);
 }
@@ -617,6 +622,47 @@ const char* Thread::currentName()
 {
     ThreadPrivate* t = ThreadPrivate::current();
     return t ? t->m_name : 0;
+}
+
+NamedCounter* Thread::getObjCounter() const
+{
+    return m_private ? m_private->m_counter : 0;
+}
+
+NamedCounter* Thread::setObjCounter(NamedCounter* counter)
+{
+    if (!m_private)
+	return 0;
+    if (counter == m_private->m_counter)
+	return counter;
+    s_tmutex.lock();
+    NamedCounter* oldCounter = m_private->m_counter;
+    m_private->m_counter = counter;
+    s_tmutex.unlock();
+    return oldCounter;
+}
+
+NamedCounter* Thread::getCurrentObjCounter(bool always)
+{
+    if (!(always || GenObject::getObjCounting()))
+	return 0;
+    ThreadPrivate* t = ThreadPrivate::current();
+    return t ? t->m_counter : s_counter;
+}
+
+NamedCounter* Thread::setCurrentObjCounter(NamedCounter* counter)
+{
+    ThreadPrivate* t = ThreadPrivate::current();
+    NamedCounter*& c = t ? t->m_counter : s_counter;
+    if (counter == c)
+	return counter;
+    if (!t)
+	s_tmutex.lock();
+    NamedCounter* oldCounter = c;
+    c = counter;
+    if (!t)
+	s_tmutex.unlock();
+    return oldCounter;
 }
 
 int Thread::count()

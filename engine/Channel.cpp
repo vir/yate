@@ -1081,6 +1081,7 @@ bool Module::installRelay(int id, const char* name, unsigned priority)
     if (!(id && name && priority))
 	return false;
 
+    TempObjectCounter cnt(objectsCounter(),true);
     Lock lock(this);
     if (m_relays & id)
 	return true;
@@ -1294,6 +1295,7 @@ bool Module::setDebug(Message& msg, const String& target)
     if (target != name())
 	return false;
 
+    NamedCounter* counter = objectsCounter();
     String str = msg.getValue("line");
     if (str.startSkip("level")) {
 	int dbg = debugLevel();
@@ -1303,6 +1305,14 @@ bool Module::setDebug(Message& msg, const String& target)
     else if (str == "reset") {
 	debugLevel(TelEngine::debugLevel());
 	debugEnabled(true);
+	if (counter)
+	    counter->enable(getObjCounting());
+    }
+    else if (str.startSkip("objects")) {
+	bool dbg = (str == "reset") ? getObjCounting() : (counter && counter->enabled());
+	str >> dbg;
+	if (counter)
+	    counter->enable(dbg);
     }
     else if (str.startSkip("filter"))
 	m_filter = str;
@@ -1313,7 +1323,8 @@ bool Module::setDebug(Message& msg, const String& target)
     }
     msg.retValue() << "Module " << name()
 	<< " debug " << (debugEnabled() ? "on" : "off")
-	<< " level " << debugLevel();
+	<< " level " << debugLevel()
+	<< " objects " << ((counter && counter->enabled()) ? "on" : "off");
     if (m_filter)
 	msg.retValue() << " filter: " << m_filter;
     msg.retValue() << "\r\n";
@@ -1407,11 +1418,13 @@ bool Driver::received(Message &msg, int id)
 		    lock();
 		}
 	    }
+	    return Module::received(msg,id);
 	case Status:
 	    // check if it's a channel status request
 	    dest = msg.getValue(YSTRING("module"));
 	    if (dest.startsWith(m_prefix))
 		break;
+	    // fall through
 	case Level:
 	case Route:
 	case Command:
@@ -1656,6 +1669,8 @@ unsigned int Driver::nextid()
 Router::Router(Driver* driver, const char* id, Message* msg)
     : Thread("Call Router"), m_driver(driver), m_id(id), m_msg(msg)
 {
+    if (driver)
+	setObjCounter(driver->objectsCounter());
 }
 
 void Router::run()

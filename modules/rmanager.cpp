@@ -60,6 +60,7 @@ static const char* s_bools[] =
 static const char* s_level[] =
 {
     "level",
+    "objects",
     "on",
     "off",
     "enable",
@@ -109,7 +110,7 @@ static const CommandInfo s_cmdInfo[] =
     { "color", "[on|off]", s_bools, "Show status or turn local colorization on or off" },
 
     // Admin commands
-    { "debug", "[module] [level|on|off]", s_level, "Show or change debugging level globally or per module" },
+    { "debug", "[module] [level|objects|on|off]", s_level, "Show or change debugging level globally or per module" },
 #ifdef HAVE_COREDUMPER
     { "coredump", "[filename]", 0, "Dumps memory image of running Yate to a file" },
 #endif
@@ -123,15 +124,18 @@ static const CommandInfo s_cmdInfo[] =
     { 0, 0, 0, 0 }
 };
 
+static void completeWord(String& str, const String& word, const char* partial = 0)
+{
+    if (null(partial) || word.startsWith(partial))
+	str.append(word,"\t");
+}
+
 static void completeWords(String& str, const char** list, const char* partial = 0)
 {
     if (!list)
 	return;
-    for (; *list; list++) {
-	String tmp = *list;
-	if (null(partial) || tmp.startsWith(partial))
-	    str.append(tmp,"\t");
-    }
+    for (; *list; list++)
+	completeWord(str,*list,partial);
 }
 
 static Mutex s_mutex(true,"RManager");
@@ -1099,9 +1103,21 @@ bool Connection::autoComplete()
 	m.addParam("partword",partWord);
     if ((partLine == "status") || (partLine == "debug") || (partLine == "drop"))
 	m.setParam("complete","channels");
+    static const Regexp o1("^debug \\(.* \\)\\?objects$");
+    static const Regexp o2("^debug objects [^ ]\\+$");
     static const Regexp r("^debug \\([^ ]\\+\\)$");
     if (partLine == "debug")
 	completeWords(m.retValue(),s_debug,partWord);
+    else if (partLine == "debug objects") {
+	for (const ObjList* l = getObjCounters().skipNull(); l; l = l->skipNext())
+	    completeWord(m.retValue(),l->get()->toString(),partWord);
+	completeWord(m.retValue(),YSTRING("all"),partWord);
+	completeWords(m.retValue(),s_bools,partWord);
+    }
+    else if (partLine.matches(o1) || partLine.matches(o2)) {
+	completeWord(m.retValue(),YSTRING("reset"),partWord);
+	completeWords(m.retValue(),s_bools,partWord);
+    }
     else while (partLine.matches(r)) {
 	String tmp = partLine.matchString(1);
 	const char** lvl = s_level;
@@ -1400,9 +1416,38 @@ bool Connection::processLine(const char *line, bool saveLine)
 	if (str.startSkip("level")) {
 	    int dbg = debugLevel();
 	    str >> dbg;
-	    dbg = debugLevel(dbg);
+	    debugLevel(dbg);
 	}
-	if (str.startSkip("threshold")) {
+	NamedCounter* counter = 0;
+	if (str.startSkip("objects")) {
+	    if (str.find(' ') >= 0) {
+		String obj;
+		str.extractTo(" ",obj);
+		if (obj == "all") {
+		    bool dbg = getObjCounting();
+		    str >> dbg;
+		    for (const ObjList* l = getObjCounters().skipNull(); l; l = l->skipNext())
+			static_cast<NamedCounter*>(l->get())->enable(dbg);
+		}
+		else {
+		    counter = GenObject::getObjCounter(obj,false);
+		    if (counter) {
+			bool dbg = counter->enabled();
+			if (str == YSTRING("reset"))
+			    dbg = getObjCounting();
+			else
+			    str >> dbg;
+			counter->enable(dbg);
+		    }
+		}
+	    }
+	    else {
+		bool dbg = getObjCounting();
+		str >> dbg;
+		setObjCounting(dbg);
+	    }
+	}
+	else if (str.startSkip("threshold")) {
 	    int thr = m_threshold;
 	    str >> thr;
 	    if (thr < DebugConf)
@@ -1441,14 +1486,21 @@ bool Connection::processLine(const char *line, bool saveLine)
 	}
 	if (m_machine) {
 	    str = "%%=debug:level=";
-	    str << debugLevel() << ":local=" << m_debug;
-	    str << ":threshold=" << m_threshold << "\r\n";
+	    str << debugLevel() << ":objects=" << getObjCounting();
+	    str << ":local=" << m_debug;
+	    str << ":threshold=" << m_threshold;
+	    if (counter)
+		str << ":" << *counter << "=" << counter->enabled();
 	}
 	else {
 	    str = "Debug level: ";
-	    str << debugLevel() << " local: " << (m_debug ? "on" : "off");
-	    str << " threshold: " << m_threshold << "\r\n";
+	    str << debugLevel() << ", objects: " << (getObjCounting() ? "on" : "off");
+	    str << ", local: " << (m_debug ? "on" : "off");
+	    str << ", threshold: " << m_threshold;
+	    if (counter)
+		str << ", " << *counter << ": " << (counter->enabled() ? "on" : "off");
 	}
+	str << "\r\n";
 	writeStr(str);
     }
     else if (str.startSkip("control"))

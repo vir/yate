@@ -225,12 +225,13 @@ MessageHandler::MessageHandler(const char* name, unsigned priority,
 	const char* trackName, bool addPriority)
     : String(name),
       m_trackName(trackName), m_priority(priority),
-      m_unsafe(0), m_dispatcher(0), m_filter(0)
+      m_unsafe(0), m_dispatcher(0), m_filter(0), m_counter(0)
 {
     DDebug(DebugAll,"MessageHandler::MessageHandler('%s',%u,'%s',%s) [%p]",
 	name,priority,trackName,String::boolText(addPriority),this);
     if (addPriority && m_trackName)
 	m_trackName << ":" << priority;
+    m_counter = Thread::getCurrentObjCounter(true);
 }
 
 MessageHandler::~MessageHandler()
@@ -384,6 +385,8 @@ bool MessageDispatcher::dispatch(Message& msg)
     u_int64_t t = m_warnTime ? Time::now() : 0;
 
     bool retv = false;
+    bool counting = getObjCounting();
+    NamedCounter* saved = Thread::getCurrentObjCounter(counting);
     ObjList *l = &m_handlers;
     Lock mylock(this);
     for (; l; l=l->next()) {
@@ -391,6 +394,9 @@ bool MessageDispatcher::dispatch(Message& msg)
 	if (h && (h->null() || *h == msg)) {
 	    if (h->filter() && (*(h->filter()) != msg.getValue(h->filter()->name())))
 		continue;
+	    if (counting)
+		Thread::setCurrentObjCounter(h->objectsCounter());
+
 	    unsigned int c = m_changes;
 	    unsigned int p = h->priority();
 	    if (trackParam() && h->trackName()) {
@@ -451,7 +457,11 @@ bool MessageDispatcher::dispatch(Message& msg)
 	}
     }
     mylock.drop();
+    if (counting)
+	Thread::setCurrentObjCounter(msg.getObjCounter());
     msg.dispatched(retv);
+    if (counting)
+	Thread::setCurrentObjCounter(saved);
 
     if (t) {
 	t = Time::now() - t;
@@ -488,6 +498,8 @@ bool MessageDispatcher::dispatch(Message& msg)
 	RefPointer<MessagePostHook> ph = static_cast<MessagePostHook*>(l->get());
 	if (ph) {
 	    m_hookMutex.unlock();
+	    if (counting)
+		Thread::setCurrentObjCounter(ph->getObjCounter());
 	    ph->dispatched(msg,retv);
 	    ph = 0;
 	    m_hookMutex.lock();
@@ -495,6 +507,8 @@ bool MessageDispatcher::dispatch(Message& msg)
     }
     m_hookCount--;
     m_hookMutex.unlock();
+    if (counting)
+	Thread::setCurrentObjCounter(saved);
 
     return retv;
 }

@@ -1521,12 +1521,16 @@ DataTranslator* DataTranslator::create(const DataFormat& sFormat, const DataForm
     }
 
     DataTranslator *trans = 0;
+    bool counting = getObjCounting();
+    NamedCounter* saved = Thread::getCurrentObjCounter(counting);
 
     s_mutex.lock();
     compose();
     ObjList *l = s_factories.skipNull();
     for (; l; l=l->skipNext()) {
 	TranslatorFactory* f = static_cast<TranslatorFactory*>(l->get());
+	if (counting)
+	    Thread::setCurrentObjCounter(f->objectsCounter());
 	trans = f->create(sFormat,dFormat);
 	if (trans) {
 	    Debug(DebugAll,"Created DataTranslator %p for '%s' -> '%s' by factory %p (len=%u)",
@@ -1535,6 +1539,8 @@ DataTranslator* DataTranslator::create(const DataFormat& sFormat, const DataForm
 	}
     }
     s_mutex.unlock();
+    if (counting)
+	Thread::setCurrentObjCounter(saved);
 
     if (!trans)
 	Debug(DebugInfo,"No DataTranslator created for '%s' -> '%s'",
@@ -1733,17 +1739,33 @@ DataTranslator* ChainedFactory::create(const DataFormat& sFormat, const DataForm
 {
     if (!converts(sFormat,dFormat))
 	return 0;
+    bool counting = getObjCounting();
+    NamedCounter* saved = Thread::getCurrentObjCounter(counting);
+    if (counting)
+	Thread::setCurrentObjCounter(m_factory1->objectsCounter());
     DataTranslator* trans = m_factory1->create(sFormat,m_format);
     DataTranslator* trans2 = 0;
-    if (trans)
+    if (trans) {
+	if (counting)
+	    Thread::setCurrentObjCounter(m_factory2->objectsCounter());
 	trans2 = m_factory2->create(m_format,dFormat);
+    }
     else {
 	// try the other way around
+	if (counting)
+	    Thread::setCurrentObjCounter(m_factory2->objectsCounter());
 	trans = m_factory2->create(sFormat,m_format);
-	if (!trans)
+	if (!trans) {
+	    if (counting)
+		Thread::setCurrentObjCounter(saved);
 	    return 0;
+	}
+	if (counting)
+	    Thread::setCurrentObjCounter(m_factory1->objectsCounter());
 	trans2 = m_factory1->create(m_format,dFormat);
     }
+    if (counting)
+	Thread::setCurrentObjCounter(saved);
 
     if (trans2) {
 	XDebug(DebugInfo,"Chaining translators: '%s' %p --(%s)-> %p '%s' [%p]",

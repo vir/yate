@@ -5,7 +5,7 @@
  * Custom table implementation
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2010-2013 Null Team
+ * Copyright (C) 2010-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -98,7 +98,7 @@ CustomTable::CustomTable(const char *name, const NamedList& params, QWidget* par
     for (int i = 0; i < n; i++) {
 	String id = objListItem(cols,i);
 	String text = objListItem(title,i);
-	if (!text) { 
+	if (!text) {
 	    String tmp = id;
 	    if (!emptyTitle->find(tmp.toLower()))
 		text = id;

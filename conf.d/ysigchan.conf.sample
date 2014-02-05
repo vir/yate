@@ -62,7 +62,7 @@
 ; Example of an ISDN trunk
 ;[trunk1]
 
-; type: keyword: Specify the trunk type 
+; type: keyword: Specify the trunk type
 ; Allowed values:
 ;  isdn-bri-net:  ISDN network side of a data link over basic rate HDLC interface(s)
 ;  isdn-bri-cpe:  ISDN CPE (user) side of a data link over basic rate HDLC interface(s)
@@ -194,7 +194,7 @@
 ; Example of an ISDN passive recorder
 ;[recorder1]
 
-; type: keyword: Specify the trunk type 
+; type: keyword: Specify the trunk type
 ; Allowed values:
 ;  isdn-pri-mon:  ISDN monitor of one or more primary HDLC interface(s)
 ;type=isdn-pri-mon
@@ -252,7 +252,7 @@
 
 ; Example of a SS7 ISUP trunk
 ;[isup1]
-; type: keyword: Specify the trunk type 
+; type: keyword: Specify the trunk type
 ; Allowed values:
 ;  ss7-isup:      SS7 ISDN User Part
 ;type=ss7-isup
@@ -410,7 +410,7 @@
 ;ringback=no
 
 ; location: string: Exchange location to be set when sending Q.850 causes
-; Available values are: 
+; Available values are:
 ;   U    User
 ;   LPN  Private network serving the local user
 ;   LN   Public network serving the local user
@@ -513,7 +513,7 @@
 
 ; Example of a SS7 MTP3 network (linkset)
 ;[linkset1]
-; type: keyword: Specify the linkset type 
+; type: keyword: Specify the linkset type
 ; Allowed values:
 ;  ss7-mtp3:      SS7 Message Transfer Part - Layer 3
 ;type=ss7-mtp3
@@ -624,7 +624,7 @@
 
 ; Example of a SS7 MTP2 link
 ;[link1]
-; type: keyword: Specify the link type 
+; type: keyword: Specify the link type
 ; Allowed values:
 ;  ss7-mtp2:      SS7 Message Transfer Part - Layer 2
 ;type=ss7-mtp2
@@ -812,7 +812,7 @@
 ;[sccp-mgm]
 
 ; type: keyword: identifies the component as a SS7 SCCP Management
-; Values : ss7-sccp-itu-mgm 
+; Values : ss7-sccp-itu-mgm
 ; Must correspond with the pointcode type of the sccp
 ;type=
 
@@ -843,7 +843,7 @@
 ; pc : integer: Remote sccp pointcode
 ; ssn1 - ssnn: integer; List of local subsystems witch are of interest for the
 ;  remote sccp
-; Note! Ssn list may be empty if the remote sccp is concerned only if local 
+; Note! Ssn list may be empty if the remote sccp is concerned only if local
 ;  sccp is available or not
 ;concerned=2057:1,2,3,4
 
@@ -852,8 +852,8 @@
 ;local-subsystems=1,2,3,4,5,..
 
 ; auto-monitor: boolean: True to auto monitor remote sccp's.
-; This flag enables remote sccp auto monitoring. When a message failed to be 
-;  send to a remote sccp, the sccp management will automaticaly append the 
+; This flag enables remote sccp auto monitoring. When a message failed to be
+;  send to a remote sccp, the sccp management will automaticaly append the
 ;  destination to the monitored remote sccp destinations
 ;  to prevent sccp routing failure.
 ; NOTE! Do not use this option if your GTT (Global Title Translator)

@@ -5,7 +5,7 @@
  * Custom QtTree based objects
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2010-2013 Null Team
+ * Copyright (C) 2010-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -131,7 +131,7 @@ static inline void setSize(QSize& size, const String& s)
 
 // Utility: compare strings
 // return -1 if s1 < s2, 0 if s1 == s2, 1 if s1 > s2
-static inline int compareStr(const QString& s1, const QString& s2, 
+static inline int compareStr(const QString& s1, const QString& s2,
     Qt::CaseSensitivity cs)
 {
     if (cs == Qt::CaseSensitive) {
@@ -564,7 +564,7 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
 	    for (ObjList* o = id->skipNull(); o; o = o->skipNext(), n++) {
 		String* name = static_cast<String*>(o->get());
 		String caption = objListItem(title,n);
-		if (!caption) { 
+		if (!caption) {
 		    String tmp = *name;
 		    if (!emptyTitle->find(tmp.toLower()))
 			caption = *name;
@@ -1358,7 +1358,7 @@ void QtCustomTree::addChildren(QList<QTreeWidgetItem*> list, int pos, QtTreeItem
 	if (!item)
 	    continue;
 	setupItem(item);
-	itemAdded(*item,parent);	
+	itemAdded(*item,parent);
     }
 }
 
@@ -2047,7 +2047,7 @@ void QtCustomTree::applyItemTooltip(QtTreeItem& item, QtTreeItemProps* p)
 	return;
     String tooltip = p->m_toolTip;
     item.replaceParams(tooltip);
-    for (int n = columnCount() - 1; n >= 0; n--) 
+    for (int n = columnCount() - 1; n >= 0; n--)
 	item.setToolTip(n,QtClient::setUtf8(tooltip));
 }
 
@@ -3406,7 +3406,7 @@ void FileListTree::resetThread()
 // QtPaintItemDesc
 //
 QtPaintButtonDesc* QtPaintItemDesc::button()
-{ 
+{
     return 0;
 }
 
@@ -3415,7 +3415,7 @@ QtPaintButtonDesc* QtPaintItemDesc::button()
 // QtPaintButtonDesc
 //
 QtPaintButtonDesc* QtPaintButtonDesc::button()
-{ 
+{
     return this;
 }
 

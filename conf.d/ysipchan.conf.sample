@@ -112,7 +112,7 @@
 
 ; floodprotection: bool: Activate the drop mechanism for INVITE/REGISTER/SUBSCRIBE/OPTIONS messages when
 ;  the number of SIP events retrieved in a row exceeds the number set for floodevents setting.
-; Other messages, as well as reINVITEs, will be allowed. 
+; Other messages, as well as reINVITEs, will be allowed.
 ; NOTE! This mechanism is activated by default, to disable it configure this parameter to false.
 ;floodprotection=on
 

@@ -5,7 +5,7 @@
  * RADIUS Client functionality for YATE
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * Largely based on the code sent by Faizan Naqvi (Tili)
  *

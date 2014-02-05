@@ -8,7 +8,7 @@ logger = logging.getLogger("yaypm.resources")
 class Resource:
     def _match(self, *args):
         raise NotImplementedError("Abstract Method!")
-    
+
     @defer.inlineCallbacks
     def play(self, yate, callid, targetid,
              stopOnDTMF = False, until = None,
@@ -55,9 +55,9 @@ class Resource:
 
     def override(self, yate, callid,
                  stopOnDTMF=False, until = None, *args):
-        
+
         return Resource.play(self, yate, callid, callid, stopOnDTMF,
-                             until, True, *args)        
+                             until, True, *args)
 
 class StaticResource(Resource):
     def __init__(self, attach, desc = None):
@@ -69,10 +69,10 @@ class StaticResource(Resource):
         return [self.attach]
 
 class ConcatenationResource(Resource):
-    def __init__(self, *args):       
+    def __init__(self, *args):
         self.resources = []
         current = None
-        current_args = None        
+        current_args = None
         for arg in args:
             if isinstance(arg, Resource):
                 if current:
@@ -84,7 +84,7 @@ class ConcatenationResource(Resource):
                     raise WrongValue("Argument without Resource!")
                 current_args.append(arg)
         if current:
-            self.resources.append((current, current_args))        
+            self.resources.append((current, current_args))
 
     def _match(self, *args):
         result = []

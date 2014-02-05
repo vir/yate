@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  * Author: Marian Podgoreanu
  *
  * This software is distributed under multiple licenses;
@@ -73,7 +73,7 @@ void IAXMediaData::print(String& buf)
 }
 
 
-IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t lcallno, 
+IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t lcallno,
 	const SocketAddr& addr, void* data)
     : Mutex(true,"IAXTransaction"),
     m_localInitTrans(false),
@@ -261,7 +261,7 @@ IAXTransaction::~IAXTransaction()
 	localCallNo(),remoteCallNo(),this);
 }
 
-IAXTransaction* IAXTransaction::factoryIn(IAXEngine* engine, IAXFullFrame* frame, u_int16_t lcallno, 
+IAXTransaction* IAXTransaction::factoryIn(IAXEngine* engine, IAXFullFrame* frame, u_int16_t lcallno,
 	const SocketAddr& addr, void* data)
 {
     IAXTransaction* tr = new IAXTransaction(engine,frame,lcallno,addr,data);
@@ -334,7 +334,7 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
     // Frame is VNAK ?
     if (frame->type() == IAXFrame::IAX && full->subclass() == IAXControl::VNAK)
 	return retransmitOnVNAK(full->iSeqNo());
-    bool fAck = frame->type() == IAXFrame::IAX && 
+    bool fAck = frame->type() == IAXFrame::IAX &&
 	(full->subclass() == IAXControl::Ack || full->subclass() == IAXControl::Inval);
     if (!fAck && !isFrameAcceptable(full))
 	return 0;
@@ -1281,7 +1281,7 @@ bool IAXTransaction::isFrameAcceptable(const IAXFullFrame* frame)
 	"Transaction(%u,%u). Received late Frame(%u,%u) with oseq=%u expecting %u [%p]",
 	localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),frame->oSeqNo(),
 	m_iSeqNo,this);
-    sendAck(frame);	
+    sendAck(frame);
     return false;
 }
 
@@ -1463,7 +1463,7 @@ IAXEvent* IAXTransaction::getEventResponse(IAXFrameOut* frame, bool& delFrame)
 	    return 0;
     }
     // Frame only need ACK. Didn't found it. Return
-    if (frame->ackOnly()) 
+    if (frame->ackOnly())
 	return 0;
     delFrame = true;
     switch (type()) {
@@ -1499,7 +1499,7 @@ IAXEvent* IAXTransaction::getEventResponse_New(IAXFrameOut* frame, bool& delFram
 	    // Frame is NEW: AUTHREQ, ACCEPT, REJECT, HANGUP ?
 	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::AuthReq,IAXEvent::AuthReq,false,NewLocalInvite_AuthRecv)))
 		return processAuthReq(ev);
-	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::Accept,IAXEvent::Accept,false,Connected))) 
+	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::Accept,IAXEvent::Accept,false,Connected)))
 		return processAccept(ev);
 	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::Reject,IAXEvent::Reject,false,Terminating)))
 		return ev;

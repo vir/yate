@@ -5,7 +5,7 @@
  * File info holder
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2013 Null Team
+ * Copyright (C) 2013-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -601,7 +601,7 @@ FIFile* FIDirectory::internalAddFile(FIFileData* fd, const String& fn)
 	    DDebug(&__plugin,DebugInfo,
 		"Dir(%s) can't add file '%s': a non-file item already in the list [%p]",
 		name().c_str(),fn.c_str(),this);
-	
+
     }
     return f;
 }

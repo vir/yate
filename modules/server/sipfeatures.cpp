@@ -1,11 +1,11 @@
 /**
  * sipfeatures.cpp
- * This file is part of the YATE Project http://YATE.null.ro 
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Additional SIP features
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -93,7 +93,7 @@ public:
 	: MessageHandler("sip.subscribe",prio,s_module.name())
 	{ }
     virtual bool received(Message &msg);
-    // Get the event from a received message. Set the content type 
+    // Get the event from a received message. Set the content type
     // Set 'code' parameter of the message if false is returned
     bool getEventData(Message& msg, int& event, String& evName, String& content);
 };
@@ -232,7 +232,7 @@ bool YSipSubscribeHandler::received(Message &msg)
     return true;
 }
 
-// Get the event from a received message. Set the content type 
+// Get the event from a received message. Set the content type
 bool YSipSubscribeHandler::getEventData(Message& msg, int& event, String& evName,
 	String& content)
 {
@@ -310,23 +310,23 @@ bool YSipSubscribeHandler::getEventData(Message& msg, int& event, String& evName
 //
 // Event specific parameters are prefixed by the event name:
 // dialog.id
-//   The id of the dialog if any 
+//   The id of the dialog if any
 // dialog.callid
-//   The dialog identifier 
+//   The dialog identifier
 // dialog.localtag
-//   The local tag component of the dialog identifier 
+//   The local tag component of the dialog identifier
 // dialog.remotetag
-//   The remote tag component of the dialog identifier 
+//   The remote tag component of the dialog identifier
 // dialog.direction
-//   Keyword indicating the call direction from Yate's point of view: incoming/outgoing 
+//   Keyword indicating the call direction from Yate's point of view: incoming/outgoing
 // dialog.remoteuri
-//   The notifier dialog peer's URI 
+//   The notifier dialog peer's URI
 // dialog.state
-//   Keyword indicating the call state: trying/confirmed/early/rejected/terminated 
+//   Keyword indicating the call state: trying/confirmed/early/rejected/terminated
 // message-summary.voicenew
-//   Optional integer specifying the number of unread (new) voice messages 
+//   Optional integer specifying the number of unread (new) voice messages
 // message-summary.voiceold
-//   Optional integer specifying the number of read (old) voice messages 
+//   Optional integer specifying the number of read (old) voice messages
 bool YSipNotifyHandler::received(Message &msg)
 {
     String notifyto = msg.getValue("notifyto");
@@ -544,7 +544,7 @@ void YSipFeatures::initialize()
     m_expiresDef = cfg.getIntValue("general","expires_def",EXPIRES_DEF);
     m_forceDlgID = cfg.getBoolValue("general","forcedialogdata",true);
     s_verboseXml = cfg.getBoolValue("general","verbosexml",true);
-    
+
     // Build the list of allowed events
     NamedList* evs = cfg.getSection("allow_events");
     bool def = evs ? evs->getBoolValue("default",true) : true;

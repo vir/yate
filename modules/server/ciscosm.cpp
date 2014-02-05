@@ -1,11 +1,11 @@
 /**
  * ciscosm.cpp
- * This file is part of the YATE Project http://YATE.null.ro 
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Signalling Stack - implements the support for SS7
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -193,7 +193,7 @@ private:
     u_int8_t m_retransCounter;                             // The maximum number of retransmissions
     u_int8_t m_maxCumAck;                                  // The maximum number of segments received without being confirmed
     u_int8_t m_queueCount;                                 // The last number of messages from list known by rudp thread
-    unsigned int m_wrongChecksum;                          // Counter how keeps the number of packets 
+    unsigned int m_wrongChecksum;                          // Counter how keeps the number of packets
                                                            // received with wrong checksum
     static const TokenDict s_RudpStates[];
     RudpState m_state;                                     // Rudp state
@@ -323,7 +323,7 @@ public:
 	// these are the only error code known at this time
     };
     enum State {
-	Configured,                                        // SLT layer has sent the configuration pdu and received the 
+	Configured,                                        // SLT layer has sent the configuration pdu and received the
                                                            //  confirmation
 	Waiting,                                           // SLT layer has sent the configuration pdu but hasn't received
                                                            //  the confirmation
@@ -657,7 +657,7 @@ void RudpSocket::checkTimeouts(u_int64_t time)
     }
 }
 
-// Verify if exist any new data in the queue and transmit all data 
+// Verify if exist any new data in the queue and transmit all data
 // with sequence number > last sent and <= actual sequence number
 bool RudpSocket::checkData(bool force)
 {
@@ -694,7 +694,7 @@ bool RudpSocket::checkData(bool force)
 
 // Method called from checkTimeouts
 // Retransmits all data with sequence number between last data confirmed and current sequence number
-// increment retransmission counter and if reach the maximum retransmission counter notify the 
+// increment retransmission counter and if reach the maximum retransmission counter notify the
 // session manager and initiate reset
 void RudpSocket::retransData()
 {

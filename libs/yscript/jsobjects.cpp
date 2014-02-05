@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2011-2013 Null Team
+ * Copyright (C) 2011-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -583,15 +583,15 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
     }
     else if (oper.name() == YSTRING("concat")) {
 	// Returns a new array comprised of this array joined with other array(s) and/or value(s).
-	// var num1 = [1, 2, 3];  
-	// var num2 = [4, 5, 6];  
-	// var num3 = [7, 8, 9];  
+	// var num1 = [1, 2, 3];
+	// var num2 = [4, 5, 6];
+	// var num3 = [7, 8, 9];
 	//
-	// creates array [1, 2, 3, 4, 5, 6, 7, 8, 9]; num1, num2, num3 are unchanged  
-	// var nums = num1.concat(num2, num3);  
+	// creates array [1, 2, 3, 4, 5, 6, 7, 8, 9]; num1, num2, num3 are unchanged
+	// var nums = num1.concat(num2, num3);
 
-	// var alpha = ['a', 'b', 'c'];  
-	// creates array ["a", "b", "c", 1, 2, 3], leaving alpha unchanged  
+	// var alpha = ['a', 'b', 'c'];
+	// creates array ["a", "b", "c", 1, 2, 3], leaving alpha unchanged
 	// var alphaNumeric = alpha.concat(1, [2, 3]);
 	if (!oper.number())
 	    return false;
@@ -771,14 +771,14 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 bool JsArray::runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     // Extracts a section of an array and returns a new array.
-    // var myHonda = { color: "red", wheels: 4, engine: { cylinders: 4, size: 2.2 } };  
-    // var myCar = [myHonda, 2, "cherry condition", "purchased 1997"];  
-    // var newCar = myCar.slice(0, 2); 
+    // var myHonda = { color: "red", wheels: 4, engine: { cylinders: 4, size: 2.2 } };
+    // var myCar = [myHonda, 2, "cherry condition", "purchased 1997"];
+    // var newCar = myCar.slice(0, 2);
     if (!oper.number())
 	return false;
     // begin | end > 0 offset from the start of the array
     //	       < 0 offset from the end of the array
-    // end missing -> go to end of array  
+    // end missing -> go to end of array
     int begin = length(), end = length();
     for (int i = (int)oper.number(); i; i--) {
 	ExpOperation* op = popValue(stack,context);
@@ -804,7 +804,7 @@ bool JsArray::runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject
 
 bool JsArray::runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    // Changes the content of an array, adding new elements while removing old elements. 
+    // Changes the content of an array, adding new elements while removing old elements.
     // Returns an array containing the removed elements
     // array.splice(index , howMany[, element1[, ...[, elementN]]])
     // array.splice(index ,[ howMany[, element1[, ...[, elementN]]]])
@@ -848,7 +848,7 @@ bool JsArray::runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObjec
 	for (int i = shiftIdx; i < length(); i++)
 	    params().setParam(String(i + shiftWith),params().getValue(String(i)));
     }
-    // insert the new ones 
+    // insert the new ones
     for (int i = begin;(arguments.count() > 2) && (i < length()); i++) {
 	GenObject* obj = arguments[2 + i - begin];
 	params().setParam(new NamedPointer(String(i),obj));

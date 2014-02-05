@@ -187,7 +187,7 @@
       </size>
      </property>
      <property name="styleSheet" >
-      <string>QTabWidget::pane {      
+      <string>QTabWidget::pane {
   border: 0px solid #717fa0;
   border-top: 1px solid #717fa0;
 }

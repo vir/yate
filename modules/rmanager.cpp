@@ -6,7 +6,7 @@
  * administrating interface.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -1375,7 +1375,7 @@ bool Connection::processLine(const char *line, bool saveLine)
 	    str = "all calls";
 	}
 	else
-	    m.addParam("id",str); 
+	    m.addParam("id",str);
 	if (reason)
 	    m.addParam("reason",reason);
 	putConnInfo(m);

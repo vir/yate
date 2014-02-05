@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -1015,7 +1015,7 @@ protected:
 
     /**
      * Build a ping iq stanza
-     * @param stanzaId Stanza id 
+     * @param stanzaId Stanza id
      * @return 0
      */
     virtual XmlElement* buildPing(const String& stanzaId);
@@ -1447,7 +1447,7 @@ public:
 
     /**
      * Build a ping iq stanza
-     * @param stanzaId Stanza id 
+     * @param stanzaId Stanza id
      * @return Valid XmlElement pointer
      */
     virtual XmlElement* buildPing(const String& stanzaId);
@@ -2648,7 +2648,7 @@ protected:
 
 /**
  * This class holds a list of stream sets.
- * The purpose is to create a list of threads 
+ * The purpose is to create a list of threads
  * @short A list of stream sets
  */
 class YJABBER_API JBStreamSetList : public RefObject, public Mutex

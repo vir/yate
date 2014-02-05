@@ -1,10 +1,10 @@
-/*
+/**
  * yatesip.h
  * Yet Another SIP Stack
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -40,7 +40,7 @@
 #define YSIP_API
 #endif
 
-/** 
+/**
  * Holds all Telephony Engine related classes.
  */
 namespace TelEngine {
@@ -1002,7 +1002,7 @@ protected:
 /**
  * This object is an event that will be taken from SIPEngine
  * @short A SIP event as retrieved from engine
- */ 
+ */
 class YSIP_API SIPEvent
 {
     friend class SIPTransaction;
@@ -1165,8 +1165,8 @@ public:
     SIPTransaction* addMessage(SIPMessage* message);
 
     /**
-     * Get a SIPEvent from the queue. 
-     * This method mainly looks into the transaction list and get all kind of 
+     * Get a SIPEvent from the queue.
+     * This method mainly looks into the transaction list and get all kind of
      * events, like an incoming request (INVITE, REGISTRATION), a timer, an
      * outgoing message.
      * This method is thread safe
@@ -1174,7 +1174,7 @@ public:
     SIPEvent *getEvent();
 
     /**
-     * This method should be called very often to get the events from the list and 
+     * This method should be called very often to get the events from the list and
      * to send them to processEvent method.
      * @return True if some events were processed this turn
      */

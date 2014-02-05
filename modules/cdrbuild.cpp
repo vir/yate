@@ -5,7 +5,7 @@
  * Cdr builder
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -355,7 +355,7 @@ void CdrBuilder::emit(const char *operation)
 
     if (String(operation) == YSTRING("update") && !s_cdrUpdates)
 	return;
-    
+
     m_first = false;
 
     DDebug("cdrbuild",DebugAll,"Emit '%s' for '%s' status '%s'",
@@ -391,7 +391,7 @@ void CdrBuilder::emit(const char *operation)
 	m_durationTime.getTime(tmp,t_hangup - m_start);
 	m->addParam("call_duration",tmp);
     }
-    
+
     if (!getValue("external")) {
 	const char* ext = 0;
 	if (m_dir == YSTRING("incoming"))

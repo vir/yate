@@ -5,7 +5,7 @@
  * Test call generator and audio quality analyzer
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * FFT routine taken from Murphy McCauley's FFT DLL based in turn on the
  *  work of Don Cross <dcross@intersrv.com>

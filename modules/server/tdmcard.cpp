@@ -5,7 +5,7 @@
  * TDM cards signalling and data driver
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -210,7 +210,7 @@ public:
     // New status is Connect: Open device. Create source/consumer. Start worker
     // Cleanup on disconnect
     virtual bool status(Status newStat, bool sync = false);
-    // Update data format for Tdm device and source/consumer 
+    // Update data format for Tdm device and source/consumer
     virtual bool updateFormat(const char* format, int direction);
     // Get this circuit or source/consumer
     virtual void* getObject(const String& name) const;
@@ -383,7 +383,7 @@ void TdmWorker::stop()
     m_thread->cancel();
     while (m_thread)
 	Thread::yield();
-    
+
 }
 
 const char* TdmThread::s_threadName = "Tdm Worker";
@@ -493,7 +493,7 @@ int TdmDevice::buildSpanChanFromIf(const char *interface_name, int *span, int *c
 		ch = (p + 1);
 		break;
 	    }
-	    else 
+	    else
 		if (*p == 's') {
 		    sp = (p + 1);
 		}
@@ -1021,7 +1021,7 @@ SignallingComponent* TdmInterface::create(const String& type, NamedList& name)
     }
 
     // Check span type
-    if (devType != TdmDevice::E1 && devType != TdmDevice::T1 && 
+    if (devType != TdmDevice::E1 && devType != TdmDevice::T1 &&
 		devType != TdmDevice::NET && devType != TdmDevice::CPE) {
 	Debug(&plugin,DebugWarn,"Section '%s'. Can't create D-channel for type='%s'",
 	    config->c_str(),sDevType.c_str());

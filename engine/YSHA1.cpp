@@ -9,7 +9,7 @@
  * Adapted for YATE by Paul Chitescu
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -174,7 +174,7 @@ static void sha1_final(sha1_ctx *sctx, u_int8_t *out)
     sha1_update(sctx, padding, padlen);
 
     /* Append length */
-    sha1_update(sctx, bits, sizeof bits); 
+    sha1_update(sctx, bits, sizeof bits);
 
     /* Store state in digest */
     for (i = j = 0; i < 5; i++, j += 4) {

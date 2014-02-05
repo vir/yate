@@ -2,7 +2,7 @@
  * clientarchive.cpp
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * Client archive management and UI logic
  *
@@ -122,7 +122,7 @@ public:
     QString m_search;                    // QString to be used when searching
 };
 
-// A contact's chat (including the file) 
+// A contact's chat (including the file)
 class ChatFile : public Mutex, public RefObject
 {
     friend class ChatArchive;
@@ -1440,7 +1440,7 @@ bool CALogic::select(Window* wnd, const String& name, const String& item,
     }
     return false;
 }
-    
+
 bool CALogic::toggle(Window* wnd, const String& name, bool active)
 {
     // Search options
@@ -1963,7 +1963,7 @@ void CASearchThread::searchAll(const String& what)
 		m_currentSession = o->get()->toString();
 	}
 	if (m_currentSession)
-	    found = searchContact(f,what,changed);	
+	    found = searchContact(f,what,changed);
 	TelEngine::destruct(f);
 	if (found)
 	    break;

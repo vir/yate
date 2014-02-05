@@ -1,11 +1,11 @@
-/*
+/**
  * yatecbase.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Common base classes for all telephony clients
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -207,7 +207,7 @@ public:
      * @param list The list
      * @param val Value to remove
      */
-    static void clearValue(ObjList& list, int val); 
+    static void clearValue(ObjList& list, int val);
 
     /**
      * Get an item's value from name
@@ -1350,7 +1350,7 @@ public:
     bool addTableRow(const String& name, const String& item, const NamedList* data = 0,
 	bool atStart = false, Window* wnd = 0, Window* skip = 0);
 
-    /** 
+    /**
      * Append or update several table rows at once
      * @param name Name of the element
      * @param data Parameters to initialize the rows with

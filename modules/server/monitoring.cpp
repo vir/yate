@@ -5,7 +5,7 @@
  * Module for monitoring and gathering information about YATE.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -1694,8 +1694,8 @@ Cache::~Cache()
 }
 
 bool Cache::load()
-{ 
-    return false; 
+{
+    return false;
 }
 
 // discard cached data
@@ -2842,7 +2842,7 @@ void RTPTable::reconfigure(const NamedList* cfg)
     }
 
     m_rtpMtx.unlock();
-    m_resetTime = Time::secNow() + m_resetInterval;  
+    m_resetTime = Time::secNow() + m_resetInterval;
 }
 
 // update an entry
@@ -2923,7 +2923,7 @@ CallRouteQoS::CallRouteQoS(const String direction, const NamedList* cfg)
 
     m_minCalls = 1;
     m_minASR = m_maxASR = m_minNER = -1;
-    if (cfg) 
+    if (cfg)
 	updateConfig(cfg);
     m_index = 0;
 }
@@ -3683,7 +3683,7 @@ void Monitor::readConfig(const Configuration& cfg)
 	for (ObjList* o = m_sipMonitoredGws->skipNull(); o; o = o->skipNext()) {
 	    String* addr = static_cast<String*>(o->get());
 	    int pos = addr->find(":");
-	    if (pos == -1) 
+	    if (pos == -1)
 	        addr->append(":" + String(SIP_PORT));
 	    else {
 	        String tmp = addr->substr(pos+1);
@@ -3698,7 +3698,7 @@ void Monitor::readConfig(const Configuration& cfg)
     s_sipInfo.reset = cfg.getIntValue("sip","reset_time",0);
     if (s_sipInfo.reset)
         s_sipInfo.resetTime = Time::secNow() + s_sipInfo.reset;
-    
+
     // read SS7 monitoring
     bool sigEnable = cfg.getBoolValue("sig","monitor",false);
     m_trunkMon = cfg.getBoolValue("sig","trunk",sigEnable);
@@ -4061,4 +4061,5 @@ bool Monitor::verifyGateway(const String& address)
 }
 
 };
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

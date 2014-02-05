@@ -5,7 +5,7 @@
  * MAP/CAMEL TCAP <-> XML translators
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 - 2011-2013 Null Team
+ * Copyright (C) 2004 - 2011-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -670,11 +670,11 @@ static bool encodeParam(const Parameter* param, DataBlock& data, XmlElement* ele
 	if (child->getAttribute(s_tagAttr) || child->getAttribute(s_encAttr))
 	    ok = encodeRaw(param,data,child,err);
 	else {
-	    if (param->tag.type() == AsnTag::Constructor && 
-		!(param->type == TcapXApplication::HexString || param->type == TcapXApplication::SequenceOf 
+	    if (param->tag.type() == AsnTag::Constructor &&
+		!(param->type == TcapXApplication::HexString || param->type == TcapXApplication::SequenceOf
 		|| param->type == TcapXApplication::Sequence || param->type == TcapXApplication::Choice
 		|| param->type == TcapXApplication::SetOf))
-		Debug(&__plugin,DebugGoOn,"Encoding definition conflict for param='%s', tag is defined as contructor" 
+		Debug(&__plugin,DebugGoOn,"Encoding definition conflict for param='%s', tag is defined as contructor"
 		    " while its type is primitive",param->name.c_str());
 	    ok = type->encode(param,type,data,child,err);
 	}
@@ -689,7 +689,7 @@ static bool encodeParam(const Parameter* param, DataBlock& data, XmlElement* ele
     return ok;
 }
 
-static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = false) 
+static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = false)
 {
     if (!(elem && data.length()))
 	return false;
@@ -798,7 +798,7 @@ static bool decodeParam(const Parameter* param, AsnTag& tag, DataBlock& data, Xm
 	elem,str.c_str());
     MapCamelType* type = (MapCamelType*)findType(param->type);
     bool ok = true;
-    if (!type) 
+    if (!type)
 	ok =  decodeRaw(elem,data,true);
     else
 	ok = type->decode(param,type,tag,data,elem,addEnc,err);
@@ -869,7 +869,7 @@ static bool decodeTBCD(const Parameter* param, MapCamelType* type, AsnTag& tag, 
     if (!(param && type && data.length() && parent))
 	return false;
     XDebug(&__plugin,DebugAll,"decodeTBCD(param=%s[%p],elem=%s[%p])",param->name.c_str(),param,parent->getTag().c_str(),parent);
-    if (param->tag != tag) 
+    if (param->tag != tag)
 	return false;
 
     data.cut(-(int)tag.coding().length());
@@ -894,7 +894,7 @@ static bool encodeTBCD(const Parameter* param, MapCamelType* type, DataBlock& da
     const String& text = elem->getText();
     encodeBCD(text,data);
     data.insert(ASNLib::buildLength(data));
-    data.insert(param->tag.coding()); 
+    data.insert(param->tag.coding());
     return true;
 }
 
@@ -977,7 +977,7 @@ static bool decodeHex(const Parameter* param, MapCamelType* type, AsnTag& tag, D
     }
     else {
 	octets.hexify(data.data(),(len > (int)data.length() ? data.length() : len),' ');
-	data.cut(-len); 
+	data.cut(-len);
     }
     child->addText(octets);
     return true;
@@ -1130,7 +1130,7 @@ static bool decodeSeq(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 			printMissing(params->name.c_str(),param->name.c_str(),false);
 		    err = TcapXApplication::DataMissing;
 		    return false;
-		} 
+		}
 		else {
 		    params++;
 		    continue;
@@ -1158,7 +1158,7 @@ static bool encodeSeq(const Parameter* param, MapCamelType* type, DataBlock& dat
 		    printMissing(params->name.c_str(),param->name.c_str());
 		    err = TcapXApplication::DataMissing;
 		    return false;
-		} 
+		}
 		else {
 		    params++;
 		    continue;
@@ -1213,7 +1213,7 @@ static bool decodeSeqOf(const Parameter* param, MapCamelType* type, AsnTag& tag,
 			printMissing(params->name.c_str(),param->name.c_str(),false);
 		    err = TcapXApplication::DataMissing;
 		    return false;
-		} 
+		}
 		else
 		    break;
 	    }
@@ -1937,7 +1937,7 @@ static bool decodeCallNumber(const Parameter* param, MapCamelType* type, AsnTag&
     unsigned char pres = (data[index] >> 2) & 3;
     unsigned char scrn = data[index] & 3;
 
-    if (type->type == TcapXApplication::GenericNumber) 
+    if (type->type == TcapXApplication::GenericNumber)
 	child->setAttribute(s_qualifierAttr,lookup(qualifier,s_dict_qual,"unknown"));
     child->setAttribute(s_natureAttr,lookup(nai,s_dict_nai,"unknown"));
     child->setAttribute(s_planAttr,lookup(plan,s_dict_numPlanIsup,"unknown"));
@@ -2074,7 +2074,7 @@ static const String s_reasonOrigAttr = "reason_original";
 static const String s_counterAttr = "counter";
 static const String s_reasonAttr = "reason";
 
-static bool decodeRedir(const Parameter* param, MapCamelType* type, AsnTag& tag, DataBlock& data, 
+static bool decodeRedir(const Parameter* param, MapCamelType* type, AsnTag& tag, DataBlock& data,
 	XmlElement* parent, bool addEnc, int& err)
 {
     if (!(param && type && data.length() && parent))
@@ -2182,7 +2182,7 @@ static const TokenDict s_dict_transferRateCCITT[] = {
 static const TokenDict s_dict_formatCCITT[] = {
     {"v110",          0x01},         // Recomendation V.110 and X.30
     {"mulaw",         0x02},         // Recomendation G.711 mu-law
-    {"alaw",          0x03},         // Recomendation G.711 A-law 
+    {"alaw",          0x03},         // Recomendation G.711 A-law
     {"g721",          0x04},         // Recomendation G.721 32kbit/s ADPCM and I.460
     {"h221",          0x05},         // Recomendation H.221 and H.242
     {"non-CCITT",     0x07},         // Non CCITT standardized rate adaption
@@ -2197,7 +2197,7 @@ static const String s_transferModeAttr = "transfermode";
 static const String s_transferRateAttr = "transferrate";
 static const String s_multiplierAttr = "multiplier";
 
-static bool decodeUSI(const Parameter* param, MapCamelType* type, AsnTag& tag, DataBlock& data, 
+static bool decodeUSI(const Parameter* param, MapCamelType* type, AsnTag& tag, DataBlock& data,
 	XmlElement* parent, bool addEnc, int& err)
 {
     if (!(param && type && data.length() && parent))
@@ -2288,7 +2288,7 @@ static const StringList s_subscriberDataCapabOps("insertSubscriberData,deleteSub
 static const StringList s_routingCapabOps("sendRoutingInfoForGprs,sendRoutingInfoForLCS,statusReport");
 static const StringList s_vlrRoutingCapabOps("provideRoamingNumber,provideSubscriberInfo");
 static const StringList s_traceSubscriberCapabOps("activateTraceMode,deactivateTraceMode");
-static const StringList s_servicesCapabOps("registerSS,eraseSS,activateSS,deactivateSS,interrogateSS,registerPassword,getPassword," 
+static const StringList s_servicesCapabOps("registerSS,eraseSS,activateSS,deactivateSS,interrogateSS,registerPassword,getPassword,"
 				    "processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify");
 static const StringList s_miscellaneousCapabOps("sendIMSI,readyForSM,setReportingState");
 static const StringList s_errorRecoveryCapabOps("reset,forwardCheckSS-Indication,failureReport");
@@ -2581,7 +2581,7 @@ static const TokenDict s_alertPattern[] = {
     {"alertingCategory-4", 0x07},//   AlertingPattern ::= '00000111'B
     {"alertingCategory-5", 0x08},//   AlertingPattern ::= '00001000'B
     {0,0},
-}; 
+};
 
 static const TokenDict s_extProtocolId[] = {
     {"ets-300356",    0x01},
@@ -2834,8 +2834,8 @@ static const SignallingFlags s_forwardOptions[] = {
 static const SignallingFlags s_ssStatus[] = {
     { 0x01, 0x01, "active" },
     { 0x02, 0x02, "registered" },
-    { 0x04, 0x04, "provisioned" }, 
-    { 0x08, 0x08, "quiescent" }, 
+    { 0x04, 0x04, "provisioned" },
+    { 0x08, 0x08, "quiescent" },
     { 0, 0, 0 },
 };
 
@@ -2973,7 +2973,7 @@ static const TokenDict s_EMLPPPriority[] = {
     {"priorityLevelB", 5},
     {"priorityLevelA", 6},
     {0,0},
-}; 
+};
 
 static const Parameter s_EMLPPInfo[] = {
     {"maximumentitledPriority", s_intTag,        false,    TcapXApplication::Enumerated,    s_EMLPPPriority},
@@ -3027,7 +3027,7 @@ static const TokenDict s_odbGeneralData[] = {
     {"registrationInterzonalCFNotToHPLMN-Barred",                           0x08000000},
     {"registrationInternationalCF-Barred",                                  0x10000000},
     {0,0},
-}; 
+};
 
 static const TokenDict s_odbHPLMNData[] = {
     {"plmn-SpecificBarringType1", 0x01},
@@ -4875,7 +4875,7 @@ static const Parameter s_forwardSMArgs[] = {
 static const TokenDict s_SMDeliveryOutcomeEnum[] = {
     {"memoryCapacityExceeded", 0},
     {"absentSubscriber",       1},
-    {"successfulTransfer",     2}, 
+    {"successfulTransfer",     2},
     {0,0}
 };
 
@@ -5244,7 +5244,7 @@ static const Operation s_mapOps[] = {
     {"reportSM-DeliveryStatus",       true,  47,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_reportSMDeliveryArgs,
 	s_sequenceTag, s_reportSMDeliveryRes,
-	
+
     },
     {"activateTraceMode",             true,  50,  SS7TCAP::SuccessOrFailureReport,
 	s_sequenceTag, s_activateTraceModeArgs,
@@ -6613,7 +6613,7 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"roamingNumberEnquiryContext-v2", "0.4.0.0.1.0.3.2", s_roamingNumberEnqCtxtOps, &s_defMapOpTable},
     {"roamingNumberEnquiryContext-v1", "0.4.0.0.1.0.3.1", s_roamingNumberEnqCtxtOps, &s_defMapOpTable},
 
-    // Location Info Retrieval Context 
+    // Location Info Retrieval Context
     {"locationInfoRetrievalContext-v3", "0.4.0.0.1.0.5.3", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
     {"locationInfoRetrievalContext-v2", "0.4.0.0.1.0.5.2", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
     {"locationInfoRetrievalContext-v1", "0.4.0.0.1.0.5.1", s_locationInfoRetrieveCtxtOps, &s_defMapOpTable},
@@ -6627,7 +6627,7 @@ static const AppCtxt s_mapAppCtxt[]= {
 
     // Info retrieval context
     {"infoRetrievalContext-v3", "0.4.0.0.1.0.14.3", s_infoRetrieveCtxt2Ops, &s_defMapOpTable},
-    {"infoRetrievalContext-v2", "0.4.0.0.1.0.14.2", s_infoRetrieveCtxt2Ops, &s_defMapOpTable}, 
+    {"infoRetrievalContext-v2", "0.4.0.0.1.0.14.2", s_infoRetrieveCtxt2Ops, &s_defMapOpTable},
     {"infoRetrievalContext-v1", "0.4.0.0.1.0.14.1", s_infoRetrieveCtxt1Ops, &s_defMapOpTable},
 
     // Subscriber Data Management Context
@@ -6678,10 +6678,10 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"msPurgingContext-v3", "0.4.0.0.1.0.27.3", s_msPurgingCtxtOps, &s_defMapOpTable},
     {"msPurgingContext-v2", "0.4.0.0.1.0.27.2", s_msPurgingCtxtOps, &s_defMapOpTable},
 
-    // Subscriber Information Enquiry Context 
+    // Subscriber Information Enquiry Context
     {"subscriberInfoEnquiryContext-v3", "0.4.0.0.1.0.28.3", s_subscriberInfoEnquiryCtxOps, &s_defMapOpTable},
 
-    // Any Time Info Enquiry Context 
+    // Any Time Info Enquiry Context
     {"anyTimeInfoEnquiryContext-v3", "0.4.0.0.1.0.29.3", s_anyTimeInfoEnquiryCtxOps, &s_defMapOpTable},
 
     // GPRS Location Update Context
@@ -6690,10 +6690,10 @@ static const AppCtxt s_mapAppCtxt[]= {
     // GPRS Location Info Retrieval Context
     {"gprsLocationInfoRetrievalContext-v3" , "0.4.0.0.1.0.33.3", s_gprsLocationInfoRetrieveCtxtOps, &s_defMapOpTable},
 
-    // Failure Report Context 
+    // Failure Report Context
     {"failureReportContext-v3" , "0.4.0.0.1.0.34.3", s_failureReportCtxtOps, &s_defMapOpTable},
 
-    // Location Services Gateway Context 
+    // Location Services Gateway Context
     {"locationSvcGatewayContext-v3", "0.4.0.0.1.0.37.3", s_locationSvcGatewayCtxtOps, &s_defMapOpTable},
 
     // Authentication Failure Report Context
@@ -6713,7 +6713,7 @@ static const StringList s_cap2AssistgsmSSFgsmSCFCtxtOps("assistRequestInstructio
 								"promptAndCollectUserInformation,cancel,activityTest");
 static const StringList s_cap2gsmSRFgsmSCFCtxtOps("assistRequestInstructions,specializedResourceReport,playAnnouncement,"
 							"promptAndCollectUserInformation,cancel,activityTest");
-    
+
 static OpTable s_defCamelOpTable = { s_camelOps, 0 };
 
 static const AppCtxt s_camelAppCtxt[] = {
@@ -6800,10 +6800,10 @@ static const Parameter s_mapProviderAbortSeq[] = {
 static const Parameter s_mapDialogChoice[] = {
     {"map-open",           s_ctxtCstr_0_Tag, false,  TcapXApplication::Sequence, s_mapOpenSeq},
     {"map-accept",         s_ctxtCstr_1_Tag, false,  TcapXApplication::Sequence, s_extensionContainerRes},
-    {"map-close",          s_ctxtCstr_2_Tag, false,  TcapXApplication::Sequence, s_extensionContainerRes},    
-    {"map-refuse",         s_ctxtCstr_3_Tag, false,  TcapXApplication::Sequence, s_mapRefuseSeq}, 
-    {"map-userAbort",      s_ctxtCstr_4_Tag, false,  TcapXApplication::Sequence, s_mapUserAbortSeq}, 
-    {"map-providerAbort",  s_ctxtCstr_5_Tag, false,  TcapXApplication::Sequence, s_mapProviderAbortSeq}, 
+    {"map-close",          s_ctxtCstr_2_Tag, false,  TcapXApplication::Sequence, s_extensionContainerRes},
+    {"map-refuse",         s_ctxtCstr_3_Tag, false,  TcapXApplication::Sequence, s_mapRefuseSeq},
+    {"map-userAbort",      s_ctxtCstr_4_Tag, false,  TcapXApplication::Sequence, s_mapUserAbortSeq},
+    {"map-providerAbort",  s_ctxtCstr_5_Tag, false,  TcapXApplication::Sequence, s_mapProviderAbortSeq},
     {"",                   s_noTag,          false,  TcapXApplication::None,     0},
 };
 
@@ -7410,7 +7410,7 @@ bool TcapToXml::buildXMLMessage(NamedList& params, XmlFragment* msg, MsgType typ
 
     if (m_app->type() == TcapXUser::MAP && !TelEngine::null(params.getParam(s_tcapDirectReference)))
 	handleMAPDialog(el,params);
-    
+
     for (unsigned int i = 0; i < params.count(); i++) {
 	NamedString* ns = params.getParam(i);
 	if (TelEngine::null(ns))
@@ -7876,7 +7876,7 @@ bool XmlToTcap::handleComponent(NamedList& tcapParams, XmlElement* elem, const A
 	return false;
     unsigned int index = tcapParams.getIntValue(s_tcapCompCount) + 1;
     String prefix = s_tcapCompPrefix;
-    prefix << "." << index; 
+    prefix << "." << index;
 
     int type = 0;
     const NamedList& comp = elem->attributes();
@@ -8028,7 +8028,7 @@ bool XmlToTcap::parse(NamedList& tcapParams)
     }
     //if we didn't find a saved context for the current transaction, search context in the XML info
     if (!appCtxt && ctxtElem)
-	appCtxt = (AppCtxt*)findCtxtFromStr(ctxtElem->getText(),(m_app->type() == TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt)); 
+	appCtxt = (AppCtxt*)findCtxtFromStr(ctxtElem->getText(),(m_app->type() == TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt));
 
     bool ok = parse(tcapParams,m_elem,"",appCtxt);
     NamedString* c = tcapParams.getParam(s_capabTag);
@@ -9016,7 +9016,7 @@ SS7TCAPError TcapXUser::applicationRequest(TcapXApplication* app, NamedList& par
     }
     else {
 	params.setParam(s_tcapRequestError,"No TCAP attached");
-	error.setError(SS7TCAPError::Transact_UnassignedTransactionID); 
+	error.setError(SS7TCAPError::Transact_UnassignedTransactionID);
 	return error;
     }
     bool saveID = false;

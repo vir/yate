@@ -69,7 +69,7 @@
 ;                  s.uu -> 1.12
 ;                  s.uuu -> 1.123
 ;                  s.uuuu -> 1.1234
-;                  s.uuuuu -> 1.12346 
+;                  s.uuuuu -> 1.12346
 ;                  s.uuuuuu -> 1.123456
 ; Other formats may me used but they must correspond with C strftime method formats
 ; Important! If duplicate formats are ignored!

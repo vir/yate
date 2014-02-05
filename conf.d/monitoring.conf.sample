@@ -29,12 +29,12 @@
 ;[yate]
 ; this section is an example on how to configure a database account to be monitored
 ; name of the section is the database account
- 
+
 ; type=
 ; specify that this section is for database monitoring
 ;type=database
 
-;interval in seconds at which statistic data should be sent. Defaults to 3600 (1 hour) 
+;interval in seconds at which statistic data should be sent. Defaults to 3600 (1 hour)
 ;notiftime=3600
 
 ; alarm threshold for maximum number of queries. Defaults to 1000

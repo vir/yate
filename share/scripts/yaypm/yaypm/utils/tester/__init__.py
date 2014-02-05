@@ -4,9 +4,9 @@
  Tester module for YAYPM. Generates calls, and allows to define incall
  activity like sending DTMFs. Can be run on two separate yates to imitate
  realistic load.
- 
+
  Copyright (C) 2005 Maciek Kaminski
- 
+
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation; either version 2 of the License, or
@@ -60,7 +60,7 @@ def detect_dtmf_and_do_nothing(client_yate, server_yate, testid, targetid, calli
         attrs = {"message" : "chan.detectdtmf",
                  "id": remoteid,
                  "consumer": "dtmf/"}).enqueue()
-        
+
     logger.debug("[%d] detecting dtmf on %s for %d s." % (testid, callid, duration))
     yield sleep(duration)
     getResult()
@@ -68,7 +68,7 @@ def detect_dtmf_and_do_nothing(client_yate, server_yate, testid, targetid, calli
     yield client_yate.msg("call.drop", {"id": callid}).dispatch()
     getResult()
 
-    
+
 
 def select_non_called(dfrs):
     """
@@ -90,14 +90,14 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
         tests is a list of tests to execute
         monitor is a extension that will be used to monitor tests.
     """
-    
+
     concurrent = []
     monitored = []
 
     successes, failures = {}, {}
 
     def success(_, t, start):
-        successes[t] = time.time() - start 
+        successes[t] = time.time() - start
 
     def failure(f, t, start):
         failures[t] = (time.time() - start, f)
@@ -109,14 +109,14 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
     yield client_yate.installWatchHandler("chan.hangup")
     getResult()
     yield server_yate.installWatchHandler("test.checkpoint")
-    getResult()    
-   
+    getResult()
+
     if monitor:
         monitorid = None
         monitor_room = None
 
         logger.debug("Creating monitoring connection.")
-        
+
         execute = client_yate.msg("call.execute",
          {"callto": "dumb/",
           "target": monitor})
@@ -125,7 +125,7 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
             logger.warn("can't create monitor connection on %s" % monitor)
             monitor = None
         else:
-            try: 
+            try:
                 end = client_yate.onwatch(
                     "chan.hangup",
                     lambda m, callid = execute["id"] : m["id"] == callid)
@@ -160,12 +160,12 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
                     monitor = None
             except AbandonedException:
                 logger.debug("Monitor connection not answered.")
-                monitor = None                
+                monitor = None
 
     count = 0
 
     for t in tests:
-        concurrent = select_non_called(concurrent)        
+        concurrent = select_non_called(concurrent)
         if len(concurrent) >= con_max:
             logger.debug("waiting on concurrency limit: %d" % con_max)
             yield defer.DeferredList(concurrent, fireOnOneCallback=True)
@@ -189,7 +189,7 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
             return
 
         remoteid_def = go(getRemoteId(route))
-      
+
         execute = client_yate.msg(
             "call.execute",
             {"callto": "dumb/",
@@ -198,12 +198,12 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
 
         yield execute.dispatch()
 
-        try:            
+        try:
             if not getResult():
                 route.cancel()
                 raise AbandonedException("Call to: %s failed." % target)
 
-            callid = execute["id"]        
+            callid = execute["id"]
 
             end = client_yate.onwatch(
                 "chan.hangup",
@@ -217,7 +217,7 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
                 raise AbandonedException("Call to: %s hungup." % target)
 
             logger.debug("[%d] outgoing call to %s" % (count, callid))
-        
+
             yield client_yate.onwatch(
                 "call.answered",
                 lambda m : m["targetid"] ==  callid,
@@ -248,7 +248,7 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
                 {"message": "chan.attach",
                  "id": callid,
 #                 "source": "moh/default",
-                 "source": "tone/silence",                 
+                 "source": "tone/silence",
                  "consumer": "wave/record//tmp/recording%s.slin" % \
                      callid.replace("/", "-"),
                  "maxlen": 0}).enqueue()
@@ -265,7 +265,7 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
             result = go(handler(
                 client_yate, server_yate,
                 count,
-                targetid,                
+                targetid,
                 callid, remoteid, t))
 
             result.addCallbacks(success, failure,
@@ -276,13 +276,13 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
                 result.addCallback(
                     lambda _, mon_id: monitored.remove(mon_id),
                     callid)
-                
+
             concurrent.append(result)
         except AbandonedException, e:
             if not route.called:
                 route.cancel()
             logger.warn("[%d] outgoing call to %s abandoned" % (count, callid))
-            failure(Failure(e), count, start)            
+            failure(Failure(e), count, start)
 
     logger.debug(
         "Waiting for %d tests to finish" % len(select_non_called(concurrent)))
@@ -296,21 +296,21 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
         yield sleep(1)
         getResult()
 
-    logger.debug("stopping reactor!")        
+    logger.debug("stopping reactor!")
     reactor.stop()
 
-    logger.info("-"*80)    
+    logger.info("-"*80)
     logger.info("Summary")
     logger.info("-"*80)
     logger.info("Tests: %d" % (len(successes) + len(failures)))
     if successes:
-        logger.info("-"*80)        
+        logger.info("-"*80)
         logger.info("Successes: %d" % len(successes))
         logger.info("Avg time: %.2f s" %
                     (reduce(lambda x, y: x + y, successes.values(), 0) /
                      len(successes)))
     if failures:
-        logger.info("-"*80)        
+        logger.info("-"*80)
         logger.info("Failures: %d" % len(failures))
         sumt = 0
         for tid, (t, f) in failures.iteritems():
@@ -362,6 +362,6 @@ def do_load_test(
         reactor.connectTCP(remote_addr, remote_port, server_factory)
 
     client_factory = TCPDispatcherFactory(start_client)
-    
+
     reactor.connectTCP(local_addr, local_port, client_factory)
 

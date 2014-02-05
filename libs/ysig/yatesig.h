@@ -1,11 +1,11 @@
-/*
+/**
  * yatesig.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Signalling Stack - implements the support for SS7, ISDN and PSTN
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -1556,7 +1556,7 @@ public:
 	Dtmf         = 1,                // Transfer tones: param: tone
 	GenericTone  = 2,                // Play or detect tones: param: tone
 	// Analog line events
-	Timeout      = 10,               // 
+	Timeout      = 10,               //
 	Polarity     = 11,               // Line's polarity changed
 	StartLine    = 15,               // Initialize FXO line
 	LineStarted  = 16,               // FXO line initialized: send number
@@ -2026,7 +2026,7 @@ public:
      * Get the pointer to the circuit codes array
      * @return Pointer to the circuit codes array or 0
      */
-    inline void clear() 
+    inline void clear()
 	{ m_range.clear(); m_count = 0; }
 
     /**
@@ -5315,7 +5315,7 @@ protected:
      * @param nextPrefix Other prefix of the global title content parameters
      * @return a new SCCP route or 0 is no route was found
      */
-    NamedList* translateGT(const NamedList& params, const String& prefix, 
+    NamedList* translateGT(const NamedList& params, const String& prefix,
 	    const String& nextPrefix);
 
     /**
@@ -5464,7 +5464,7 @@ public:
      * Send a message to SCCP for transport
      * @param data User data
      * @param params SCCP parameters
-     * Note! If the request is made with return option set there is no warranty that a notification 
+     * Note! If the request is made with return option set there is no warranty that a notification
      * will be received in case that the message failed to be delivered
      */
     virtual bool sendData(DataBlock& data, NamedList& params);
@@ -5504,7 +5504,7 @@ public:
      * Notification from SCCP that a message failed to arrive to it's destination
      * @param data User data send.
      * @param params SCCP parameters
-     * Note! The data may not contain the full message block previously sent (in case of SCCP segmentation), 
+     * Note! The data may not contain the full message block previously sent (in case of SCCP segmentation),
      * but it must always must contain the first segment
      */
      virtual HandledMSU notifyData(DataBlock& data, NamedList& params);
@@ -7229,7 +7229,7 @@ public:
      */
     virtual bool control(SS7Layer2::Operation oper, NamedList* params = 0)
 	{ return control((M2PAOperations)oper,params); }
-	
+
     /**
      * Retrieve the current link status indications
      * @return Link status indication bits
@@ -8634,7 +8634,7 @@ public:
 
     /**
      * Check if the call is a not test one in early state
-     * @return True if this a non test call in early state 
+     * @return True if this a non test call in early state
      */
     inline bool earlyState() const
 	{ return m_state <= Setup && !m_testCall; }
@@ -9180,7 +9180,7 @@ private:
 	unsigned int count, bool block);
     // Handle circuit(s) event generation command
     bool handleCicEventCommand(const NamedList& p);
-    // Try to start single circuit (un)blocking. Set a pending operation on success 
+    // Try to start single circuit (un)blocking. Set a pending operation on success
     // @param force True to ignore resetting/(un)blocking flags of the circuit
     // Return built message to be sent on success
     SS7MsgISUP* buildCicBlock(SignallingCircuit* cic, bool block, bool force = false);
@@ -9804,7 +9804,7 @@ public:
      */
     inline void removeData()
 	{ m_data = 0; }
-	
+
     /**
      * Obtain the data associated with this message
      * @return The data
@@ -9817,7 +9817,7 @@ public:
      * @return The data
      */
     inline DataBlock* extractData()
-	{ 
+	{
 	    DataBlock* data = m_data;
 	    m_data = 0;
 	    return data;
@@ -10069,7 +10069,7 @@ public:
      */
     inline void stopCoordTimer()
 	{ m_coordTimer.stop(); }
-	
+
     /**
      * Obtain the subsystem multiplicity indicator of this subsystem
      * @return The Subsystem multiplicity indicator
@@ -10573,7 +10573,7 @@ public:
      */
     inline unsigned int translations()
 	{ return m_totalGTTranslations; }
-	
+
     /**
      * Obtain the local SCCP point code
      * @return Pointer to local point code or 0 if no pointcode was configured
@@ -10682,7 +10682,7 @@ private:
     // Helper method used to dump service messages and error codes status
     void dumpArchive(String& msg, bool extended);
 
-    bool processMSU(SS7MsgSCCP::Type type, const unsigned char* paramPtr, 
+    bool processMSU(SS7MsgSCCP::Type type, const unsigned char* paramPtr,
 	    unsigned int paramLen, const SS7Label& label, SS7Layer3* network, int sls);
 
     bool decodeMessage(SS7MsgSCCP* msg, SS7PointCode::Type pcType,
@@ -10742,7 +10742,7 @@ public:
      * Constructor
      * @param params NamedList reference containing information from the SCCP level
      * @param data DataBlock representing the TCAP payload
-     * @param notice Flag if this is a notification, true if it is, false if it's a message 
+     * @param notice Flag if this is a notification, true if it is, false if it's a message
      */
     inline SS7TCAPMessage(NamedList& params, DataBlock& data, bool notice = false)
 	: m_msgParams(params), m_msgData(data), m_notice(notice)
@@ -11172,7 +11172,7 @@ protected:
     unsigned int m_discardMsgs;
     unsigned int m_normalMsgs;
     unsigned int m_abnormalMsgs;
-    
+
     // Subsystem Status
     SCCPManagement::LocalBroadcast m_ssnStatus;
 };
@@ -11301,7 +11301,7 @@ private:
 };
 
 /**
- * Implementation of SS7 Transactional Capabilities Application Part Transaction 
+ * Implementation of SS7 Transactional Capabilities Application Part Transaction
  * @short SS7 TCAP transaction implementation
  */
 class YSIG_API SS7TCAPTransaction : public RefObject, public Mutex
@@ -11585,7 +11585,7 @@ protected:
 };
 
 /**
- * Implementation of SS7 Transactional Capabilities Application Part Component 
+ * Implementation of SS7 Transactional Capabilities Application Part Component
  * @short SS7 TCAP component implementation
  */
 class YSIG_API SS7TCAPComponent : public GenObject
@@ -14555,7 +14555,7 @@ public:
      * @param call The call requesting the operation
      * @param tei The TEI to send with the STATUS message
      * @param cause Value for Cause IE
-     * @param display Optional value for Display IE 
+     * @param display Optional value for Display IE
      * @param diagnostic Optional value for cause diagnostic value
      * @return The result of the operation (true if successfully sent)
      */
@@ -14573,8 +14573,8 @@ public:
      * @param cause Value for Cause IE
      * @param tei TEI to which the release is sent to
      * @param diag Optional hexified string for cause dignostic
-     * @param display Optional value for Display IE 
-     * @param signal Optional value for Signal IE 
+     * @param display Optional value for Display IE
+     * @param signal Optional value for Signal IE
      * @return The result of the operation (true if successfully sent)
      */
     inline bool sendRelease(ISDNQ931Call* call, bool release, const char* cause, u_int8_t tei = 0,
@@ -14735,7 +14735,7 @@ protected:
      * @param tei The TEI to send with the STATUS message
      * @param initiator True if this is from the call initiator
      * @param state The state for CallState IE
-     * @param display Optional value for Display IE 
+     * @param display Optional value for Display IE
      * @param diagnostic Optional value for cause diagnostic value
      * @return The result of the operation (true if successfully sent)
      */
@@ -14752,8 +14752,8 @@ protected:
      * @param initiator The call initiator flag
      * @param cause Value for Cause IE
      * @param diag Optional hexified string for cause dignostic
-     * @param display Optional value for Display IE 
-     * @param signal Optional value for Signal IE 
+     * @param display Optional value for Display IE
+     * @param signal Optional value for Signal IE
      * @return The result of the operation (true if successfully sent)
      */
     bool sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef, u_int8_t tei,

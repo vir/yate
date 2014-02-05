@@ -5,7 +5,7 @@
  * This is the PostgreSQL support from Yate.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -244,7 +244,7 @@ bool PgConn::initDbInternal(int retry)
 			    c_str(),m_account);
 		    }
 		}
-		
+
 	    }
 	    else {
 		fatal = true;
@@ -676,6 +676,7 @@ void PgModule::genUpdate(Message& msg)
     s_conmutex.unlock();
     msg.setParam("count",String(index));
 }
+
 }; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

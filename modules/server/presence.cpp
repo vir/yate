@@ -5,7 +5,7 @@
  * Presence module
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -884,7 +884,7 @@ bool PresenceModule::queryDB(String id, String instance)
 {
     if (TelEngine::null(id))
 	return false;
-    NamedList queryList(""); 
+    NamedList queryList("");
     String query;
     queryList.addParam("contact", id);
     if (TelEngine::null(instance))

@@ -1,10 +1,11 @@
 /**
  * nettest.cpp
- * Network and socket performance test module
  * This file is part of the YATE Project http://YATE.null.ro
  *
+ * Network and socket performance test module
+ *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  * Author: Marian Podgoreanu
  *
  * This software is distributed under multiple licenses;
@@ -384,7 +385,7 @@ bool FDSetSelect::add(int handle, bool read, bool write, bool event)
 
 // Reset all file descriptor sets
 void FDSetSelect::reset()
-{ 
+{
     m_read->reset();
     m_write->reset();
     m_event->reset();

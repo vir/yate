@@ -1,11 +1,11 @@
 /**
  * sccp.cpp
- * This file is part of the YATE Project http://YATE.null.ro 
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Signalling Stack - implements the support for SS7, ISDN and PSTN
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -462,7 +462,7 @@ static bool decodeAnsiAddress(const SS7SCCP* sccp, NamedList& params,const SCCPP
 	    length -= 3;
 	    params.addParam(prName + ".pointcode",String(pointcode));
 	}
-	params.addParam(prName + ".route", ((addressIndicator & 0x40) == 0x40) ? 
+	params.addParam(prName + ".route", ((addressIndicator & 0x40) == 0x40) ?
 		    YSTRING("ssn") : YSTRING("gt"));
 	unsigned char gti = (addressIndicator >> 2) & 0x0f;
 	if (!gti) // No Global Title Present
@@ -1405,7 +1405,7 @@ bool SS7MsgSccpReassemble::canProcess(const SS7MsgSCCP* msg, const SS7Label& lab
 {
     if (!compareLabel(m_label,label))
 	return false;
-    if (m_segmentationLocalReference != 
+    if (m_segmentationLocalReference !=
 	    (u_int32_t)msg->params().getIntValue(YSTRING("Segmentation.SegmentationLocalReference")))
 	return false;
     NamedList address("");
@@ -1665,7 +1665,7 @@ bool SCCPUser::initialize(const NamedList* config)
 	if (!resolveConfig(YSTRING("sccp"),params,config))
 	    params.addParam("local-config","true");
 	// NOTE SS7SCCP is created on demand!!!
-	// engine ->build method will search for the requested sccc and 
+	// engine ->build method will search for the requested sccc and
 	// if it was found will return it with the ref counter incremented
 	// if it wasn't found the refcounter will be 1
 	// For this behavior SCCPUser attach method will not reference the sccp
@@ -2017,7 +2017,7 @@ bool SCCPManagement::managementMessage(SCCP::Type type, NamedList& params)
 {
     if (!m_sccp)
 	return false;
-    return m_sccp->managementMessage(type,params); 
+    return m_sccp->managementMessage(type,params);
 }
 
 void SCCPManagement::putValue(NamedList& params,int val,const char* name, bool dict)
@@ -2042,7 +2042,7 @@ void SCCPManagement::localBroadcast(SCCP::Type type, int pointcode, int sps,
     putValue(params,sps,"signalling-point-status",true);
     putValue(params,ss,"subsystem-status",true);
     putValue(params,rss,"remote-sccp-status",true);
-    m_sccp->managementMessage(type,params); 
+    m_sccp->managementMessage(type,params);
 }
 
 SccpLocalSubsystem* SCCPManagement::getLocalSubsystem(unsigned char ssn)
@@ -3746,7 +3746,7 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label, bool checkLeng
 		} else {
 		    // Do not try to set the pointer to optional parameters
 		    // if is bigger than max unsigned char value because will
-		    // result in a malformed packet! 
+		    // result in a malformed packet!
 		    if (storedLength > 255) {
 			Debug(this,checkLength ? DebugAll : DebugStub,
 			      "Build MSU the pointer to optional parameters is bigger than 255!!!! %d",
@@ -3808,7 +3808,7 @@ HandledMSU SS7SCCP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
     return ok;
 }
 
-bool SS7SCCP::processMSU(SS7MsgSCCP::Type type, const unsigned char* paramPtr, 
+bool SS7SCCP::processMSU(SS7MsgSCCP::Type type, const unsigned char* paramPtr,
 	unsigned int paramLen, const SS7Label& label, SS7Layer3* network, int sls)
 {
     XDebug(this,DebugAll,"SS7SCCP::processMSU(%u,%p,%u,%p,%p,%d) [%p]",
@@ -4367,7 +4367,7 @@ bool SS7SCCP::decodeMessage(SS7MsgSCCP* msg, SS7PointCode::Type pcType,
 void SS7SCCP::receivedUPU(SS7PointCode::Type type, const SS7PointCode node,
 	SS7MSU::Services part, unsigned char cause, const SS7Label& label, int sls)
 {
-    if (part != sif() || !m_management) // not SCCP 
+    if (part != sif() || !m_management) // not SCCP
 	return;
     m_management->sccpUnavailable(node,cause);
 }
@@ -4453,7 +4453,7 @@ void SS7SCCP::setNetworkUp(bool operational)
 	m_management->mtpEndRestart();
     else
 	m_management->stopSSTs();
-	
+
 }
 
 void SS7SCCP::routeStatusChanged(SS7PointCode::Type type, const SS7PointCode& node, SS7Route::State state)

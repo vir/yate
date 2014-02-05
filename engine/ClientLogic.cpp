@@ -5,7 +5,7 @@
  * Default client logic
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -519,7 +519,7 @@ public:
 	    unlock();
 	    return cancelJob(job,false);
 	}
-    // Set contact/instance online 
+    // Set contact/instance online
     virtual bool setOnline(bool online);
     // Cancel all running jobs, clear data
     virtual void cancel();
@@ -4020,7 +4020,7 @@ static bool addTrayIcon(const String& type)
 	    prio = Client::TrayIconNotification;
 	    iconParams->addParam("icon",Client::s_skinPath + "tray_notification.png");
 	    triggerAction = s_actionShowNotification;
-	} 
+	}
 	else {
 	    prio = Client::TrayIconInfo;
 	    iconParams->addParam("icon",Client::s_skinPath + "tray_info.png");
@@ -5190,7 +5190,7 @@ void AccountStatus::init()
     setCurrent(lookup(ClientResource::Online,ClientResource::s_statusName));
 }
 
-// Update 
+// Update
 void AccountStatus::updateUi()
 {
     if (!(s_current && Client::self()))
@@ -5501,7 +5501,7 @@ FtItem::FtItem(FtManager* owner, const String& itemId, const String& acc,
 	m_contactName << "/" << inst;
 }
 
-// Set contact/instance online 
+// Set contact/instance online
 bool FtItem::setOnline(bool online)
 {
     if (m_online == online)
@@ -5592,7 +5592,7 @@ void DownloadBatch::addItem(ClientFileItem& item, const String& path,
     else
 	cancel();
 }
- 
+
 // Timer tick handler
 bool DownloadBatch::timerTick(const Time& time)
 {
@@ -5765,7 +5765,7 @@ bool DownloadBatch::handleFileInfoRsp(const String& oper, NamedList& msg)
     return true;
 }
 
-// Set contact/instance online 
+// Set contact/instance online
 bool DownloadBatch::setOnline(bool online)
 {
     Lock lck(this);
@@ -5902,7 +5902,7 @@ void DownloadBatch::addItemName(ClientFileItem& item, const String& path,
     else
 	addFileUnsafe(p,ip,file->params());
 }
- 
+
 // Add a shared file
 void DownloadBatch::addFileUnsafe(const String& localPath, const String& downloadPath,
     const NamedList& params)
@@ -6429,7 +6429,7 @@ FTManagerTimer::FTManagerTimer(FtManager* owner)
     m_owner(owner)
 {
 }
-    
+
 FTManagerTimer::~FTManagerTimer()
 {
     notify();
@@ -7050,9 +7050,9 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     bool showMsgs = (name == YSTRING("messages_show") || name == s_actionShowNotification ||
 	name == s_actionShowInfo);
     if (showMsgs || name == YSTRING("messages_close")) {
-	bool notif = (name == s_actionShowNotification); 
+	bool notif = (name == s_actionShowNotification);
 	if (notif || name == s_actionShowInfo) {
-	    removeTrayIcon(notif ? YSTRING("notification") : YSTRING("info")); 
+	    removeTrayIcon(notif ? YSTRING("notification") : YSTRING("info"));
 	    if (wnd && Client::valid())
 		Client::self()->setVisible(wnd->id(),true,true);
 	}
@@ -7729,7 +7729,7 @@ bool DefaultLogic::validateCall(NamedList& params, Window* wnd)
 bool DefaultLogic::callStart(NamedList& params, Window* wnd, const String& cmd)
 {
     if (!(Client::self() && fillCallStart(params,wnd)))
-	return false;    
+	return false;
     if (!validateCall(params,wnd))
 	return false;
     String target;

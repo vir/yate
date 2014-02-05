@@ -5,7 +5,7 @@
  * On hold (music) generator
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -19,13 +19,13 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/** 
- * Hybrid of tonegen and extmodule. Module for playing music from external 
- * processes. Data is read from shell processes started by commands defined 
- * in configuration file. Data sources based on external processes are 
- * shared by DataEndpoints so number of external processes is limited 
+/**
+ * Hybrid of tonegen and extmodule. Module for playing music from external
+ * processes. Data is read from shell processes started by commands defined
+ * in configuration file. Data sources based on external processes are
+ * shared by DataEndpoints so number of external processes is limited
  * by number of entries in configuration file.
- * Compiled from tonegen.cpp and extmodule.cpp 
+ * Compiled from tonegen.cpp and extmodule.cpp
  * by Maciek Kaminski (maciejka_at_tiger.com.pl)
  */
 
@@ -217,7 +217,7 @@ bool MOHSource::create()
 	/* Close stdin */
 	//::close(STDIN_FILENO);
 	/* Close everything but stdin/out/ */
-	for (x=STDERR_FILENO+1;x<1024;x++) 
+	for (x=STDERR_FILENO+1;x<1024;x++)
 	    ::close(x);
 	/* Execute script */
 	if (debugAt(DebugInfo))

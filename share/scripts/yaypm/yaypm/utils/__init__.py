@@ -2,9 +2,9 @@
 # -*- coding: iso-8859-2; -*-
 """
  Utils module for YAYPM
- 
+
  Copyright (C) 2005 Maciek Kaminski
- 
+
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation; either version 2 of the License, or
@@ -32,10 +32,10 @@ def sleep(time, until = None):
     def canceller(*args):
         if later and later.active:
             later.cancel()
-                
+
     d = CancellableDeferred(canceller)
     later = reactor.callLater(time, d.callback, None)
-    
+
     if until:
         def until_callback(m):
             if later.active():
@@ -60,17 +60,17 @@ def setup(start, args = [], kwargs = {},
 
     if embedded:
         yaypm.embeddedStart(start, args, kwargs)
-        if defaultLogging:        
+        if defaultLogging:
             hdlr = YateLogHandler()
-            formatter = ConsoleFormatter('%(message)s')                                
-        
+            formatter = ConsoleFormatter('%(message)s')
+
     else:
         reactor.connectTCP(host, port,
             TCPDispatcherFactory(start, args, kwargs))
 
         if defaultLogging:
             hdlr = logging.StreamHandler()
-            formatter = ConsoleFormatter('%(name)s %(levelname)s %(message)s')                                
+            formatter = ConsoleFormatter('%(name)s %(levelname)s %(message)s')
 
     if defaultLogging:
         hdlr.setFormatter(formatter)
@@ -85,7 +85,7 @@ def setup(start, args = [], kwargs = {},
     if not embedded and runreactor:
         reactor.run()
 
-    
+
 class XOR(CancellableDeferred):
     def __init__(self, *deferreds):
         defer.Deferred.__init__(self)
@@ -123,7 +123,7 @@ class OR(CancellableDeferred):
         self.done = False
         self.errors = 0
         self.patient = kwargs.get("patient", True)
-        
+
         index = 0
         for deferred in deferreds:
             deferred.addCallbacks(self._callback, self._callback,
@@ -141,7 +141,7 @@ class OR(CancellableDeferred):
 
         if succeeded:
             self.callback((index, result))
-            self.done = True            
+            self.done = True
         else:
             if self.patient:
                 self.errors = self.errors + 1
@@ -149,8 +149,8 @@ class OR(CancellableDeferred):
                     self.done = True
                     self.errback(result)
             else:
-                self.done = True                
-                self.errback(result)                
+                self.done = True
+                self.errback(result)
         return None
 
 
@@ -159,10 +159,10 @@ class RestrictedDispatcher:
     def __init__(self, parent, restriction):
         self.parent = parent
         self.restriction = restriction
-   
+
     def msg(self, name, attrs = None, retValue = None):
         return self.parent.msg(name, attrs, retValue)
-    
+
     def onmsg(self, name, guard = lambda _: True,
               until = None, autoreturn = False):
         if until:
@@ -170,7 +170,7 @@ class RestrictedDispatcher:
             d = until
         else:
             d = self.restriction
-            
+
         return self.parent.onmsg(name, guard, d, autoreturn)
 
     def onwatch(self, name, guard = lambda _: True, until = None):
@@ -182,25 +182,25 @@ class ConsoleFormatter(logging.Formatter) :
       "DEBUG": "\033[22;32m", "INFO": "\033[01;34m",
       "WARNING": "\033[22;35m", "ERROR": "\033[22;31m",
       "CRITICAL": "\033[01;31m"
-     };    
+     };
     def __init__(self,
                  fmt = '%(name)s %(levelname)s %(message)s',
                  datefmt=None):
         logging.Formatter.__init__(self, fmt, datefmt)
-        
+
     def format(self, record):
         if(ConsoleFormatter._level_colors.has_key(record.levelname)):
             record.levelname = "%s%s\033[0;0m" % \
                             (ConsoleFormatter._level_colors[record.levelname],
                              record.levelname)
         record.name = "\033[37m\033[1m%s\033[0;0m" % record.name
-        return logging.Formatter.format(self, record)    
+        return logging.Formatter.format(self, record)
 
 
 class OutgoingCallException(Exception):
     """
     Raised when deferred is abandoned by until condition.
-    
+
     """
     def __init__(self, cause):
         Exception.__init__(self, cause)
@@ -211,7 +211,7 @@ def formatReason(msg):
     if msg["code"]:
         reason += "(%s)" % msg["code"]
     return reason
-            
+
 @defer.inlineCallbacks
 def outgoing(yate, target, maxcall = 30*1000,
              callto = "dumb/", formats = None,
@@ -233,7 +233,7 @@ def outgoing(yate, target, maxcall = 30*1000,
         attrs["formats_audio"] = formats
 
     execute = yate.msg("call.execute", attrs)
-    
+
     if not (yield execute.dispatch()):
         raise OutgoingCallException(formatReason(execute))
 
@@ -266,10 +266,10 @@ def outgoing(yate, target, maxcall = 30*1000,
     answered.addErrback(trapAbandoned)
 
     if logger.isEnabledFor(logging.DEBUG):
-        def logAnswered(msg):                
+        def logAnswered(msg):
             logger.debug("Answered: %s, %s", answered["id"], answered["targetid"])
             return msg
-        
+
     if retCallIdFast:
         defer.returnValue((execute["targetid"], execute["id"],
                            end,
@@ -280,7 +280,7 @@ def outgoing(yate, target, maxcall = 30*1000,
 
         answered = yield answered
 
-        defer.returnValue((answered["targetid"], answered["id"], end))        
+        defer.returnValue((answered["targetid"], answered["id"], end))
 
 
 ## @defer.inlineCallbacks
@@ -292,7 +292,7 @@ def outgoing(yate, target, maxcall = 30*1000,
 
 ##     if sync:
 ##         m["notify"] =  callid
-        
+
 ##     yate.msg("chan.masquerade", m).enqueue()
 
 ##     end = yate.onwatch("chan.hangup",
@@ -301,17 +301,17 @@ def outgoing(yate, target, maxcall = 30*1000,
 ##     if sync:
 ##         yield yate.onmsg("chan.notify",
 ##                          lambda m : m["targetid"] == callid,
-##                          autoreturn = True, until = end)       
+##                          autoreturn = True, until = end)
 
 ## @defer.inlineCallbacks
 ## def record(yate, callid, fileName, maxlen = 100000):
-##         yate.msg("chan.masquerade",        
+##         yate.msg("chan.masquerade",
 ##                  {"message": "chan.attach",
-##                   "id": callid,            
+##                   "id": callid,
 ##                   "consumer": "wave/record/" + fileName,
 ##                     "maxlen": maxlen,
 ##                     "notify": callid}).enqueue()
-        
+
 ##         yield yate.onmsg("chan.notify",
 ##                          lambda m : m["targetid"] == callid,
-##                          autoreturn = True)       
+##                          autoreturn = True)

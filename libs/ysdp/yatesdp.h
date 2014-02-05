@@ -1,11 +1,11 @@
-/*
+/**
  * yatesdp.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * SDP media handling
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -45,7 +45,7 @@
 #define YSDP_API
 #endif
 
-/** 
+/**
  * Holds all Telephony Engine related classes.
  */
 namespace TelEngine {
@@ -616,7 +616,7 @@ protected:
     virtual void dispatchingRtp(Message*& msg, SDPMedia* media);
 
     /**
-     * Set data used in debug 
+     * Set data used in debug
      * @param enabler The DebugEnabler to use (0 to to use the parser)
      * @param ptr Pointer to print, 0 to use the session pointer
      */

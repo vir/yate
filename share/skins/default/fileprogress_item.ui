@@ -112,7 +112,7 @@ p, li { white-space: pre-wrap; }
 }
 
 QProgressBar {
-	border: 1px solid darkblue; 
+	border: 1px solid darkblue;
 	border-radius: 3px;
 	color: darkgreen;
 	background-color: lightblue;

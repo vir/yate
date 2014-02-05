@@ -4,8 +4,8 @@
  flow.py
 
  Flow submodule for YAYPM.
- 
- Copyright (C) 2005 Maciek Kaminski 
+
+ Copyright (C) 2005 Maciek Kaminski
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -41,9 +41,9 @@ class Result:
     def __init__(self, result = None, failure = None):
         self.result = result
         self.failure = failure
-    
+
     def getResult(self):
-        current_result = None                    
+        current_result = None
         if self.failure:
             if self.failure.value:
                 raise self.failure.value
@@ -53,12 +53,12 @@ class Result:
             return self.result
 
 def getResult():
-    global current_result    
+    global current_result
     if current_result:
         return current_result.getResult()
     else:
         None
-        
+
 class Flow:
     def step(self):
         d = None
@@ -73,13 +73,13 @@ class Flow:
         except StopIteration:
             if d:
                 self.return_with.callback(d)
-            self.return_with.callback(None)       
-    
+            self.return_with.callback(None)
+
     def __init__(self, fun_todo, return_with):
         self.fun_todo = fun_todo
         self.return_with = return_with
         global current_result
-        current_result = None        
+        current_result = None
         self.step()
 
     def callback(self, result):

@@ -22,7 +22,7 @@ def blind_transfer(yate, callid, targetid, transferto, returnto):
     try:
         yate.msg(
             "chan.masquerade",
-            {"message" : "call.execute",                
+            {"message" : "call.execute",
              "id": targetid, "callto": transferto}).enqueue()
 
         end = yate.onmsg(
@@ -45,7 +45,7 @@ def blind_transfer(yate, callid, targetid, transferto, returnto):
 
         if what == 0:
             logger.debug("Blind transfer to: %s done" % transferto)
-            m.ret(False)    
+            m.ret(False)
             return
         else:
             logger.debug(
@@ -61,14 +61,14 @@ def blind_transfer(yate, callid, targetid, transferto, returnto):
                 logger.debug("Can't return to: %s" % returnto)
                 m.ret(False)
                 return
-            
+
             yate.msg("chan.masquerade",
-                     {"message" : "call.execute",                
+                     {"message" : "call.execute",
                       "id": m["id"],
                       "callto": route.getRetValue(),
                       "called": returnto}).enqueue()
             yate.ret(m, True)
-            
+
     except AbandonedException, e:
         logger.debug(
             "Blind transfer to: %s failed. Peer has disconnected" % \
@@ -79,7 +79,7 @@ def supervised_transfer(yate, callid, targetid, transferto, returnto):
 
 def pbx(yate, callid, targetid, callto, called):
     # Pbx function provides dtmf interface to pbx functions
-    
+
     logger.debug("Pbx for %s, %s  started" % (callto, callid))
     try:
         # run until hangup:
@@ -90,8 +90,8 @@ def pbx(yate, callid, targetid, callto, called):
 
         while True:
             last_time = time.time()
-            ext = ""        
-            while True:            
+            ext = ""
+            while True:
                 yield yate.onmsg(
                     "chan.dtmf",
                     lambda m : m["id"] == callid,
@@ -104,18 +104,18 @@ def pbx(yate, callid, targetid, callto, called):
                 if last_time - current_time > 3:
                     ext = text
                 else:
-                    # * or # initializes transfer                    
+                    # * or # initializes transfer
                     if text in ["#", "*"]:
                         break
                     else:
                         ext += text
-                       
+
             # Let routing module resolve the extension
 
             route = yate.msg("call.route",
                      {"called": ext})
             yield route.dispatch()
-            
+
             if not getResult():
                 # Abandon transfer in case of bad extension
                 logger.debug(
@@ -138,18 +138,18 @@ def pbx(yate, callid, targetid, callto, called):
         logger.debug("Pbx for %s finished" % callid)
     except AbandonedException, e:
         logger.debug("Pbx for %s abandoned" % callid)
-      
+
 
 def main(yate, called):
     # Main function will start pbx function for connections comming to a
-    # given extension. 
+    # given extension.
 
-    logger.debug("Watching for calls to: %s" % called)    
+    logger.debug("Watching for calls to: %s" % called)
 
     while True:
         # Notice that message watches have to be used here to get
 	# call.execute attributes after message is handled:
-   
+
         yield yate.onwatch("call.execute", lambda m : m["called"] == called)
         execute = getResult()
 
@@ -173,10 +173,10 @@ if __name__ == '__main__':
 
        yaypm.logger.addHandler(hdlr)
        #yaypm.logger.setLevel(logging.DEBUG)
-       yaypm.flow.logger_flow.setLevel(logging.DEBUG)       
+       yaypm.flow.logger_flow.setLevel(logging.DEBUG)
        #yaypm.logger_messages.setLevel(logging.DEBUG)
        yaypm.logger_messages.setLevel(logging.INFO)
-       
+
        logger.setLevel(logging.DEBUG)
        logger.addHandler(hdlr)
 

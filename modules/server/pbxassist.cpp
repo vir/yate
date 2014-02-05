@@ -5,7 +5,7 @@
  * PBX assist module
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  * Author: Monica Tepelus
  *
  * This software is distributed under multiple licenses;

@@ -941,7 +941,7 @@ currentASR OBJECT-TYPE
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
-		"The ASR value for the configured time interval. A value of -1 means that there haven't been 
+		"The ASR value for the configured time interval. A value of -1 means that there haven't been
 		    calls in order to compute the ASR value."
 	::= { asrData 3 }
 
@@ -950,7 +950,7 @@ overallASR OBJECT-TYPE
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
-		"The ASR value since YATE started. A value of -1 means that there haven't been 
+		"The ASR value since YATE started. A value of -1 means that there haven't been
 		    calls in order to compute the ASR value."
 	::= { asrData 4 }
 
@@ -1015,7 +1015,7 @@ currentNER OBJECT-TYPE
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
-		"The NER value for the configured time interval. A value of -1 means that there haven't been 
+		"The NER value for the configured time interval. A value of -1 means that there haven't been
 		    calls in order to compute the NER value."
 	::= { nerData 2 }
 
@@ -1024,7 +1024,7 @@ overallNER OBJECT-TYPE
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
-		"The NER value since YATE started. A value of -1 means that there haven't been 
+		"The NER value since YATE started. A value of -1 means that there haven't been
 		    calls in order to compute the NER value."
 	::= { nerData 3 }
 

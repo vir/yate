@@ -4,9 +4,9 @@
  Tester module for YAYPM. Generates calls, and allows to define incall
  activity like sending DTMFs. Can be run on two separate yates to imitate
  realistic load.
- 
+
  Copyright (C) 2005 Maciek Kaminski
- 
+
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation; either version 2 of the License, or
@@ -38,8 +38,8 @@ class peep:
         self.peep = None
 
     def __iter__(self):
-        return self            
-        
+        return self
+
     def next(self):
         if self.peep:
             tmp = self.peep
@@ -49,8 +49,8 @@ class peep:
             return self.g.next()
 
     def back(self, v):
-        self.peep = v      
-    
+        self.peep = v
+
 
 def tokenize(text):
     a = ""
@@ -82,7 +82,7 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
 
     end = [server_yate.onwatch("chan.hangup", lambda m : m["id"] == remoteid)]
     ignore_hangup = [False]
-    
+
     def one_step(step):
         if "c:" in step or "s:" in step:
             media = step.split("|")
@@ -107,9 +107,9 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
             return
 
         elif "?" in step:
-            i = step.find("?")            
+            i = step.find("?")
             check = step[:i]
-                
+
             timeout = None
             if len(step) > i + 1:
                 timeout = int(step[i+1:])
@@ -140,7 +140,7 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
             else:
                 logger.debug(
                     "[%d] Waiting for checkpoint: '%s' on: %s" % \
-                        (testid, check, remoteid))                
+                        (testid, check, remoteid))
                 yield check_def
                 getResult()
         elif "!" in step:
@@ -160,7 +160,7 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
             timeout = int(step[1:])
             ignore_hangup[0] = True
             logger.debug("[%d] Waiting for 'end' checkpoint after hangup for: %d s." % (testid, timeout))
-            yield OR(end[0], sleep(timeout), patient = False)            
+            yield OR(end[0], sleep(timeout), patient = False)
             getResult()
             raise AbandonedException("Timeout while waiting for end.")
         else:
@@ -173,8 +173,8 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
             logger.debug("[%d] Sleeping for: %d s." % (testid, t))
             yield OR(end[0], sleep(t), patient = False)
             getResult()
-        
-    
+
+
     def parse(toparse):
         last = None
         for t in toparse:
@@ -203,12 +203,12 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
         if last:
             return last
         else:
-            return None  
+            return None
 
     try:
         yield go(parse(peep(tokenize(test))))
         getResult()
-        
+
         yield sleep(0.1)
         getResult()
     except Exception, e:
@@ -224,8 +224,8 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
                 until = sleep(1))
             getResult()
             logger.debug("[%d] call %s finished" % (testid, callid))
-            return           
-            
+            return
+
         yield d
         getResult()
 
@@ -233,10 +233,10 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
 
         raise e
 
-    logger.debug("[%d] dropping: %s" % (testid, callid))        
+    logger.debug("[%d] dropping: %s" % (testid, callid))
     yield client_yate.msg("call.drop", {"id": callid}).dispatch()
     getResult()
     yield server_yate.msg("call.drop", {"id": remoteid}).dispatch()
-    getResult()        
+    getResult()
 
     logger.debug("[%d] call %s finished" % (testid, callid))

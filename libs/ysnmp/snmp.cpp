@@ -56,7 +56,7 @@ ObjectSyntax::ObjectSyntax(void* data, int len)
 {
 	m_simple = new SimpleSyntax();
 	m_application_wide = new ApplicationSyntax();
-	
+
 	DataBlock db(data,len);
 	decode(db);
 }
@@ -195,7 +195,7 @@ ApplicationSyntax::ApplicationSyntax(void* data, int len)
 	m_arbitrary_value = new Opaque();
 	m_big_counter_value = new Counter64();
 	m_unsigned_integer_value = new Unsigned32();
-	
+
 	DataBlock db(data,len);
 	decode(db);
 }
@@ -450,7 +450,7 @@ Gauge32::Gauge32()
 Gauge32::Gauge32(void* data, int len)
 {
 	m_Gauge32 = new Unsigned32();
-	
+
 	DataBlock db(data,len);
 	decode(db);
 }
@@ -666,7 +666,7 @@ PDUs::PDUs(void* data, int len)
 	m_inform_request = new InformRequest_PDU();
 	m_snmpV2_trap = new SNMPv2_Trap_PDU();
 	m_report = new Report_PDU();
-	
+
 	DataBlock db(data,len);
 	decode(db);
 }

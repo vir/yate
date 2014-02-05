@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -40,7 +40,7 @@
 #define YMGCP_API
 #endif
 
-/** 
+/**
  * Holds all Telephony Engine related classes.
  */
 namespace TelEngine {
@@ -54,7 +54,7 @@ class MGCPEngine;
 
 /**
  * This class holds an MGCP message, either command or response, along with
- *  its parameters. The 
+ *  its parameters. The
  * @short An MGCP command or response
  */
 class YMGCP_API MGCPMessage : public RefObject

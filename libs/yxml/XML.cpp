@@ -1,9 +1,9 @@
 /**
  * XML.cpp
- * This file is part of the YATE Project http://YATE.null.ro 
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -567,7 +567,7 @@ bool XmlSaxParser::parseComment()
 #endif
 	    gotComment(comment);
 	    resetParsed();
-	    // The comment can apear anywhere sow SaxParser never 
+	    // The comment can apear anywhere sow SaxParser never
 	    // sets an error when receive a comment
 	    return true;
 	}
@@ -577,7 +577,7 @@ bool XmlSaxParser::parseComment()
     comment << m_buf;
     int length = comment.length();
     // Keep the last 2 charaters in buffer because if the input buffer ends
-    // between "--" and ">" 
+    // between "--" and ">"
     m_buf = comment.substr(length - 2);
     setUnparsed(Comment);
     if (length > 1)
@@ -1864,7 +1864,7 @@ bool XmlElement::getTag(const String*& tag, const String*& ns) const
 // Append a new child
 XmlSaxParser::Error XmlElement::addChild(XmlChild* child)
 {
-    if (!child) 
+    if (!child)
 	return XmlSaxParser::NoError;
     // TODO: Check if a child element's attribute names are unique in the new context
     //       See http://www.w3.org/TR/xml-names/ Section 6.3

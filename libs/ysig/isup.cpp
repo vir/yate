@@ -1,11 +1,11 @@
 /**
  * isup.cpp
- * This file is part of the YATE Project http://YATE.null.ro 
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Signalling Stack - implements the support for SS7, ISDN and PSTN
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -3914,7 +3914,7 @@ void SS7ISUP::timerTick(const Time& when)
 	    if (ok) {
 		unsigned int nCics = 0;
 		int flg = 0;
-		int flgReset = 0; 
+		int flgReset = 0;
 		if ((msg->params()[YSTRING("GroupSupervisionTypeIndicator")] == YSTRING("hw-failure"))) {
 		    flg = SignallingCircuit::LockLocalHWFail;
 		    flgReset = SignallingCircuit::LockingHWFail;
@@ -4772,7 +4772,7 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
     // TODO: check parameters-unsupported vs. ParameterCompatInformation
 
     // Check if we expected some response to UPT
-    // Ignore 
+    // Ignore
     if (!m_userPartAvail && m_uptTimer.started()) {
 	m_uptTimer.stop();
 	const char* oldStat = statusName();
@@ -6105,7 +6105,7 @@ bool SS7ISUP::handleCicEventCommand(const NamedList& p)
     return true;
 }
 
-// Try to start single circuit (un)blocking. Set a pending operation on success 
+// Try to start single circuit (un)blocking. Set a pending operation on success
 // @param force True to ignore resetting/(un)blocking flags of the circuit
 // Return built message to be sent on success
 SS7MsgISUP* SS7ISUP::buildCicBlock(SignallingCircuit* cic, bool block, bool force)

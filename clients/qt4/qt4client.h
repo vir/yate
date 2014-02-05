@@ -5,7 +5,7 @@
  * A Qt-4 based universal telephony client
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -35,7 +35,7 @@
 #endif
 
 #endif /* _WINDOWS */
-                                          
+
 #ifndef YQT4_API
 #define YQT4_API
 #endif
@@ -191,7 +191,7 @@ public:
      * Destructor
      */
     ~QtUrlBuilder();
-    
+
     /**
      * Build URL
      * @param params URL params
@@ -466,7 +466,7 @@ public:
     /**
      * Build a menu object from a list of parameters.
      * Each menu item is indicated by a parameter starting with 'item:".
-     * item:menu_name=Menu Text will create a menu item named 'menu_name' with 
+     * item:menu_name=Menu Text will create a menu item named 'menu_name' with
      *  'Menu Text' as display name.
      * If the item parameter is a NamedPointer a submenu will be created.
      * Menu actions properties can be set from parameters with format:
@@ -641,9 +641,9 @@ public:
     static void applyWindowFlags(QWidget* w, const String& value);
 
     /**
-     * Build a QT Alignment mask from a comma separated list of flags 
+     * Build a QT Alignment mask from a comma separated list of flags
      * @param flags The flags list
-     * @param initVal Initial value for the returned mask 
+     * @param initVal Initial value for the returned mask
      * @return QT Alignment mask
      */
     static int str2align(const String& flags, int initVal = 0);
@@ -824,7 +824,7 @@ public:
      * @param atStart True to insert, false to append
      * @return True on success
      */
-    virtual bool addLines(const String& name, const NamedList* lines, unsigned int max, 
+    virtual bool addLines(const String& name, const NamedList* lines, unsigned int max,
 	bool atStart = false);
 
     virtual bool addTableRow(const String& name, const String& item, const NamedList* data = 0, bool atStart = false);
@@ -1002,7 +1002,7 @@ public:
      * @param parent The widget holding the loaded widget's contents
      * @param uiName The loaded widget's name (used for debug)
      * @param path Optional fileName path. Set to 0 to use the default one
-     * @return QWidget pointer or 0 on failure 
+     * @return QWidget pointer or 0 on failure
      */
     static QWidget* loadUI(const char* fileName, QWidget* parent,
 	const char* uiName, const char* path = 0);
@@ -1012,7 +1012,7 @@ public:
      * @param fileName Optional UI filename to clear. Clear all if 0
      */
     static void clearUICache(const char* fileName = 0);
-    
+
     /**
      * Retrieve the parent window
      * @return QtWindow pointer or 0
@@ -1489,7 +1489,7 @@ public:
      */
     static inline void setListItemProp(QObject* obj, const QString& item)
 	{ obj->setProperty("_yate_widgetlistitem",QVariant(item)); }
-	
+
     /**
      * Retrieve the list item property from an item's child object
      * @param obj The object
@@ -1999,7 +1999,7 @@ public:
     virtual void reset();
 
 protected:
-    int m_acceptOnEmpty;                 // Accept drop on widget surface not occupied by any item 
+    int m_acceptOnEmpty;                 // Accept drop on widget surface not occupied by any item
     ObjList m_acceptItemTypes;           // Item type to handle drop
 };
 

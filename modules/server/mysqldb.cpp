@@ -5,7 +5,7 @@
  * This is the MySQL support from Yate.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -198,7 +198,7 @@ public:
     virtual bool received(Message& msg, int id);
     InitThread* m_initThread;
     inline void startInitThread()
-    { 
+    {
 	lock();
 	if (!m_initThread)
 	    (m_initThread = new InitThread())->startup();
@@ -234,7 +234,7 @@ public:
     inline bool finished()
 	{ return m_finished; }
 
-    inline void setFinished() 
+    inline void setFinished()
 	{ m_finished = true;
 	  if (!m_msg)
 	      destruct();
@@ -453,7 +453,7 @@ MyAcct::MyAcct(const NamedList* sect)
 
     Debug(&module, DebugNote, "For account '%s' connection pool size is %d",
 	c_str(),m_poolSize);
-    
+
     m_retryTime = sect->getIntValue("initretry",10); // default value is 10 seconds
     setRetryWhen(); // set retry interval
 }
@@ -469,12 +469,12 @@ MyAcct::~MyAcct()
 int MyAcct::initConns()
 {
     int count = m_connections.count();
-    
+
     DDebug(&module,DebugInfo,"MyAcct::initConns() - %d connections initialized already, pool required is of %d connections for '%s'",
 	count,m_poolSize,c_str());
     // set new retry interval
     setRetryWhen();
-    
+
     for (int i = count; i < m_poolSize; i++) {
 	MyConn* mySqlConn = new MyConn(toString() + "." + String(i), this);
 

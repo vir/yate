@@ -3,7 +3,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -1012,7 +1012,7 @@ void Client::cleanup()
     Engine::dispatch(m);
     TelEngine::destruct(m_defaultLogic);
     exitClient();
-    
+
     for (ObjList* o = m_relays.skipNull(); o; o = o->skipNext())
 	Engine::uninstall(static_cast<MessageRelay*>(o->get()));
     m_relays.clear();
@@ -6233,7 +6233,7 @@ ClientFileItem* ClientDir::findChild(const String& path, const char* sep)
 // NamedInt
 //
 // Add an item to a list. Replace existing item with the same name
-void NamedInt::addToListUniqueName(ObjList& list, NamedInt* obj) 
+void NamedInt::addToListUniqueName(ObjList& list, NamedInt* obj)
 {
     if (!obj)
 	return;
@@ -6250,7 +6250,7 @@ void NamedInt::addToListUniqueName(ObjList& list, NamedInt* obj)
 }
 
 // Clear all items with a given value
-void NamedInt::clearValue(ObjList& list, int val) 
+void NamedInt::clearValue(ObjList& list, int val)
 {
     for (ObjList* o = list.skipNull(); o;) {
 	NamedInt* ni = static_cast<NamedInt*>(o->get());

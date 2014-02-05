@@ -560,28 +560,22 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
     }
     else if (oper.name() == YSTRING("pop")) {
 	// Removes the last element from an array and returns that element
-
-	// TODO: fix it, it's broken for non-strings
-	if (m_length < 1)
-	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
-
+	if (oper.number())
+	    return false;
 	NamedString* last = 0;
-	while (!last) {
+	while ((m_length > 0) && !last)
 	    last = params().getParam(String(--m_length));
-	    if (m_length == 0)
-		break;
-	}
 	if (!last)
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
 	else {
-	    ExpWrapper* w = YOBJECT(ExpWrapper,last);
-	    if (!w)
-		ExpEvaluator::pushOne(stack,new ExpOperation(*last));
-	    else
-		ExpEvaluator::pushOne(stack,w->clone(w->name()));
+	    params().paramList()->remove(last,false);
+	    ExpOperation* op = YOBJECT(ExpOperation,last);
+	    if (!op) {
+		op = new ExpOperation(*last,0,true);
+		TelEngine::destruct(last);
+	    }
+	    ExpEvaluator::pushOne(stack,op);
 	}
-	// clear last
-	params().clearParam(last);
     }
     else if (oper.name() == YSTRING("concat")) {
 	// Returns a new array comprised of this array joined with other array(s) and/or value(s).
@@ -711,23 +705,21 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// myFish after: ["drum", "lion", "angel", "clown"]
 	// New length: 4
 	// shift array
-
-	// TODO: fix it, it's broken for non-strings
 	int32_t shift = (int32_t)oper.number();
-	for (int32_t i = length(); i; i--)
-	    params().setParam(String(i - 1 + shift),params().getValue(String(i - 1)));
-	for (int32_t i = shift; i; i--) {
+	for (int32_t i = length() + shift - 1; i >= shift; i--) {
+	    NamedString* ns = static_cast<NamedString*>((*params().paramList())[String(i - shift)]);
+	    if (ns) {
+		String index(i);
+		params().clearParam(index);
+		const_cast<String&>(ns->name()) = index;
+	    }
+	}
+	for (int32_t i = shift - 1; i >= 0; i--) {
 	    ExpOperation* op = popValue(stack,context);
-	    ExpWrapper* obj = YOBJECT(ExpWrapper,op);
-	    if (!obj)
+	    if (!op)
 		continue;
-	    JsObject* jo = (JsObject*)obj->getObject(YATOM("JsObject"));
-	    if (!jo)
-		continue;
-	    jo->ref();
-	    params().clearParam(String(i - 1));
-	    params().setParam(new NamedPointer(String(i - 1),jo));
-	    TelEngine::destruct(op);
+	    const_cast<String&>(op->name()) = i;
+	    params().paramList()->insert(op);
 	}
 	setLength(length() + shift);
 	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)length()));

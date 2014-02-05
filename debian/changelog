@@ -1,4 +1,4 @@
-yate (5.0.1~svn5752) UNRELEASED; urgency=low
+yate (5.0.1~svn5758) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -983,8 +983,17 @@ yate (5.0.1~svn5752) UNRELEASED; urgency=low
     selected contact when handling call action from address book.
   * Updated to SVN revision 5752: + Added support for counting allocated
     objects for memory leaks troubleshooting.
+  * Updated to SVN revision 5758: + Add new line and vi settings at the
+    end of file.  + Fixed compilation warnings.  + Added SVN ignore
+    propery to ygsm.  + Fixed end of lines in many files.  + Updated
+    copyright notices for 2014.  + Added copyright notices to sources
+    and scripts missing them.  + Fixed copyright notice which had a
+    different structure and was altered by script.  + Marked pop(),
+    concat(), reverse(), unshift() in need of fixing.  + Fixed JS
+    Array.shift(), was breaking non-string values.  + Fixed JS
+    Array.pop() and unshift()
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 05 Feb 2014 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 06 Feb 2014 02:19:24 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

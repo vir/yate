@@ -5,7 +5,7 @@
  * Module for SNMP protocol agent
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -165,7 +165,7 @@ private:
     SocketAddr m_from;
 };
 
-class SnmpUser : public GenObject 
+class SnmpUser : public GenObject
 {
 public:
     // enum for authentication and privacy encryption
@@ -739,7 +739,7 @@ AsnMib* AsnMibTree::find(const ASNObjId& id)
     while (cycles < 2) {
  	ObjList* n = m_mibs.find(value);
 	searched = n ? static_cast<AsnMib*>(n->get()) : 0;
-	if (searched) {	    
+	if (searched) {
 	    searched->setIndex(index);
 	    return searched;
 	}
@@ -1203,7 +1203,7 @@ void SnmpUser::generateAuthInfo()
 {
     if (TelEngine::null(m_authPassword))
 	return;
-	
+
     m_authKey = generateAuthKey(m_authPassword);
     m_k1.clear();
     m_k2.clear();
@@ -1283,7 +1283,7 @@ int SnmpV3MsgContainer::prepareForSend(Snmp::SNMPv3Message& msg)
     if (!msg.m_msgGlobalData)
 	return SnmpAgent::MESSAGE_DROP;
     msg.m_msgGlobalData->m_msgFlags.assign(&msgFlags,sizeof(msgFlags));
-    
+
     // make sure auth and encrypt parameters are empty
     m_security.m_msgPrivacyParameters.clear();
     m_security.m_msgAuthenticationParameters.clear();
@@ -1321,7 +1321,7 @@ int SnmpV3MsgContainer::generateTooBigMsg(Snmp::SNMPv3Message& msg)
 {
     Debug(&__plugin,DebugInfo,"SnmpV3MsgContainer::generateTooBigMsg() [%p]",this);
     if (!m_scopedPdu)
-	return SnmpAgent::MESSAGE_DROP;    
+	return SnmpAgent::MESSAGE_DROP;
     DataBlock data = m_scopedPdu->m_data;
     Snmp::PDUs pdus;
     pdus.decode(data);
@@ -1331,7 +1331,7 @@ int SnmpV3MsgContainer::generateTooBigMsg(Snmp::SNMPv3Message& msg)
     pdu->m_error_status = Snmp::PDU::s_tooBig_error_status;
     pdu->m_error_index = 0;
     if (!pdu->m_variable_bindings)
-	pdu->m_variable_bindings = new Snmp::VarBindList();	
+	pdu->m_variable_bindings = new Snmp::VarBindList();
     pdu->m_variable_bindings->m_list.clear();
     data.clear();
     pdus.encode(data);
@@ -1356,7 +1356,7 @@ int SnmpV3MsgContainer::processHeader(Snmp::SNMPv3Message& msg)
     m_msgMaxSize = header->m_msgMaxSize;
     // * msgFlags
     u_int8_t msgFlags = (u_int8_t)(header->m_msgFlags.length() == 1 ? header->m_msgFlags[0] : 0);
-    
+
     // get the message flags
     m_reportFlag = ((msgFlags &  REPORT_FLAG) == 0x0 ? false : true);
     m_privFlag = ((msgFlags & PRIVACY_FLAG) == 0x0 ? false : true);
@@ -1389,7 +1389,7 @@ int SnmpV3MsgContainer::processSecurityModel(Snmp::SNMPv3Message& msg)
     m_msgEngineTime = m_security.m_msgAuthoritativeEngineTime;
 
     m_user = __plugin.getUser(m_security.m_msgUserName.getString());
-    
+
     DDebug(&__plugin,DebugInfo,"SnmpV3MsgContainer::processSecurityModel found authEngineId = '%s', engineBoots = '%d', "
 	"engineTime = '%d', username = '%s'", authEngineId.toHexString().c_str(),
 	    m_msgEngineBoots,m_msgEngineTime,(m_user ? m_user->toString().c_str() : ""));
@@ -1686,7 +1686,7 @@ SnmpAgent::SnmpAgent()
       : Module("snmpagent","misc"),
 	m_init(false), m_msgQueue(0), m_mibTree(0),
 	m_engineBoots(0),m_startTime(0), m_silentDrops(0),
-	m_salt(0), 
+	m_salt(0),
 	m_trapHandler(0),
 	m_traps(0),
 	m_trapUser(0),
@@ -1784,7 +1784,7 @@ void SnmpAgent::initialize()
 
     for (unsigned int i = 0; i < s_cfg.sections(); i++) {
 	NamedList* sec = s_cfg.getSection(i);
-	if (!sec || (*sec == "general") || (*sec == "snmp_v2") || (*sec == "snmp_v3") 
+	if (!sec || (*sec == "general") || (*sec == "snmp_v2") || (*sec == "snmp_v3")
 		    || (*sec == "traps") || (*sec == s_cfg.getValue("traps","trap_user","")))
 	    continue;
 	m_users.append(new SnmpUser(sec));
@@ -2298,7 +2298,7 @@ Snmp::PDU* SnmpAgent::decodeBulkPDU(int& reqType, Snmp::BulkPDU* pdu, const int&
     int i = 0;
     int error = 0;
     AsnValue val;
-    
+
     // handle non-repeaters
     ObjList* o = list->m_list.skipNull();
     for (; o; o = o->skipNext()) {
@@ -2308,7 +2308,7 @@ Snmp::PDU* SnmpAgent::decodeBulkPDU(int& reqType, Snmp::BulkPDU* pdu, const int&
 	if (var) {
 	    Snmp::VarBind* newVar = new Snmp::VarBind();
 	    newVar->m_choiceType = Snmp::VarBind::VALUE;
-	    newVar->m_name->m_ObjectName = var->m_name->m_ObjectName; 
+	    newVar->m_name->m_ObjectName = var->m_name->m_ObjectName;
 	    int res = processGetNextReq(newVar,&val,error,access);
 	    if (res == 1 && error) {
 		retPdu->m_error_index = i + 1;
@@ -2507,7 +2507,7 @@ int SnmpAgent::generateReport(Snmp::SNMPv3Message& msg, const int& secRes, SnmpV
     if (!m_mibTree)
 	return MESSAGE_DROP;
     if (!msg.m_msgGlobalData)
-  	return MESSAGE_DROP;  
+  	return MESSAGE_DROP;
     // reset the message flags
     cont.setReportFlag(false);
     cont.setPrivFlag(false);

@@ -5,7 +5,7 @@
  * External module handler
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  * Portions copyright (C) 2005 Maciek Kaminski
  *
  * This software is distributed under multiple licenses;
@@ -1050,7 +1050,7 @@ bool ExtModReceiver::create(const char *script, const char *args)
 	else
 	    ::close(STDERR_FILENO+2);
 	// Blindly close everything but stdin/out/err/audio
-	for (x=STDERR_FILENO+3;x<1024;x++) 
+	for (x=STDERR_FILENO+3;x<1024;x++)
 	    ::close(x);
 	// Execute script
 	if (debugAt(DebugInfo))

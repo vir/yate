@@ -5,7 +5,7 @@
  * Detectors for various tones
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -94,7 +94,7 @@ public:
 	Mixed
     };
     ToneConsumer(const String& id, const String& name);
-    virtual ~ToneConsumer(); 
+    virtual ~ToneConsumer();
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
     virtual const String& toString() const
 	{ return m_name; }
@@ -229,7 +229,7 @@ ToneConsumer::ToneConsumer(const String& id, const String& name)
     : m_id(id), m_name(name), m_mode(Mono),
       m_detFax(true), m_detCont(false), m_detDtmf(true), m_detDnis(false),
       m_fax(s_paramsCNG), m_cont(s_paramsCOTv)
-{ 
+{
     Debug(&plugin,DebugAll,"ToneConsumer::ToneConsumer(%s,'%s') [%p]",
 	id.c_str(),name.c_str(),this);
     for (int i = 0; i < 4; i++) {

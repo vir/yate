@@ -5,7 +5,7 @@
  * Detector and synthesizer for voice and tones using a MRCP v2 server
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -45,7 +45,7 @@ class MrcpConsumer : public DataConsumer
     YCLASS(MrcpConsumer,DataConsumer)
 public:
     MrcpConsumer(const String& id, const char* target, const char* format = 0);
-    virtual ~MrcpConsumer(); 
+    virtual ~MrcpConsumer();
     virtual bool setFormat(const DataFormat& format);
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
     bool init(Message& msg);
@@ -108,7 +108,7 @@ public:
 MrcpConsumer::MrcpConsumer(const String& id, const char* target, const char* format)
     : DataConsumer(format),
       m_source(0), m_chan(0), m_id(id)
-{ 
+{
     s_mutex.lock();
     s_count++;
     s_mutex.unlock();

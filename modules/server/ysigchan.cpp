@@ -5,7 +5,7 @@
  * Yet Another Signalling Channel
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -3043,7 +3043,7 @@ bool SigDriver::reInitialize(NamedList& params)
 	    return false;
     }
     bool ret = false;
-    unsigned int n = cfg->sections(); 
+    unsigned int n = cfg->sections();
     for (unsigned int i = 0; i < n; i++) {
 	NamedList* sect = cfg->getSection(i);
 	ret = initSection(sect);
@@ -3146,7 +3146,7 @@ void SigDriver::initialize()
     if (level >= 0)
 	m_engine->debugLevel(level);
     // Build/initialize trunks and topmost components
-    unsigned int n = s_cfg.sections(); 
+    unsigned int n = s_cfg.sections();
     for (unsigned int i = 0; i < n; i++) {
 	NamedList* sect = s_cfg.getSection(i);
 	initSection(sect);
@@ -3301,7 +3301,7 @@ void SigLinkSet::linkStatus(String& status)
 
 /**
  * SigSS7ccp
- */ 
+ */
 
 SigSS7Sccp::~SigSS7Sccp()
 {
@@ -4897,7 +4897,7 @@ bool SCCPHandler::received(Message& msg)
 	    if (hexData) {
 		data.unHexify(hexData->c_str(),hexData->length(),' ');
 	    }
-	} 
+	}
     }
     if (data.length() == 0) {
 	DDebug(&plugin,DebugNote,"Received message %s with no data",msg.c_str());

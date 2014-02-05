@@ -5,7 +5,7 @@
  * ASN.1 Library
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -694,7 +694,7 @@ int ASNLib::decodeGenTime(DataBlock& data, unsigned int* time, unsigned int* fra
     for (int i = 0; i < length; i++)
 	date += (char) (data[i]);
     data.cut(-length);
-    
+
     if (!(utc && fractions && time)) {
         DDebug(s_libName.c_str(),DebugAll,"::decodeGenTime() - Invalid buffer for return data");
         return InvalidContentsError;
@@ -702,7 +702,7 @@ int ASNLib::decodeGenTime(DataBlock& data, unsigned int* time, unsigned int* fra
 
     unsigned int year, month, day, hours, minutes, seconds;
     int timeDiff = 0;
-   
+
     *utc = false;
     *fractions = 0;
 
@@ -790,7 +790,7 @@ int ASNLib::decodeUTCTime(DataBlock& data, unsigned int* time, bool tagCheck)
     for (int i = 0; i < length; i++)
 	date += (char) (data[i]);
     data.cut(-length);
- 
+
     if (!time) {
         DDebug(s_libName.c_str(),DebugAll,"::decodeUTCTime() - Invalid buffer for return data");
         return InvalidContentsError;
@@ -1448,6 +1448,4 @@ int AsnMib::compareTo(AsnMib* mib)
     return retValue;
 }
 
-
-
-
+/* vi: set ts=8 sw=4 sts=4 noet: */

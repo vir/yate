@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -507,7 +507,7 @@ bool JBStream::readSocket(char* buf, unsigned int len)
     else if (read) {
 	String tmp;
 	Thread::errorString(tmp,m_socket->error());
-	reason << "Socket read error: " << tmp << " (" << m_socket->error() << ")"; 
+	reason << "Socket read error: " << tmp << " (" << m_socket->error() << ")";
 	Debug(this,DebugWarn,"%s [%p]",reason.c_str(),this);
     }
     else {
@@ -1939,7 +1939,7 @@ bool JBStream::writeSocket(const void* data, unsigned int& len)
     String tmp;
     Thread::errorString(tmp,m_socket->error());
     String reason;
-    reason << "Socket send error: " << tmp << " (" << m_socket->error() << ")"; 
+    reason << "Socket send error: " << tmp << " (" << m_socket->error() << ")";
     Debug(this,DebugWarn,"%s [%p]",reason.c_str(),this);
     lck.drop();
     postponeTerminate(0,m_incoming,XMPPError::SocketError,reason);

@@ -7,7 +7,7 @@
 
  test.py is a really small and minimal script to test and understand
  the libyate.py library.
- It simply install "engine.timer" and intercept messages from 
+ It simply install "engine.timer" and intercept messages from
  yate and log them to stderr for 10 times, after that the script
  uninstall engine.timer and exit.
 
@@ -44,8 +44,8 @@
 """
 from libyate import Yate
 
-""" 
-Python is Object Oriented language, so, define a "yourapp" class 
+"""
+Python is Object Oriented language, so, define a "yourapp" class
 
 """
 
@@ -58,7 +58,7 @@ class YateApp:
 			self.app.__Yatecall__ = self.retenv
 
 	# this function will manage the imput from Yate.
-	# param "d" is the Yate.type variable for incoming message 
+	# param "d" is the Yate.type variable for incoming message
 	def retenv(self, d):
 		if d == "":
 			self.app.Output("PYTHON event: empty")
@@ -74,9 +74,9 @@ class YateApp:
 			self.app.Output("PYTHON Uninstalled: " + self.app.name )
 		else:
 			self.app.Output("PYTHON event: " + self.app.type )
-			
 
-	# clean shutdown of our application... 
+
+	# clean shutdown of our application...
 	def uninstall(self):
 			self.app.Uninstall("engine.timer")
 
@@ -97,7 +97,7 @@ class YateApp:
 		while True:
 			# check for events
 			self.app.flush()
-			
+
 			# uninstall engine.timer after 5 messages from Yate
 			if self.count == 5:
 				self.uninstall()
@@ -107,7 +107,7 @@ class YateApp:
 		self.count = 0
 		self.app.Install("engine.timer", 10)
 		self.app.th_loop()
-		
+
 		# wow, amazing, the loop still running and we can continue in the execution!
 		# dispatch a final test message after the main loop exit
 		self.app.Yate("final_test")
@@ -115,7 +115,7 @@ class YateApp:
 		self.app.params = [ ['param1', 'value1'] ]
 		self.app.Dispatch()
 
-		# now wait for 10 message from yate, and then uninstall the engine.timer and exit 
+		# now wait for 10 message from yate, and then uninstall the engine.timer and exit
 		while self.count != 10:
 			pass
 		self.uninstall()
@@ -125,7 +125,7 @@ class YateApp:
 
 		# close file descriptors
 		self.app.close()
-		
+
 # execution start here!
 if __name__ == '__main__':
 	a = YateApp()

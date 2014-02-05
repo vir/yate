@@ -3,11 +3,11 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Oss driver
- * I have to thank you to Mark Spencer because some parts of the code have 
+ * I have to thank you to Mark Spencer because some parts of the code have
  * been taken from chan_oss.c from asterisk.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -339,7 +339,7 @@ bool OssChan::init()
     dev->deref();
     if (!source->init()) {
 	source->deref();
-	return false;		
+	return false;
     }
     setSource(source);
     source->deref();
@@ -347,8 +347,8 @@ bool OssChan::init()
     if (!cons->init()) {
 	cons->deref();
 	setSource();
-	return false;		
-    }	
+	return false;
+    }
     setConsumer(cons);
     cons->deref();
     return true;
@@ -537,7 +537,7 @@ bool OssHandler::received(Message &msg)
 	    Debug(DebugInfo,"OSS outgoing call not accepted!");
 	    chan->destruct();
 	    return false;
-	}	
+	}
 	const char *targ = msg.getValue("target");
 	if (!targ) {
 	    Debug(DebugWarn,"OSS outgoing call with no target!");

@@ -5,7 +5,7 @@
  * Zaptel PRI/TDM/FXS/FXO cards signalling and data driver
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -102,7 +102,7 @@ class ZapModule;                         // The module
 
 #define DAHDI_EVENT_PULSEDIGIT 		ZT_EVENT_PULSEDIGIT
 #define DAHDI_EVENT_DTMFDOWN   		ZT_EVENT_DTMFDOWN
-#define DAHDI_EVENT_DTMFUP  		ZT_EVENT_DTMFUP 
+#define DAHDI_EVENT_DTMFUP  		ZT_EVENT_DTMFUP
 #define DAHDI_EVENT_PULSEDIGIT		ZT_EVENT_PULSEDIGIT
 
 // hook events
@@ -585,7 +585,7 @@ public:
     // New status is Connect: Open device. Create source/consumer. Start worker
     // Cleanup on disconnect
     virtual bool status(Status newStat, bool sync = false);
-    // Update data format for zaptel device and source/consumer 
+    // Update data format for zaptel device and source/consumer
     virtual bool updateFormat(const char* format, int direction);
     // Setup echo canceller or start echo canceller training
     virtual bool setParam(const String& param, const String& value);
@@ -981,7 +981,7 @@ static TokenDict s_formats[] = {
     {"alaw",    ZapDevice::Alaw},
     {0,0}
     };
-#ifdef HAVE_ZAP 
+#ifdef HAVE_ZAP
 const char* ZapDevice::s_zapCtlName = "/dev/zap/ctl";
 const char* ZapDevice::s_zapDevName = "/dev/zap/channel";
 #else
@@ -1402,7 +1402,7 @@ bool ZapDevice::checkAlarms()
 void ZapDevice::resetAlarms()
 {
     m_alarms = 0;
-    m_alarmsText = ""; 
+    m_alarmsText = "";
     Debug(m_owner,DebugInfo,"%sNo more alarms on channel %u [%p]",
 	m_name.safe(),m_channel,m_owner);
 }
@@ -2258,7 +2258,7 @@ bool ZapCircuit::status(Status newStat, bool sync)
     return false;
 }
 
-// Update data format for zaptel device and source/consumer 
+// Update data format for zaptel device and source/consumer
 bool ZapCircuit::updateFormat(const char* format, int direction)
 {
     s_sourceAccessMutex.lock();
@@ -2327,7 +2327,7 @@ bool ZapCircuit::setParam(const String& param, const String& value)
 	bool ok = m_device.setEchoCancel(m_crtEchoCancel,m_echoTaps);
 	if (m_crtEchoCancel)
 	    m_crtEchoCancel = ok;
-	return ok; 
+	return ok;
     }
     if (param == "echotaps") {
 	int tmp = value.toInteger();

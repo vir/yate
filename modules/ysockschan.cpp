@@ -5,7 +5,7 @@
  * SOCKS channel
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -249,7 +249,7 @@ public:
     /**
      * Constructor
      * @param t The message type
-     * @param conn The connection sending or receiving this packet 
+     * @param conn The connection sending or receiving this packet
      */
     inline SOCKSPacket(Type t, SOCKSConn* conn)
 	: m_type(t), m_conn(conn)
@@ -271,7 +271,7 @@ public:
 
     /**
      * Get the connection sending or receiving this packet
-     * @return The connection sending or receiving this packet 
+     * @return The connection sending or receiving this packet
      */
     inline SOCKSConn* conn() const
 	{ return m_conn; }
@@ -293,7 +293,7 @@ public:
 
     /**
      * Build a SOCKS request/reply message
-     * @param conn The connection sending this packet 
+     * @param conn The connection sending this packet
      * @param request True if this is a request, false if this is a reply
      * @param cmdRsp CMD/RSP value
      * @param addrType Address type as enumeration
@@ -306,7 +306,7 @@ public:
 
     /**
      * Build an auth methods message
-     * @param conn The connection sending this packet 
+     * @param conn The connection sending this packet
      * @param methods The list of methods
      * @param count The number of methods in the list (must be at least 1)
      * @return Valid SOCKSPacket pointer on success
@@ -316,7 +316,7 @@ public:
 
     /**
      * Build an auth reply message
-     * @param conn The connection sending this packet 
+     * @param conn The connection sending this packet
      * @param method The method
      * @return Valid SOCKSPacket pointer on success
      */
@@ -324,7 +324,7 @@ public:
 
     /**
      * Build an username/password auth request
-     * @param conn The connection sending this packet 
+     * @param conn The connection sending this packet
      * @param uname The username (length must be between 0 and 255)
      * @param pwd The password (length must be between 0 and 255)
      * @return Valid SOCKSPacket pointer on success
@@ -333,7 +333,7 @@ public:
 
     /**
      * Build an username/password auth reply
-     * @param conn The connection sending this packet 
+     * @param conn The connection sending this packet
      * @param ok The result (0 for success)
      * @return Valid SOCKSPacket pointer on success
      */
@@ -988,7 +988,7 @@ public:
 
     /**
      * Add an endpoint definition. Replace an existing one with the same name.
-     * The pointer will be owned by the engine (append to list without 
+     * The pointer will be owned by the engine (append to list without
      *  increasing its reference counter)
      * @param epDef The endpoint definition to add
      */

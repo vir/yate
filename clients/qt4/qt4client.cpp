@@ -5,7 +5,7 @@
  * A Qt-4 based universal telephony client
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -228,7 +228,7 @@ public:
 
     int getType() {
 	    if (m_widget) {
-		String cls = m_widget->metaObject()->className(); 
+		String cls = m_widget->metaObject()->className();
 		for (int i = 0; i < Unknown; i++)
 		    if (s_types[i] == cls)
 			return i;
@@ -309,7 +309,7 @@ public:
     inline void addColumn(int index, int width = -1, const char* name = 0) {
 	    m_table->insertColumn(index);
 	    if (width >= 0)
-		m_table->setColumnWidth(index,width); 
+		m_table->setColumnWidth(index,width);
 	    setHeaderText(index,name);
 	}
     inline void setImage(int row, int col, const String& image) {
@@ -344,9 +344,9 @@ public:
     void updateRow(const String& item, const NamedList* data, bool atStart);
     // Update a row from a list of parameters
     void updateRow(int row, const NamedList& data);
-    // Find a row by the first's column value. Return -1 if not found 
+    // Find a row by the first's column value. Return -1 if not found
     int getRow(const String& item);
-    // Find a column by its label. Return -1 if not found 
+    // Find a column by its label. Return -1 if not found
     int getColumn(const String& name, bool caseInsentive = true);
 protected:
     void init(bool tmp);
@@ -394,7 +394,7 @@ static String s_propWindowFlags = "_yate_windowflags"; // Window flags
 static const String s_propContextMenu = "_yate_context_menu"; // Context menu name
 static String s_propHideInactive = "dynamicHideOnInactive"; // Hide inactive window
 static const String s_yatePropPrefix = "_yate_";      // Yate dynamic properties prefix
-static NamedList s_qtStyles("");                      // Qt styles classname -> internal name 
+static NamedList s_qtStyles("");                      // Qt styles classname -> internal name
 //
 static Qt4ClientFactory s_qt4Factory;
 static Configuration s_cfg;
@@ -889,7 +889,7 @@ void TableWidget::updateRow(int row, const NamedList& data)
     }
 }
 
-// Find a row by the first's column value. Return -1 if not found 
+// Find a row by the first's column value. Return -1 if not found
 int TableWidget::getRow(const String& item)
 {
     int n = rowCount();
@@ -901,7 +901,7 @@ int TableWidget::getRow(const String& item)
     return -1;
 }
 
-// Find a column by its label. Return -1 if not found 
+// Find a column by its label. Return -1 if not found
 int TableWidget::getColumn(const String& name, bool caseInsensitive)
 {
     int n = columnCount();
@@ -1545,7 +1545,7 @@ bool QtWindow::getOptions(const String& name, NamedList* items)
 }
 
 // Append or insert text lines to a widget
-bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int max, 
+bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int max,
 	bool atStart)
 {
     DDebug(ClientDriver::self(),DebugAll,"QtWindow(%s) addLines('%s',%p,%u,%s) [%p]",
@@ -1613,7 +1613,7 @@ bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int
 		if (w.combo()->lineEdit())
 		    w.combo()->lineEdit()->setText(w.combo()->itemText(0));
 	    }
-	    else { 
+	    else {
 		for (unsigned int i = 0; i < count; i++) {
 		    NamedString* ns = lines->getParam(i);
 		    if (ns)
@@ -2057,7 +2057,7 @@ bool QtWindow::getSelect(const String& name, String& item)
 	    {
 		TableWidget t(w);
 		int row = t.crtRow();
-		return row >= 0 ? t.getCell(row,0,item) : false; 
+		return row >= 0 ? t.getCell(row,0,item) : false;
 	    }
 	case QtWidget::ListBox:
 	    {
@@ -2255,7 +2255,7 @@ void QtWindow::moveEvent(QMoveEvent* event)
 	m_id.c_str(),m_x,m_y,this);
 }
 
-void QtWindow::resizeEvent(QResizeEvent* event) 
+void QtWindow::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     // Don't update size if not shown normal
@@ -3586,7 +3586,7 @@ bool QtClient::chooseFile(Window* parent, NamedList& params)
     }
     else
 	dlg->setFileMode(QFileDialog::DirectoryOnly);
- 
+
     dlg->selectFile(QtClient::setUtf8(params.getValue(YSTRING("selectedfile"))));
 
     dlg->setVisible(true);
@@ -4282,7 +4282,7 @@ void QtClient::applyWindowFlags(QWidget* w, const String& value)
     w->setWindowFlags((Qt::WindowFlags)flags);
 }
 
-// Build a QT Alignment mask from a comma separated list of flags 
+// Build a QT Alignment mask from a comma separated list of flags
 int QtClient::str2align(const String& flags, int initVal)
 {
     ObjList* list = flags.split(',',false);
@@ -4623,7 +4623,7 @@ QtUrlBuilder::~QtUrlBuilder()
 {
     TelEngine::destruct(m_queryParams);
 }
-    
+
 // Build URL
 QUrl QtUrlBuilder::build(const NamedList& params) const
 {

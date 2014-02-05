@@ -1,11 +1,11 @@
 /**
  * subscription.cpp
- * This file is part of the YATE Project http://YATE.null.ro 
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Subscription handler and presence notifier
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -2980,7 +2980,7 @@ bool SubscriptionModule::commandExecute(String& retVal, const String& line)
 	    return false;
 	}
 	DDebug(this,DebugInfo,"Command Execute , operation status for: %s, to %s",user.c_str(),contact.c_str());
-//	retVal << "Subscription state for user: " << user << " and contact: " 
+//	retVal << "Subscription state for user: " << user << " and contact: "
 //	    << contact << " is: " << m_users.getSubscription(user,contact);
 	return true;
     }
@@ -3002,7 +3002,7 @@ bool SubscriptionModule::commandExecute(String& retVal, const String& line)
 		    retVal << "Expected <PresenceUser,Contact> pair";
 		    return false;
 	    }
-	    counter += 1;	
+	    counter += 1;
 	}
 	if (user->null() || contact->null()) {
 	    retVal << "Expected <PresenceUser,Contact> pair";

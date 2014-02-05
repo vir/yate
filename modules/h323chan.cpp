@@ -2,16 +2,16 @@
  * h323chan.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
- * As a special exception to the GNU General Public License, permission is 
- * granted for additional uses of the text contained in this release of Yate 
+ * As a special exception to the GNU General Public License, permission is
+ * granted for additional uses of the text contained in this release of Yate
  * as noted here.
  * This exception is that permission is hereby granted to link Yate with the
  * OpenH323 and PWLIB runtime libraries to produce an executable image.
- * 
+ *
  * H.323 channel
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -413,7 +413,7 @@ public:
 	: m_exit(false)
 	{ Debug(&hplugin,DebugAll,"YateH323AudioSource::YateH323AudioSource() [%p]",this); }
     ~YateH323AudioSource();
-    virtual BOOL Close(); 
+    virtual BOOL Close();
     virtual BOOL IsOpen() const;
     virtual BOOL Write(const void *buf, PINDEX len);
 private:
@@ -431,7 +431,7 @@ public:
 	: Mutex(false,"YateH323AudioConsumer"), m_exit(false)
 	{ Debug(&hplugin,DebugAll,"YateH323AudioConsumer::YateH323AudioConsumer() [%p]",this); }
     ~YateH323AudioConsumer();
-    virtual BOOL Close(); 
+    virtual BOOL Close();
     virtual BOOL IsOpen() const;
     virtual BOOL Read(void *buf, PINDEX len);
     virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
@@ -1333,7 +1333,7 @@ void YateH323EndPoint::setCodecs()
 		num = GetCapabilities().GetSize() - init;
 	    }
 	    if (num)
-		added.append(String((int)num)," ") << ": " << tmp; 
+		added.append(String((int)num)," ") << ": " << tmp;
 	    else
 		failed.append("'"," ") << tmp << "'";
 	}
@@ -1556,7 +1556,7 @@ bool YateH323EndPoint::removeGk(bool wait)
 bool YateH323EndPoint::checkListener(const NamedList* params, bool& changed)
 {
     changed = false;
-    // Setup the listener if we don't have one or bind address changed 
+    // Setup the listener if we don't have one or bind address changed
     int port = 1720;
     String a;
     if (params) {
@@ -2293,7 +2293,7 @@ void YateH323Connection::OnSetLocalCapabilities()
     adjustCapabilities();
 }
 
-BOOL YateH323Connection::OnStartLogicalChannel(H323Channel & channel) 
+BOOL YateH323Connection::OnStartLogicalChannel(H323Channel & channel)
 {
     DDebug(this,DebugInfo,"YateH323Connection::OnStartLogicalChannel(%p) [%p]",&channel,this);
     if (!(m_chan && m_chan->alive()))
@@ -2480,13 +2480,13 @@ unsigned int YateH323Connection::fixQ931Cause() const
 YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel(
     YateH323Connection& connection,
     const H323Capability& capability,
-    Directions direction, 
-    unsigned sessionID, 
-    const PIPSocket::Address& ip, 
+    Directions direction,
+    unsigned sessionID,
+    const PIPSocket::Address& ip,
     WORD dataPort)
     : H323_ExternalRTPChannel(connection, capability, direction, sessionID, ip, dataPort),
       m_conn(&connection)
-{ 
+{
     DDebug(m_conn,DebugAll,"YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel %s addr=%s:%u [%p]",
 	lookup(GetDirection(),dict_h323_dir), (const char *)ip.AsString(), dataPort,this);
     SetExternalAddress(H323TransportAddress(ip, dataPort), H323TransportAddress(ip, dataPort+1));
@@ -2677,7 +2677,7 @@ H323GatekeeperCall* YateGatekeeperServer::CreateCall(const OpalGloballyUniqueID&
 H323GatekeeperRequest::Response YateGatekeeperServer::OnRegistration(H323GatekeeperRRQ& request)
 {
     int i = H323GatekeeperServer::OnRegistration(request);
-    if (i == H323GatekeeperRequest::Confirm) {	
+    if (i == H323GatekeeperRequest::Confirm) {
 	PString alias,r;
 	String ips;
         for (int j = 0; j < request.rrq.m_terminalAlias.GetSize(); j++) {
@@ -2735,10 +2735,10 @@ BOOL YateGatekeeperServer::TranslateAliasAddressToSignalAddress(const H225_Alias
     Engine::dispatch(m);
     String s = m.retValue();
     if (s) {
-	/** 
+	/**
 	 * Here we have 2 cases, first is handle when the call have to be send
-	 * to endpoint (if the call is to another yate channel, or is h323 
-	 * proxied), or if has to be send to another gatekeeper we find out 
+	 * to endpoint (if the call is to another yate channel, or is h323
+	 * proxied), or if has to be send to another gatekeeper we find out
 	 * from the driver parameter
 	 */
 	    if ((m.getParam("driver")) && (*(m.getParam("driver")) == "h323")) {
@@ -3437,7 +3437,7 @@ bool H323Driver::commandComplete(Message& msg, const String& partLine, const Str
     String overviewCmd = s_statusCmd + " overview " + name();
     if (partLine == cmd || partLine == overviewCmd)
 	itemComplete(msg.retValue(),"accounts",partWord);
-    else 
+    else
     	return Driver::commandComplete(msg,partLine,partWord);
     return false;
 }
@@ -3466,7 +3466,7 @@ void H323Driver::msgStatus(Message& msg)
 		str << (const char*)ep->GetLocalUserName() << "|";
 		str << (ep->IsRegisteredWithGatekeeper() ? "registered" : "not-registered");
 	    }
-	    msg.retValue().append(str,";"); 
+	    msg.retValue().append(str,";");
     	    msg.retValue() << "\r\n";
 	    return;
 	}

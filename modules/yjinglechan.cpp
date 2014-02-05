@@ -5,7 +5,7 @@
  * Jingle channel
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  * Author: Marian Podgoreanu
  *
  * This software is distributed under multiple licenses;
@@ -2060,7 +2060,7 @@ int YJGConnection::getRinging(const String& flags, DebugEnabler* enabler, int de
 {
     if (flags)
 	defVal = XMPPUtils::decodeFlags(flags,s_ringFlgName);
-    // Set RingNoEarlySession if RingWithContent 
+    // Set RingNoEarlySession if RingWithContent
     // Reset RingWithContentOnly if RingWithContent is not set
     if (0 != (defVal & RingWithContent))
 	defVal |= RingNoEarlySession;
@@ -3226,7 +3226,7 @@ bool YJGConnection::changeFTHostDir(bool resetState)
     if (!resetState)
 	return false;
     if (m_ftHostDirection != FTHostNone)
-	Debug(this,DebugNote,"No more hosts available [%p]",this); 
+	Debug(this,DebugNote,"No more hosts available [%p]",this);
     m_ftHostDirection = FTHostNone;
     return false;
 }
@@ -3482,7 +3482,7 @@ void YJGConnection::copySessionParams(NamedList& list, bool redirect)
 	jingleAddParam(list,"file_time",String(t),copy);
 }
 
-// Check media in a received content 
+// Check media in a received content
 bool YJGConnection::checkMedia(const JGEvent& event, JGSessionContent& c)
 {
     JGRtpMediaList& codecs = m_audioFormats;

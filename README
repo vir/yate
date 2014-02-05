@@ -2,9 +2,9 @@
 		-----------------------------------
 
   The YATE project aims to be a fully featured software PBX.
-  
+
   It was created to alow developers and users to have more functionality and
-  scalability. To reach this goal YATE is built from two kinds of components: 
+  scalability. To reach this goal YATE is built from two kinds of components:
     1. The main engine - telengine.
     2. Modules - routing modules
                - drivers

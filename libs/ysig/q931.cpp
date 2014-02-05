@@ -1,11 +1,11 @@
 /**
  * q931.cpp
- * This file is part of the YATE Project http://YATE.null.ro 
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Signalling Stack - implements the support for SS7, ISDN and PSTN
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -3880,7 +3880,7 @@ void ISDNQ931IE::toString(String& dest, bool extendedDebug, const char* before)
 	    tmp.hexify(m_buffer.data(),m_buffer.length(),' ');
 	    dest << "   " << tmp;
 	}
-	// Show fields 
+	// Show fields
 	tmp = before;
 	tmp << "  ";
 	for (unsigned int i = 0; ; i++) {
@@ -4167,7 +4167,7 @@ const TokenDict Q931Parser::s_dict_bearerTransRate[] = {
 const TokenDict Q931Parser::s_dict_bearerProto1[] = {
 	{"v110",          0x01},         // Recomendation V.110 and X.30
 	{"mulaw",         0x02},         // Recomendation G.711 mu-law
-	{"alaw",          0x03},         // Recomendation G.711 A-law 
+	{"alaw",          0x03},         // Recomendation G.711 A-law
 	{"g721",          0x04},         // Recomendation G.721 32kbit/s ADPCM and I.460
 	{"h221",          0x05},         // Recomendation H.221 and H.242
 	{"non-CCITT",     0x07},         // Non CCITT standardized rate adaption
@@ -4310,7 +4310,7 @@ static const IEParam s_ie_ieSubAddress[] = {
 const TokenDict Q931Parser::s_dict_channelIDSelect_BRI[] = {
 	{"none", 0x00},                  // No channel
 	{"b1",   0x01},                  // B1 channel
-	{"b2",   0x02},                  // B2 channel 
+	{"b2",   0x02},                  // B2 channel
 	{"any",  0x03},                  // Any channel
 	{0,0}
 	};

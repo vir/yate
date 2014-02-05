@@ -17,7 +17,7 @@
 ;[tcap map]
 ; This section configures a TCAP User MAP/CAMEL protocol translator
 
-; type: string: Type of TCAP User 
+; type: string: Type of TCAP User
 ; Allowed values are MAP or CAMEL
 ;type=MAP
 

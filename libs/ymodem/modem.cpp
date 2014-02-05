@@ -5,7 +5,7 @@
  * Yet Another Modem
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -224,7 +224,7 @@ FilterConst::FilterConst(FSKModem::Type type)
 		         -2.9928879142e+00, 2.5990173742e+00, 0.0000000000e+00};
     static float s[7] = {-5.6297236492e-02, -1.1421579050e-01, -4.8122536483e-01, -4.0121072432e-01,
 		         -7.4834487567e-01, -6.9170822332e-01, 0.0000000000e+00};
-    static float l[7] = {-7.8390522307e-03, 8.5209627801e-02, -4.0804129163e-01, 1.1157139955e+00, 
+    static float l[7] = {-7.8390522307e-03, 8.5209627801e-02, -4.0804129163e-01, 1.1157139955e+00,
 		         -1.8767603680e+00, 1.8916395224e+00, 0.0000000000e+00};
 
     switch (type) {

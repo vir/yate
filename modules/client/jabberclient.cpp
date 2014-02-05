@@ -5,7 +5,7 @@
  * Jabber Client module
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -597,7 +597,7 @@ static inline const String& getChildText(XmlElement& xml, const String& name,
     XmlElement* child = xml.findNextChild(start,&name);
     return child ? child->getText() : String::empty();
 }
- 
+
 // Add a child element text to a list of parameters
 static inline void addChildText(NamedList& list, XmlElement& parent, int tag, int ns,
     const char* param = 0, const String& prefix = String::empty(), bool emptyOk = false)
@@ -1895,8 +1895,8 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
 	    unsigned int n = 0;
 	    XmlElement* ch = 0;
 	    while (0 != (ch = ev->element()->findNextChild(ch))) {
-		int tag = XmlTag::Count; 
-		int ns = XMPPNamespace::Count; 
+		int tag = XmlTag::Count;
+		int ns = XMPPNamespace::Count;
 		XMPPUtils::getTag(*ch,tag,ns);
 		// Known children in stream's namespace
 		if (ns == ev->stream()->xmlns() &&

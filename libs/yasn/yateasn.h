@@ -5,7 +5,7 @@
  * ASN.1 Library
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -223,11 +223,11 @@ public:
      * Assign operator
      */
     inline AsnValue& operator=( AsnValue* val)
-    { 
-	if (!val) 
+    {
+	if (!val)
 	    return *this;
 	m_data = val->getValue();
-	m_type = val->type(); 
+	m_type = val->type();
 	return *this;
     }
 
@@ -1047,7 +1047,7 @@ public:
     static int matchEOC(DataBlock& data);
 
     /**
-     * Extract length until a End Of Contents is found. 
+     * Extract length until a End Of Contents is found.
      * @param data Input block for which to determine the length to End Of Contents
      * @param length Length to which to add determined length
      * @return Length until End Of Contents

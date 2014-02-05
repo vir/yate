@@ -95,7 +95,7 @@
 ; Minimum allowed value is 10000
 ; Defaults to 20000 if missing or to the minimum value if invalid
 ;stanza_timeout=20000
- 
+
 ; ping_interval: integer: The interval (in milliseconds) to ping the remote party of a
 ;  jingle session
 ; If enabled and the ping element fails the session will be terminated

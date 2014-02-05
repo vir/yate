@@ -1,10 +1,10 @@
-/*
+/**
  * yategsm.h
  * GSM Radio Layer 3 library
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2011-2013 Null Team
+ * Copyright (C) 2011-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -82,7 +82,7 @@ public:
 	GTTP      = 0x04, // GPRS Transparent Transport Protocol (GTTP)
 	MM        = 0x05, // Mobility Management
 	RRM       = 0x06, // Radio Resources Management
-	EPS_MM    = 0x07, // EPS Mobility Management 
+	EPS_MM    = 0x07, // EPS Mobility Management
 	GPRS_MM   = 0x08, // GPRS Mobility Management
 	SMS       = 0x09, // SMS
 	GPRS_SM   = 0x0a, // GPRS Session Management
@@ -132,7 +132,7 @@ public:
      * Constructor
      */
     GSML3Codec(DebugEnabler* dbg = 0);
- 
+
     /**
      * Decode layer 3 message payload
      * @param in Input buffer containing the data to be decoded
@@ -144,7 +144,7 @@ public:
     unsigned int decode(const uint8_t* in, unsigned int len, XmlElement*& out, const NamedList& params = NamedList::empty());
 
     /**
-     * Encode a layer 3 message 
+     * Encode a layer 3 message
      * @param in Layer 3 message in XML form
      * @param out Output buffer into which to put encoded data
      * @param params Encoder parameters
@@ -161,7 +161,7 @@ public:
     unsigned int decode(XmlElement* xml, const NamedList& params = NamedList::empty());
 
     /**
-     * Encode a layer 3 message from an existing XML 
+     * Encode a layer 3 message from an existing XML
      * @param in XML which contains a layer 3 message in XML form. The message will be replaced with its encoded buffer
      * @param params Encoder parameters
      * @return Parsing result: 0 (NoError) if succeeded, error status otherwise
@@ -188,7 +188,7 @@ public:
      * @param reset Reset flags before setting these ones
      */
     inline void setFlags(uint8_t flgs, bool reset = false)
-    { 
+    {
 	if (reset)
 	    resetFlags();
 	m_flags |= flgs;

@@ -3,9 +3,9 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * iLBC codec using iLBC library.
- * 
+ *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * iLBC codec has been created based on the code sent by Faizan Naqvi (Tili)
  *

@@ -14,7 +14,7 @@
 ;  trunk (timestamps use, send interval, max packet length) are ignored if there
 ;  is another call using trunking with the same remote ip/port.
 ;  TAKE CARE WHEN SETTING TRUNKING PARAMETERS IN MORE THEN 1 PLACE FOR THE SAME
-;   REMOTE IP/PORT !!! 
+;   REMOTE IP/PORT !!!
 ; When routing a call to iax module a specific listener can be specfied:
 ;  1: Its name can be set in 'oconnection_id' parameter.
 ;    The name of the listener created from 'general' section is 'iaxengine'

@@ -56,7 +56,7 @@ engine_info=
 
 ; list traps to disable. Must be separated by ','.
 ; An entire substree of traps can be disabled by ending the name of the trap with ".*"
-; (e.g. disable the whole database status traps by adding database.*) 
+; (e.g. disable the whole database status traps by adding database.*)
 disable_traps=
 
 ; IP address to which the traps are sent. Defaults to localhost.
@@ -79,7 +79,7 @@ community=
 
 ;[userV3]
 ; Configure a section for a SNMPv3 user. The name of the user is the name of the section.
-; To allow SNMPv3 interrogation, at least one SNMPv3 user must be configured 
+; To allow SNMPv3 interrogation, at least one SNMPv3 user must be configured
 
 ; authentication pass phrase. If it is not set, authentication will not be required
 ;auth_password=

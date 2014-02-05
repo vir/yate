@@ -1,11 +1,11 @@
-/*
+/**
  * coreaudio.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * CoreAudio sound channel driver for Mac OS X.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -42,29 +42,29 @@ public:
     virtual void run();
     virtual void cleanup();
     virtual bool control(NamedList& params);
-	
+
     // append to the internal buffer data read from input source
     void sendData(AudioBufferList *buf);
-    // provide data to the AudioConverter taken from the internal buffer	
+    // provide data to the AudioConverter taken from the internal buffer
     DataBlock getData(UInt32 pkts);
-	
+
     // helper function for allocating buffers
     AudioBufferList* allocateAudioBufferList(UInt32 numChannels, UInt32 size);
     // helper function for freeing buffers
     void destroyAudioBufferList(AudioBufferList* list);
     // helper function for obtaining an AudioConverter
     OSStatus buildConverter(AudioStreamBasicDescription inFormat, AudioConverterRef* ac);
-	
+
     // obtain the output format of the AudioUnit
     inline AudioStreamBasicDescription outFormat() const
 	{ return m_outDevFormat; }
     // obtain the output sample rate
     inline unsigned int rate() const
 	{ return m_rate; }
-	
+
 private:
     // callback for obtaining data from input source
-    static OSStatus inputCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp, 
+    static OSStatus inputCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp,
 				  UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList* ioData);
     // default input AudioUnit
     AudioUnit fAudioUnit;
@@ -106,7 +106,7 @@ public:
 
 private:
     // callback through which the AudioUnit requires data to play
-    static OSStatus outputCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp, 
+    static OSStatus outputCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp,
 				  UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList* ioData);
     // the AudioUnit
     AudioUnit fAudioUnit;
@@ -137,7 +137,7 @@ public:
     inline const String& getTarget() const
 	{ return m_target; }
     inline unsigned int rate() const
-	{ return m_rate; }			
+	{ return m_rate; }
 private:
     String m_dev;
     String m_target;
@@ -233,7 +233,7 @@ static bool checkVolumeSettable(AudioDeviceID devId, UInt32 inChannel,Boolean is
 OSStatus convertCallback(AudioConverterRef inAudioConverter, UInt32* ioNumberDataPackets, AudioBufferList* ioData,
 			 AudioStreamPacketDescription**	outDataPacketDescription, void* inUserData)
 {
-    CoreAudioSource* src = static_cast<CoreAudioSource*> (inUserData);	
+    CoreAudioSource* src = static_cast<CoreAudioSource*> (inUserData);
     if (!src)
 	return 1;
     // try to get data with the required length
@@ -248,11 +248,11 @@ OSStatus convertCallback(AudioConverterRef inAudioConverter, UInt32* ioNumberDat
     }
     // determine how much we can read into the converter's input buffer
     UInt32 maxPackets = data.length() / src->outFormat().mBytesPerFrame;
-    if (*ioNumberDataPackets > maxPackets) 
+    if (*ioNumberDataPackets > maxPackets)
 	*ioNumberDataPackets = maxPackets;
-    else 
+    else
 	maxPackets = *ioNumberDataPackets;
-	
+
     // fill the converters input buffer
     ioData->mBuffers[0].mData = data.data();
     ioData->mBuffers[0].mDataByteSize = maxPackets * src->outFormat().mBytesPerFrame;
@@ -278,10 +278,10 @@ CoreAudioSource::~CoreAudioSource()
 	Debug(DebugInfo,"CoreAudioSource::~CoreAudioSource() [%p] - Failed to stop AU",this);
     err = AudioUnitUninitialize(fAudioUnit);
     if(err != noErr)
-	Debug(DebugInfo,"CoreAudioSource::~CoreAudioSource() [%p] - Failed to uninitialize AU",this);	
+	Debug(DebugInfo,"CoreAudioSource::~CoreAudioSource() [%p] - Failed to uninitialize AU",this);
     destroyAudioBufferList(m_inAudioBuffer);
 }
-	
+
 bool CoreAudioSource::init()
 {
     OSStatus err = noErr;
@@ -318,7 +318,7 @@ bool CoreAudioSource::init()
 
     // configure AudioOutputUnit for input, enable input on the AUHAL
     param = 1;
-    err = AudioUnitSetProperty(fAudioUnit,kAudioOutputUnitProperty_EnableIO,kAudioUnitScope_Input,1,&param,sizeof(UInt32)); 
+    err = AudioUnitSetProperty(fAudioUnit,kAudioOutputUnitProperty_EnableIO,kAudioUnitScope_Input,1,&param,sizeof(UInt32));
     if (err == noErr) {
 	// disable output on the AUHAL
 	param = 0;
@@ -328,7 +328,7 @@ bool CoreAudioSource::init()
 	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to configure AudioUnit for input error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
-	
+
     // select the default input device
     param = sizeof(AudioDeviceID);
 
@@ -345,17 +345,17 @@ bool CoreAudioSource::init()
 	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to set AU input device=%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
-	
+
     // setup render callback
     AURenderCallbackStruct callback;
-    callback.inputProc = CoreAudioSource::inputCallback; 
+    callback.inputProc = CoreAudioSource::inputCallback;
     callback.inputProcRefCon = this;
     err = AudioUnitSetProperty(fAudioUnit,kAudioOutputUnitProperty_SetInputCallback,kAudioUnitScope_Global,0,&callback,sizeof(AURenderCallbackStruct));
     if (err != noErr) {
 	Debug(DebugInfo,"CoreAudioSource::init() [%p] - could not set callback error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
-	
+
     // get hardware device format
     param = sizeof(AudioStreamBasicDescription);
     AudioStreamBasicDescription devFormat;
@@ -375,7 +375,7 @@ bool CoreAudioSource::init()
     m_outDevFormat.mSampleRate = devFormat.mSampleRate;
     m_outDevFormat.mFormatID = kAudioFormatLinearPCM;
     m_outDevFormat.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-    m_outDevFormat.mFormatFlags &= ~kAudioFormatFlagIsBigEndian;    
+    m_outDevFormat.mFormatFlags &= ~kAudioFormatFlagIsBigEndian;
 #if __BIG_ENDIAN__
     m_outDevFormat.mFormatFlags |= kAudioFormatFlagIsBigEndian;
 #endif
@@ -422,14 +422,14 @@ bool CoreAudioSource::init()
 	Debug(DebugInfo,"CoreAudioSource::init() [%p] - Failed to initialize AU error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
-    
+
     // allocate AudioBufferList
     m_inAudioBuffer = allocateAudioBufferList(m_outDevFormat.mChannelsPerFrame,audioSamples *  m_outDevFormat.mBytesPerFrame);
     if(m_inAudioBuffer == NULL) {
 	Debug(DebugInfo,"CoreAudioSource::init() [%p] - Failed to allocate audio buffers",this);
 	return false;
     }
-    
+
     // Start pulling for audio data
     err = AudioOutputUnitStart(fAudioUnit);
     if(err != noErr) {
@@ -444,7 +444,7 @@ bool CoreAudioSource::init()
     for (unsigned int i = 0; i <= m_channels; i++)
         m_volSettable = checkVolumeSettable(fInputDevID,i,true) || m_volSettable;
     Debug(DebugAll,"CoreAudioSource::init() [%p] - volume %s settable",this,(m_volSettable ? "is" : "isn't"));
-    
+
     return start("CoreAudioSource");
 }
 
@@ -462,20 +462,20 @@ OSStatus CoreAudioSource::buildConverter(AudioStreamBasicDescription inputFormat
     m_convertToFormat.mBytesPerFrame = m_convertToFormat.mBitsPerChannel / 8;
     m_convertToFormat.mFramesPerPacket = 1;
     m_convertToFormat.mBytesPerPacket = m_convertToFormat.mBytesPerFrame;
-    
+
     DDebug(DebugInfo,"CoreAudioSource::buildConverter() [%p] - AudioConverter output format is : channels/frame=%u, sampleRate=%f, bits/channel=%u, "
 	   "bytes/frame=%u, frames/packet=%u, bytes/packet=%u, formatFlags=0x%x",
            this,(unsigned int)m_convertToFormat.mChannelsPerFrame,m_convertToFormat.mSampleRate,(unsigned int)m_convertToFormat.mBitsPerChannel,
 	   (unsigned int)m_convertToFormat.mBytesPerFrame,(unsigned int)m_convertToFormat.mFramesPerPacket,(unsigned int)m_convertToFormat.mBytesPerPacket,
 	   (unsigned int)m_convertToFormat.mFormatFlags);
-    
+
     OSStatus err = noErr;
     err = AudioConverterNew(&inputFormat,&m_convertToFormat,ac);
     if (err != noErr) {
 	Debug(DebugInfo,"CoreAudioSource::buildConverter() [%p] failed to get converter error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return err;
     }
-	    
+
     // set channel map
     SInt32 channelMap[] = { 0 };
     err = AudioConverterSetProperty(*ac, kAudioConverterChannelMap, sizeof(SInt32), channelMap);
@@ -487,7 +487,7 @@ OSStatus CoreAudioSource::buildConverter(AudioStreamBasicDescription inputFormat
 	Debug(DebugInfo,"CoreAudioSource::buildConverter() [%p] failed to set converter complexity error==%4.4s, %ld",this,(char*)&err,(long int)err);
     return noErr;
 }
-	
+
 AudioBufferList* CoreAudioSource::allocateAudioBufferList(UInt32 numChannels, UInt32 size)
 {
     AudioBufferList* list;
@@ -495,7 +495,7 @@ AudioBufferList* CoreAudioSource::allocateAudioBufferList(UInt32 numChannels, UI
     list = (AudioBufferList*)calloc(1, sizeof(AudioBufferList) + numChannels * sizeof(AudioBuffer));
     if(list == NULL)
 	return NULL;
-		
+
     list->mNumberBuffers = numChannels;
     for(UInt32 i = 0; i < numChannels; ++i) {
 	list->mBuffers[i].mNumberChannels = 1;
@@ -508,7 +508,7 @@ AudioBufferList* CoreAudioSource::allocateAudioBufferList(UInt32 numChannels, UI
     }
     return list;
 }
-	
+
 void CoreAudioSource::destroyAudioBufferList(AudioBufferList* list)
 {
     DDebug(DebugAll,"CoreAudioSource::destroyAudioBufferList(list=%p) [%p]",list,this);
@@ -527,12 +527,12 @@ void CoreAudioSource::sendData(AudioBufferList* buf)
     if (!buf)
 	return;
     lock();
-    for (unsigned int i = 0; i < m_outDevFormat.mChannelsPerFrame; i++) 
+    for (unsigned int i = 0; i < m_outDevFormat.mChannelsPerFrame; i++)
 	m_data.append(buf->mBuffers[i].mData,buf->mBuffers[i].mDataByteSize);
     XDebug(DebugAll,"CoreAudioSource::sendData(buffer=%p,buffer_length=%d), internal buffer length=%d [%p]",buf,(int)buf->mBuffers[0].mDataByteSize,m_data.length(),this);
     unlock();
 }
-	
+
 DataBlock CoreAudioSource::getData(UInt32 pkts)
 {
     // return to the converter a data block with the required size or the maximum available
@@ -545,8 +545,8 @@ DataBlock CoreAudioSource::getData(UInt32 pkts)
     unlock();
     return data;
 }
-	
-OSStatus CoreAudioSource::inputCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp, 
+
+OSStatus CoreAudioSource::inputCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp,
 							UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList* ioData)
 {
     CoreAudioSource* source = (CoreAudioSource*) inRefCon;
@@ -555,11 +555,11 @@ OSStatus CoreAudioSource::inputCallback(void* inRefCon, AudioUnitRenderActionFla
     err = AudioUnitRender(source->fAudioUnit,ioActionFlags,inTimeStamp,inBusNumber,inNumberFrames,source->m_inAudioBuffer);
     if(err)
 	Debug(DebugInfo,"CoreAudioSource::inputCallback() [%p] AudioUnitRender() failed with error=%4.4s, %ld",source,(char*)&err,(long int)err);
-	
-    source->sendData(source->m_inAudioBuffer);	
+
+    source->sendData(source->m_inAudioBuffer);
     return err;
 }
-	
+
 void CoreAudioSource::run()
 {
     DataBlock frame;
@@ -585,7 +585,7 @@ void CoreAudioSource::run()
 	    }
 	    frame.append(fillBufList.mBuffers[0].mData,outBuffSize * m_convertToFormat.mBytesPerPacket);
 	}
-		
+
 	if (frame.length() >= FRAME_SIZE) {
 	    // we have enough data to send forward
 	    DataBlock data(frame.data(),FRAME_SIZE,false);
@@ -599,14 +599,14 @@ void CoreAudioSource::run()
     delete [] (char*)fillBufList.mBuffers[0].mData;
     Debug(DebugAll,"CoreAudioSource [%p] end of data",this);
 }
-	
+
 void CoreAudioSource::cleanup()
 {
     Debug(DebugAll,"CoreAudioSource [%p] cleanup, total=%u",this,m_total);
     AudioConverterDispose(m_audioConvert);
     ThreadedSource::cleanup();
 }
-	
+
 bool CoreAudioSource::control(NamedList& params)
 {
     DDebug(DebugAll,"CoreAudioSource::control() [%p]",this);
@@ -650,8 +650,8 @@ bool CoreAudioSource::control(NamedList& params)
 	return TelEngine::controlReturn(&params,false);
     return TelEngine::controlReturn(&params,setVolStatus);
 }
-	
-	
+
+
 CoreAudioConsumer::CoreAudioConsumer(unsigned int rate)
     : Mutex(false,"CoreAudioConsumer"),
       m_total(0), m_volSettable(false), m_channels(0), fOutputDevID(0), m_rate(rate)
@@ -660,7 +660,7 @@ CoreAudioConsumer::CoreAudioConsumer(unsigned int rate)
     if (m_rate != DEFAULT_SAMPLE_RATE)
 	m_format << "/" << m_rate;
 }
-	
+
 CoreAudioConsumer::~CoreAudioConsumer()
 {
     Debug(DebugAll,"CoreAudioConsumer::~CoreAudioConsumer() [%p] total=%u",this,m_total);
@@ -671,7 +671,7 @@ CoreAudioConsumer::~CoreAudioConsumer()
     if(err != noErr)
     	Debug(DebugInfo,"CoreAudioConsumer::~CoreAudioConsumer() [%p] - Failed to uninitialize the AudioUnit error=%4.4s, %ld",this,(char*)&err,(long int)err);
 }
-	
+
 bool CoreAudioConsumer::init()
 {
     OSStatus err = noErr;
@@ -800,12 +800,12 @@ void CoreAudioConsumer::getData(AudioBufferList* buf)
 	len = m_data.length();
     if (len > 0) {
 	::memcpy(buf->mBuffers[0].mData,m_data.data(),len);
-	m_data.cut(-len);                
+	m_data.cut(-len);
     }
     unlock();
 }
 
-OSStatus CoreAudioConsumer::outputCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp, 
+OSStatus CoreAudioConsumer::outputCallback(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp,
 							   UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList* ioData)
 {
     CoreAudioConsumer* dst = static_cast<CoreAudioConsumer*>(inRefCon);
@@ -816,7 +816,7 @@ OSStatus CoreAudioConsumer::outputCallback(void* inRefCon, AudioUnitRenderAction
     dst->getData(ioData);
     return noErr;
 }
-	
+
 unsigned long CoreAudioConsumer::Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags)
 {
     // append to the internal buffer received data
@@ -828,7 +828,7 @@ unsigned long CoreAudioConsumer::Consume(const DataBlock &data, unsigned long tS
     unlock();
     return invalidStamp();
 }
-	
+
 bool CoreAudioConsumer::control(NamedList& params)
 {
     DDebug(DebugAll,"CoreAudioConsumer::control() [%p]",this);
@@ -871,7 +871,7 @@ bool CoreAudioConsumer::control(NamedList& params)
 
     return TelEngine::controlReturn(&params,setVolStatus);
 }
-	
+
 CoreAudioChan::CoreAudioChan(const String& dev, unsigned int rate)
     : CallEndpoint("coreaudio"),
       m_dev(dev), m_rate(rate)
@@ -879,7 +879,7 @@ CoreAudioChan::CoreAudioChan(const String& dev, unsigned int rate)
     Debug(DebugAll,"CoreAudioChan::CoreAudioChan ('%s') [%p]",dev.c_str(),this);
     s_audioChan = this;
 }
-	
+
 CoreAudioChan::~CoreAudioChan()
 {
     Debug(DebugAll,"CoreAudioChan::~CoreAudioChan() [%p]",this);
@@ -888,7 +888,7 @@ CoreAudioChan::~CoreAudioChan()
     setConsumer();
     s_audioChan = 0;
 }
-	
+
 bool CoreAudioChan::init()
 {
     CoreAudioSource* source = new CoreAudioSource(rate());
@@ -908,13 +908,13 @@ bool CoreAudioChan::init()
     cons->deref();
     return true;
 }
-	
+
 void CoreAudioChan::disconnected(bool final, const char *reason)
 {
     Debug(DebugInfo,"CoreAudioChan::disconnected() '%s' [%p]",reason,this);
     setTarget();
 }
-	
+
 void CoreAudioChan::answer()
 {
     Message* m = new Message("call.answered");
@@ -973,7 +973,7 @@ bool CoreAudioHandler::received(Message &msg)
 	    Debug(DebugInfo,"CoreAudio outgoing call not accepted!");
 	    chan->destruct();
 	    return false;
-	}	
+	}
 	const char *targ = msg.getValue("target");
 	if (!targ) {
 	    Debug(DebugWarn,"CoreAudio outgoing call with no target!");
@@ -1128,3 +1128,5 @@ bool CoreAudioPlugin::isBusy() const
 }
 
 }; // anonymous namespace
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

@@ -5,7 +5,7 @@
  * ZLib support
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -178,7 +178,7 @@ ZLibStream::ZLibStream(ZLibComp* owner, bool comp, const NamedList& params)
     ::memset(&m_zlib,0,sizeof(z_stream_s));
     m_zlib.next_out = (Bytef*)data();
     m_zlib.avail_out = length();
-    m_zlib.zalloc = Z_NULL; 
+    m_zlib.zalloc = Z_NULL;
     m_zlib.zfree = Z_NULL;
     m_zlib.opaque = Z_NULL;
     int code = Z_OK;

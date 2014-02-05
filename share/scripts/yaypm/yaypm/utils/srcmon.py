@@ -5,7 +5,7 @@ from twisted.internet import reactor
 
 logger = logging.getLogger('yaypm.srcmon')
 
-def monitor():    
+def monitor():
     def modules2watch():
         modules2watch = {}
         pythonDir = sys.modules["os"].__file__.rsplit("/", 1)[0]
@@ -34,7 +34,7 @@ def monitor():
                 except os.error:
                     logger.info("File: '%s' possibly removed. Reloading..." % f)
                     yield True
-                   
+
                 mtime = watched.get(f, None)
                 if mtime:
                     if t.st_mtime > mtime:
@@ -62,7 +62,7 @@ if os.environ.has_key("MONITORED"):
     reactor.callLater(1, monitor)
 else:
     os.environ["MONITORED"] = ""
-    
+
     while True:
         if not(subprocess.call(sys.argv)):
             break

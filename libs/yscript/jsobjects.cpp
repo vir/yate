@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2011-2013 Null Team
+ * Copyright (C) 2011-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -560,39 +560,37 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
     }
     else if (oper.name() == YSTRING("pop")) {
 	// Removes the last element from an array and returns that element
-	if (m_length < 1)
-	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
-
+	if (oper.number())
+	    return false;
 	NamedString* last = 0;
-	while (!last) {
+	while ((m_length > 0) && !last)
 	    last = params().getParam(String(--m_length));
-	    if (m_length == 0)
-		break;
-	}
 	if (!last)
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
 	else {
-	    ExpWrapper* w = YOBJECT(ExpWrapper,last);
-	    if (!w)
-		ExpEvaluator::pushOne(stack,new ExpOperation(*last));
-	    else
-		ExpEvaluator::pushOne(stack,w->clone(w->name()));
+	    params().paramList()->remove(last,false);
+	    ExpOperation* op = YOBJECT(ExpOperation,last);
+	    if (!op) {
+		op = new ExpOperation(*last,0,true);
+		TelEngine::destruct(last);
+	    }
+	    ExpEvaluator::pushOne(stack,op);
 	}
-	// clear last
-	params().clearParam(last);
     }
     else if (oper.name() == YSTRING("concat")) {
 	// Returns a new array comprised of this array joined with other array(s) and/or value(s).
-	// var num1 = [1, 2, 3];  
-	// var num2 = [4, 5, 6];  
-	// var num3 = [7, 8, 9];  
+	// var num1 = [1, 2, 3];
+	// var num2 = [4, 5, 6];
+	// var num3 = [7, 8, 9];
 	//
-	// creates array [1, 2, 3, 4, 5, 6, 7, 8, 9]; num1, num2, num3 are unchanged  
-	// var nums = num1.concat(num2, num3);  
+	// creates array [1, 2, 3, 4, 5, 6, 7, 8, 9]; num1, num2, num3 are unchanged
+	// var nums = num1.concat(num2, num3);
 
-	// var alpha = ['a', 'b', 'c'];  
-	// creates array ["a", "b", "c", 1, 2, 3], leaving alpha unchanged  
+	// var alpha = ['a', 'b', 'c'];
+	// creates array ["a", "b", "c", 1, 2, 3], leaving alpha unchanged
 	// var alphaNumeric = alpha.concat(1, [2, 3]);
+
+	// TODO: fix it, it's broken for non-strings
 	if (!oper.number())
 	    return false;
 	JsArray* array = new JsArray(mutex());
@@ -647,6 +645,8 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// Reverses the order of the elements of an array -- the first becomes the last, and the last becomes the first.
 	// var myArray = ["one", "two", "three"];
 	// myArray.reverse(); => three, two, one
+
+	// TODO: fix it, it's broken for non-strings
 	NamedList reversed("");
 	String separator = ",";
 	String toCopy;
@@ -668,16 +668,30 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// myFish before: angel,clown,mandarin,surgeon
 	// myFish after: clown,mandarin,surgeon
 	// Removed this element: angel
-	if (!length())
-	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
-	else {
-	    ExpEvaluator::pushOne(stack,new ExpOperation(params().getValue("0")));
+	if (oper.number())
+	    return false;
+	ObjList* l = params().paramList()->find("0");
+	if (l) {
+	    NamedString* ns = static_cast<NamedString*>(l->get());
+	    params().paramList()->remove(ns,false);
+	    ExpOperation* op = YOBJECT(ExpOperation,ns);
+	    if (!op) {
+		op = new ExpOperation(*ns,0,true);
+		TelEngine::destruct(ns);
+	    }
+	    ExpEvaluator::pushOne(stack,op);
 	    // shift : value n+1 becomes value n
-	    for (int32_t i = 0; i < length() - 1; i++)
-		params().setParam(String(i),params().getValue(String(i + 1)));
-	    params().clearParam(String(length() - 1));
-	    setLength(length() - 1);
+	    for (int32_t i = 0; ; i++) {
+		ns = static_cast<NamedString*>((*params().paramList())[String(i + 1)]);
+		if (!ns) {
+		    setLength(i);
+		    break;
+		}
+		const_cast<String&>(ns->name()) = i;
+	    }
 	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
     }
     else if (oper.name() == YSTRING("unshift")) {
 	// Adds one or more elements to the front of an array and returns the new length of the array
@@ -692,20 +706,20 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// New length: 4
 	// shift array
 	int32_t shift = (int32_t)oper.number();
-	for (int32_t i = length(); i; i--)
-	    params().setParam(String(i - 1 + shift),params().getValue(String(i - 1)));
-	for (int32_t i = shift; i; i--) {
+	for (int32_t i = length() + shift - 1; i >= shift; i--) {
+	    NamedString* ns = static_cast<NamedString*>((*params().paramList())[String(i - shift)]);
+	    if (ns) {
+		String index(i);
+		params().clearParam(index);
+		const_cast<String&>(ns->name()) = index;
+	    }
+	}
+	for (int32_t i = shift - 1; i >= 0; i--) {
 	    ExpOperation* op = popValue(stack,context);
-	    ExpWrapper* obj = YOBJECT(ExpWrapper,op);
-	    if (!obj)
+	    if (!op)
 		continue;
-	    JsObject* jo = (JsObject*)obj->getObject(YATOM("JsObject"));
-	    if (!jo)
-		continue;
-	    jo->ref();
-	    params().clearParam(String(i - 1));
-	    params().setParam(new NamedPointer(String(i - 1),jo));
-	    TelEngine::destruct(op);
+	    const_cast<String&>(op->name()) = i;
+	    params().paramList()->insert(op);
 	}
 	setLength(length() + shift);
 	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)length()));
@@ -771,14 +785,14 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 bool JsArray::runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     // Extracts a section of an array and returns a new array.
-    // var myHonda = { color: "red", wheels: 4, engine: { cylinders: 4, size: 2.2 } };  
-    // var myCar = [myHonda, 2, "cherry condition", "purchased 1997"];  
-    // var newCar = myCar.slice(0, 2); 
+    // var myHonda = { color: "red", wheels: 4, engine: { cylinders: 4, size: 2.2 } };
+    // var myCar = [myHonda, 2, "cherry condition", "purchased 1997"];
+    // var newCar = myCar.slice(0, 2);
     if (!oper.number())
 	return false;
     // begin | end > 0 offset from the start of the array
     //	       < 0 offset from the end of the array
-    // end missing -> go to end of array  
+    // end missing -> go to end of array
     int begin = length(), end = length();
     for (int i = (int)oper.number(); i; i--) {
 	ExpOperation* op = popValue(stack,context);
@@ -804,7 +818,7 @@ bool JsArray::runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject
 
 bool JsArray::runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    // Changes the content of an array, adding new elements while removing old elements. 
+    // Changes the content of an array, adding new elements while removing old elements.
     // Returns an array containing the removed elements
     // array.splice(index , howMany[, element1[, ...[, elementN]]])
     // array.splice(index ,[ howMany[, element1[, ...[, elementN]]]])
@@ -848,7 +862,7 @@ bool JsArray::runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObjec
 	for (int i = shiftIdx; i < length(); i++)
 	    params().setParam(String(i + shiftWith),params().getValue(String(i)));
     }
-    // insert the new ones 
+    // insert the new ones
     for (int i = begin;(arguments.count() > 2) && (i < length()); i++) {
 	GenObject* obj = arguments[2 + i - begin];
 	params().setParam(new NamedPointer(String(i),obj));

@@ -2,7 +2,7 @@
 ; List of pipelines that will be used as sources of music (on hold).
 ; Each pipeline should write to stdout in 16bit signed linear
 ;  at default rate 8000/s or as specificed in the "rate" parameter.
-; From outside (e.g. routing modules) mohs are addressed 
+; From outside (e.g. routing modules) mohs are addressed
 ;  as moh/default, moh/noise etc.
 
 ; use mpg123 to play a bunch of mp3 files (shuffled)

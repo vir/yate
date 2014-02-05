@@ -6,7 +6,7 @@
  * Adapted for YATE by Paul Chitescu
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -32,7 +32,7 @@ typedef struct MD5Context {
     u_int32_t bits[2];
     unsigned char in[64];
 } MD5_CTX;
-			
+
 
 #if !(defined(WORDS_BIGENDIAN) || defined(BIGENDIAN))
 #define byteReverse(buf, len)	/* Nothing */
@@ -217,7 +217,7 @@ static void MD5_Update(MD5_CTX *ctx, unsigned char const *buf, unsigned len)
 }
 
 /*
- * Final wrapup - pad to 64-byte boundary with the bit pattern 
+ * Final wrapup - pad to 64-byte boundary with the bit pattern
  * 1 0* (64-bit count of bits processed, MSB-first)
  */
 static void MD5_Final(unsigned char digest[16], MD5_CTX *ctx)

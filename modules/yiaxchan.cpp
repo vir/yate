@@ -5,7 +5,7 @@
  * IAX channel
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  * Author: Marian Podgoreanu
  *
  * This software is distributed under multiple licenses;
@@ -1116,7 +1116,7 @@ void YIAXLineContainer::evTimer(Time& time)
 {
     lock();
     ListIterator iter(m_lines);
-    GenObject* gen = 0; 
+    GenObject* gen = 0;
     while (0 != (gen = iter.get())) {
 	RefPointer<YIAXLine> line = static_cast<YIAXLine*>(gen);
 	if (!line)
@@ -2233,7 +2233,7 @@ void YIAXDriver::msgStatusAccounts(Message& msg)
     }
     s_lines.unlock();
     msg.retValue() << "accounts=" << n;
-    msg.retValue().append(det,";"); 
+    msg.retValue().append(det,";");
     msg.retValue() << "\r\n";
 }
 
@@ -2270,7 +2270,7 @@ void YIAXDriver::msgStatusListeners(Message& msg)
     }
     m_enginesMutex.unlock();
     msg.retValue() << "listeners=" << n << ",default=" << def;
-    msg.retValue().append(det,";"); 
+    msg.retValue().append(det,";");
     msg.retValue() << "\r\n";
 }
 
@@ -2453,7 +2453,7 @@ unsigned long YIAXConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 //
 // YIAXSource
 //
-YIAXSource::YIAXSource(YIAXConnection* conn, u_int32_t format, const char* formatText, int type) 
+YIAXSource::YIAXSource(YIAXConnection* conn, u_int32_t format, const char* formatText, int type)
     : DataSource(formatText),
     YIAXData(conn,format,type)
 {
@@ -2713,7 +2713,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    startMedia(true,IAXFormat::Video);
 	    startMedia(false,IAXFormat::Video);
 	    Engine::enqueue(message("call.answered",false,true));
-	    break; 
+	    break;
 	case IAXEvent::Quelch:
 	    DDebug(this,DebugCall,"QUELCH [%p]",this);
 	    m_mutedOut = true;
@@ -2726,7 +2726,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    DDebug(this,DebugInfo,"RINGING [%p]",this);
 	    startMedia(true);
 	    Engine::enqueue(message("call.ringing",false,true));
-	    break; 
+	    break;
 	case IAXEvent::Hangup:
 	case IAXEvent::Reject:
 	    {

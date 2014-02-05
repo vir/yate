@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -266,7 +266,7 @@ bool JGEngine::acceptIq(XMPPUtils::IqType type, const JabberID& from, const Jabb
 // Default event processor
 void JGEngine::defProcessEvent(JGEvent* event)
 {
-    if (!event) 
+    if (!event)
 	return;
     DDebug(this,DebugAll,"JGEngine::defprocessEvent. Deleting event (%p,%u)",
 	event,event->type());
@@ -286,7 +286,7 @@ int JGEngine::decodeFlags(const String& list, const TokenDict* dict)
     if (!(list && dict))
 	return 0;
     int ret = 0;
-    ObjList* l = list.split(',',false); 
+    ObjList* l = list.split(',',false);
     for (; dict->token; dict++)
 	if (l->find(dict->token))
 	    ret += dict->value;

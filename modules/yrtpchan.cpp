@@ -5,7 +5,7 @@
  * RTP channel - also acts as data helper for other protocols
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -736,7 +736,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
     setTimeout(msg,s_timeout);
     m_rtp->setReports(msg.getIntValue(YSTRING("rtcp_interval"),s_interval));
     // dejittering is only meaningful for audio
-    if (isAudio()){ 
+    if (isAudio()){
 	int minJitter = msg.getIntValue(YSTRING("minjitter"),s_minJitter);
 	int maxJitter = msg.getIntValue(YSTRING("maxjitter"),s_maxJitter);
 	if (minJitter >= 0 && maxJitter > 0)
@@ -873,7 +873,7 @@ void YRTPWrapper::timeout(bool initial)
 	return;
     if (initial)
 	m_noAudio++;
-    else 
+    else
 	m_lostAudio++;
     Debug(&splugin,DebugWarn,"%s timeout in%s%s wrapper [%p]",
 	(initial ? "Initial" : "Later"),

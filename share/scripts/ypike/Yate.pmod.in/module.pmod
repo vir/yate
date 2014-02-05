@@ -24,10 +24,10 @@ constant __components=({"Public.pmod/Protocols.pmod/Yate.pmod"});
 class Engine
 {
    static Stdio.FILE yate_socket;
-   
+
    void create(void|string|object server, void|string role, void|int port)
    {
-      
+
       if(server)
       {
          if(objectp(server))
@@ -47,9 +47,9 @@ class Engine
          _yate_print("%%%%>connect:%s\n",role);
       return;
    }
-   
+
    /**
-    * Static function to output astring to Yate's stderr or logfile 
+    * Static function to output astring to Yate's stderr or logfile
     * only if debugging was enabled.
     * @param str String to output if yate_debug is set.
    **/
@@ -60,7 +60,7 @@ class Engine
    #endif
       return;
    }
-   
+
    /**
     * Private function to convert a string to its Yate escaped format
     * @param str String to escape
@@ -68,19 +68,19 @@ class Engine
     */
    private string _yate_escape(string str)
    {
-       return replace(str, 
+       return replace(str,
        ({"%" , "\000" , "\001" , "\002" , "\003" , "\004" , "\005" ,
        "\006" , "\007" , "\008" , "\009" , "\010" , "\011" , "\012" ,
        "\013" , "\014" , "\015" , "\016" , "\017" , "\018" , "\019" ,
        "\020" , "\021" , "\022" , "\023" , "\024" , "\025" , "\026" ,
-       "\027" , "\028" , "\029" , "\030" , "\031" , "\072" }), 
+       "\027" , "\028" , "\029" , "\030" , "\031" , "\072" }),
        ({"%%" , "%\100" , "%\101" , "%\102" , "%\103" , "%\104" , "%\105" ,
        "%\106" , "%\107" , "%\108" , "%\109" , "%\110" , "%\111" , "%\112" ,
        "%\113" , "%\114" , "%\115" , "%\116" , "%\117" , "%\118" , "%\119" ,
        "%\120" , "%\121" , "%\122" , "%\123" , "%\124" , "%\125" , "%\126" ,
        "%\127" , "%\128" , "%\129" , "%\130" , "%\131" , "%\172" }));
    }
-   
+
    /**
     * Static function to convert an Yate escaped string back to string
     * @param str Yate escaped String
@@ -103,7 +103,7 @@ class Engine
       }
       return outp;
    }
-   
+
    /*
     * install a Yate message handler
     * @param name Name of the messages to handle
@@ -111,7 +111,7 @@ class Engine
     * @param filtname (optional) Name of parameter to filter for
     * @param filtvalue (optional) Matching value of filtered parameter
     */
-   void install(string name, void|int priority, void|string filter_name, 
+   void install(string name, void|int priority, void|string filter_name,
                                                        void|string filter_value)
    {
       string filter="";
@@ -122,7 +122,7 @@ class Engine
          filter=":"+_yate_escape(filter_name)+":"+_yate_escape(filter_value||"");
       _yate_print("%%%%>install:%d:%s:%s\n",priority,name,filter);
    }
-   
+
    /*
     * Uninstall a Yate message handler
     * @param name Name of the messages to handle
@@ -132,18 +132,18 @@ class Engine
       name=_yate_escape(name);
       _yate_print("%%%%>install:%s\n",name);
    }
-   
-   
+
+
    /*
     * Install a Yate message watcher
     * @param name Name of the messages to watch
     */
-   void watch(string name) 
+   void watch(string name)
    {
       name=_yate_escape(name);
       _yate_print("%%%%>watch:%s\n",name);
    }
-   
+
    /*
     * Uninstall a Yate message watcher
     * @param name Name of the messages to stop watching
@@ -153,7 +153,7 @@ class Engine
       name=_yate_escape(name);
       _yate_print("%%%%>unwatch:%s\n",name);
    }
-   
+
    /*
     * Dispatch the message to Yate for handling
     * @param message Message object to dispatch
@@ -181,8 +181,8 @@ class Engine
                   _yate_escape(message->name),_yate_escape(message->retval||""),
    	       paramstring);
    }
-   
-   
+
+
    void acknowledge(mapping message)
    {
       if(message->type != "incoming")
@@ -199,12 +199,12 @@ class Engine
                   _yate_escape(message->handled),_yate_escape(message->name),
    	       _yate_escape(message->retval||""),paramstring);
    }
-   
+
    void setlocal(string name, string value)
    {
       _yate_print("%%%%>setlocal:%s:%s\n",_yate_escape(name),_yate_escape(value));
    }
-   
+
    mapping getevent()
    {
       string rawmessage;
@@ -279,7 +279,7 @@ class Engine
       }
       return message;
    }
-   
+
    void output(string str, mixed ... args)
    {
      if(yate_socket)
@@ -287,14 +287,14 @@ class Engine
      else
         Stdio.stderr->write(str+"\n", @args);
    }
-   
+
    /* Internal function */
    private string _yate_mapping2string(mapping params)
    {
       string param="";
       foreach(indices(params), string key)
       {
-        param+=":" + _yate_escape(key) + "=" + _yate_escape(params[key]); 
+        param+=":" + _yate_escape(key) + "=" + _yate_escape(params[key]);
       }
       return param;
    }

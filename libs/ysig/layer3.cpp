@@ -1,11 +1,11 @@
 /**
  * layer3.cpp
- * This file is part of the YATE Project http://YATE.null.ro 
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Signalling Stack - implements the support for SS7, ISDN and PSTN
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -490,7 +490,7 @@ void SS7Layer3::printRoutes()
 	    }
 	    if (route->shift())
 		tmp << " >> " << route->shift();
-	    tmp << "\r\n"; 
+	    tmp << "\r\n";
 	}
 	s << tmp;
     }
@@ -498,7 +498,7 @@ void SS7Layer3::printRoutes()
 	s = s.substr(0,s.length() - 2);
 	Output("%s of '%s': [%p]\r\n%s",router?"Routing table":"Destinations",debugName(),this,s.c_str());
     }
-    else 
+    else
 	Output("No %s in '%s' [%p]",router?"routes":"destinations",debugName(),this);
 }
 

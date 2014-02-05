@@ -376,7 +376,7 @@ static inline unsigned int getMCCMNC(const uint8_t*& in, unsigned int& len, XmlE
     return GSML3Codec::NoError;
 }
 
-static inline unsigned int setMCCMNC(XmlElement* in, uint8_t*& out, unsigned int& len, bool advance = true, 
+static inline unsigned int setMCCMNC(XmlElement* in, uint8_t*& out, unsigned int& len, bool advance = true,
 					bool findChild = true)
 {
     if (!(in && out && len >= 3))
@@ -895,7 +895,7 @@ static unsigned int encodeEPSMobileIdent(const GSML3Codec* codec,  uint8_t proto
 		return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
 	    // MMEGroupID
 	    XmlElement* child = xml->findFirstChild(&YSTRING("MMEGroupID"));
-	    unsigned int val = -1;
+	    unsigned int val = (unsigned int)-1;
 	    if (!(child && ((val = child->getText().toInteger(val)) <= 0xffff)))
 		return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
 	    setUINT16(val,buf,len,true);
@@ -2007,7 +2007,7 @@ static const TokenDict s_causeCCITT_dict[] = {
 	{"unknown-group",                  0x5a}, // Non-existent CUG
 	{"invalid-transit-net",            0x5b}, // Invalid transit network selection
 	{"invalid-message",                0x5f}, // Invalid message, unspecified
-	// protocol-error class 
+	// protocol-error class
 	{"missing-mandatory-ie",           0x60}, // Mandatory information element is missing
 	{"unknown-message",                0x61}, // Message type non-existent or not implemented
 	{"wrong-message",                  0x62}, // Message not compatible with call state, non-existent or not implemented
@@ -3827,7 +3827,7 @@ static unsigned int  decodeSecHeader(const GSML3Codec* codec, uint8_t proto, con
 	}
 	default:
 	    if (secVal >= GSML3Codec::ServiceRequestHeader) {
-		//TODO 
+		//TODO
 		DDebug(codec->dbg(),DebugStub,"decodeSecHeader() for ServiceRequestHeader not implemented [%p]",codec->ptr());
 	    }
 	    break;
@@ -3887,7 +3887,7 @@ static unsigned int encodeSecHeader(const GSML3Codec* codec,  uint8_t proto, con
 	}
 	default:
 	    if (secVal >= GSML3Codec::ServiceRequestHeader) {
-		//TODO 
+		//TODO
 		DDebug(codec->dbg(),DebugStub,"encodeSecHeader() for ServiceRequestHeader not implemented [%p]",codec->ptr());
 	    }
 	    break;
@@ -4140,7 +4140,7 @@ static unsigned int encodeHexParam(const GSML3Codec* codec, uint8_t proto, XmlEl
 		    return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
 		if (param->length == 4) {
 		    uint8_t val = d[0];
-		    if (!param->lowerBits) 
+		    if (!param->lowerBits)
 			val = val >> 4;
 		    setUINT8(val,out,param);
 		    d.clear();
@@ -4551,7 +4551,7 @@ static unsigned int encodeTV(const GSML3Codec* codec, uint8_t proto, XmlElement*
 		    return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
 		if (!(param->name && param->length <= 8))
 		    return encodeHexParam(codec,proto,xml,out,param);
-		
+
 		const TokenDict* dict = static_cast<const TokenDict*>(param->ieType.data);
 		uint8_t val = param->iei;
 		if (!dict)
@@ -4661,7 +4661,7 @@ static unsigned int encodeTLV_TLVE(const GSML3Codec* codec, uint8_t proto, XmlEl
     return GSML3Codec::NoError;
 }
 
-static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const uint8_t*& in, unsigned int& len, XmlElement*& out, 
+static unsigned int decodeParams(const GSML3Codec* codec, uint8_t proto, const uint8_t*& in, unsigned int& len, XmlElement*& out,
 	const IEParam* param, const NamedList& params)
 {
     if (!(codec && in && len && param))
@@ -4944,3 +4944,5 @@ void GSML3Codec::printDbg(int dbgLevel, const uint8_t* in, unsigned int len, Xml
 	(encode ? "Encoded" : "Decoded"),(encode ? "xml" : "payload"),(encode ? tmp.c_str() : s.c_str()),
 	(encode ? "payload" : "xml"), (encode ? s.c_str() : tmp.c_str()));
 }
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

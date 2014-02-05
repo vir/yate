@@ -5,7 +5,7 @@
  * DirectSound channel driver for Windows.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -201,7 +201,7 @@ bool DSoundPlay::init()
 	Debug(DebugGoOn,"Could not set the DirectSound cooperative level, code 0x%X",hr);
 	return false;
     }
-    
+
     // Set channel number depending data
     WORD nChannels = 1;
     DWORD nAvgBytesPerSec = 2 * m_rate;  // nSamplesPerSec * nBlockAlign.
@@ -643,7 +643,7 @@ unsigned long DSoundConsumer::Consume(const DataBlock &data, unsigned long tStam
 
 bool DSoundConsumer::control(NamedList& msg)
 {
-    if (m_dsound)	
+    if (m_dsound)
 	return m_dsound->control(msg);
     return false;
 }

@@ -895,7 +895,7 @@ static unsigned int encodeEPSMobileIdent(const GSML3Codec* codec,  uint8_t proto
 		return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
 	    // MMEGroupID
 	    XmlElement* child = xml->findFirstChild(&YSTRING("MMEGroupID"));
-	    unsigned int val = -1;
+	    unsigned int val = (unsigned int)-1;
 	    if (!(child && ((val = child->getText().toInteger(val)) <= 0xffff)))
 		return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
 	    setUINT16(val,buf,len,true);
@@ -4944,3 +4944,5 @@ void GSML3Codec::printDbg(int dbgLevel, const uint8_t* in, unsigned int len, Xml
 	(encode ? "Encoded" : "Decoded"),(encode ? "xml" : "payload"),(encode ? tmp.c_str() : s.c_str()),
 	(encode ? "payload" : "xml"), (encode ? s.c_str() : tmp.c_str()));
 }
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

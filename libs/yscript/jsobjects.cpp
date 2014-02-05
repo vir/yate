@@ -560,6 +560,8 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
     }
     else if (oper.name() == YSTRING("pop")) {
 	// Removes the last element from an array and returns that element
+
+	// TODO: fix it, it's broken for non-strings
 	if (m_length < 1)
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
 
@@ -593,6 +595,8 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// var alpha = ['a', 'b', 'c'];
 	// creates array ["a", "b", "c", 1, 2, 3], leaving alpha unchanged
 	// var alphaNumeric = alpha.concat(1, [2, 3]);
+
+	// TODO: fix it, it's broken for non-strings
 	if (!oper.number())
 	    return false;
 	JsArray* array = new JsArray(mutex());
@@ -647,6 +651,8 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// Reverses the order of the elements of an array -- the first becomes the last, and the last becomes the first.
 	// var myArray = ["one", "two", "three"];
 	// myArray.reverse(); => three, two, one
+
+	// TODO: fix it, it's broken for non-strings
 	NamedList reversed("");
 	String separator = ",";
 	String toCopy;
@@ -668,16 +674,30 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// myFish before: angel,clown,mandarin,surgeon
 	// myFish after: clown,mandarin,surgeon
 	// Removed this element: angel
-	if (!length())
-	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
-	else {
-	    ExpEvaluator::pushOne(stack,new ExpOperation(params().getValue("0")));
+	if (oper.number())
+	    return false;
+	ObjList* l = params().paramList()->find("0");
+	if (l) {
+	    NamedString* ns = static_cast<NamedString*>(l->get());
+	    params().paramList()->remove(ns,false);
+	    ExpOperation* op = YOBJECT(ExpOperation,ns);
+	    if (!op) {
+		op = new ExpOperation(*ns,0,true);
+		TelEngine::destruct(ns);
+	    }
+	    ExpEvaluator::pushOne(stack,op);
 	    // shift : value n+1 becomes value n
-	    for (int32_t i = 0; i < length() - 1; i++)
-		params().setParam(String(i),params().getValue(String(i + 1)));
-	    params().clearParam(String(length() - 1));
-	    setLength(length() - 1);
+	    for (int32_t i = 0; ; i++) {
+		ns = static_cast<NamedString*>((*params().paramList())[String(i + 1)]);
+		if (!ns) {
+		    setLength(i);
+		    break;
+		}
+		const_cast<String&>(ns->name()) = i;
+	    }
 	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,0));
     }
     else if (oper.name() == YSTRING("unshift")) {
 	// Adds one or more elements to the front of an array and returns the new length of the array
@@ -691,6 +711,8 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// myFish after: ["drum", "lion", "angel", "clown"]
 	// New length: 4
 	// shift array
+
+	// TODO: fix it, it's broken for non-strings
 	int32_t shift = (int32_t)oper.number();
 	for (int32_t i = length(); i; i--)
 	    params().setParam(String(i - 1 + shift),params().getValue(String(i - 1)));

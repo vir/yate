@@ -1,4 +1,4 @@
-yate (5.0.1~svn5758) UNRELEASED; urgency=low
+yate (5.0.1~svn5759) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -992,8 +992,10 @@ yate (5.0.1~svn5758) UNRELEASED; urgency=low
     concat(), reverse(), unshift() in need of fixing.  + Fixed JS
     Array.shift(), was breaking non-string values.  + Fixed JS
     Array.pop() and unshift()
+  * Updated to SVN revision 5759: + Fixed implementation of JS Array
+    concat() and reverse() methods.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 06 Feb 2014 02:19:24 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 07 Feb 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -590,39 +590,38 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// creates array ["a", "b", "c", 1, 2, 3], leaving alpha unchanged
 	// var alphaNumeric = alpha.concat(1, [2, 3]);
 
-	// TODO: fix it, it's broken for non-strings
-	if (!oper.number())
-	    return false;
+	ObjList args;
+	extractArgs(this,stack,oper,context,args);
+
 	JsArray* array = new JsArray(mutex());
-	// copy this array
-	for (int i = 0; i < m_length; i++)
-	    array->params().addParam(params().getParam(String(i)));
+	// copy this array - only numerically indexed elements!
+	for (int i = 0; i < m_length; i++) {
+	    NamedString* ns = params().getParam(String(i));
+	    ExpOperation* op = YOBJECT(ExpOperation,ns);
+	    op = op ? op->clone() : new ExpOperation(*ns,ns->name(),true);
+	    array->params().addParam(op);
+	}
 	array->setLength(length());
-	// add parameters (JsArray of JsObject)
-	for (int i = (int)oper.number(); i; i--) {
-	    ExpOperation* op = popValue(stack,context);
-	    ExpWrapper* obj = YOBJECT(ExpWrapper,op);
-	    if (!obj)
-		continue;
-	    JsArray* ja = (JsArray*)obj->getObject(YATOM("JsArray"));
+	// add parameters - either basic types or elements of Array
+	while (ExpOperation* op = static_cast<ExpOperation*>(args.remove(false))) {
+	    JsArray* ja = YOBJECT(JsArray,op);
 	    if (ja) {
-		for (int j = 0; j < ja->length(); j++)
-		    array->params().addParam(String(j + array->length()),ja->params().getValue(String(j)));
-		array->setLength(array->length() + ja->length());
+		int len = ja->length();
+		for (int i = 0; i < len; i++) {
+		    NamedString* ns = ja->params().getParam(String(i));
+		    op = YOBJECT(ExpOperation,ns);
+		    op = op ? op->clone() : new ExpOperation(*ns,0,true);
+		    const_cast<String&>(op->name()) = (unsigned int)array->m_length++;
+		    array->params().addParam(op);
+		}
+		TelEngine::destruct(ja);
 	    }
 	    else {
-		JsObject* jo = (JsObject*)obj->getObject(YATOM("JsObject"));
-		if (jo) {
-		    array->params().addParam(new NamedPointer(String(array->length()),jo));
-		    array->setLength(array->length() + 1);
-		    jo->ref();
-		}
-		else
-		    continue;
+		const_cast<String&>(op->name()) = (unsigned int)array->m_length++;
+		array->params().addParam(op);
 	    }
-	    TelEngine::destruct(op);
 	}
-	ExpEvaluator::pushOne(stack,new ExpWrapper(array,0));
+	ExpEvaluator::pushOne(stack,new ExpWrapper(array));
     }
     else if (oper.name() == YSTRING("join")) {
 	// Joins all elements of an array into a string
@@ -645,16 +644,22 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// Reverses the order of the elements of an array -- the first becomes the last, and the last becomes the first.
 	// var myArray = ["one", "two", "three"];
 	// myArray.reverse(); => three, two, one
-
-	// TODO: fix it, it's broken for non-strings
-	NamedList reversed("");
-	String separator = ",";
-	String toCopy;
-	for (int32_t i = 0; i < length(); i++)
-	    toCopy.append(params()[String(i)],separator);
-	reversed.copyParams(params(),toCopy);
-	for (int32_t i = length(); i; i--)
-	    params().setParam(String(length() - i),reversed.getValue(String(i - 1)));
+	if (oper.number())
+	    return false;
+	int i1 = 0;
+	int i2 = length() - 1;
+	for (; i1 < i2; i1++, i2--) {
+	    String s1(i1);
+	    String s2(i2);
+	    NamedString* n1 = params().getParam(s1);
+	    NamedString* n2 = params().getParam(s2);
+	    if (n1)
+		const_cast<String&>(n1->name()) = s2;
+	    if (n2)
+		const_cast<String&>(n2->name()) = s1;
+	}
+	ref();
+	ExpEvaluator::pushOne(stack,new ExpWrapper(this));
     }
     else if (oper.name() == YSTRING("shift")) {
 	// Removes the first element from an array and returns that element

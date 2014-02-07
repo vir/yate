@@ -1,4 +1,4 @@
-yate (5.0.1~svn5759) UNRELEASED; urgency=low
+yate (5.0.1~svn5762) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -994,8 +994,11 @@ yate (5.0.1~svn5759) UNRELEASED; urgency=low
     Array.pop() and unshift()
   * Updated to SVN revision 5759: + Fixed implementation of JS Array
     concat() and reverse() methods.
+  * Updated to SVN revision 5762: + Added methods used to encode and
+    decode GSM 7bit buffers.  + Make default paths absolute when
+    starting with .../run --there  + Marked file for utf-8 encoding.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 07 Feb 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 08 Feb 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

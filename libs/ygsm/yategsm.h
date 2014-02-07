@@ -235,6 +235,21 @@ public:
 	{ return m_ptr; }
 
     /**
+     * Decode GSM 7bit buffer
+     * @param buf Input buffer
+     * @param len Input buffer length
+     * @param text Destination text
+     */
+    static void decodeGSM7Bit(unsigned char* buf, unsigned int len, String& text);
+
+    /**
+     * Encode GSM 7bit buffer
+     * @param text Input text
+     * @param buf Destination buffer
+     */
+    static void encodeGSM7Bit(const String& text, DataBlock& buf);
+
+    /**
      * IE types dictionary
      */
     static const TokenDict s_typeDict[];

@@ -35,6 +35,10 @@ fi
 if [ "$1" = "--there" ]; then
     shift
     cd `dirname "$0"`
+    wd=`pwd`
+    set_conf="-c $wd/conf.d"
+    set_mods="-m $wd/modules"
+    set_share="-e $wd/share"
 fi
 if [ "$1" = "--gdb" ]; then
     shift

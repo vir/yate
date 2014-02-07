@@ -5081,4 +5081,4 @@ void GSML3Codec::printDbg(int dbgLevel, const uint8_t* in, unsigned int len, Xml
 	(encode ? "payload" : "xml"), (encode ? s.c_str() : tmp.c_str()));
 }
 
-/* vi: set ts=8 sw=4 sts=4 noet: */
+/* vi: set ts=8 sw=4 sts=4 noet enc=utf-8: */

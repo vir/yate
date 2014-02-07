@@ -102,6 +102,63 @@ static unsigned int decodeRL3Msg(const GSML3Codec* codec, uint8_t proto, const I
 static unsigned int encodeRL3Msg(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
 	DataBlock& out, const NamedList& params);
 
+static void unpackGSM7Bit(unsigned char* in, unsigned int length, DataBlock& out)
+{
+    if (!(in && length))
+	return;
+    unsigned int len = length * 8 / 7;
+    out.assign(0,len);
+    unsigned char* outData = out.data(0);
+    uint8_t bits = 0;
+    uint16_t buf = 0;
+    for (unsigned int i = 0; i < length; i++) {
+	buf |= ((uint16_t)*in) << bits;
+	in++;
+	bits += 8;
+	while (bits >= 7) {
+	    *outData = (buf & 0x7f);
+	    outData++;
+	    buf >>= 7;
+	    bits -= 7;
+	}
+    }
+    if ((bits == 0) && (out[len - 1] == '\r'))
+	out.assign(out.data(),out.length() - 1);
+}
+
+void packGSM7Bit(unsigned char* in, unsigned int length, DataBlock& out)
+{
+    if (!(in && length))
+	return;
+    int len = (length + 1) * 7 / 8;
+    out.assign(0,len);
+    unsigned char* outData = out.data(0);
+    uint8_t bits = 0;
+    uint32_t buf = 0;
+    uint8_t code = 0;
+    for (unsigned int i = 0; i < length; i++) {
+	code = *in++;
+	buf |= (code << bits);
+	bits += 7;
+	while (bits >= 8) {
+	    *outData = buf & 0xff;
+	    outData++;
+	    buf >>= 8;
+	    bits -= 8;
+	}
+    }
+    if (bits) {
+	*outData = buf & 0xff;
+	// if just 1 bit use a shifted \r as filler
+	if (bits == 1)
+	    *outData |= 0x1a;
+    }
+    else if (code == '\r') {
+	code = 0x0d;
+	// last char was \r, add another \r
+	out.append(&code,sizeof(code));
+    }
+}
 
 static bool getBCDDigits(const uint8_t*& in, unsigned int& len, String& digits)
 {
@@ -4857,6 +4914,85 @@ unsigned int GSML3Codec::encode(XmlElement* xml, const NamedList& params)
     if (!(xml && pduMark))
 	return MissingParam;
     return encodeXml(xml,params,pduMark);
+}
+
+// These tables contain embedded UTF-8 characters
+static const char* const s_gsm7base[128] = {
+    "@", "£", "$", "¥", "è", "é", "ù", "ì", "ò", "Ç", "\n", "Ø", "ø", "\r", "Å", "å",
+    "Δ", "_", "Φ", "Γ", "Λ", "Ω", "Π", "Ψ", "Σ", "Θ", "Ξ", "", "Æ", "æ", "ß", "É",
+    " ", "!", "\"", "#", "¤", "%", "&", "'", "(", ")", "*", "+", ",", "-", ".", "/",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ":", ";", "<", "=", ">", "?",
+    "¡", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
+    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Ä", "Ö", "Ñ", "Ü", "§",
+    "¿", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o",
+    "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "ä", "ö", "ñ", "ü", "à"
+};
+
+static const char* const s_gsm7esc[128] = {
+    "", "", "", "", "", "", "", "", "", "", "\f", "", "", "", "", "",
+    "", "", "", "", "^", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "", "", "{", "}", "", "", "", "", "", "\\",
+    "", "", "", "", "", "", "", "", "", "", "", "", "[", "~", "]", "",
+    "|", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "€", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+};
+
+// Decode GSM 7bit buffer
+void GSML3Codec::decodeGSM7Bit(unsigned char* buf, unsigned int len, String& text)
+{
+    if (!(buf && len))
+	return;
+    DataBlock out;
+    unpackGSM7Bit(buf,len,out);
+    uint8_t* b = (uint8_t*)out.data();
+    bool esc = false;
+    for (unsigned int i = 0; i < out.length(); b++, i++) {
+	if (esc) {
+	    text << s_gsm7esc[*b];
+	    esc = false;
+	}
+	else if (*b != 0x1b)
+	    text << s_gsm7base[*b];
+	else
+	    esc = true;
+    }
+}
+
+// Encode GSM 7bit buffer
+void GSML3Codec::encodeGSM7Bit(const String& text, DataBlock& buf)
+{
+    static uint8_t escape = 0x1b;
+    if (!text)
+	return;
+    DataBlock gsm;
+    String tmp = text;
+    while (tmp) {
+	bool notFound = true;
+	for (uint8_t i = 0; i < 128; i++) {
+	    if (tmp.startSkip(s_gsm7base[i],false)) {
+		gsm.append(&i,sizeof(i));
+		notFound = false;
+		break;
+	    }
+	}
+	if (notFound) {
+	    for (uint8_t i = 0; i < 128; i++) {
+		if (tmp.startSkip(s_gsm7esc[i],false)) {
+		    gsm.append((void*)&escape,sizeof(escape));
+		    gsm.append(&i,sizeof(i));
+		    notFound = false;
+		    break;
+		}
+	    }
+	    if (notFound) {
+		// TODO: skip one UTF-8 instead of one C char
+		tmp = tmp.c_str() + 1;
+	    }
+	}
+    }
+    packGSM7Bit(gsm.data(0),gsm.length(),buf);
 }
 
 unsigned int GSML3Codec::decodeXml(XmlElement* xml, const NamedList& params, const String& pduTag)

@@ -4,12 +4,11 @@
 # override DESTDIR at install time to prefix the install directory
 DESTDIR :=
 
-SCRIPTS := leavemail.php voicemail.php route.php queue_in.php queue_out.php banbrutes.php
+SCRIPTS := leavemail.php voicemail.php route.php queue_in.php queue_out.php banbrutes.php \
+	echo.sh
 SCRLIBS := libyate.php libyateivr.php libyatechan.php libvoicemail.php \
 	libeliza.js libchatbot.js eliza.js \
-	libyate.py \
-	Yate.pm \
-	echo.sh
+	libyate.py
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@

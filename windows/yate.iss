@@ -200,6 +200,7 @@ Source: "..\conf.d\yate-qt4.conf.default"; DestName: "yate-qt4.conf"; DestDir: "
 Source: "..\share\data\*.txt"; DestDir: "{app}\share\data"; Components: server
 Source: "..\share\data\*.conf"; DestDir: "{app}\share\data"; Components: server
 
+Source: "..\share\scripts\*.js"; DestDir: "{app}\share\scripts"; Components: external
 Source: "..\share\scripts\*.php"; DestDir: "{app}\share\scripts"; Components: external\php
 
 Source: "Release\libyate.lib"; DestDir: "{app}\devel"; Components: devel

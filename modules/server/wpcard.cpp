@@ -5,7 +5,7 @@
  * Wanpipe PRI cards signalling and data driver
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -1678,7 +1678,7 @@ void WpSpan::run()
 	}
 #endif
 	// Calculate received samples. Check if we received valid data
-	unsigned int samples = 0; 
+	unsigned int samples = 0;
 	if ((r > 0) && ((r % m_count) == 0))
 	    samples = (unsigned int)r / m_count;
 	if (!samples) {

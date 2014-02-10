@@ -5,7 +5,7 @@
  * Custom QtTree based objects
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -47,7 +47,7 @@ class QtHtmlItemDelegate;                // Custom HTML item delegate
 
 typedef QList<QTreeWidgetItem*> QtTreeItemList;
 typedef QPair<QTreeWidgetItem*,QString> QtTreeItemKey;
-typedef QPair<String,int> QtTokenDict; 
+typedef QPair<String,int> QtTokenDict;
 
 
 /**
@@ -106,7 +106,7 @@ public:
      * @param pos Position to set
      * @param params Parameter list
      */
-    void setPen(Position pos, const NamedList& params); 
+    void setPen(Position pos, const NamedList& params);
 
     /**
      * Draw the borders
@@ -202,7 +202,7 @@ public:
      */
     void setUrlBuilder(const String& fmt = String::empty(),
 	const String& queryParams = String::empty());
-    
+
     /**
      * Build MIME data for a list of items
      * @param item The list
@@ -1855,7 +1855,7 @@ public:
      * @param type File item type
      * @param name File name
      * @param path File path
-     * @param prov Optional file icon provider 
+     * @param prov Optional file icon provider
      */
     FileItem(int type, const char* name, const String& path,
 	QFileIconProvider* prov = 0);
@@ -1863,7 +1863,7 @@ public:
     /**
      * Constructor. Build a FileListTree up directory
      * @param path The path
-     * @param prov Optional file icon provider 
+     * @param prov Optional file icon provider
      */
     FileItem(const String& path, QFileIconProvider* prov = 0);
 
@@ -2091,7 +2091,7 @@ protected:
     bool m_listFiles;                    // List files in current directory
     int m_sort;                          // Sort files
     int m_listOnFailure;                 // What to list when fails current directory
-    QFileIconProvider* m_iconProvider;   // The icon provider 
+    QFileIconProvider* m_iconProvider;   // The icon provider
     String m_nameParam;                  // Item name column
     String m_fsPath;                     // Current path
     QThread* m_dirListThread;            // Dir list thread

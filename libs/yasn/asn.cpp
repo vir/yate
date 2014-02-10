@@ -5,7 +5,7 @@
  * ASN.1 Library
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -694,7 +694,7 @@ int ASNLib::decodeGenTime(DataBlock& data, unsigned int* time, unsigned int* fra
     for (int i = 0; i < length; i++)
 	date += (char) (data[i]);
     data.cut(-length);
-    
+
     if (!(utc && fractions && time)) {
         DDebug(s_libName.c_str(),DebugAll,"::decodeGenTime() - Invalid buffer for return data");
         return InvalidContentsError;
@@ -702,7 +702,7 @@ int ASNLib::decodeGenTime(DataBlock& data, unsigned int* time, unsigned int* fra
 
     unsigned int year, month, day, hours, minutes, seconds;
     int timeDiff = 0;
-   
+
     *utc = false;
     *fractions = 0;
 
@@ -790,7 +790,7 @@ int ASNLib::decodeUTCTime(DataBlock& data, unsigned int* time, bool tagCheck)
     for (int i = 0; i < length; i++)
 	date += (char) (data[i]);
     data.cut(-length);
- 
+
     if (!time) {
         DDebug(s_libName.c_str(),DebugAll,"::decodeUTCTime() - Invalid buffer for return data");
         return InvalidContentsError;
@@ -1334,18 +1334,6 @@ ASNObjId::~ASNObjId()
     m_ids.clear();
 }
 
-ASNObjId& ASNObjId::operator=(const String& val)
-{
-    m_value = val;
-    return *this;
-}
-
-ASNObjId& ASNObjId::operator=(const char* val)
-{
-    m_value.assign(val);
-    return *this;
-}
-
 void ASNObjId::toDataBlock()
 {
     DDebug(s_libName.c_str(),DebugAll,"ASNObjId::toDataBlock() '%s'", m_value.c_str());
@@ -1460,159 +1448,4 @@ int AsnMib::compareTo(AsnMib* mib)
     return retValue;
 }
 
-/**
-  * AsnMibTree
-  */
-AsnMibTree::AsnMibTree(const String& fileName)
-{
-    DDebug(s_libName.c_str(),DebugAll,"AsnMibTree object created from %s", fileName.c_str());
-    m_treeConf = fileName;
-    buildTree();
-}
-
-AsnMibTree::~AsnMibTree()
-{
-    m_mibs.clear();
-}
-
-void AsnMibTree::buildTree()
-{
-    Configuration cfgTree;
-    cfgTree = m_treeConf;
-    if(!cfgTree.load())
-	Debug(s_libName.c_str(),DebugWarn,"Failed to load MIB tree");
-    else {
-    	for (unsigned int i = 0; i < cfgTree.sections(); i++) {
-    	    NamedList* sect = cfgTree.getSection(i);
-    	    if (sect) {
-	    	AsnMib* mib = new AsnMib(*sect);
-	    	m_mibs.append(mib);
-	    }
-    	}
-    }
-}
-
-String AsnMibTree::findRevision(const String& name)
-{
-    AsnMib* mib = find(name);
-    if (!mib)
-    	return "";
-    String revision = "";
-    while (revision.null()) {
-    	ASNObjId parentID = mib->getParent();
-    	AsnMib* parent = find(parentID);
-    	if (!parent)
-    	    return revision;
-    	revision = parent->getRevision();
-    	mib = parent;
-    }
-    return revision;
-}
-
-AsnMib* AsnMibTree::find(const String& name)
-{
-    DDebug(s_libName.c_str(),DebugAll,"AsnMibTree::find('%s')",name.c_str());
-    const ObjList *n = m_mibs.skipNull();
-    AsnMib* mib = 0;
-    while (n) {
-	mib = static_cast<AsnMib*>(n->get());
-	if (name == mib->getName())
-	    break;
-	n = n->skipNext();
-	mib = 0;
-    }
-    return mib;
-}
-
-AsnMib* AsnMibTree::find(const ASNObjId& id)
-{
-    DDebug(s_libName.c_str(),DebugAll,"AsnMibTree::find('%s')",id.toString().c_str());
-
-    String value = id.toString();
-    int pos = 0;
-    int index = 0;
-    AsnMib* searched = 0;
-    unsigned int cycles = 0;
-    while (cycles < 2) {
- 	ObjList* n = m_mibs.find(value);
-	searched = n ? static_cast<AsnMib*>(n->get()) : 0;
-	if (searched) {	    
-	    searched->setIndex(index);
-	    return searched;
-	}
-	pos = value.rfind('.');
-	if (pos < 0)
-	    return 0;
-	index = value.substr(pos + 1).toInteger();
-	value = value.substr(0,pos);
-	cycles++;
-    }
-    return searched;
-}
-
-AsnMib* AsnMibTree::findNext(const ASNObjId& id)
-{
-    DDebug(s_libName.c_str(),DebugAll,"AsnMibTree::findNext('%s')",id.toString().c_str());
-    String searchID = id.toString();
-    // check it the oid is in our known tree
-    AsnMib* root = static_cast<AsnMib*>(m_mibs.get());
-    if (root && !(id.toString().startsWith(root->toString()))) {
-    	NamedList p(id.toString());
-    	AsnMib oid(p);
-    	int comp = oid.compareTo(root);
-    	if (comp < 0)
-    	    searchID = root->toString();
-    	else if (comp > 0)
-    	    return 0;
-    }
-    AsnMib* searched = static_cast<AsnMib*>(m_mibs[searchID.toString()]);
-    if (searched) {
-    	if (searched->getAccessValue() > AsnMib::accessibleForNotify) {
-	    DDebug(s_libName.c_str(),DebugInfo,"AsnMibTree::findNext('%s') - found an exact match to be '%s'",
-			id.toString().c_str(), searched->toString().c_str());
-	    return searched;
-	}
-    }
-    String value = searchID.toString();
-    int pos = 0;
-    int index = 0;
-    while (true) {
- 	ObjList* n = m_mibs.find(value);
-	searched = n ? static_cast<AsnMib*>(n->get()) : 0;
-	if (searched) {
-	    if (id.toString() == searched->getOID() || id.toString() == searched->toString()) {
-	    	ObjList* aux = n->skipNext();
-	    	if (!aux)
-	    	    return 0;
-	    	while (aux) {
-		    AsnMib* mib = static_cast<AsnMib*>(aux->get());
-		    if (mib && mib->getAccessValue() > AsnMib::accessibleForNotify)
-			return mib;
-		    aux = aux->skipNext();
-	    	}
-		return 0;
-	    }
-	    else {
-	    	searched->setIndex(index + 1);
-	    	return searched;
-	    }
-	}
-	pos = value.rfind('.');
-	if (pos < 0)
-	    return 0;
-	index = value.substr(pos + 1).toInteger();
-	value = value.substr(0,pos);
-    }
-    return 0;
-}
-
-int AsnMibTree::getAccess(const ASNObjId& id)
-{
-    DDebug(s_libName.c_str(),DebugAll,"AsnMibTree::getAccess('%s')",id.toString().c_str());
-    AsnMib* mib = find(id);
-    if (!mib)
-	return 0;
-    return mib->getAccessValue();
-}
-
-
+/* vi: set ts=8 sw=4 sts=4 noet: */

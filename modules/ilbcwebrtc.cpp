@@ -3,9 +3,9 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * iLBC codec using iLBC library based on WebRTC project.
- * 
+ *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2012-2013 Null Team
+ * Copyright (C) 2012-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing

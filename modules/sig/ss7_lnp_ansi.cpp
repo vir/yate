@@ -5,7 +5,7 @@
  * Query LNP databases using Telcordia GR-533-Core specification
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2011-2013 Null Team
+ * Copyright (C) 2011-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -90,7 +90,7 @@ public:
 	{ return m_id; }
     inline bool timedOut()
 	{ return m_timeout < Time::msecNow(); }
-    inline QueryStatus status() 
+    inline QueryStatus status()
 	{ return m_status; }
     inline NamedList* parameters()
 	{ return m_msg; }
@@ -108,7 +108,7 @@ public:
 	{ return m_dbSSN; }
     inline int dbPointCode()
 	{ return m_dbPC; }
-    inline void setDialogID(const char* id) 
+    inline void setDialogID(const char* id)
 	{ m_dialogID = id; }
     inline String& dialogID()
 	{ return m_dialogID; }
@@ -263,7 +263,7 @@ public:
 	{ return m_cause; }
     const String& toString() const
 	{ return m_code; }
-    inline bool codeAllowed() 
+    inline bool codeAllowed()
 	{ return (m_gap == 0 ? false : m_gapExpiry < Time::secNow()); }
     inline unsigned int duration()
 	{ return m_duration; }
@@ -818,7 +818,7 @@ bool LNPClient::makeQuery(const String& called, Message& msg)
 
 bool LNPClient::tcapRequest(SS7TCAP::TCAPUserTransActions primitive, LNPQuery* code)
 {
-    // request parameters from code object 
+    // request parameters from code object
     if (!code)
 	return false;
 
@@ -912,7 +912,7 @@ bool LNPClient::tcapRequest(SS7TCAP::TCAPUserTransActions primitive, LNPQuery* c
 	if (primitive == SS7TCAP::TC_QueryWithPerm || primitive == SS7TCAP::TC_Begin)
 	    code->setDialogID(params.getValue(s_tcapTID));
     }
-    else 
+    else
 	return false;
     return true;
 }
@@ -1111,7 +1111,7 @@ SS7TCAPError LNPClient::decodePrivateParam(NamedList& params, DataBlock& data)
 	    }
 	    break;
 	case ACGIndicator:
-	    if (len != 3) 
+	    if (len != 3)
 		error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
 	    else  {
 		params.setParam(s_lnpPrefix + s_acgCause,lookup(data[0],s_acgCauses,String(data[0])));
@@ -1365,7 +1365,7 @@ void LNPClient::statusBlocked(String& status)
 	BlockedCode* acg = static_cast<BlockedCode*>(iter.get());
 	if (!acg)
 	    break;
-	str.append(acg->toString(),",") << "=" << lookup(acg->acgCause(),s_acgCauses) << "|" << acg->duration() << "|" 
+	str.append(acg->toString(),",") << "=" << lookup(acg->acgCause(),s_acgCauses) << "|" << acg->duration() << "|"
 	    << acg->gap() << "|" << String::boolText(acg->codeAllowed());
     }
     status.append(str,";");

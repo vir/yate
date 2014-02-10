@@ -1,11 +1,11 @@
 /**
  * engine.cpp
- * This file is part of the YATE Project http://YATE.null.ro 
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Signalling Stack - implements the support for SS7, ISDN and PSTN
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -675,7 +675,7 @@ static const TokenDict s_dict_causeCCITT[] = {
 	{"unknown-group",                  0x5a}, // Non-existent CUG
 	{"invalid-transit-net",            0x5b}, // Invalid transit network selection
 	{"invalid-message",                0x5f}, // Invalid message, unspecified
-	// protocol-error class 
+	// protocol-error class
 	{"missing-mandatory-ie",           0x60}, // Mandatory information element is missing
 	{"unknown-message",                0x61}, // Message type non-existent or not implemented
 	{"wrong-message",                  0x62}, // Message not compatible with call state, non-existent or not implemented
@@ -729,7 +729,7 @@ static const TokenDict s_dict_transferRateCCITT[] = {
 static const TokenDict s_dict_formatCCITT[] = {
 	{"v110",          0x01},         // Recomendation V.110 and X.30
 	{"mulaw",         0x02},         // Recomendation G.711 mu-law
-	{"alaw",          0x03},         // Recomendation G.711 A-law 
+	{"alaw",          0x03},         // Recomendation G.711 A-law
 	{"g721",          0x04},         // Recomendation G.721 32kbit/s ADPCM and I.460
 	{"h221",          0x05},         // Recomendation H.221 and H.242
 	{"h223",          0x06},         // Recomendation H.223 and H.245 videoconference

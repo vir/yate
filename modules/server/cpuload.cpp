@@ -5,7 +5,7 @@
  * Monitor CPU load and inform YATE about it
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -31,7 +31,7 @@ class Cpu
 {
 public:
     Cpu();
-    inline virtual ~Cpu() {} 
+    inline virtual ~Cpu() {}
     // Default implementation updates system load from "/proc/stat"
     inline virtual int getSystemLoad()
 	{
@@ -52,7 +52,7 @@ public:
 	{ return (m_loadYS + 50) / 100; }
     inline int getSLoad()
 	{ return m_loadSystem < 0? m_loadSystem : (m_loadSystem + 50) / 100; }
-	
+
 protected:
     u_int64_t m_yateUser;      // Yate last time counter spend in user mode
     u_int64_t m_yateSystem;    // Yate last time counter spent in kernel mode
@@ -866,7 +866,7 @@ int CpuStat::getSystemLoad()
 		loading = ((loading *100) * (1000 / user_hz)) / t;
 		loading /= m_coreNumber;
 		m_loadSystem = (100 - s_smooth) * m_loadSystem/100 + s_smooth*loading;
-	    } else 
+	    } else
 		m_loadSystem = 0;
 	    m_sysUser = user;
 	    m_sysNice = nice;

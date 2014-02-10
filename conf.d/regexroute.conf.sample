@@ -59,6 +59,10 @@
 ;  $(message,count) = parameter count of the message handled
 ;  $(message,parameters) = parameter list of the message handled, comma separated
 ;  $(message,parameters,sep) = parameter list of the message handled, explicit separator
+;  $(variables,count) = current count of the global variables
+;  $(variables,list) = comma separated list of the global variables names
+;  $(variables,list,sep) = list of the global variables names with explicit separator
+;  $(variables,NAME) = "true" if global variable NAME exists, "false" otherwise
 ;  $(transcode,FLAGS,FORMAT1,FORMAT2,...) = list of formats the input can be transcoded into
 ;       e - exclude initial formats form generated list
 ;       r - allow rate conversion (for use with wideband)
@@ -76,6 +80,9 @@
 
 ; route: int: Priority of the routing message handler
 ;route=100
+
+; status: int: Priority of the status and line completion handlers
+;status=110
 
 ; extended: bool: Use extended regular expressions
 ;extended=no

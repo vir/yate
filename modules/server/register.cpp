@@ -5,7 +5,7 @@
  * Registration, authentication, authorization and accounting from a database.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -51,7 +51,7 @@ public:
 	DialogNotify,
 	MWINotify,
 	Subscribe,
-	SubscribeTimer	
+	SubscribeTimer
     };
     AAAHandler(const char* hname, int type, int prio = 50);
     virtual ~AAAHandler();
@@ -251,7 +251,7 @@ private:
 
 static RegistModule module;
 
-// copy parameters from SQL result to a Message	
+// copy parameters from SQL result to a Message
 
 static void copyParams2(Message &msg, Array* a, int row = 0)
 {
@@ -536,7 +536,7 @@ bool AAAHandler::received(Message& msg)
 		    {
 			// we know about the user but has no address of record
 			if (s_errOffline) {
-			    msg.retValue() = "-"; 
+			    msg.retValue() = "-";
 			    msg.setParam("error","offline");
 			    msg.setParam("reason","Offline");
 			}
@@ -993,7 +993,7 @@ bool RegistModule::received(Message& msg, int id)
 {
     if (id == Private) {
 	if (s_cfg.getBoolValue("general","accounts"))
-	    m_accountsmodule= new AccountsModule(); 
+	    m_accountsmodule= new AccountsModule();
 	ObjList* l = s_handlers.skipNull();
 	for (; l; l=l->skipNext()) {
 	    AAAHandler* h = YOBJECT(AAAHandler,l->get());
@@ -1110,9 +1110,9 @@ void RegistModule::initialize()
 bool FallBackHandler::received(Message &msg)
 {
     switch (m_type)
-    {	
+    {
 	case Answered:
-	{ 
+	{
 	    GenObject* route = s_fallbacklist[msg.getValue("targetid")];
 	    s_fallbacklist.remove(route);
 	    return false;
@@ -1126,8 +1126,8 @@ bool FallBackHandler::received(Message &msg)
 	}
 	break;
 	case Disconnect:
-	{	
-	    String reason=msg.getValue("reason");	
+	{
+	    String reason=msg.getValue("reason");
 	    if (m_stoperror && m_stoperror.matches(reason)) {
 		//stop fallback on this error
 		GenObject* route = s_fallbacklist[msg.getValue("id")];
@@ -1155,8 +1155,8 @@ bool FallBackHandler::received(Message &msg)
 
 AccountsModule::AccountsModule()
     : m_init(false), m_nextTime(0)
-{ 
-    Output("Loaded modules Accounts for database"); 
+{
+    Output("Loaded modules Accounts for database");
     m_account = s_cfg.getValue("accounts","account", s_cfg.getValue("default","account"));
     m_queryInit = s_cfg.getValue("accounts","initquery");
     m_queryTimer = s_cfg.getValue("accounts","timerquery");
@@ -1224,7 +1224,7 @@ bool AccountsModule::received(Message &msg, int id)
 		    Array* a = static_cast<Array*>(m.userObject(YATOM("Array")));
 		    copyParams2(*m1,a, i);
 		    Engine::enqueue(m1);
-		} 
+		}
 		return false;
 	    }
 	}

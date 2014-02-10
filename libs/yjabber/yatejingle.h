@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -275,7 +275,7 @@ public:
      */
     inline Media media() const
 	{ return m_media; }
- 
+
     /**
      * Append a new data payload
      * @param id The 'id' attribute
@@ -619,7 +619,7 @@ public:
 	UnknownFileTransfer = -2,        // Unknown (unsupported) file transfer content
 	RtpIceUdp           = 1,         // Audio: RTP ICE-UDP transport
 	RtpRawUdp,                       // Audio: RTP RAW-UDP transport
-	RtpP2P,                          // 
+	RtpP2P,                          //
 	RtpGoogleRawUdp,                 //
 	FileBSBOffer,                    // File offer: byte stream (SOCKS) transport
 	FileBSBRequest,                  // File request: byte stream (SOCKS) transport
@@ -901,7 +901,7 @@ public:
      * Session state enumeration
      */
     enum State {
-	Idle    = 0,                     // Outgoing stream is waiting for 
+	Idle    = 0,                     // Outgoing stream is waiting for
 	Pending = 1,                     // Session is pending, session-initiate sent/received
 	Active  = 2,                     // Session is active, session-accept sent/received
 	Ending  = 3,                     // Session terminated: Wait for write result
@@ -1942,7 +1942,7 @@ private:
     // Event specific
     JGSession::Action m_action;          // The action if type is Jingle
     String m_id;                         // The element's id attribute
-    String m_reason;                     // The reason if type is Error or Terminated 
+    String m_reason;                     // The reason if type is Error or Terminated
     String m_text;                       // Dtmf text
 };
 
@@ -2002,7 +2002,7 @@ public:
 
     /**
      * Send a session's stanza.
-     * This method should be re-implemented 
+     * This method should be re-implemented
      * @param session The session requesting the operation
      * @param stanza The stanza to send. Will be consumed and zeroed
      * @return True on success

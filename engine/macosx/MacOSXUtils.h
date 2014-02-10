@@ -5,7 +5,7 @@
  * Classes for interfacing with Mac OS X API
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -84,7 +84,7 @@ public:
      * @param path String into which the determined path will go
      * @param dirPath The type of directory path to be sought
      * @param domain Mask containing the domains where the type of directory is to be sought
-     * @param append Name of directory to create in the searched directory 
+     * @param append Name of directory to create in the searched directory
      * @param append True if the directory is to be created if it not exists
      */
     static void getPath(String& path, DirectoryPath dirPath, Domain domain, const char* append = 0, bool createDir = true);

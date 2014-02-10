@@ -32,7 +32,7 @@ done
 )<<EOF
 common_types.h
 typedefs.h
-modules/interface/	
+modules/interface/
 module.h
 module_common_types.h
 common_audio/resampler/	audio/common/resampler/

@@ -1,11 +1,11 @@
-/*
+/**
  * yatexml.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * XML Parser and support classes
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -348,7 +348,7 @@ protected:
     void unEscape(String& text);
 
     /**
-     * Remove blank characters from the begining of the buffer 
+     * Remove blank characters from the begining of the buffer
      */
     void skipBlanks();
 
@@ -728,7 +728,7 @@ private:
 };
 
 /**
- * Xml Child for Xml document 
+ * Xml Child for Xml document
  * @short Xml Child
  */
 class YXML_API XmlChild : public GenObject
@@ -793,7 +793,7 @@ public:
 
 
 /**
- * Xml Declaration for Xml document 
+ * Xml Declaration for Xml document
  * @short Xml Declaration
  */
 class YXML_API XmlDeclaration : public XmlChild
@@ -851,7 +851,7 @@ private:
 };
 
 /**
- * Xml Fragment a fragment from a Xml document 
+ * Xml Fragment a fragment from a Xml document
  * @short Xml Fragment
  */
 class YXML_API XmlFragment : public XmlParent
@@ -1087,7 +1087,7 @@ private:
 
 
 /**
- * Xml Element from a Xml document 
+ * Xml Element from a Xml document
  * @short Xml Element
  */
 
@@ -1533,7 +1533,7 @@ public:
     /**
      * Build a list parameter from xml element
      * See @ref param2xml for more info
-     * @param xml The XML element to process 
+     * @param xml The XML element to process
      * @param tag Child XmlElement tag to handle
      * @param copyXml True to copy XmlElement objects instead of just remove
      *  them from parent
@@ -1547,7 +1547,7 @@ public:
      * Each parameter will be taken from 'name' and 'value' attributes.
      * See @ref param2xml for more info
      * @param list Destination list
-     * @param parent The XML element to process 
+     * @param parent The XML element to process
      * @param tag Child XmlElement tag to handle
      * @param copyXml True to copy XmlElement objects instead of just remove
      *  them from parent
@@ -1584,7 +1584,7 @@ private:
 };
 
 /**
- * A Xml Comment from Xml document 
+ * A Xml Comment from Xml document
  * @short Xml Comment
  */
 class YXML_API XmlComment : public XmlChild
@@ -1634,7 +1634,7 @@ private:
 };
 
 /**
- * A Xml CData from Xml document 
+ * A Xml CData from Xml document
  * @short Xml Declaration
  */
 class YXML_API XmlCData : public XmlChild
@@ -1685,7 +1685,7 @@ private:
 };
 
 /**
- * A Xml Declaration for Xml document 
+ * A Xml Declaration for Xml document
  * @short Xml Declaration
  */
 class YXML_API XmlText : public XmlChild

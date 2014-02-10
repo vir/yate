@@ -308,7 +308,7 @@ bool AlsaChan::init()
     dev->deref();
     if (!source->init()) {
 	source->deref();
-	return false;		
+	return false;
     }
     setSource(source);
     source->deref();
@@ -316,8 +316,8 @@ bool AlsaChan::init()
     if (!cons->init()) {
 	cons->deref();
 	setSource();
-	return false;		
-    }	
+	return false;
+    }
     setConsumer(cons);
     cons->deref();
     return true;
@@ -551,7 +551,7 @@ bool AlsaHandler::received(Message &msg)
 	    Debug(DebugInfo,"Alsa outgoing call not accepted!");
 	    chan->destruct();
 	    return false;
-	}	
+	}
 	const char *targ = msg.getValue("target");
 	if (!targ) {
 	    Debug(DebugWarn,"Alsa outgoing call with no target!");

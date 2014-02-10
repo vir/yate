@@ -86,6 +86,7 @@ for small to large scale projects.
 %{_libdir}/libyatescript.so.*
 %{_libdir}/libyatejabber.so.*
 %{_libdir}/libyatesig.so.*
+%{_libdir}/libyategsm.so.*
 %{_libdir}/libyatemgcp.so.*
 %{_bindir}/yate
 %{_mandir}/*/yate.*

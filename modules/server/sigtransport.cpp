@@ -5,7 +5,7 @@
  * SIGTRAN transports provider, supports SCTP, TCP, UDP, UNIX sockets
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2009-2013 Null Team
+ * Copyright (C) 2009-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -788,7 +788,7 @@ bool Transport::bindSocket()
 	    }
 	    socket = soc;
 	    socket->create(AF_INET,SOCK_SEQPACKET,IPPROTO_SCTP);
-	    SctpSocket* sctp = static_cast<SctpSocket*>(socket); 
+	    SctpSocket* sctp = static_cast<SctpSocket*>(socket);
 	    if (!sctp->setStreams(2,2))
 		Debug(this,DebugInfo,"Failed to set sctp streams number");
 	    if (!sctp->subscribeEvents())
@@ -1034,7 +1034,7 @@ void Transport::setStatus(int status)
 
 u_int32_t Transport::getMsgLen(unsigned char* buf)
 {
-    return ((unsigned int)buf[4] << 24) | ((unsigned int)buf[5] << 16) | 
+    return ((unsigned int)buf[4] << 24) | ((unsigned int)buf[5] << 16) |
 	((unsigned int)buf[6] << 8) | (unsigned int)buf[7];
 }
 
@@ -1147,7 +1147,7 @@ void Transport::stopThread()
 
 
 /**
- * class StreamReader 
+ * class StreamReader
  */
 
 StreamReader::StreamReader(Transport* transport,Socket* sock)

@@ -114,7 +114,7 @@ tcap=
 ;check_addr=false
 
 ; sccp.CalledPartyAddress.route: string: Routing Indicator for SCCP Called Party Address
-; Values allowed : 
+; Values allowed :
 ; gt - for Global Title Translation
 ; ssn - routing by SubSystem Number (SSN)
 ;sccp.CalledPartyAddress.route=
@@ -136,11 +136,11 @@ tcap=
 ;    {"maritimemobile", LNPClient::NPMaritimeMobile},
 ;    {"landmobile",     LNPClient::NPLandMobile},
 ;    {"private",        LNPClient::NPPrivate},
-; NOTE! According to GR-533-Core, this mustn't be set 
+; NOTE! According to GR-533-Core, this mustn't be set
 ;sccp.CalledPartyAddress.gt.np=
 
 ; sccp.CalledPartyAddress.gt.enconding: string: Encoding type for Called Party Address GT
-; NOTE! According to GR-533-Core, this mustn't be set 
+; NOTE! According to GR-533-Core, this mustn't be set
 ; Allowed values: bcd
 ;sccp.CalledPartyAddress.gt.encoding : integer GT encoding scheme
 
@@ -150,7 +150,7 @@ tcap=
 ;sccp.CalledPartyAddress.gt.tt=11
 
 ; sccp.CallingPartyAddress.route: string: Routing Indicator for SCCP Calling Party Address
-; Values allowed : 
+; Values allowed :
 ; ssn - routing by SubSystem Number (SSN)
 ;sccp.CallingPartyAddress.route=
 

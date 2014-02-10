@@ -4,7 +4,7 @@
  This file is a contribute of nexlab ( http://www.nexlab.it )
  for the YATE Project ( http://YATE.null.ro ).
 
- libyate.py is Copyright (C) 2005 Nexlab S.r.l 
+ libyate.py is Copyright (C) 2005 Nexlab S.r.l
  Author: Franco (nextime) Lanza <nextime@nexlab.it>
  Version: 0.3
 
@@ -98,7 +98,7 @@ class YateInit(asynchat.async_chat):
 		if self._fileno == 0:
 			datain = self.in_buffer
 			self.in_buffer = ''
-			if (datain != '\n') and ( datain != ''): 
+			if (datain != '\n') and ( datain != ''):
 				self.handler(datain)
 
 	def handle_close(self):
@@ -110,7 +110,7 @@ class YateInit(asynchat.async_chat):
 
 
 class Yate:
-	
+
 	""" internal methods """
 
 	type = ''
@@ -127,7 +127,7 @@ class Yate:
 		self.si = YateInit(0, self)
 		self.so = YateInit(1, self)
 		self.se = YateInit(2, self)
-	
+
 	# static function to intercept incoming message from yate
 	# ( internal use )
 	def __call__(self, data):
@@ -140,7 +140,7 @@ class Yate:
 
 		""" TODO: add feof check to respond with EOF when necessary """
 
-		#if data == EOF:	
+		#if data == EOF:
 		#	sys.stderr.write("antani\n")
 		if data == None:
 			return ''
@@ -193,11 +193,11 @@ class Yate:
 			while c < n:
 				r = r + ":" + self.Escape(params[c][0]) + "=" + self.Escape(params[c][1])
 				c = c + 1
-		return r 
+		return r
 
 	# asyncore.loop() wrapper for retrocompatibility with python prior to
 	# 2.4, this is needed because python 2.3 and prior asyncore.loop
-	# cant use the "count=1" parameter that we need to programmate exit 
+	# cant use the "count=1" parameter that we need to programmate exit
 	# from the loop.
 	def __loop__(self, timeout=30.0, use_poll=False, map=None, count=None):
 		poll_fun = asyncore.poll
@@ -212,7 +212,7 @@ class Yate:
 			while map and count > 0:
 				poll_fun(timeout, map)
 				count = count - 1
-	
+
 	# loop executed in separate thread
 	def __th_loop__(self, exit_cond):
 		self.exit_condition = exit_cond
@@ -248,7 +248,7 @@ class Yate:
 			asyncore.loop(0, True, count=1)
 		else:
 			self.__loop__(0, count=1)
-	
+
 	# static function to clean close the asyncore.loop
 	def close(self):
 		asyncore.close_all()
@@ -352,7 +352,7 @@ class Yate:
 		self.so.write("%s:%s\n" % ( initstr, name))
 		#self.se.write("%s:%s\n" % ( initstr, name))
 		self.flush()
-	
+
    # Constructor. Creates a new outgoing message
    # @param $name Name of the new message
    # @param $retval (optional) Default return
@@ -369,7 +369,7 @@ class Yate:
 		self.name = name
 		self.retval = retval
 		self.origin = int(time.strftime("%s"))
-		self.handled = 'true' 
+		self.handled = 'true'
 		self.id = id
 		self.params = []
 

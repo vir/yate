@@ -1,11 +1,11 @@
-/*
+/**
  * yatephone.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Drivers, channels and telephony related classes
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -831,7 +831,7 @@ protected:
      */
     inline explicit TranslatorFactory(const char* name = 0)
 	: m_name(name ? name : "?")
-	{ DataTranslator::install(this); }
+	{ m_counter = Thread::getCurrentObjCounter(true); DataTranslator::install(this); }
 
 public:
     /**
@@ -893,8 +893,16 @@ public:
     virtual const char* name() const
 	{ return m_name; }
 
+    /**
+     * Retrive the objects counter associated to this factory
+     * @return Pointer to factory's objects counter or NULL
+     */
+    inline NamedCounter* objectsCounter() const
+	{ return m_counter; }
+
 private:
     const char* m_name;
+    NamedCounter* m_counter;
 };
 
 /**
@@ -1108,7 +1116,9 @@ class YATE_API CallEndpoint : public RefObject
     YNOCOPY(CallEndpoint); // no automatic copies please
 private:
     CallEndpoint* m_peer;
+    const void* m_lastPeer;
     String m_id;
+    String m_lastPeerId;
 
 protected:
     ObjList m_data;
@@ -1151,7 +1161,7 @@ public:
     /**
      * Get the connected peer call id in a caller supplied String
      * @param id String to fill in
-     * @return True if the call endpoint had a peer
+     * @return True if the call endpoint has a peer
      */
     bool getPeerId(String& id) const;
 
@@ -1160,6 +1170,18 @@ public:
      * @return Connected peer call id or empty string
      */
     String getPeerId() const;
+
+    /**
+     * Get the last connected peer call id in a caller supplied String
+     * @param id String to fill in
+     * @return True if the call endpoint ever had a peer
+     */
+    bool getLastPeerId(String& id) const;
+
+    /**
+     * Copy the current peer ID as the last connected peer ID, does nothing if not connected
+     */
+    void setLastPeerId();
 
     /**
      * Get the mutex that serializes access to this call endpoint, if any
@@ -1257,7 +1279,7 @@ public:
      * @return True if the node was removed from at least one slot
      */
     bool clearData(DataNode* node, const String& type = CallEndpoint::audioType());
-    
+
     /**
      * Return the defaul audio type "audio"
      * @return Return a string naming the "audio" type
@@ -1632,7 +1654,6 @@ private:
     unsigned int m_dtmfSeq;
     String m_dtmfText;
     String m_dtmfDetected;
-    String m_lastPeerId;
 
 protected:
     String m_status;
@@ -1958,13 +1979,6 @@ public:
      */
     inline const String& billid() const
 	{ return m_billid; }
-
-    /**
-     * Get the last connected peer id
-     * @return The last connected peer id
-     */
-    const String& lastPeerId() const
-	{ return m_lastPeerId; }
 
     /**
      * Add the channel to the parent driver list

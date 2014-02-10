@@ -1,11 +1,11 @@
-/*
+/**
  * yatengine.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Engine, plugins and messages related classes
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -526,6 +526,13 @@ public:
 	{ if (!m_dispatcher) m_trackName = name; }
 
     /**
+     * Retrive the objects counter associated to this handler
+     * @return Pointer to handler's objects counter or NULL
+     */
+    inline NamedCounter* objectsCounter() const
+	{ return m_counter; }
+
+    /**
      * Retrieve the filter (if installed) associated to this handler
      */
     inline const NamedString* filter() const
@@ -566,6 +573,7 @@ private:
     int m_unsafe;
     MessageDispatcher* m_dispatcher;
     NamedString* m_filter;
+    NamedCounter* m_counter;
 };
 
 /**
@@ -983,6 +991,13 @@ public:
 	{ return m_name; }
 
     /**
+     * Retrive the objects counter associated to this plugin
+     * @return Pointer to plugin's objects counter or NULL
+     */
+    inline NamedCounter* objectsCounter() const
+	{ return m_counter; }
+
+    /**
      * Check if the module is to be initialized early
      * @return True if the module should be initialized before regular ones
      */
@@ -992,6 +1007,7 @@ public:
 private:
     Plugin(); // no default constructor please
     String m_name;
+    NamedCounter* m_counter;
     bool m_early;
 };
 
@@ -1154,7 +1170,7 @@ public:
      * @return Engine's call accept status as enumerated value
      */
     inline static CallAccept accept() {
-	return s_accept;
+	return (s_congestion && (s_accept < Congestion)) ? Congestion : s_accept;
     }
 
     /**
@@ -1172,6 +1188,19 @@ public:
     inline static const TokenDict* getCallAcceptStates() {
 	return s_callAccept;
     }
+
+    /**
+     * Alter the congestion state counter.
+     * @param reason Reason to enter congested state, NULL to leave congestion
+     */
+    static void setCongestion(const char* reason = 0);
+
+    /**
+     * Get the congestion state counter
+     * @return Zero if not congested else the number of congested components
+     */
+    static unsigned int getCongestion()
+	{ return s_congestion; }
 
     /**
      * Check if the engine is running as telephony client
@@ -1497,6 +1526,7 @@ private:
     static NamedList s_params;
     static int s_haltcode;
     static RunMode s_mode;
+    static unsigned int s_congestion;
     static CallAccept s_accept;
     static const TokenDict s_callAccept[];
 };

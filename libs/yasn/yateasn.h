@@ -5,7 +5,7 @@
  * ASN.1 Library
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -22,7 +22,7 @@
 #ifndef __YATEASN_H
 #define __YATEASN_H
 
-#include <yatengine.h>
+#include <yateclass.h>
 
 #ifdef _WINDOWS
 
@@ -49,7 +49,6 @@ namespace TelEngine {
 
 class AsnObject;
 class AsnValue;
-class AsnMibTree;
 class ASNObjId;
 class ASNLib;
 class ASNError;
@@ -115,13 +114,14 @@ public:
      */
     inline AsnObject()
 	{}
+
     /**
-     * Constructor
-     * @param data Data from which the object is built
-     * @param len Length of the given data
+     * Copy constructor
+     * @param original Value object to copy
      */
-    AsnObject(void* data, int len)
+    inline AsnObject(const AsnObject& original)
 	{}
+
     /**
      * Destructor
      */
@@ -183,6 +183,14 @@ public:
 	{}
 
     /**
+     * Copy constructor
+     * @param original Value object to copy
+     */
+    inline AsnValue(const AsnValue& original)
+	: m_type(original.m_type), m_data(original.m_data)
+	{ }
+
+    /**
      * Constructor
      * @param value Object value
      * @param type AsnValue type, default is String
@@ -215,11 +223,11 @@ public:
      * Assign operator
      */
     inline AsnValue& operator=( AsnValue* val)
-    { 
-	if (!val) 
+    {
+	if (!val)
 	    return *this;
 	m_data = val->getValue();
-	m_type = val->type(); 
+	m_type = val->type();
 	return *this;
     }
 
@@ -382,76 +390,8 @@ private:
     int maxVal;
     int minVal;
     unsigned int m_index;
-    
+
     static TokenDict s_access[];
-};
-
-/**
- * Tree of OIDs.
- */
-class YASN_API AsnMibTree : public GenObject {
-    YCLASS(AsnMibTree, GenObject)
-public:
-    /**
-     * Constructor
-     */
-    inline AsnMibTree()
-	{}
-
-    /**
-     * Constructor
-     * @param fileName File from which the tree is to be built
-     */
-    AsnMibTree(const String& fileName);
-
-    /**
-     * Destructor
-     */
-    virtual ~AsnMibTree();
-
-    /**
-     * Find a MIB object given the object id
-     * @param id The object id
-     * @return A pointer to the MIB with the searched object id, 0 if not found
-     */
-    AsnMib* find(const ASNObjId& id);
-
-    /**
-     * Find a MIB given the MIB name
-     * @param name The name of the MIB object
-     * @return A pointer to the MIB with the searched object id, 0 if not found
-     */
-    AsnMib* find(const String& name);
-
-    /**
-     * Find the next MIB object in the tree
-     * @param id Object id of the current MIB object
-     * @return A pointer to the next MIB object in the tree, 0 if there is no next
-     */
-    AsnMib* findNext(const ASNObjId& id);
-
-    /**
-     * Get access level for the given object id
-     * @param oid Object id for which the access level is required
-     * @return Enum value describing the access level required for this object
-     */
-    int getAccess(const ASNObjId& oid);
-
-    /**
-     * Build the tree of MIB objects
-     */
-    void buildTree();
-
-    /**
-     *  Find the module revision of which this OID is part of
-     * @param name Name of the OID
-     * @return String value of the module revision
-     */
-    String findRevision(const String& name);
-
-private:
-    String m_treeConf;
-    ObjList m_mibs;
 };
 
 /**
@@ -464,6 +404,14 @@ public:
      * Constructor
      */
     ASNObjId();
+
+    /**
+     * Copy constructor
+     * @param original OID object to copy
+     */
+    inline ASNObjId(const ASNObjId& original)
+	: m_value(original.m_value), m_name(original.m_name)
+	{ }
 
     /**
      * Constructor
@@ -490,14 +438,22 @@ public:
     ~ASNObjId();
 
     /**
+     * Assignment operator from OID
+     */
+    inline ASNObjId& operator=(const ASNObjId& original)
+	{ m_value = original.toString(); return *this; }
+
+    /**
      * Assign operator from a string value
      */
-    ASNObjId& operator=(const String& val);
+    inline ASNObjId& operator=(const String& val)
+	{ m_value = val; return *this; }
 
     /**
      * Assign operator from a const char* value
      */
-    ASNObjId& operator=(const char* val);
+    inline ASNObjId& operator=(const char* val)
+	{ m_value = val; return *this; }
 
     /**
      * Transform the value of this OID from a string value to a sequence of numbers
@@ -1091,7 +1047,7 @@ public:
     static int matchEOC(DataBlock& data);
 
     /**
-     * Extract length until a End Of Contents is found. 
+     * Extract length until a End Of Contents is found.
      * @param data Input block for which to determine the length to End Of Contents
      * @param length Length to which to add determined length
      * @return Length until End Of Contents

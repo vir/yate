@@ -3,9 +3,9 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * iSAC codec using iSAC library based on WebRTC project.
- * 
+ *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2011-2013 Null Team
+ * Copyright (C) 2011-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -386,7 +386,7 @@ bool iSACCodec::isacInit()
 	res = WebRtcIsac_EncoderInit(m_isac,m_mode);
 	WebRtcIsac_SetEncSampRate(m_isac,sampleRate == 16000 ? kIsacWideband : kIsacSuperWideband);
 #endif
-	
+
 	if (sampleRate == 16000) {
 	    m_outData.assign(0,400);
 	    m_encodeChunk = 320;

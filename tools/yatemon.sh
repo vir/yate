@@ -1,5 +1,23 @@
 #! /bin/bash
 
+# yatemon.sh
+# This file is part of the YATE Project http://YATE.null.ro
+#
+# Yet Another Telephony Engine - a fully featured software PBX and IVR
+# Copyright (C) 2010-2014 Null Team
+#
+# This software is distributed under multiple licenses;
+# see the COPYING file in the main directory for licensing
+# information for this specific distribution.
+#
+# This use of this software may be subject to additional restrictions.
+# See the LEGAL file in the main directory for details.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+
 # Use: yatemon.sh [-p pid]
 # Displays a history of Yate's memory and thread CPU usage
 # You will need a very wide console

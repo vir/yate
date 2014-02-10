@@ -253,14 +253,14 @@ gkclient = false
 [gk]
 ; If server is true the gatekeeper of yate will start. You must understand that
 ; the H323EndPoint and H323GateKeeper share the calls. So you can make a call
-; to a registered endpoint of this gatekeeper even if in the [ep] section 
+; to a registered endpoint of this gatekeeper even if in the [ep] section
 ; you haven't register the local H323EndPoint to the local H323Gatekeeper. In
 ; fact is not recomanded to register the local EndPoint to the local GateKeeper.
-; The local H323EndPoint is used as proxy for calls to local non h323 
-; destinations. If you wanna call let's say tone/dial from a registered 
-; endpoint to the local gatekeeper, you must make a route in regexroute (or 
+; The local H323EndPoint is used as proxy for calls to local non h323
+; destinations. If you wanna call let's say tone/dial from a registered
+; endpoint to the local gatekeeper, you must make a route in regexroute (or
 ; whatever you use) and then just dial the number.
-; If you wanna call a registered endpoint you must use now as a module register 
+; If you wanna call a registered endpoint you must use now as a module register
 ; since is the only module who can record prefixes right now.
 
 ; server: bool: Enable running a gatekeeper on the main endpoint

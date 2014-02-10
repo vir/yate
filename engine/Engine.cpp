@@ -3,7 +3,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -227,6 +227,8 @@ static bool s_init = false;
 static bool s_dynplugin = false;
 static Engine::PluginMode s_loadMode = Engine::LoadFail;
 static int s_maxworkers = 10;
+unsigned int Engine::s_congestion = 0;
+static Mutex s_congMutex(false,"Congestion");
 static bool s_debug = true;
 static bool s_capture = CAPTURE_EVENTS;
 static int s_maxevents = 25;
@@ -308,6 +310,8 @@ public:
 	: MessageHandler("engine.status",90,"engine")
 	{ }
     virtual bool received(Message &msg);
+    static void objects(String& retVal, bool details);
+    static int objects(String& str);
 };
 
 class EngineHelp : public MessageHandler
@@ -400,11 +404,55 @@ static void initCfgFile(const char* name)
 	s_cfgfile = s_cfgfile.substr(0,s_cfgfile.length()-4);
 }
 
+int EngineStatusHandler::objects(String& str)
+{
+    int cnt = 0;
+    for (const ObjList* l = GenObject::getObjCounters().skipNull(); l; l = l->skipNext()) {
+	const NamedCounter* c = static_cast<const NamedCounter*>(l->get());
+	if (!c->count())
+	    continue;
+	str.append(*c,",") << "=" << c->count();
+	cnt += c->count();
+    }
+    return cnt;
+}
+
+void EngineStatusHandler::objects(String& retVal, bool details)
+{
+    retVal << "name=objects,type=system";
+    retVal << ";enabled=" << getObjCounting();
+    retVal << ",counters=" << getObjCounters().count();
+    if (details) {
+	String str;
+	retVal << ",objects=" << objects(str);
+	retVal.append(str,";");
+    }
+    retVal << "\r\n";
+}
+
 bool EngineStatusHandler::received(Message &msg)
 {
-    const char *sel = msg.getValue("module");
-    if (sel && ::strcmp(sel,"engine"))
+    bool details = msg.getBoolValue("details",true);
+    String sel = msg.getValue("module");
+    if (sel && (sel != YSTRING("engine"))) {
+	if (sel.startSkip("objects")) {
+	    if (sel) {
+		msg.retValue() << "name=objects,type=system";
+		msg.retValue() << ";enabled=" << getObjCounting();
+		const NamedCounter* c = getObjCounter(sel,false);
+		msg.retValue() << ";" << sel << "=";
+		if (c)
+		    msg.retValue() << c->count();
+		else
+		    msg.retValue() << "(not counted)";
+		msg.retValue() << "\r\n";
+	    }
+	    else
+		objects(msg.retValue(),details);
+	    return true;
+	}
 	return false;
+    }
     msg.retValue() << "name=engine,type=system";
     msg.retValue() << ",version=" << YATE_VERSION;
     msg.retValue() << ",revision=" << YATE_REVISION;
@@ -430,7 +478,8 @@ bool EngineStatusHandler::received(Message &msg)
     if (locks >= 0)
 	msg.retValue() << ",waiting=" << locks;
     msg.retValue() << ",acceptcalls=" << lookup(Engine::accept(),Engine::getCallAcceptStates());
-    if (msg.getBoolValue("details",true)) {
+    msg.retValue() << ",congestion=" << Engine::getCongestion();
+    if (details) {
 	NamedIterator iter(Engine::runParams());
 	char sep = ';';
 	while (const NamedString* p = iter.get()) {
@@ -441,7 +490,9 @@ bool EngineStatusHandler::received(Message &msg)
 	}
     }
     msg.retValue() << "\r\n";
-    return false;
+    if (getObjCounting() && sel.null())
+	objects(msg.retValue(),details);
+    return !sel.null();
 }
 
 bool EngineEventHandler::received(Message &msg)
@@ -600,8 +651,14 @@ void EngineCommand::doCompletion(Message &msg, const String& partLine, const Str
 	completeOne(msg.retValue(),"events",partWord);
 	completeOne(msg.retValue(),"logview",partWord);
     }
-    else if (partLine == YSTRING("status"))
+    else if (partLine == YSTRING("status")) {
 	completeOne(msg.retValue(),"engine",partWord);
+	completeOne(msg.retValue(),"objects",partWord);
+    }
+    else if (partLine == YSTRING("status objects")) {
+	for (ObjList* l = getObjCounters().skipNull();l;l = l->skipNext())
+	    completeOne(msg.retValue(),l->get()->toString(),partWord);
+    }
     else if (partLine == YSTRING("module")) {
 	completeOne(msg.retValue(),"load",partWord);
 	if (!s_nounload) {
@@ -1582,6 +1639,12 @@ int Engine::engineCleanup()
     plugins.clear();
     if (mux || cnt)
 	Debug(DebugGoOn,"Exiting with %d locked mutexes and %u plugins loaded!",mux,cnt);
+    if (GenObject::getObjCounting()) {
+	String str;
+	int obj = EngineStatusHandler::objects(str);
+	if (str)
+	    Debug(DebugNote,"Exiting with %d allocated objects: %s",obj,str.c_str());
+    }
 #ifdef _WINDOWS
     ::WSACleanup();
 #endif
@@ -1600,6 +1663,26 @@ Engine* Engine::self()
     if (!s_self)
 	s_self = new Engine;
     return s_self;
+}
+
+void Engine::setCongestion(const char* reason)
+{
+    unsigned int cong = 2;
+    s_congMutex.lock();
+    if (reason)
+	cong = ++s_congestion;
+    else if (s_congestion)
+	cong = --s_congestion;
+    s_congMutex.unlock();
+    switch (cong) {
+	case 0:
+	    Alarm("engine","performance",DebugNote,"Engine congestion ended");
+	    break;
+	case 1:
+	    if (reason)
+		Alarm("engine","performance",DebugWarn,"Engine is congested: %s",reason);
+	    break;
+    }
 }
 
 const char* Engine::pathSeparator()
@@ -1797,6 +1880,7 @@ void Engine::initPlugins()
     ObjList *l = plugins.skipNull();
     for (; l; l = l->skipNext()) {
 	Plugin *p = static_cast<Plugin *>(l->get());
+	TempObjectCounter cnt(p->objectsCounter());
 	p->initialize();
 	if (exiting()) {
 	    Output("Initialization aborted, exiting...");
@@ -1873,6 +1957,7 @@ bool Engine::init(const String& name)
     bool ok = s_self->m_dispatcher.dispatch(msg);
     Plugin* p = static_cast<Plugin*>(plugins[name]);
     if (p) {
+	TempObjectCounter cnt(p->objectsCounter());
 	p->initialize();
 	ok = true;
     }
@@ -2015,6 +2100,7 @@ static void usage(bool client, FILE* f)
 "     w            Delay creation of 1st worker thread\n"
 "     o            Colorize output using ANSI codes\n"
 "     s            Abort on bugs even during shutdown\n"
+"     O            Attempt to debug object allocations\n"
 "     t            Timestamp debugging messages relative to program start\n"
 "     e            Timestamp debugging messages based on EPOCH (1-1-1970 GMT)\n"
 "     f            Timestamp debugging in GMT format YYYYMMDDhhmmss.uuuuuu\n"
@@ -2260,6 +2346,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 				    break;
 				case 'o':
 				    colorize = true;
+				    break;
+				case 'O':
+				    GenObject::setObjCounting(true);
 				    break;
 				case 'e':
 				    tstamp = Debugger::Absolute;

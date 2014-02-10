@@ -3,7 +3,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -335,7 +335,7 @@ bool MutexPrivate::unlock()
 	    thr->m_locks--;
 	if (!--m_locked) {
 	    const char* tname = thr ? thr->name() : 0;
-	    if (tname != m_owner) 
+	    if (tname != m_owner)
 		Debug(DebugFail,"MutexPrivate '%s' unlocked by '%s' but owned by '%s' [%p]",
 		    m_name,tname,m_owner,this);
 	    m_owner = 0;

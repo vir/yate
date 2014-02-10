@@ -4,9 +4,9 @@
  Answer module for YAYPM. Adds extenstions that results in answered,
  unanswered, busy, notfound calls. There is also an extenstion that
  behaves randomly. Good for automated testing.
- 
+
  Copyright (C) 2006 Maciek Kaminski
- 
+
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation; either version 2 of the License, or
@@ -38,7 +38,7 @@ def answer(yate, called,
                       "busy": "3",
                       "notfound": "4",
                       "random": "5"}):
-    
+
     def unanswered(yate, route):
         callid = route["id"]
         route.ret(True, "dumb/")
@@ -72,11 +72,11 @@ def answer(yate, called,
 
         execute = yield yate.onwatch(
             "call.execute",
-            lambda m : m["id"] == callid, until = end)    
+            lambda m : m["id"] == callid, until = end)
 
         targetid = execute["targetid"]
 
-        if answered_target.startswith("dumb"):           
+        if answered_target.startswith("dumb"):
             yate.msg("call.answered",
                      {"id": targetid,
                       "targetid": callid}).enqueue()
@@ -113,7 +113,7 @@ def answer(yate, called,
         handlers = [answered, unanswered, busy, notfound]
         h = handlers[randint(0, len(handlers)-1)]
         go(h(yate, route))
-    
+
     called_aswered = "%s%s" % (called, extensions["answered"])
     called_unanswered = "%s%s" % (called, extensions["unanswered"])
     called_busy = "%s%s" % (called, extensions["busy"])

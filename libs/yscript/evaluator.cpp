@@ -1,9 +1,10 @@
 /**
- * Evaluator.cpp
+ * evaluator.cpp
+ * Yet Another (Java)script library
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -1463,7 +1464,7 @@ void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
 	        const char* name = getOperator(oper.opcode());
 		if (name)
 		    res << name;
-		else 
+		else
 		    res << "[" << oper.opcode() << "]";
 	    }
 	    if (oper.number() && oper.isInteger())

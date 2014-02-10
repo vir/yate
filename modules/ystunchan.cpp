@@ -5,7 +5,7 @@
  * STUN support module
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  * Author: Marian Podgoreanu
  *
  * This software is distributed under multiple licenses;
@@ -36,10 +36,10 @@ namespace { // anonymous
 
   uselocalusername        Add USERNAME attribute when sending requests
                           Defaults to true
-  localusername           The USERNAME attribute for outgoing requests 
+  localusername           The USERNAME attribute for outgoing requests
   useremoteusername       Check USERNAME attribute when receiving requests
                           Defaults to true
-  remoteusername          The USERNAME attribute for incoming requests 
+  remoteusername          The USERNAME attribute for incoming requests
   remoteip                The initial remote address
   remoteport              The initial remote port
   userid                  The id of the user that requested the filter
@@ -261,7 +261,7 @@ public:
     virtual bool fromBuffer(u_int8_t* buffer, u_int16_t len);
     virtual void toBuffer(DataBlock& buffer);
 private:
-    u_int16_t m_unknownType;            // The unknown type 
+    u_int16_t m_unknownType;            // The unknown type
     DataBlock m_data;                   // Data
 };
 
@@ -531,7 +531,7 @@ void YStunAttributeChangeReq::toBuffer(DataBlock& buffer)
 // YStunAttributeAuth
 void YStunAttributeAuth::toString(String& dest)
 {
-    dest = m_auth; 
+    dest = m_auth;
 }
 
 bool YStunAttributeAuth::fromBuffer(u_int8_t* buffer, u_int16_t len)

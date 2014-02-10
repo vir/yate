@@ -5,7 +5,7 @@
  * Users module
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -465,6 +465,6 @@ bool UsersModule::commandComplete(Message& msg, const String& partLine, const St
     return Module::commandComplete(msg,partLine,partWord);
 }
 
-}
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -70,7 +70,7 @@ void main()
             yate->debug("Pike [Un]Installed: %s\n",message->name);
             break;
          default:
-            yate->debug("Unknown type: %s\n",message->type);   
+            yate->debug("Unknown type: %s\n",message->type);
       }
    }
 }

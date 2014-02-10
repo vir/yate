@@ -5,7 +5,7 @@
  * Default client logic
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -519,7 +519,7 @@ public:
 	    unlock();
 	    return cancelJob(job,false);
 	}
-    // Set contact/instance online 
+    // Set contact/instance online
     virtual bool setOnline(bool online);
     // Cancel all running jobs, clear data
     virtual void cancel();
@@ -4020,7 +4020,7 @@ static bool addTrayIcon(const String& type)
 	    prio = Client::TrayIconNotification;
 	    iconParams->addParam("icon",Client::s_skinPath + "tray_notification.png");
 	    triggerAction = s_actionShowNotification;
-	} 
+	}
 	else {
 	    prio = Client::TrayIconInfo;
 	    iconParams->addParam("icon",Client::s_skinPath + "tray_info.png");
@@ -5190,7 +5190,7 @@ void AccountStatus::init()
     setCurrent(lookup(ClientResource::Online,ClientResource::s_statusName));
 }
 
-// Update 
+// Update
 void AccountStatus::updateUi()
 {
     if (!(s_current && Client::self()))
@@ -5501,7 +5501,7 @@ FtItem::FtItem(FtManager* owner, const String& itemId, const String& acc,
 	m_contactName << "/" << inst;
 }
 
-// Set contact/instance online 
+// Set contact/instance online
 bool FtItem::setOnline(bool online)
 {
     if (m_online == online)
@@ -5592,7 +5592,7 @@ void DownloadBatch::addItem(ClientFileItem& item, const String& path,
     else
 	cancel();
 }
- 
+
 // Timer tick handler
 bool DownloadBatch::timerTick(const Time& time)
 {
@@ -5765,7 +5765,7 @@ bool DownloadBatch::handleFileInfoRsp(const String& oper, NamedList& msg)
     return true;
 }
 
-// Set contact/instance online 
+// Set contact/instance online
 bool DownloadBatch::setOnline(bool online)
 {
     Lock lck(this);
@@ -5902,7 +5902,7 @@ void DownloadBatch::addItemName(ClientFileItem& item, const String& path,
     else
 	addFileUnsafe(p,ip,file->params());
 }
- 
+
 // Add a shared file
 void DownloadBatch::addFileUnsafe(const String& localPath, const String& downloadPath,
     const NamedList& params)
@@ -6429,7 +6429,7 @@ FTManagerTimer::FTManagerTimer(FtManager* owner)
     m_owner(owner)
 {
 }
-    
+
 FTManagerTimer::~FTManagerTimer()
 {
     notify();
@@ -7050,9 +7050,9 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     bool showMsgs = (name == YSTRING("messages_show") || name == s_actionShowNotification ||
 	name == s_actionShowInfo);
     if (showMsgs || name == YSTRING("messages_close")) {
-	bool notif = (name == s_actionShowNotification); 
+	bool notif = (name == s_actionShowNotification);
 	if (notif || name == s_actionShowInfo) {
-	    removeTrayIcon(notif ? YSTRING("notification") : YSTRING("info")); 
+	    removeTrayIcon(notif ? YSTRING("notification") : YSTRING("info"));
 	    if (wnd && Client::valid())
 		Client::self()->setVisible(wnd->id(),true,true);
 	}
@@ -7678,42 +7678,48 @@ bool DefaultLogic::callIncoming(Message& msg, const String& dest)
     return true;
 }
 
+static inline int targetExtraCharPos(const String& s)
+{
+    for (unsigned int i = 0; i < s.length(); i++) {
+	char c = s[i];
+	if (c == '@' || c == ':')
+	    return (int)i;
+    }
+    return -1;
+}
+
 // Validate an outgoing call
 bool DefaultLogic::validateCall(NamedList& params, Window* wnd)
 {
     const String& ns = params[YSTRING("target")];
-    int pos = ns.find('/');
-    if (pos > 0) {
-	params.clearParam(YSTRING("account"));
-	params.clearParam(YSTRING("protocol"));
-	params.clearParam(YSTRING("line"));
-	return true;
-    }
+    NamedString* proto = params.getParam(YSTRING("protocol"));
+    NamedString* acc = params.getParam(YSTRING("account"));
+    if (!acc)
+	acc = params.getParam(YSTRING("line"));
     bool accountCleared = false;
-    for (unsigned int i = 0; i < ns.length(); i++) {
-	char c = ns[i];
-	if (c == '@' || c == ':') {
-	    NamedString* tmp = params.getParam(YSTRING("account"));
-	    if (tmp) {
+    int extraPos = -2;
+    if (!(proto && *proto == s_jabber) && !(acc && acc->startsWith("jabber:"))) {
+	int pos = ns.find('/');
+	if (pos > 0) {
+	    params.clearParam(YSTRING("account"));
+	    params.clearParam(YSTRING("line"));
+	    params.clearParam(proto);
+	    return true;
+	}
+	if (acc) {
+	    extraPos = targetExtraCharPos(ns);
+	    if (extraPos >= 0) {
 		accountCleared = true;
-		params.clearParam(tmp);
+		params.clearParam(YSTRING("account"));
 		params.clearParam(YSTRING("line"));
 	    }
-	    else {
-		tmp = params.getParam(YSTRING("line"));
-		if (tmp) {
-		    accountCleared = true;
-		    params.clearParam(tmp);
-		}
-	    }
-	    break;
 	}
     }
-    if (params[YSTRING("account")])
+    if (!TelEngine::null(acc))
 	return true;
     const char* error = 0;
-    if (params[YSTRING("protocol")]) {
-	if (ns.find('@') <= 0 && ns.find(':') <= 0)
+    if (!TelEngine::null(proto)) {
+	if (extraPos >= 0 || (extraPos == -2 && targetExtraCharPos(ns) >= 0))
 	    error = "This is not a valid protocol URI.";
     }
     else if (accountCleared)
@@ -7729,7 +7735,7 @@ bool DefaultLogic::validateCall(NamedList& params, Window* wnd)
 bool DefaultLogic::callStart(NamedList& params, Window* wnd, const String& cmd)
 {
     if (!(Client::self() && fillCallStart(params,wnd)))
-	return false;    
+	return false;
     if (!validateCall(params,wnd))
 	return false;
     String target;
@@ -8119,8 +8125,10 @@ bool DefaultLogic::callContact(NamedList* params, Window* wnd)
 	return false;
     NamedList dummy("");
     if (!params) {
+	String sel;
+	Client::self()->getSelect(s_contactList,sel);
+	dummy.assign(sel);
 	params = &dummy;
-	Client::self()->getSelect(s_contactList,*params);
     }
     if (!Client::self()->getTableRow(s_contactList,*params,params))
 	return false;

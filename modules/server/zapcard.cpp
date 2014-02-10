@@ -5,7 +5,7 @@
  * Zaptel PRI/TDM/FXS/FXO cards signalling and data driver
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -102,7 +102,7 @@ class ZapModule;                         // The module
 
 #define DAHDI_EVENT_PULSEDIGIT 		ZT_EVENT_PULSEDIGIT
 #define DAHDI_EVENT_DTMFDOWN   		ZT_EVENT_DTMFDOWN
-#define DAHDI_EVENT_DTMFUP  		ZT_EVENT_DTMFUP 
+#define DAHDI_EVENT_DTMFUP  		ZT_EVENT_DTMFUP
 #define DAHDI_EVENT_PULSEDIGIT		ZT_EVENT_PULSEDIGIT
 
 // hook events
@@ -583,8 +583,6 @@ public:
 	const NamedList& params);
     virtual ~ZapCircuit()
 	{ cleanup(false); }
-    inline const ZapDevice device() const
-	{ return m_device; }
     virtual void destroyed()
 	{ cleanup(true); }
     // Change circuit status. Clear events on status change
@@ -998,7 +996,7 @@ static TokenDict s_formats[] = {
     {"alaw",    ZapDevice::Alaw},
     {0,0}
     };
-#ifdef HAVE_ZAP 
+#ifdef HAVE_ZAP
 const char* ZapDevice::s_zapCtlName = "/dev/zap/ctl";
 const char* ZapDevice::s_zapDevName = "/dev/zap/channel";
 #else

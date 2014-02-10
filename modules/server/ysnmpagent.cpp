@@ -5,7 +5,7 @@
  * Module for SNMP protocol agent
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -63,6 +63,7 @@ class SnmpUser;
 
 class SnmpUdpListener;
 class TrapHandler;
+class AsnMibTree;
 
 /**
   *	TransportType
@@ -164,7 +165,7 @@ private:
     SocketAddr m_from;
 };
 
-class SnmpUser : public GenObject 
+class SnmpUser : public GenObject
 {
 public:
     // enum for authentication and privacy encryption
@@ -518,6 +519,35 @@ private:
     Cipher* m_cipher;
 };
 
+/**
+ * Tree of OIDs.
+ */
+class AsnMibTree : public GenObject {
+    YCLASS(AsnMibTree, GenObject)
+public:
+    inline AsnMibTree()
+	{}
+    // Constructor with file name from which the tree is to be built
+    AsnMibTree(const String& fileName);
+    virtual ~AsnMibTree();
+    // Find a MIB object given the object id
+    AsnMib* find(const ASNObjId& id);
+    // Find a MIB given the MIB name
+    AsnMib* find(const String& name);
+    // Find the next MIB object in the tree
+    AsnMib* findNext(const ASNObjId& id);
+    // Get access level for the given object id
+    int getAccess(const ASNObjId& oid);
+    // Build the tree of MIB objects
+    void buildTree();
+    //Find the module revision of which this OID is part of
+    String findRevision(const String& name);
+
+private:
+    String m_treeConf;
+    ObjList m_mibs;
+};
+
 const TokenDict TransportType::s_typeText[] = {
     {"UDP",	UDP},
     {"TCP",	TCP},
@@ -633,6 +663,160 @@ UNLOAD_PLUGIN(unloadNow)
     return true;
 }
 
+/**
+  * AsnMibTree
+  */
+AsnMibTree::AsnMibTree(const String& fileName)
+{
+    DDebug(&__plugin,DebugAll,"AsnMibTree object created from %s", fileName.c_str());
+    m_treeConf = fileName;
+    buildTree();
+}
+
+AsnMibTree::~AsnMibTree()
+{
+    m_mibs.clear();
+}
+
+void AsnMibTree::buildTree()
+{
+    Configuration cfgTree;
+    cfgTree = m_treeConf;
+    if(!cfgTree.load())
+	Debug(&__plugin,DebugWarn,"Failed to load MIB tree");
+    else {
+    	for (unsigned int i = 0; i < cfgTree.sections(); i++) {
+    	    NamedList* sect = cfgTree.getSection(i);
+    	    if (sect) {
+	    	AsnMib* mib = new AsnMib(*sect);
+	    	m_mibs.append(mib);
+	    }
+    	}
+    }
+}
+
+String AsnMibTree::findRevision(const String& name)
+{
+    AsnMib* mib = find(name);
+    if (!mib)
+    	return "";
+    String revision = "";
+    while (revision.null()) {
+    	ASNObjId parentID = mib->getParent();
+    	AsnMib* parent = find(parentID);
+    	if (!parent)
+    	    return revision;
+    	revision = parent->getRevision();
+    	mib = parent;
+    }
+    return revision;
+}
+
+AsnMib* AsnMibTree::find(const String& name)
+{
+    DDebug(&__plugin,DebugAll,"AsnMibTree::find('%s')",name.c_str());
+    const ObjList *n = m_mibs.skipNull();
+    AsnMib* mib = 0;
+    while (n) {
+	mib = static_cast<AsnMib*>(n->get());
+	if (name == mib->getName())
+	    break;
+	n = n->skipNext();
+	mib = 0;
+    }
+    return mib;
+}
+
+AsnMib* AsnMibTree::find(const ASNObjId& id)
+{
+    DDebug(&__plugin,DebugAll,"AsnMibTree::find('%s')",id.toString().c_str());
+
+    String value = id.toString();
+    int pos = 0;
+    int index = 0;
+    AsnMib* searched = 0;
+    unsigned int cycles = 0;
+    while (cycles < 2) {
+ 	ObjList* n = m_mibs.find(value);
+	searched = n ? static_cast<AsnMib*>(n->get()) : 0;
+	if (searched) {
+	    searched->setIndex(index);
+	    return searched;
+	}
+	pos = value.rfind('.');
+	if (pos < 0)
+	    return 0;
+	index = value.substr(pos + 1).toInteger();
+	value = value.substr(0,pos);
+	cycles++;
+    }
+    return searched;
+}
+
+AsnMib* AsnMibTree::findNext(const ASNObjId& id)
+{
+    DDebug(&__plugin,DebugAll,"AsnMibTree::findNext('%s')",id.toString().c_str());
+    String searchID = id.toString();
+    // check it the oid is in our known tree
+    AsnMib* root = static_cast<AsnMib*>(m_mibs.get());
+    if (root && !(id.toString().startsWith(root->toString()))) {
+    	NamedList p(id.toString());
+    	AsnMib oid(p);
+    	int comp = oid.compareTo(root);
+    	if (comp < 0)
+    	    searchID = root->toString();
+    	else if (comp > 0)
+    	    return 0;
+    }
+    AsnMib* searched = static_cast<AsnMib*>(m_mibs[searchID.toString()]);
+    if (searched) {
+    	if (searched->getAccessValue() > AsnMib::accessibleForNotify) {
+	    DDebug(&__plugin,DebugInfo,"AsnMibTree::findNext('%s') - found an exact match to be '%s'",
+			id.toString().c_str(), searched->toString().c_str());
+	    return searched;
+	}
+    }
+    String value = searchID.toString();
+    int pos = 0;
+    int index = 0;
+    while (true) {
+ 	ObjList* n = m_mibs.find(value);
+	searched = n ? static_cast<AsnMib*>(n->get()) : 0;
+	if (searched) {
+	    if (id.toString() == searched->getOID() || id.toString() == searched->toString()) {
+	    	ObjList* aux = n->skipNext();
+	    	if (!aux)
+	    	    return 0;
+	    	while (aux) {
+		    AsnMib* mib = static_cast<AsnMib*>(aux->get());
+		    if (mib && mib->getAccessValue() > AsnMib::accessibleForNotify)
+			return mib;
+		    aux = aux->skipNext();
+	    	}
+		return 0;
+	    }
+	    else {
+	    	searched->setIndex(index + 1);
+	    	return searched;
+	    }
+	}
+	pos = value.rfind('.');
+	if (pos < 0)
+	    return 0;
+	index = value.substr(pos + 1).toInteger();
+	value = value.substr(0,pos);
+    }
+    return 0;
+}
+
+int AsnMibTree::getAccess(const ASNObjId& id)
+{
+    DDebug(&__plugin,DebugAll,"AsnMibTree::getAccess('%s')",id.toString().c_str());
+    AsnMib* mib = find(id);
+    if (!mib)
+	return 0;
+    return mib->getAccessValue();
+}
 
 /**
   * TrapHandler - message handler for incoming notifications
@@ -1019,7 +1203,7 @@ void SnmpUser::generateAuthInfo()
 {
     if (TelEngine::null(m_authPassword))
 	return;
-	
+
     m_authKey = generateAuthKey(m_authPassword);
     m_k1.clear();
     m_k2.clear();
@@ -1099,7 +1283,7 @@ int SnmpV3MsgContainer::prepareForSend(Snmp::SNMPv3Message& msg)
     if (!msg.m_msgGlobalData)
 	return SnmpAgent::MESSAGE_DROP;
     msg.m_msgGlobalData->m_msgFlags.assign(&msgFlags,sizeof(msgFlags));
-    
+
     // make sure auth and encrypt parameters are empty
     m_security.m_msgPrivacyParameters.clear();
     m_security.m_msgAuthenticationParameters.clear();
@@ -1137,7 +1321,7 @@ int SnmpV3MsgContainer::generateTooBigMsg(Snmp::SNMPv3Message& msg)
 {
     Debug(&__plugin,DebugInfo,"SnmpV3MsgContainer::generateTooBigMsg() [%p]",this);
     if (!m_scopedPdu)
-	return SnmpAgent::MESSAGE_DROP;    
+	return SnmpAgent::MESSAGE_DROP;
     DataBlock data = m_scopedPdu->m_data;
     Snmp::PDUs pdus;
     pdus.decode(data);
@@ -1147,7 +1331,7 @@ int SnmpV3MsgContainer::generateTooBigMsg(Snmp::SNMPv3Message& msg)
     pdu->m_error_status = Snmp::PDU::s_tooBig_error_status;
     pdu->m_error_index = 0;
     if (!pdu->m_variable_bindings)
-	pdu->m_variable_bindings = new Snmp::VarBindList();	
+	pdu->m_variable_bindings = new Snmp::VarBindList();
     pdu->m_variable_bindings->m_list.clear();
     data.clear();
     pdus.encode(data);
@@ -1172,7 +1356,7 @@ int SnmpV3MsgContainer::processHeader(Snmp::SNMPv3Message& msg)
     m_msgMaxSize = header->m_msgMaxSize;
     // * msgFlags
     u_int8_t msgFlags = (u_int8_t)(header->m_msgFlags.length() == 1 ? header->m_msgFlags[0] : 0);
-    
+
     // get the message flags
     m_reportFlag = ((msgFlags &  REPORT_FLAG) == 0x0 ? false : true);
     m_privFlag = ((msgFlags & PRIVACY_FLAG) == 0x0 ? false : true);
@@ -1205,7 +1389,7 @@ int SnmpV3MsgContainer::processSecurityModel(Snmp::SNMPv3Message& msg)
     m_msgEngineTime = m_security.m_msgAuthoritativeEngineTime;
 
     m_user = __plugin.getUser(m_security.m_msgUserName.getString());
-    
+
     DDebug(&__plugin,DebugInfo,"SnmpV3MsgContainer::processSecurityModel found authEngineId = '%s', engineBoots = '%d', "
 	"engineTime = '%d', username = '%s'", authEngineId.toHexString().c_str(),
 	    m_msgEngineBoots,m_msgEngineTime,(m_user ? m_user->toString().c_str() : ""));
@@ -1502,7 +1686,7 @@ SnmpAgent::SnmpAgent()
       : Module("snmpagent","misc"),
 	m_init(false), m_msgQueue(0), m_mibTree(0),
 	m_engineBoots(0),m_startTime(0), m_silentDrops(0),
-	m_salt(0), 
+	m_salt(0),
 	m_trapHandler(0),
 	m_traps(0),
 	m_trapUser(0),
@@ -1600,7 +1784,7 @@ void SnmpAgent::initialize()
 
     for (unsigned int i = 0; i < s_cfg.sections(); i++) {
 	NamedList* sec = s_cfg.getSection(i);
-	if (!sec || (*sec == "general") || (*sec == "snmp_v2") || (*sec == "snmp_v3") 
+	if (!sec || (*sec == "general") || (*sec == "snmp_v2") || (*sec == "snmp_v3")
 		    || (*sec == "traps") || (*sec == s_cfg.getValue("traps","trap_user","")))
 	    continue;
 	m_users.append(new SnmpUser(sec));
@@ -2114,7 +2298,7 @@ Snmp::PDU* SnmpAgent::decodeBulkPDU(int& reqType, Snmp::BulkPDU* pdu, const int&
     int i = 0;
     int error = 0;
     AsnValue val;
-    
+
     // handle non-repeaters
     ObjList* o = list->m_list.skipNull();
     for (; o; o = o->skipNext()) {
@@ -2124,7 +2308,7 @@ Snmp::PDU* SnmpAgent::decodeBulkPDU(int& reqType, Snmp::BulkPDU* pdu, const int&
 	if (var) {
 	    Snmp::VarBind* newVar = new Snmp::VarBind();
 	    newVar->m_choiceType = Snmp::VarBind::VALUE;
-	    newVar->m_name->m_ObjectName = var->m_name->m_ObjectName; 
+	    newVar->m_name->m_ObjectName = var->m_name->m_ObjectName;
 	    int res = processGetNextReq(newVar,&val,error,access);
 	    if (res == 1 && error) {
 		retPdu->m_error_index = i + 1;
@@ -2323,7 +2507,7 @@ int SnmpAgent::generateReport(Snmp::SNMPv3Message& msg, const int& secRes, SnmpV
     if (!m_mibTree)
 	return MESSAGE_DROP;
     if (!msg.m_msgGlobalData)
-  	return MESSAGE_DROP;  
+  	return MESSAGE_DROP;
     // reset the message flags
     cont.setReportFlag(false);
     cont.setPrivFlag(false);

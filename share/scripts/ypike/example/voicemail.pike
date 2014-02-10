@@ -30,7 +30,7 @@ void main()
       if(!message->type)
          continue;
       logtmp->write("%O\n",message);
-      switch(message->type) 
+      switch(message->type)
       {
         case "incoming":
 	   switch(message->name)
@@ -82,11 +82,11 @@ void main()
 	   break;
 	case "installed":
 	case "uninstalled":
-	   yate->debug("Pike [Un]Installed: %s\n",message->name); 
+	   yate->debug("Pike [Un]Installed: %s\n",message->name);
 	   break;
 	default:
-	   yate->debug("Unknown type: %s\n",message->type); 
-	   
+	   yate->debug("Unknown type: %s\n",message->type);
+
       }
 
    }

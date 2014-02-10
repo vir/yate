@@ -1,5 +1,23 @@
 #! /bin/sh
 
+# yate-config.sh
+# This file is part of the YATE Project http://YATE.null.ro
+#
+# Yet Another Telephony Engine - a fully featured software PBX and IVR
+# Copyright (C) 2005-2014 Null Team
+#
+# This software is distributed under multiple licenses;
+# see the COPYING file in the main directory for licensing
+# information for this specific distribution.
+#
+# This use of this software may be subject to additional restrictions.
+# See the LEGAL file in the main directory for details.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+
 if [ ! -f configure ]; then
     echo "Cannot find configure" >&2
     exit 1
@@ -38,6 +56,26 @@ exec > yate-config.in < configure
 
 cat <<"EOF"
 #! /bin/sh
+
+# yate-config
+# This file is part of the YATE Project http://YATE.null.ro
+#
+# This is a generated file. You should never need to modify it.
+# Take a look at the source file yate-config.sh instead.
+#
+# Yet Another Telephony Engine - a fully featured software PBX and IVR
+# Copyright (C) 2005-2014 Null Team
+#
+# This software is distributed under multiple licenses;
+# see the COPYING file in the main directory for licensing
+# information for this specific distribution.
+#
+# This use of this software may be subject to additional restrictions.
+# See the LEGAL file in the main directory for details.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 ustr='Usage: yate-config [--cflags] [--includes] [--c-all]
                    [--ldflags] [--libs] [--ld-all] [--ld-nostrip] [--ld-strip]

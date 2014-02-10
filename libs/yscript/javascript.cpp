@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2011-2013 Null Team
+ * Copyright (C) 2011-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -784,7 +784,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 		    pos = tmp->toInteger(0); \
 	    } \
 	} \
-	String s(*str); 
+	String s(*str);
 
     if (name == YSTRING("startsWith")) {
 	MAKE_WITH_METHOD;
@@ -798,7 +798,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	if (pos > 0)
 	    s = s.substr(0,pos);
 	ExpEvaluator::pushOne(stack,new ExpOperation(s.endsWith(what)));
-	return true; 
+	return true;
     }
 #undef MAKE_WITH_METHOD
 #define SPLIT_EMPTY() do { \

@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -667,7 +667,7 @@ void JGRtpCandidateP2P::fromXml(XmlElement* xml, const JGRtpCandidates& containe
 /*
  * JGRtpCandidates
  */
-// Create a 'transport' element from this object. Add 
+// Create a 'transport' element from this object. Add
 XmlElement* JGRtpCandidates::toXml(bool addCandidates, bool addAuth) const
 {
     XMPPNamespace::Type ns;
@@ -1692,7 +1692,7 @@ JGSession0::JGSession0(JGEngine* engine, const JabberID& caller, const JabberID&
     m_candidatesAction(ActCount)
 {
 }
- 
+
 // Create an incoming session
 JGSession0::JGSession0(JGEngine* engine, const JabberID& caller, const JabberID& called,
     XmlElement* xml, const String& id)
@@ -1838,7 +1838,7 @@ JGEvent* JGSession0::decodeJingle(XmlElement*& xml, XmlElement* child)
 	    unhandledAction(this,xml,act);
 	return ev;
     }
- 
+
     // *** ActInfo
     if (act == ActInfo) {
 	// Return ActInfo event to signal ping (XEP-0166 6.8)
@@ -1867,7 +1867,7 @@ JGEvent* JGSession0::decodeJingle(XmlElement*& xml, XmlElement* child)
 	    unhandledAction(this,xml,act,ch);
 	return ev;
     }
- 
+
     if (act == ActTransportAccept) {
 	confirmResult(xml);
 	TelEngine::destruct(xml);
@@ -1999,7 +1999,7 @@ JGSession1::JGSession1(JGEngine* engine, const JabberID& caller, const JabberID&
     : JGSession(Version1,engine,caller,called)
 {
 }
- 
+
 // Create an incoming session
 JGSession1::JGSession1(JGEngine* engine, const JabberID& caller, const JabberID& called,
     XmlElement* xml, const String& id)

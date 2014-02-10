@@ -5,7 +5,7 @@
  * IAX channel
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  * Author: Marian Podgoreanu
  *
  * This software is distributed under multiple licenses;
@@ -442,6 +442,7 @@ public:
 protected:
     virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
     virtual void msgStatus(Message& msg);
+    virtual void statusParams(String& str);
     void msgStatusAccounts(Message& msg);
     void msgStatusListeners(Message& msg);
     virtual void genUpdate(Message& msg);
@@ -1123,7 +1124,7 @@ void YIAXLineContainer::evTimer(Time& time)
 {
     lock();
     ListIterator iter(m_lines);
-    GenObject* gen = 0; 
+    GenObject* gen = 0;
     while (0 != (gen = iter.get())) {
 	RefPointer<YIAXLine> line = static_cast<YIAXLine*>(gen);
 	if (!line)
@@ -2206,6 +2207,18 @@ void YIAXDriver::msgStatus(Message& msg)
     Driver::msgStatus(msg);
 }
 
+void YIAXDriver::statusParams(String& str)
+{
+    Driver::statusParams(str);
+    m_enginesMutex.lock();
+    unsigned int cnt = 0;
+    ListIterator iter(m_engines);
+    while (YIAXEngine* eng = static_cast<YIAXEngine*>(iter.get()))
+	cnt += eng->transactionCount();
+    m_enginesMutex.unlock();
+    str.append("transactions=",",") << cnt;
+}
+
 void YIAXDriver::msgStatusAccounts(Message& msg)
 {
     msg.retValue().clear();
@@ -2228,7 +2241,7 @@ void YIAXDriver::msgStatusAccounts(Message& msg)
     }
     s_lines.unlock();
     msg.retValue() << "accounts=" << n;
-    msg.retValue().append(det,";"); 
+    msg.retValue().append(det,";");
     msg.retValue() << "\r\n";
 }
 
@@ -2265,7 +2278,7 @@ void YIAXDriver::msgStatusListeners(Message& msg)
     }
     m_enginesMutex.unlock();
     msg.retValue() << "listeners=" << n << ",default=" << def;
-    msg.retValue().append(det,";"); 
+    msg.retValue().append(det,";");
     msg.retValue() << "\r\n";
 }
 
@@ -2448,7 +2461,7 @@ unsigned long YIAXConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 //
 // YIAXSource
 //
-YIAXSource::YIAXSource(YIAXConnection* conn, u_int32_t format, const char* formatText, int type) 
+YIAXSource::YIAXSource(YIAXConnection* conn, u_int32_t format, const char* formatText, int type)
     : DataSource(formatText),
     YIAXData(conn,format,type)
 {
@@ -2708,7 +2721,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    startMedia(true,IAXFormat::Video);
 	    startMedia(false,IAXFormat::Video);
 	    Engine::enqueue(message("call.answered",false,true));
-	    break; 
+	    break;
 	case IAXEvent::Quelch:
 	    DDebug(this,DebugCall,"QUELCH [%p]",this);
 	    m_mutedOut = true;
@@ -2721,7 +2734,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    DDebug(this,DebugInfo,"RINGING [%p]",this);
 	    startMedia(true);
 	    Engine::enqueue(message("call.ringing",false,true));
-	    break; 
+	    break;
 	case IAXEvent::Hangup:
 	case IAXEvent::Reject:
 	    {

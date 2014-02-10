@@ -5,7 +5,7 @@
  * Yet Another Sip Channel
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2013 Null Team
+ * Copyright (C) 2004-2014 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -799,7 +799,7 @@ public:
     void initializing(bool start);
     inline YateSIPEngine* engine() const
 	{ return m_engine; }
-    inline void incFailedAuths() 
+    inline void incFailedAuths()
 	{ m_failedAuths++; }
     inline unsigned int failedAuths()
     {
@@ -1127,7 +1127,8 @@ public:
     unsigned int transportTerminated(YateSIPTransport* trans);
     bool validLine(const String& line);
     bool commandComplete(Message& msg, const String& partLine, const String& partWord);
-    void msgStatus(Message& msg);
+    virtual void msgStatus(Message& msg);
+    virtual void statusParams(String& str);
     // Build and dispatch a socket.ssl message
     bool socketSsl(Socket** sock, bool server, const String& context = String::empty());
     // Send a SIP method
@@ -1463,7 +1464,7 @@ static bool msgIsAllowed(const char* buf, int len)
     if (!(buf && len))
 	return false;
 
-    
+
     int pos = 0;
     // check REGISTER
     while (pos < len) {
@@ -1512,7 +1513,7 @@ static bool msgIsAllowed(const char* buf, int len)
 	int status = START;
 	bool breakLoop = false;
 	while (pos < len) {
-	    
+
 	    switch (buf[pos]) {
 		case ' ':
 		case '\t':
@@ -2720,7 +2721,7 @@ bool YateSIPTransport::init(const NamedList& params, const NamedList& defs,
     else {
 	m_rtpLocalAddr = params.getValue(YSTRING("rtp_localip"));
 	m_maxpkt = getMaxpkt(params.getIntValue(YSTRING("tcp_maxpkt"),m_maxpkt),m_maxpkt);
-	// Set rtp ip for tcp outgoing 
+	// Set rtp ip for tcp outgoing
 	if (!m_rtpLocalAddr && tcpTransport() && tcpTransport()->outgoing()) {
 	    Lock lck(s_globalMutex);
 	    m_rtpLocalAddr = s_tcpOutRtpip;
@@ -5007,7 +5008,7 @@ void YateSIPEndPoint::run()
 	SIPEvent* e = m_engine->getEvent();
 	if (e)
 	    s_evCount++;
-	else 
+	else
 	    s_evCount = 0;
 	// hack: use a loop so we can use break and continue
 	for (; e; m_engine->processEvent(e),e = 0) {
@@ -5562,7 +5563,7 @@ void YateSIPRefer::run()
 		m_transferredDrv->lock();
 		RefPointer<Channel> chan = m_transferredDrv->find(m_transferredID);
 		m_transferredDrv->unlock();
-		if (chan && conn->getPeer() && 
+		if (chan && conn->getPeer() &&
 		    chan->connect(conn->getPeer(),m_msg->getValue(YSTRING("reason")))) {
 		    m_rspCode = 202;
 		    m_notifyCode = 200;
@@ -7594,7 +7595,7 @@ void YateSIPConnection::callAccept(Message& msg)
     }
     Channel::callAccept(msg);
 
-    if ((m_reInviting == ReinviteNone) && !m_rtpForward && !isAnswered() && 
+    if ((m_reInviting == ReinviteNone) && !m_rtpForward && !isAnswered() &&
 	msg.getBoolValue(YSTRING("autoreinvite"),false)) {
 	// remember we want to switch to RTP forwarding when party answers
 	m_reInviting = ReinvitePending;
@@ -8625,7 +8626,7 @@ bool SIPDriver::msgExecute(Message& msg, String& dest)
 }
 
 SIPDriver::SIPDriver()
-    : Driver("sip","varchans"), 
+    : Driver("sip","varchans"),
       m_parser("sip","SIP Call"),
       m_endpoint(0)
 {
@@ -8839,7 +8840,7 @@ bool SIPDriver::commandComplete(Message& msg, const String& partLine, const Stri
 	    }
 	}
     }
-    else 
+    else
     	return Driver::commandComplete(msg,partLine,partWord);
     return false;
 }
@@ -8870,6 +8871,13 @@ void SIPDriver::msgStatus(Message& msg)
 	else if (str.startSkip("listeners"))
 	    msgStatusListener(msg);
     }
+}
+
+void SIPDriver::statusParams(String& str)
+{
+    Driver::statusParams(str);
+    if (m_endpoint->engine())
+	str.append("transactions=",",") << m_endpoint->engine()->transactionCount();
 }
 
 // Build and dispatch a socket.ssl message
@@ -9017,7 +9025,7 @@ void SIPDriver::msgStatusAccounts(Message& msg)
 	accounts.append(line->getUserName()) << "|";
 	accounts << (line->valid() ? "online" : "offline");
     }
-    msg.retValue().append(accounts,";"); 
+    msg.retValue().append(accounts,";");
     msg.retValue() << "\r\n";
 }
 
@@ -9066,7 +9074,7 @@ void SIPDriver::msgStatusTransports(Message& msg, bool showUdp, bool showTcp, bo
 	}
     }
     msg.retValue() << "transports=" << n;
-    msg.retValue().append(buf,";"); 
+    msg.retValue().append(buf,";");
     msg.retValue() << "\r\n";
 }
 
@@ -9116,7 +9124,7 @@ void SIPDriver::msgStatusListener(Message& msg)
 	    n += m_endpoint->m_listeners.count();
     }
     msg.retValue() << "listeners=" << n;
-    msg.retValue().append(buf,";"); 
+    msg.retValue().append(buf,";");
     msg.retValue() << "\r\n";
 }
 

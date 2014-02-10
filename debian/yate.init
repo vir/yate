@@ -19,7 +19,7 @@
 # Description:       Yet another telephony engine
 ### END INIT INFO
 
-
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 DAEMON=/usr/bin/yate
 PIDFILE=/var/run/yate/yate.pid

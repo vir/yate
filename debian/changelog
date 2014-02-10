@@ -1,4 +1,4 @@
-yate (5.0.1~svn5762) UNRELEASED; urgency=low
+yate (5.1.0~svn5771) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -997,8 +997,16 @@ yate (5.0.1~svn5762) UNRELEASED; urgency=low
   * Updated to SVN revision 5762: + Added methods used to encode and
     decode GSM 7bit buffers.  + Make default paths absolute when
     starting with .../run --there  + Marked file for utf-8 encoding.
+  * Updated to SVN revision 5771: + Fixed bug: don't clear jabber
+    account/proto when validating calls.  + Setting PATH in rc script  +
+    Added Javascript Eliza chat bot.  + Added Eliza chat bot to the
+    installer.  + Exclude archives from the files to be processed for
+    EOL whitespace removal.  + Bumped version to 5.1.0  + Manually
+    bumped SVN revision for Windows.  + Install the Eliza Javascript
+    files.  + Install the echo.sh needed by yate-bts NIB.  + Echo.sh
+    needs to be executable.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 08 Feb 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 11 Feb 2014 02:19:28 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

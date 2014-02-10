@@ -7678,42 +7678,48 @@ bool DefaultLogic::callIncoming(Message& msg, const String& dest)
     return true;
 }
 
+static inline int targetExtraCharPos(const String& s)
+{
+    for (unsigned int i = 0; i < s.length(); i++) {
+	char c = s[i];
+	if (c == '@' || c == ':')
+	    return (int)i;
+    }
+    return -1;
+}
+
 // Validate an outgoing call
 bool DefaultLogic::validateCall(NamedList& params, Window* wnd)
 {
     const String& ns = params[YSTRING("target")];
-    int pos = ns.find('/');
-    if (pos > 0) {
-	params.clearParam(YSTRING("account"));
-	params.clearParam(YSTRING("protocol"));
-	params.clearParam(YSTRING("line"));
-	return true;
-    }
+    NamedString* proto = params.getParam(YSTRING("protocol"));
+    NamedString* acc = params.getParam(YSTRING("account"));
+    if (!acc)
+	acc = params.getParam(YSTRING("line"));
     bool accountCleared = false;
-    for (unsigned int i = 0; i < ns.length(); i++) {
-	char c = ns[i];
-	if (c == '@' || c == ':') {
-	    NamedString* tmp = params.getParam(YSTRING("account"));
-	    if (tmp) {
+    int extraPos = -2;
+    if (!(proto && *proto == s_jabber) && !(acc && acc->startsWith("jabber:"))) {
+	int pos = ns.find('/');
+	if (pos > 0) {
+	    params.clearParam(YSTRING("account"));
+	    params.clearParam(YSTRING("line"));
+	    params.clearParam(proto);
+	    return true;
+	}
+	if (acc) {
+	    extraPos = targetExtraCharPos(ns);
+	    if (extraPos >= 0) {
 		accountCleared = true;
-		params.clearParam(tmp);
+		params.clearParam(YSTRING("account"));
 		params.clearParam(YSTRING("line"));
 	    }
-	    else {
-		tmp = params.getParam(YSTRING("line"));
-		if (tmp) {
-		    accountCleared = true;
-		    params.clearParam(tmp);
-		}
-	    }
-	    break;
 	}
     }
-    if (params[YSTRING("account")])
+    if (!TelEngine::null(acc))
 	return true;
     const char* error = 0;
-    if (params[YSTRING("protocol")]) {
-	if (ns.find('@') <= 0 && ns.find(':') <= 0)
+    if (!TelEngine::null(proto)) {
+	if (extraPos >= 0 || (extraPos == -2 && targetExtraCharPos(ns) >= 0))
 	    error = "This is not a valid protocol URI.";
     }
     else if (accountCleared)

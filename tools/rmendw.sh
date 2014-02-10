@@ -20,7 +20,7 @@
 
 # This script removes whitespaces at end of lines of all files in all subdirectories
 
-grep -l -r '[ \t]\+$' * | grep -v '\.svn\|\.html\|\.yhlp\|\.png\|\.gif\|\.jpg\|\.jpeg\|\.ico\|\.wav\|\.au\|\.mp3\|\.ogg\|\.gsm\|\.slin\|\.alaw\|\.mulaw\|Doxyfile\|Makefile\|README' | while read fn; do
+grep -l -r '[ \t]\+$' * | grep -v '\.svn\|\.html\|\.yhlp\|\.gz\|\.zip\|\.png\|\.gif\|\.jpg\|\.jpeg\|\.ico\|\.wav\|\.au\|\.mp3\|\.ogg\|\.gsm\|\.slin\|\.alaw\|\.mulaw\|Doxyfile\|Makefile\|README' | while read fn; do
 echo -n "Processing: $fn ..."
 sed 's/[ \t]\+$//' < "$fn" > "$fn.tmp"
 if cmp -s "$fn" "$fn.tmp"; then

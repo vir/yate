@@ -8,7 +8,8 @@ SCRIPTS := leavemail.php voicemail.php route.php queue_in.php queue_out.php banb
 	echo.sh
 SCRLIBS := libyate.php libyateivr.php libyatechan.php libvoicemail.php \
 	libeliza.js libchatbot.js eliza.js \
-	libyate.py
+	libyate.py \
+	Yate.pm
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@

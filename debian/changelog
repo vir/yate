@@ -1,4 +1,4 @@
-yate (5.1.0~svn5771) UNRELEASED; urgency=low
+yate (5.1.1~svn5776) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1005,8 +1005,14 @@ yate (5.1.0~svn5771) UNRELEASED; urgency=low
     bumped SVN revision for Windows.  + Install the Eliza Javascript
     files.  + Install the echo.sh needed by yate-bts NIB.  + Echo.sh
     needs to be executable.
+  * Updated to SVN revision 5776: + Added back install of Yate.pm
+    accidentally removed by Rev 5771.  + Patch by Vasily i. Redkin
+    <vir@ctm.ru>  + Fixes bug #359 "Yate.pm removes '0' values from all
+    (even not handled) messages".  + Check if parameters are defined
+    instead of interpreting as booleans.  + Bumped revision in Windows.
+    + Bumped version to 5.1.1 devel.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 11 Feb 2014 02:19:28 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 12 Feb 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

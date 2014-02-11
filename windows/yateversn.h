@@ -35,7 +35,7 @@
 #define YATE_VERSION "5.1.0"
 #define YATE_RELEASE "1"
 #define YATE_STATUS  ""
-#define YATE_REVISION "5767"
+#define YATE_REVISION "5774"
 
 /* Windows version resource - file and string style */
 #define YATE_WINVER_F 5,1,0,1

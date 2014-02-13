@@ -1,4 +1,4 @@
-yate (5.1.1~svn5777) UNRELEASED; urgency=low
+yate (5.1.1~svn5778) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1013,8 +1013,10 @@ yate (5.1.1~svn5777) UNRELEASED; urgency=low
     + Bumped version to 5.1.1 devel.
   * Updated to SVN revision 5777: + Enable the Eliza chat bot in
     rmanager in the sample Javascript config file.
+  * Updated to SVN revision 5778: + Fixes bug #110  + Properly append
+    new row in Array::addRow(), check if entries exist.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 13 Feb 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 14 Feb 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

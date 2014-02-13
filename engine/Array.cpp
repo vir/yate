@@ -62,11 +62,17 @@ bool Array::addRow(ObjList* row, int index)
     if (index > m_rows)
 	return false;
     for (int i=0; i<m_columns; i++) {
+	ObjList* list = static_cast<ObjList*>(m_obj[i]);
+	if (!list)
+	    continue;
 	GenObject* item = row ? (*row)[i] : 0;
 	if (index == m_rows)
-	    ((*(ObjList *)(m_obj[i]))+index)->append(item,false);
-	else
-	    ((*(ObjList *)(m_obj[i]))+index)->insert(item,false);
+	    list->append(item,false);
+	else {
+	    list = (*list) + index;
+	    if (list)
+		list->insert(item,false);
+	}
     }
     m_rows++;
     return true;

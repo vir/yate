@@ -248,6 +248,7 @@ private:
     void closeIn();
     void closeOut();
     void closeAudio();
+    bool outputLineInternal(const char* line, int len);
     int m_role;
     bool m_dead;
     int m_use;
@@ -261,6 +262,7 @@ private:
     bool m_selfWatch;
     bool m_reenter;
     bool m_setdata;
+    bool m_writing;
     int m_timeout;
     bool m_timebomb;
     bool m_restart;
@@ -750,7 +752,8 @@ ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, 
     : Mutex(true,"ExtModReceiver"),
       m_role(RoleUnknown), m_dead(false), m_use(1), m_pid(-1),
       m_in(0), m_out(0), m_ain(ain), m_aout(aout),
-      m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false), m_setdata(true),
+      m_chan(chan), m_watcher(0),
+      m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
       m_script(script), m_args(args), m_trackName(s_trackName)
 {
@@ -767,7 +770,8 @@ ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, i
     : Mutex(true,"ExtModReceiver"),
       m_role(role), m_dead(false), m_use(1), m_pid(-1),
       m_in(io), m_out(io), m_ain(0), m_aout(0),
-      m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false), m_setdata(true),
+      m_chan(chan), m_watcher(0),
+      m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
       m_script(name), m_trackName(s_trackName)
 {
@@ -1178,49 +1182,66 @@ void ExtModReceiver::run()
 
 bool ExtModReceiver::outputLine(const char* line)
 {
-    lock();
-    DDebug("ExtModReceiver",DebugAll,"%soutputLine '%s'",
-	((m_out && !m_dead) ? "" : "failing "), line);
-    if (m_dead || !m_out) {
-	unlock();
-	return false;
-    }
-    // since m_out can be non-blocking (the socket) we have to loop
+    if (TelEngine::null(line))
+	return true;
     int len = ::strlen(line);
+    if (m_dead || !m_out || !use())
+	return false;
+    uint64_t tout = (m_timeout > 0) ? (Time::now() + 1000 * (uint64_t)m_timeout) : 0;
+    for (;;) {
+	Lock mylock(this);
+	if (m_dead || !m_out) {
+	    unuse();
+	    return false;
+	}
+	if (!m_writing) {
+	    m_writing = true;
+	    break;
+	}
+	if (tout && tout < Time::now()) {
+	    Alarm("extmodule","performance",DebugWarn,"Timeout %d msec for %d characters [%p]",
+		m_timeout,len,this);
+	    unuse();
+	    return false;
+	}
+	mylock.drop();
+	Thread::idle();
+    }
+    bool ok = outputLineInternal(line,len);
+    m_writing = false;
+    unuse();
+    return ok;
+}
+
+bool ExtModReceiver::outputLineInternal(const char* line, int len)
+{
+    DDebug("ExtModReceiver",DebugAll,"outputLine len=%d '%s' [%p]",len,line,this);
+    // since m_out can be non-blocking (the socket) we have to loop
     while (m_out && (len > 0) && !m_dead) {
 	int w = m_out->writeData(line,len);
 	if (w < 0) {
-	    if (m_dead || !m_out || !m_out->canRetry()) {
-		unlock();
+	    if (m_dead || !m_out || !m_out->canRetry())
 		return false;
-	    }
 	}
 	else {
 	    line += w;
 	    len -= w;
 	}
-	if (len > 0) {
-	    unlock();
+	if (len > 0)
 	    Thread::idle();
-	    lock();
-	}
     }
     char nl = '\n';
     for (;;) {
-	if (m_dead || !m_out) {
-	    unlock();
+	if (m_dead || !m_out)
 	    return false;
-	}
 	int w = m_out->writeData(&nl,1);
 	if ((w < 0) && m_out->canRetry())
 	    w = 0;
-	unlock();
 	if (w > 0)
 	    return true;
 	if (w < 0)
 	    return false;
 	Thread::idle();
-	lock();
     }
 }
 
@@ -1233,7 +1254,8 @@ void ExtModReceiver::reportError(const char* line)
 void ExtModReceiver::returnMsg(const Message* msg, const char* id, bool accepted)
 {
     String ret(msg->encode(accepted,id));
-    outputLine(ret);
+    if (!outputLine(ret) && m_timebomb)
+	die();
 }
 
 bool ExtModReceiver::addWatched(const String& name)

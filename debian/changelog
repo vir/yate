@@ -1,4 +1,4 @@
-yate (5.1.1~svn5778) UNRELEASED; urgency=low
+yate (5.1.1~svn5779) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1015,8 +1015,13 @@ yate (5.1.1~svn5778) UNRELEASED; urgency=low
     rmanager in the sample Javascript config file.
   * Updated to SVN revision 5778: + Fixes bug #110  + Properly append
     new row in Array::addRow(), check if entries exist.
+  * Updated to SVN revision 5779: + Properly append new row in
+    Array::addRow(), check if entries exist.  + This should avoid
+    complete locks if the external application reads too slow.  + Apply
+    the extmodule timeout whenever we try to grab the socket to write to
+    the external script.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 14 Feb 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 19 Feb 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

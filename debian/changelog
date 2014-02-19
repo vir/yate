@@ -1,4 +1,4 @@
-yate (5.1.1~svn5779) UNRELEASED; urgency=low
+yate (5.1.1~svn5781) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1020,8 +1020,13 @@ yate (5.1.1~svn5779) UNRELEASED; urgency=low
     complete locks if the external application reads too slow.  + Apply
     the extmodule timeout whenever we try to grab the socket to write to
     the external script.
+  * Updated to SVN revision 5781: + Apply the extmodule timeout whenever
+    we try to grab the socket to write to the external script.  + Fixed
+    counter allocation reentrancy problem.  + Added object counter for
+    main engine thread.  + Count circuit alocated objects in the plugin
+    creating them.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 19 Feb 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 20 Feb 2014 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

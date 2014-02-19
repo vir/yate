@@ -1712,6 +1712,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 {
     Debug(&splugin,DebugInfo,"MGCPCircuit::status(%s,%s) %u [%p]",
 	lookupStatus(newStat),String::boolText(sync),code(),this);
+    TempObjectCounter cnt(splugin.objectsCounter());
     waitNotChanging();
     // Don't notify local rtp if we already have it (addr/port/sdp) and didn't changed
     // Accept only synchronous connect requests
@@ -1822,6 +1823,7 @@ bool MGCPCircuit::updateFormat(const char* format, int direction)
     const char* gwFmt = lookup(fmt,s_dict_gwbearerinfo);
     if (!gwFmt)
 	return false;
+    TempObjectCounter cnt(splugin.objectsCounter());
     waitNotChanging();
     if (m_gwFormat != gwFmt) {
 	m_gwFormat = gwFmt;
@@ -1838,6 +1840,7 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
     Lock lock(s_mutex);
     if (m_changing)
 	return false;
+    TempObjectCounter cnt(splugin.objectsCounter());
     bool rtpChanged = false;
     bool reConnect = false;
     if (param == YSTRING("sdp_raw")) {
@@ -1880,6 +1883,7 @@ bool MGCPCircuit::getParam(const String& param, String& value) const
     Lock lock(s_mutex);
     if (m_changing)
 	return false;
+    TempObjectCounter cnt(splugin.objectsCounter());
     if (param == YSTRING("rtp_addr")) {
 	value = m_rtpAddr;
 	return true;
@@ -1903,6 +1907,7 @@ bool MGCPCircuit::getBoolParam(const String& param, bool defValue) const
 // Set circuit data from a list of parameters
 bool MGCPCircuit::setParams(const NamedList& params)
 {
+    TempObjectCounter cnt(splugin.objectsCounter());
     if (params == "rtp") {
 	waitNotChanging();
 	DDebug(&splugin,DebugAll,"MGCPCircuit::setParams(rtp) %u [%p]",code(),this);
@@ -1928,6 +1933,7 @@ bool MGCPCircuit::getParams(NamedList& params, const String& category)
 {
     if (category != "rtp")
 	return false;
+    TempObjectCounter cnt(splugin.objectsCounter());
     waitNotChanging();
     addRtpParams(params,String::empty(),0,true);
     m_changing = false;
@@ -1939,6 +1945,7 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 {
     DDebug(&splugin,DebugAll,"MGCPCircuit::sendEvent(%u,%p) %u [%p]",
 	type,params,code(),this);
+    TempObjectCounter cnt(splugin.objectsCounter());
     switch (type) {
 	case SignallingCircuitEvent::Connect:
 	    if (params)

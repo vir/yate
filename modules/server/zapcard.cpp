@@ -1699,6 +1699,7 @@ SignallingComponent* ZapInterface::create(const String& type, NamedList& name)
     else
 	return 0;
 
+    TempObjectCounter cnt(plugin.objectsCounter());
     const String* module = name.getParam("module");
     if (module && *module != "zapcard")
 	return 0;
@@ -1792,6 +1793,7 @@ SignallingComponent* ZapInterface::create(const String& type, NamedList& name)
 bool ZapInterface::init(ZapDevice::Type type, unsigned int code, unsigned int channel,
 	const NamedList& config, const NamedList& defaults, const NamedList& params)
 {
+    TempObjectCounter cnt(plugin.objectsCounter());
     m_device.channel(channel,code);
     m_readOnly = getBoolValue("readonly",config,defaults,params);
     m_priority = Thread::priority(config.getValue("priority",defaults.getValue("priority")));
@@ -2005,6 +2007,7 @@ void ZapInterface::checkEvents()
 bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
 	const NamedList& config, const NamedList& defaults, const NamedList& params)
 {
+    TempObjectCounter cnt(plugin.objectsCounter());
     String voice = config.getValue("voicechans");
     unsigned int chans = 0;
     bool digital = true;
@@ -2213,6 +2216,7 @@ bool ZapCircuit::status(Status newStat, bool sync)
 	    code(),lookupStatus(newStat),this);
 	return false;
     }
+    TempObjectCounter cnt(plugin.objectsCounter());
     Status oldStat = SignallingCircuit::status();
     // Allow status change for the following values
     switch (newStat) {
@@ -2270,6 +2274,7 @@ bool ZapCircuit::updateFormat(const char* format, int direction)
     // Do nothing if format is the same
     if (src->getFormat() == format && m_consumer && m_consumer->getFormat() == format)
 	return false;
+    TempObjectCounter cnt(plugin.objectsCounter());
     // Check format
     // T1,E1: allow alaw or mulaw
     int f = lookup(format,s_formats,-2);
@@ -2304,6 +2309,7 @@ bool ZapCircuit::updateFormat(const char* format, int direction)
 // Setup echo canceller or start echo canceller training
 bool ZapCircuit::setParam(const String& param, const String& value)
 {
+    TempObjectCounter cnt(plugin.objectsCounter());
     if (param == "echotrain") {
 	int tmp = value.toInteger(-1);
 	if (tmp >= 0)
@@ -2356,6 +2362,7 @@ bool ZapCircuit::setParam(const String& param, const String& value)
 // Get circuit data
 bool ZapCircuit::getParam(const String& param, String& value) const
 {
+    TempObjectCounter cnt(plugin.objectsCounter());
     if (param == "buflen")
 	value = m_buflen;
     else if (param == "tonedetect")
@@ -2425,6 +2432,7 @@ bool ZapCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
     XDebug(group(),DebugAll,"ZapCircuit(%u). sendEvent(%u) [%p]",code(),type,this);
     if (!m_canSend)
 	return false;
+    TempObjectCounter cnt(plugin.objectsCounter());
 
     if (type == SignallingCircuitEvent::Dtmf) {
 	const char* tones = 0;
@@ -2645,6 +2653,7 @@ bool ZapAnalogCircuit::status(Status newStat, bool sync)
 	    code(),newStat,this);
 	return false;
     }
+    TempObjectCounter cnt(plugin.objectsCounter());
     // Allow status change for the following values
     switch (newStat) {
 	case Missing:
@@ -2725,6 +2734,7 @@ bool ZapAnalogCircuit::getParam(const String& param, String& value) const
 // Set line polarity
 bool ZapAnalogCircuit::setParam(const String& param, const String& value)
 {
+    TempObjectCounter cnt(plugin.objectsCounter());
     if (param == "polarity") {
 	if (!(m_device.valid() && value.isBoolean()))
 	    return false;
@@ -2743,6 +2753,7 @@ bool ZapAnalogCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* p
     if (type == SignallingCircuitEvent::Dtmf)
 	return ZapCircuit::sendEvent(type,params);
 
+    TempObjectCounter cnt(plugin.objectsCounter());
     XDebug(group(),DebugAll,"ZapAnalogCircuit(%u). sendEvent(%u) [%p]",code(),type,this);
     switch (type) {
 	case SignallingCircuitEvent::OnHook:

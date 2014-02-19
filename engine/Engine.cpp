@@ -238,6 +238,7 @@ static String s_startMsg;
 static SharedVars s_vars;
 static Mutex s_hooksMutex(true,"HooksList");
 static ObjList s_hooks;
+static NamedCounter* s_counter = 0;
 
 const TokenDict Engine::s_callAccept[] = {
     {"accept",      Engine::Accept},
@@ -867,12 +868,14 @@ static bool logFileOpen()
     }
     return false;
 }
+
 static int engineRun(EngineLoop loop = 0)
 {
     time_t t = ::time(0);
     s_startMsg << "Yate (" << ::getpid() << ") is starting " << ::ctime(&t);
     s_startMsg.trimSpaces();
     Output("%s",s_startMsg.c_str());
+    Thread::setCurrentObjCounter((s_counter = GenObject::getObjCounter("engine")));
     int retcode = Engine::self()->engineInit();
     if (!retcode)
 	retcode = (loop ? loop() : Engine::self()->run());

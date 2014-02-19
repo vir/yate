@@ -682,6 +682,7 @@ bool TdmDevice::setEvent(SignallingCircuitEvent::Type event, NamedList* params)
 bool TdmSpan::init(TdmDevice::Type type,
 	const NamedList& config, const NamedList& defaults, const NamedList& params)
 {
+    TempObjectCounter cnt(plugin.objectsCounter());
     String voice = params.getValue("voicechans",config.getValue("voicechans"));
     unsigned int chans = 0;
     switch (type) {
@@ -826,6 +827,7 @@ bool TdmCircuit::status(Status newStat, bool sync)
 	    code(),lookupStatus(newStat),this);
 	return false;
     }
+    TempObjectCounter cnt(plugin.objectsCounter());
     Status oldStat = SignallingCircuit::status();
     // Allow status change for the following values
     switch (newStat) {
@@ -900,6 +902,7 @@ bool TdmCircuit::updateFormat(const char* format, int direction)
 {
     if (!(format && *format))
 	return false;
+    TempObjectCounter cnt(plugin.objectsCounter());
     bool consumerChanged = true;
     bool sourceChanged = true;
     if (direction == -1 || direction == 0) {
@@ -975,6 +978,7 @@ SignallingComponent* TdmInterface::create(const String& type, NamedList& name)
     else
 	return 0;
 
+    TempObjectCounter cnt(plugin.objectsCounter());
     // Check in params if the module witch should create the component is specifyed
     // if the module is specifyed and is not tdmcard let the specifyed module to create the component
     const String* module = name.getParam("module");
@@ -1093,6 +1097,7 @@ bool TdmInterface::process()
 bool TdmInterface::init(TdmDevice::Type type, unsigned int code, unsigned int channel,
 	const NamedList& config, const NamedList& defaults, const NamedList& params)
 {
+    TempObjectCounter cnt(plugin.objectsCounter());
     m_readOnly = getBoolValue("readonly",params,config,defaults);
     String priority = defaults.getValue("priority");
     m_priority = Thread::priority(params.getValue("priority",config.getValue("priority",priority)));

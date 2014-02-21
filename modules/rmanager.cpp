@@ -29,6 +29,15 @@
 #include <stdio.h>
 #include <fcntl.h>
 
+#ifdef NDEBUG
+#undef HAVE_MALLINFO
+#undef HAVE_COREDUMPER
+#endif
+
+#ifdef HAVE_MALLINFO
+#include <malloc.h>
+#endif
+
 #ifdef HAVE_COREDUMPER
 #include <google/coredumper.h>
 #endif
@@ -111,6 +120,9 @@ static const CommandInfo s_cmdInfo[] =
 
     // Admin commands
     { "debug", "[module] [level|objects|on|off]", s_level, "Show or change debugging level globally or per module" },
+#ifdef HAVE_MALLINFO
+    { "meminfo", 0, 0, "Displays memory allocation statistics" },
+#endif
 #ifdef HAVE_COREDUMPER
     { "coredump", "[filename]", 0, "Dumps memory image of running Yate to a file" },
 #endif
@@ -1546,6 +1558,25 @@ bool Connection::processLine(const char *line, bool saveLine)
 	    str = (m_machine ? "%%=control:fail:" : "Could not control ") + str + "\r\n";
 	writeStr(str);
     }
+#ifdef HAVE_MALLINFO
+    else if (str.startSkip("meminfo"))
+    {
+	struct mallinfo info = ::mallinfo();
+	str = "Memory allocation statistics:";
+	str << "\r\n  arena    = " << info.arena;
+	str << "\r\n  ordblks  = " << info.ordblks;
+	str << "\r\n  smblks   = " << info.smblks;
+	str << "\r\n  hblks    = " << info.hblks;
+	str << "\r\n  hblkhd   = " << info.hblkhd;
+	str << "\r\n  usmblks  = " << info.usmblks;
+	str << "\r\n  fsmblks  = " << info.fsmblks;
+	str << "\r\n  uordblks = " << info.uordblks;
+	str << "\r\n  fordblks = " << info.fordblks;
+	str << "\r\n  keepcost = " << info.keepcost;
+	str << "\r\n";
+	writeStr(str);
+    }
+#endif
 #ifdef HAVE_COREDUMPER
     else if (str.startSkip("coredump"))
     {

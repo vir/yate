@@ -175,6 +175,10 @@ ifneq ($(HAVE_ZLIB),no)
 PROGS := $(PROGS) zlibcompress.yate
 endif
 
+ifeq (@HAVE_MALLINFO@,yes)
+MALLINFO_DEF := -DHAVE_MALLINFO
+endif
+
 ifeq (@HAVE_COREDUMPER@,yes)
 COREDUMP_INC := -DHAVE_COREDUMPER @COREDUMPER_INC@
 COREDUMP_LIB := @COREDUMPER_LIB@
@@ -379,7 +383,7 @@ yrtpchan.yate: LOCALLIBS = -L../libs/yrtp -lyatertp
 openssl.yate: EXTERNFLAGS = $(OPENSSL_INC)
 openssl.yate: EXTERNLIBS = $(OPENSSL_LIB)
 
-rmanager.yate: EXTERNFLAGS = $(COREDUMP_INC)
+rmanager.yate: EXTERNFLAGS = $(COREDUMP_INC) $(MALLINFO_DEF)
 rmanager.yate: EXTERNLIBS = $(COREDUMP_LIB)
 
 qt4/updater.yate: EXTERNFLAGS = $(QT4_INC_NET)

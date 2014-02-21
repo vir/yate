@@ -1467,6 +1467,23 @@ AC_SUBST(QT4_VER)
 AC_SUBST(QT4_STATIC_MODULES)
 
 
+HAVE_MALLINFO=no
+AC_ARG_ENABLE(mallinfo,AC_HELP_STRING([--enable-mallinfo],[Enable malloc info if available (default: yes)]),[ac_cv_use_mallinfo=$withval],[ac_cv_use_mallinfo=yes])
+if [[ "x$ac_cv_use_mallinfo" != "xno" ]]; then
+AC_MSG_CHECKING([for mallinfo in malloc.h])
+AC_TRY_COMPILE([
+#include <malloc.h>
+],[
+struct mallinfo info = mallinfo();
+return info.keepcost;
+],
+HAVE_MALLINFO=yes
+)
+AC_MSG_RESULT([$HAVE_MALLINFO])
+fi
+AC_SUBST(HAVE_MALLINFO)
+
+
 HAVE_COREDUMPER=no
 COREDUMPER_INC=""
 COREDUMPER_LIB=""

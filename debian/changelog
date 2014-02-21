@@ -1,4 +1,4 @@
-yate (5.1.1~svn5781) UNRELEASED; urgency=low
+yate (5.1.1~svn5783) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1025,8 +1025,11 @@ yate (5.1.1~svn5781) UNRELEASED; urgency=low
     counter allocation reentrancy problem.  + Added object counter for
     main engine thread.  + Count circuit alocated objects in the plugin
     creating them.
+  * Updated to SVN revision 5783: + Added "meminfo" command in rmanager
+    to display memory allocator stats when mallinfo() is available.  +
+    Properly skip one UTF-8 instead of C char.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 20 Feb 2014 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 22 Feb 2014 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

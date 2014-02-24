@@ -1584,6 +1584,7 @@ static void alarmCallback(const char* message, int level, const char* component,
     const char* lvl = debugLevelName(level);
     if (TelEngine::null(lvl))
 	return;
+    TempObjectCounter cnt(__plugin.objectsCounter());
     Message* msg = new Message("module.update");
     msg->addParam("module",__plugin.name());
     msg->addParam("level",String(level));

@@ -609,6 +609,7 @@ SignallingComponent* Transport::create(const String& type, NamedList& name)
 {
     if (type != "SIGTransport")
 	return 0;
+    TempObjectCounter cnt(plugin.objectsCounter());
     Configuration cfg(Engine::configFile("sigtransport"));
     cfg.load();
 

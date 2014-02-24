@@ -2086,6 +2086,7 @@ SignallingComponent* SLT::create(const String& type, NamedList& name)
     const String* module = name.getParam("module");
     if (module && *module != "ciscosm")
 	return 0;
+    TempObjectCounter cnt(plugin.objectsCounter());
     Configuration cfg(Engine::configFile("ciscosm"));
     const char* sectName = name.getValue("link",name);
     NamedList* layer = cfg.getSection(sectName);

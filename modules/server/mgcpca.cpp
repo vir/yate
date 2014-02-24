@@ -872,6 +872,7 @@ SignallingComponent* MGCPSpan::create(const String& type, const NamedList& name)
 	DDebug(&splugin,DebugAll,"No endpoint info for span '%s'",spanName->c_str());
 	return 0;
     }
+    TempObjectCounter cnt(splugin.objectsCounter());
     MGCPSpan* span = new MGCPSpan(name,spanName->safe("MGCPSpan"),*ep);
     if (span->init(name))
 	return span;

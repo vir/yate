@@ -947,6 +947,7 @@ SignallingComponent* SigFactory::create(const String& type, NamedList& name)
     int compType = type.toInteger(s_compClass,-1);
     if (compType < 0)
 	return 0;
+    TempObjectCounter cnt(plugin.objectsCounter());
     if (!config) {
 	NamedList sec(name);
 	sec.copySubParams(name,name + ".");

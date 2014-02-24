@@ -1886,7 +1886,7 @@ void Engine::initPlugins()
     ObjList *l = plugins.skipNull();
     for (; l; l = l->skipNext()) {
 	Plugin *p = static_cast<Plugin *>(l->get());
-	TempObjectCounter cnt(p->objectsCounter());
+	TempObjectCounter cnt(p->objectsCounter(),true);
 	p->initialize();
 	if (exiting()) {
 	    Output("Initialization aborted, exiting...");
@@ -1963,7 +1963,7 @@ bool Engine::init(const String& name)
     bool ok = s_self->m_dispatcher.dispatch(msg);
     Plugin* p = static_cast<Plugin*>(plugins[name]);
     if (p) {
-	TempObjectCounter cnt(p->objectsCounter());
+	TempObjectCounter cnt(p->objectsCounter(),true);
 	p->initialize();
 	ok = true;
     }

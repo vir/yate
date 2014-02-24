@@ -239,6 +239,7 @@ static SharedVars s_vars;
 static Mutex s_hooksMutex(true,"HooksList");
 static ObjList s_hooks;
 static NamedCounter* s_counter = 0;
+static NamedCounter* s_workCnt = 0;
 
 const TokenDict Engine::s_callAccept[] = {
     {"accept",      Engine::Accept},
@@ -836,6 +837,7 @@ bool EngineHelp::received(Message &msg)
 
 void EnginePrivate::run()
 {
+    setCurrentObjCounter(s_workCnt);
     for (;;) {
 	s_makeworker = false;
 	Engine::self()->m_dispatcher.dequeue();
@@ -876,6 +878,7 @@ static int engineRun(EngineLoop loop = 0)
     s_startMsg.trimSpaces();
     Output("%s",s_startMsg.c_str());
     Thread::setCurrentObjCounter((s_counter = GenObject::getObjCounter("engine")));
+    s_workCnt = GenObject::getObjCounter("workers");
     int retcode = Engine::self()->engineInit();
     if (!retcode)
 	retcode = (loop ? loop() : Engine::self()->run());

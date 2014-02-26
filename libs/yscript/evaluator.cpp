@@ -341,6 +341,8 @@ bool ExpEvaluator::getOperandInternal(ParsePoint& expr, bool endOk, int preceden
 	expr++;
 	return true;
     }
+    if (getNumber(expr))
+	return true;
     Opcode op = getUnaryOperator(expr);
     if (op != OpcNone) {
 	if (!getOperand(expr,false,getPrecedence(op)))

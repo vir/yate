@@ -6831,6 +6831,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	    if (natAddr)
 		msg.addParam("rtp_nat_addr",natAddr);
 	    putMedia(msg,lst);
+	    TelEngine::destruct(lst);
 	    addSdpParams(msg,sdp);
 	    bool ok = Engine::dispatch(msg);
 	    Lock mylock2(driver());

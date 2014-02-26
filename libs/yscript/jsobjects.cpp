@@ -543,6 +543,27 @@ bool JsArray::runField(ObjList& stack, const ExpOperation& oper, GenObject* cont
     return JsObject::runField(stack,oper,context);
 }
 
+JsObject* JsArray::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    if (!ref())
+	return 0;
+    JsArray* obj = static_cast<JsArray*>(clone("[object " + oper.name() + "]"));
+    unsigned int len = oper.number();
+    for (unsigned int i = len; i;  i--) {
+	ExpOperation* op = obj->popValue(stack,context);
+	if ((len == 1) && op->isInteger() && (op->number() >= 0) && (op->number() <= 0xffffffff)) {
+	    len = op->number();
+	    TelEngine::destruct(op);
+	    break;
+	}
+	const_cast<String&>(op->name()) = i - 1;
+	obj->params().paramList()->insert(op);
+    }
+    obj->setLength(len);
+    obj->params().addParam(new ExpWrapper(this,protoName()));
+    return obj;
+}
+
 bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(DebugAll,"JsArray::runNative() '%s' in '%s' [%p]",

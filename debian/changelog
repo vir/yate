@@ -1,4 +1,4 @@
-yate (5.1.1~svn5787) UNRELEASED; urgency=low
+yate (5.1.1~svn5792) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1033,8 +1033,18 @@ yate (5.1.1~svn5787) UNRELEASED; urgency=low
     alarm hook.  + Force a counter switch when initializing a plugin so
     its threads inherit the proper counter.  + Properly count signaling
     objects created by a factory.
+  * Updated to SVN revision 5792: + Correctly parse numbers with sign,
+    in that case sthe sign is not an unary operator.  + Added proper
+    constructor for JS Array object.  + Fixes bug #336.  + A different
+    non-blocking function does not exit the script.  + Keep executing a
+    channel script until callTo, callJust or hangup.  + Solves bug #338.
+    + Made callTo() and callJust() to be callable from pretty much
+    anywhere.  + Added an optional 2nd argument to callTo() and
+    callJust() to set parameters.  + Fixes a memory leak caused by
+    reINVITE in RTP forward mode.  + Free the parsed SDP media after
+    populating the internal update message.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 25 Feb 2014 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 27 Feb 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

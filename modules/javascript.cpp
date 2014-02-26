@@ -74,7 +74,7 @@ public:
     };
     inline JsAssist(ChanAssistList* list, const String& id, ScriptRun* runner)
 	: ChanAssist(list, id),
-	  m_runner(runner), m_state(NotStarted), m_handled(false)
+	  m_runner(runner), m_state(NotStarted), m_handled(false), m_repeat(false)
 	{ }
     virtual ~JsAssist();
     virtual void msgStartup(Message& msg);
@@ -91,11 +91,11 @@ public:
     inline const char* stateName() const
 	{ return stateName(m_state); }
     inline void end()
-	{ if (m_state < Ended) m_state = Ended; }
+	{ m_repeat = false; if (m_state < Ended) m_state = Ended; }
     inline JsMessage* message()
 	{ return m_message; }
     inline void handled()
-	{ m_handled = true; }
+	{ m_repeat = false; m_handled = true; }
     inline ScriptContext* context()
 	{ return m_runner ? m_runner->context() : 0; }
     Message* getMsg(ScriptRun* runner) const;
@@ -108,6 +108,7 @@ private:
     ScriptRun* m_runner;
     State m_state;
     bool m_handled;
+    bool m_repeat;
     RefPointer<JsMessage> m_message;
 };
 
@@ -2445,14 +2446,21 @@ bool JsAssist::runScript(Message* msg, State newState)
 	return false;
     }
 
-    switch (m_runner->execute()) {
-	case ScriptRun::Invalid:
-	case ScriptRun::Succeeded:
-	    if (m_state < Ended)
-		m_state = Ended;
-	default:
-	    break;
-    }
+    m_repeat = true;
+    do {
+	switch (m_runner->execute()) {
+	    case ScriptRun::Incomplete:
+		break;
+	    case ScriptRun::Invalid:
+	    case ScriptRun::Succeeded:
+		if (m_state < Ended)
+		    m_state = Ended;
+		// fall through
+	    default:
+		m_repeat = false;
+		break;
+	}
+    } while (m_repeat);
     bool handled = m_handled;
     clearMsg(m_state >= Ended);
 

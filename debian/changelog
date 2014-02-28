@@ -1,4 +1,4 @@
-yate (5.1.1~svn5792) UNRELEASED; urgency=low
+yate (5.1.1~svn5793) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1043,8 +1043,11 @@ yate (5.1.1~svn5792) UNRELEASED; urgency=low
     callJust() to set parameters.  + Fixes a memory leak caused by
     reINVITE in RTP forward mode.  + Free the parsed SDP media after
     populating the internal update message.
+  * Updated to SVN revision 5793: + Free the parsed SDP media after
+    populating the internal update message.  + Fixed documentation
+    comment.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 27 Feb 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 01 Mar 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

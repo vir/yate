@@ -162,7 +162,7 @@ public:
 
     /**
      * Encode a layer 3 message from an existing XML
-     * @param in XML which contains a layer 3 message in XML form. The message will be replaced with its encoded buffer
+     * @param xml XML which contains a layer 3 message in XML form. The message will be replaced with its encoded buffer
      * @param params Encoder parameters
      * @return Parsing result: 0 (NoError) if succeeded, error status otherwise
      */

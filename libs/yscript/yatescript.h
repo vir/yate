@@ -2251,6 +2251,15 @@ public:
      */
     virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
+    /**
+     * Array object constructor, it's run on the prototype
+     * @param stack Evaluation stack in use
+     * @param oper Constructor function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return New created and populated Javascript Array object
+     */
+    virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
 protected:
     /**
      * Clone and rename method

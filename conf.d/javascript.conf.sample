@@ -32,3 +32,6 @@
 ; Examples:
 ;  faxes=fax_handler.js
 ;  callback=js_lib/callback.js
+
+; The Eliza chat bot, enabled by default for your enjoyment in rmanager
+eliza=eliza.js

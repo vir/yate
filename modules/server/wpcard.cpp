@@ -784,6 +784,7 @@ SignallingComponent* WpInterface::create(const String& type, NamedList& name)
     else
 	return 0;
 
+    TempObjectCounter cnt(driver.objectsCounter());
     Configuration cfg(Engine::configFile("wpcard"));
     const char* sectName = name.getValue((interface ? "sig" : "voice"),name.getValue("basename",name));
     NamedList* config = cfg.getSection(sectName);
@@ -1243,6 +1244,7 @@ bool WpCircuit::status(Status newStat, bool sync)
     Lock lock(this);
     if (SignallingCircuit::status() == newStat)
 	return true;
+    TempObjectCounter cnt(driver.objectsCounter());
     // Allow status change for the following values
     switch (newStat) {
 	case Missing:
@@ -1326,6 +1328,7 @@ bool WpCircuit::updateFormat(const char* format, int direction)
 {
     if (!(format && *format))
 	return false;
+    TempObjectCounter cnt(driver.objectsCounter());
     bool consumerChanged = true;
     bool sourceChanged = true;
     Lock lock(this);
@@ -1352,6 +1355,7 @@ bool WpCircuit::updateFormat(const char* format, int direction)
 
 bool WpCircuit::setParam(const String& param, const String& value)
 {
+    TempObjectCounter cnt(driver.objectsCounter());
     if (param == "special_mode")
 	m_specialMode = value;
     else
@@ -1452,6 +1456,7 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
 	    id().safe(),this);
 	return false;
     }
+    TempObjectCounter cnt(driver.objectsCounter());
     // Set socket card / device
     m_socket.card(!params.null() ? params : config);
     const char* voice = params.getValue("voicegroup",config.getValue("voicegroup"));

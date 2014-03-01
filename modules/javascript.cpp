@@ -74,7 +74,7 @@ public:
     };
     inline JsAssist(ChanAssistList* list, const String& id, ScriptRun* runner)
 	: ChanAssist(list, id),
-	  m_runner(runner), m_state(NotStarted), m_handled(false)
+	  m_runner(runner), m_state(NotStarted), m_handled(false), m_repeat(false)
 	{ }
     virtual ~JsAssist();
     virtual void msgStartup(Message& msg);
@@ -91,11 +91,11 @@ public:
     inline const char* stateName() const
 	{ return stateName(m_state); }
     inline void end()
-	{ if (m_state < Ended) m_state = Ended; }
+	{ m_repeat = false; if (m_state < Ended) m_state = Ended; }
     inline JsMessage* message()
 	{ return m_message; }
     inline void handled()
-	{ m_handled = true; }
+	{ m_repeat = false; m_handled = true; }
     inline ScriptContext* context()
 	{ return m_runner ? m_runner->context() : 0; }
     Message* getMsg(ScriptRun* runner) const;
@@ -108,6 +108,7 @@ private:
     ScriptRun* m_runner;
     State m_state;
     bool m_handled;
+    bool m_repeat;
     RefPointer<JsMessage> m_message;
 };
 
@@ -492,8 +493,8 @@ public:
     static void initialize(ScriptContext* context, JsAssist* assist);
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
-    void callToRoute(ObjList& stack, const ExpOperation& oper, GenObject* context);
-    void callToReRoute(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    void callToRoute(ObjList& stack, const ExpOperation& oper, GenObject* context, const NamedList* params);
+    void callToReRoute(ObjList& stack, const ExpOperation& oper, GenObject* context, const NamedList* params);
     JsAssist* m_assist;
 };
 
@@ -2193,27 +2194,47 @@ bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    runner->pause();
     }
     else if (oper.name() == YSTRING("callTo") || oper.name() == YSTRING("callJust")) {
-	if (oper.number() != 1)
-	    return false;
+	ExpOperation* params = 0;
+	switch (oper.number()) {
+	    case 2:
+		params = popValue(stack,context);
+		// fall through
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
 	ExpOperation* op = popValue(stack,context);
+	if (!op) {
+	    op = params;
+	    params = 0;
+	}
 	if (!op)
 	    return false;
 	RefPointer<JsAssist> ja = m_assist;
 	if (!ja) {
 	    TelEngine::destruct(op);
+	    TelEngine::destruct(params);
 	    return false;
+	}
+	NamedList* lst = YOBJECT(NamedList,params);
+	if (!lst) {
+	    ScriptContext* ctx = YOBJECT(ScriptContext,params);
+	    if (ctx)
+		lst = &ctx->params();
 	}
 	switch (ja->state()) {
 	    case JsAssist::Routing:
-		callToRoute(stack,*op,context);
+		callToRoute(stack,*op,context,lst);
 		break;
 	    case JsAssist::ReRoute:
-		callToReRoute(stack,*op,context);
+		callToReRoute(stack,*op,context,lst);
 		break;
 	    default:
 		break;
 	}
 	TelEngine::destruct(op);
+	TelEngine::destruct(params);
 	if (oper.name() == YSTRING("callJust"))
 	    ja->end();
     }
@@ -2222,7 +2243,7 @@ bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
     return true;
 }
 
-void JsChannel::callToRoute(ObjList& stack, const ExpOperation& oper, GenObject* context)
+void JsChannel::callToRoute(ObjList& stack, const ExpOperation& oper, GenObject* context, const NamedList* params)
 {
     ScriptRun* runner = YOBJECT(ScriptRun,context);
     if (!runner)
@@ -2236,22 +2257,31 @@ void JsChannel::callToRoute(ObjList& stack, const ExpOperation& oper, GenObject*
 	Debug(&__plugin,DebugWarn,"JsChannel::callToRoute(): Invalid target!");
 	return;
     }
+    if (params) {
+	unsigned int n = params->length();
+	for (unsigned int i = 0; i < n; i++) {
+	    const NamedString* p = params->getParam(i);
+	    if (p && !p->name().startsWith("__"))
+		msg->setParam(p->name(),*p);
+	}
+    }
     msg->retValue() = oper;
     m_assist->handled();
     runner->pause();
 }
 
-void JsChannel::callToReRoute(ObjList& stack, const ExpOperation& oper, GenObject* context)
+void JsChannel::callToReRoute(ObjList& stack, const ExpOperation& oper, GenObject* context, const NamedList* params)
 {
     ScriptRun* runner = YOBJECT(ScriptRun,context);
     if (!runner)
 	return;
+    RefPointer<CallEndpoint> ep;
     Message* msg = m_assist->getMsg(YOBJECT(ScriptRun,context));
-    if (!msg) {
-	Debug(&__plugin,DebugWarn,"JsChannel::callToReRoute(): No message!");
-	return;
+    Channel* chan = msg ? YOBJECT(Channel,msg->userData()) : 0;
+    if (!chan) {
+	ep = m_assist->locate();
+	chan = YOBJECT(Channel,ep);
     }
-    Channel* chan = YOBJECT(Channel,msg->userData());
     if (!chan) {
 	Debug(&__plugin,DebugWarn,"JsChannel::callToReRoute(): No channel!");
 	return;
@@ -2265,11 +2295,21 @@ void JsChannel::callToReRoute(ObjList& stack, const ExpOperation& oper, GenObjec
     Message* m = chan->message("call.execute",false,true);
     m->setParam("callto",target);
     // copy params except those already set
-    unsigned int n = msg->length();
-    for (unsigned int i = 0; i < n; i++) {
-	const NamedString* p = msg->getParam(i);
-	if (p && !m->getParam(p->name()))
-	    m->addParam(p->name(),*p);
+    if (msg) {
+	unsigned int n = msg->length();
+	for (unsigned int i = 0; i < n; i++) {
+	    const NamedString* p = msg->getParam(i);
+	    if (p && !m->getParam(p->name()))
+		m->addParam(p->name(),*p);
+	}
+    }
+    if (params) {
+	unsigned int n = params->length();
+	for (unsigned int i = 0; i < n; i++) {
+	    const NamedString* p = params->getParam(i);
+	    if (p && !p->name().startsWith("__"))
+		m->setParam(p->name(),*p);
+	}
     }
     Engine::enqueue(m);
     m_assist->handled();
@@ -2445,16 +2485,25 @@ bool JsAssist::runScript(Message* msg, State newState)
 	return false;
     }
 
-    switch (m_runner->execute()) {
-	case ScriptRun::Invalid:
-	case ScriptRun::Succeeded:
-	    if (m_state < Ended)
-		m_state = Ended;
-	default:
-	    break;
-    }
+    m_repeat = true;
+    do {
+	switch (m_runner->execute()) {
+	    case ScriptRun::Incomplete:
+		break;
+	    case ScriptRun::Invalid:
+	    case ScriptRun::Succeeded:
+		if (m_state < Ended)
+		    m_state = Ended;
+		// fall through
+	    default:
+		m_repeat = false;
+		break;
+	}
+    } while (m_repeat);
     bool handled = m_handled;
     clearMsg(m_state >= Ended);
+    if (Routing == m_state)
+	m_state = ReRoute;
 
 #ifdef DEBUG
     tm = Time::now() - tm;

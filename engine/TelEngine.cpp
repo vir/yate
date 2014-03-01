@@ -881,8 +881,11 @@ NamedCounter* GenObject::getObjCounter(const String& name, bool create)
 	return 0;
     Lock mylock(s_countersMutex);
     NamedCounter* cnt = static_cast<NamedCounter*>(s_counters[name]);
-    if (create && !cnt)
+    if (create && !cnt) {
+	NamedCounter* saved = Thread::setCurrentObjCounter(0);
 	s_counters.append(cnt = new NamedCounter(name));
+	Thread::setCurrentObjCounter(saved);
+    }
     return cnt;
 }
 

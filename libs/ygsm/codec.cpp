@@ -4987,8 +4987,8 @@ void GSML3Codec::encodeGSM7Bit(const String& text, DataBlock& buf)
 		}
 	    }
 	    if (notFound) {
-		// TODO: skip one UTF-8 instead of one C char
-		tmp = tmp.c_str() + 1;
+		UChar c;
+		tmp >> c;
 	    }
 	}
     }

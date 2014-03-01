@@ -70,13 +70,13 @@ Description: Yate h323 module
 Package: yate-mysql
 Architecture: any
 Recommends: yate (= ${binary:Version})
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: libyate(= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: MySQL support for yate
 
 Package: yate-pgsql
 Architecture: any
 Recommends: yate (= ${binary:Version})
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: libyate(= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: Postgres support for yate
 
 Package: yate-telhw

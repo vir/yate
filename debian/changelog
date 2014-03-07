@@ -1,4 +1,4 @@
-yate (5.1.1~svn5794) UNRELEASED; urgency=low
+yate (5.1.1~svn5795) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1047,8 +1047,11 @@ yate (5.1.1~svn5794) UNRELEASED; urgency=low
     populating the internal update message.  + Fixed documentation
     comment.
   * Updated to SVN revision 5794: + Set svn eol property to native.
+  * Updated to SVN revision 5795: + Use the proper letter cases for the
+    AudioToolbox framework. Fixes linking issues on Mac OS X case
+    sensitive filesystem.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 06 Mar 2014 02:19:30 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 08 Mar 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

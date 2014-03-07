@@ -323,7 +323,7 @@ server/mysqldb.yate: EXTERNLIBS = $(MYSQL_LIB)
 
 client/alsachan.yate: EXTERNLIBS = -lasound
 
-client/coreaudio.yate: EXTERNLIBS = -framework CoreServices -framework CoreAudio -framework AudioUnit -framework AudioToolBox
+client/coreaudio.yate: EXTERNLIBS = -framework CoreServices -framework CoreAudio -framework AudioUnit -framework AudioToolbox
 
 yiaxchan.yate: ../libs/yiax/libyateiax.a
 yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yiax

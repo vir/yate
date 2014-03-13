@@ -1882,6 +1882,13 @@ public:
 	{ return clone(toString()); }
 
     /**
+     * Set the object prototype
+     * @param context  Pointer to arbitrary object passed from evaluation methods
+     * @param objName Name of the object prototype to set the this object
+     */
+    void setPrototype(GenObject* context, const String& objName);
+
+    /**
      * Deep copy method
      * @param mtx Pointer to the mutex that serializes the copied object
      * @return New object instance, does not keep references to old object
@@ -2187,13 +2194,16 @@ private:
  */
 class YSCRIPT_API JsArray : public JsObject
 {
+    friend class JsObject;
     YCLASS(JsArray,JsObject)
 public:
+
     /**
-     * Constructor
+     * Constructor for an empty array with prototype
+     * @param context Script context from which Array prototype is obtainend
      * @param mtx Pointer to the mutex that serializes this object
      */
-    JsArray(Mutex* mtx = 0);
+    JsArray(GenObject* context, Mutex* mtx = 0);
 
     /**
      * Constructor for an empty array
@@ -2261,6 +2271,7 @@ public:
     virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
 protected:
+
     /**
      * Clone and rename method
      * @param name Name of the cloned object
@@ -2280,6 +2291,13 @@ protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
 private:
+
+    /**
+     * Private constructor
+     * @param mtx Pointer to the mutex that serializes this object
+     */
+    JsArray(Mutex* mtx = 0);
+
     bool runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context);
     bool runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObject* context);
     bool runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject* context);

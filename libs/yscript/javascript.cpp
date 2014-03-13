@@ -729,7 +729,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 		ok = buf.matches(r);
 	    }
 	    if (ok) {
-		JsArray* jsa = new JsArray(mutex());
+		JsArray* jsa = new JsArray(context,mutex());
 		for (int i = 0; i <= buf.matchCount(); i++)
 		    jsa->push(new ExpOperation(buf.matchString(i)));
 		jsa->params().addParam(new ExpOperation((int64_t)buf.matchOffset(),"index"));
@@ -808,7 +808,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
     } while (false);
     if (name == YSTRING("split")) {
 	ObjList args;
-	JsArray* array = new JsArray(mutex());
+	JsArray* array = new JsArray(context,mutex());
 	if (!(extractArgs(stack,oper,context,args) && args.skipNull()))
 	    SPLIT_EMPTY();
 	String* s = static_cast<String*>(args[0]);

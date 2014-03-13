@@ -230,6 +230,22 @@ void JsObject::printRecursive(const GenObject* obj)
     Output("%s",buf.c_str());
 }
 
+void JsObject::setPrototype(GenObject* context, const String& objName)
+{
+    ScriptContext* ctxt = YOBJECT(ScriptContext,context);
+    if (!ctxt) {
+	ScriptRun* sr = static_cast<ScriptRun*>(context);
+	if (!(sr && (ctxt = YOBJECT(ScriptContext,sr->context()))))
+	    return;
+    }
+    JsObject* objCtr = YOBJECT(JsObject,ctxt->params().getParam(objName));
+    if (objCtr) {
+	JsObject* proto = YOBJECT(JsObject,objCtr->params().getParam(YSTRING("prototype")));
+	if (proto && proto->ref())
+	    params().addParam(new ExpWrapper(proto,protoName()));
+    }
+}
+
 JsObject* JsObject::buildCallContext(Mutex* mtx, JsObject* thisObj)
 {
     JsObject* ctxt = new JsObject(mtx,"()");
@@ -488,6 +504,12 @@ JsArray::JsArray(Mutex* mtx)
     params().addParam(new ExpFunction("sort"));
     params().addParam(new ExpFunction("indexOf"));
     params().addParam("length","0");
+}
+
+JsArray::JsArray(GenObject* context, Mutex* mtx)
+    : JsObject(mtx,"[object Array]"), m_length(0)
+{
+    setPrototype(context,YSTRING("Array"));
 }
 
 JsObject* JsArray::copy(Mutex* mtx) const

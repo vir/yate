@@ -1314,7 +1314,7 @@ void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* co
 		}
 	    }
 	    if (idx >= 0 && idx < cols) {
-		JsArray* jsa = new JsArray(mutex());
+		JsArray* jsa = new JsArray(context,mutex());
 		for (int r = 1; r <= rows; r++) {
 		    GenObject* o = arr->get(idx,r);
 		    if (o)
@@ -1333,7 +1333,7 @@ void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* co
 		const String* name = YOBJECT(String,arr->get(c,0));
 		if (TelEngine::null(name))
 		    continue;
-		JsArray* jsa = new JsArray(mutex());
+		JsArray* jsa = new JsArray(context,mutex());
 		for (int r = 1; r <= rows; r++) {
 		    GenObject* o = arr->get(c,r);
 		    if (o)
@@ -1379,7 +1379,7 @@ void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* conte
 	}
 	else {
 	    // [ { col1: val11, col2: val12 }, { col1: val21, col2: val22 } ]
-	    JsArray* jsa = new JsArray(mutex());
+	    JsArray* jsa = new JsArray(context,mutex());
 	    for (int r = 1; r <= rows; r++) {
 		JsObject* jso = new JsObject("Object",mutex());
 		for (int c = 0; c < cols; c++) {
@@ -1817,7 +1817,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	if (m_xml)
 	    xml = m_xml->findFirstChild(name,ns);
 	if (xml) {
-	    JsArray* jsa = new JsArray(mutex());
+	    JsArray* jsa = new JsArray(context,mutex());
 	    while (xml) {
 		jsa->push(new ExpWrapper(new JsXML(mutex(),xml,owner())));
 		xml = m_xml->findNextChild(xml,name,ns);

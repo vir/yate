@@ -836,31 +836,52 @@ bool JsArray::runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject
     // var myHonda = { color: "red", wheels: 4, engine: { cylinders: 4, size: 2.2 } };
     // var myCar = [myHonda, 2, "cherry condition", "purchased 1997"];
     // var newCar = myCar.slice(0, 2);
-    if (!oper.number())
-	return false;
-    // begin | end > 0 offset from the start of the array
-    //	       < 0 offset from the end of the array
-    // end missing -> go to end of array
-    int begin = length(), end = length();
-    for (int i = (int)oper.number(); i; i--) {
-	ExpOperation* op = popValue(stack,context);
-	if (op->isInteger()) {
-	    end = begin;
-	    begin = (int)op->number();
-	}
-	TelEngine::destruct(op);
+    int32_t begin = 0, end = length();
+    switch (oper.number()) {
+	case 2:
+	    {   // get end of interval
+		ExpOperation* op = popValue(stack,context);
+		if (op && op->isInteger())
+		    end = op->number();
+		TelEngine::destruct(op);
+	    }
+	// intentional fallthrough
+	case 1:
+	    {
+		ExpOperation* op = popValue(stack,context);
+		if (op && op->isInteger())
+		    begin = op->number();
+		TelEngine::destruct(op);
+	    }
+	    break;
+	case 0:
+	    break;
+	default:
+	    // maybe we should ignore the rest of the given parameters?
+	    return false;
     }
-    if (begin < 0)
+    if (begin < 0) {
 	begin = length() + begin;
+	if (begin < 0)
+	    begin = 0;
+    }
     if (end < 0)
 	end = length() + end;
-    if (end < begin)
-	return false;
-    // TODO
-    //JsArray* slice = new JsArray(context,mutex());
-    for (long int i = begin; i < end; i++) {
-//	slice->params().addParam(new NamedString(String(i - begin),
+ 
+    JsArray* array = new JsArray(context,mutex());
+    for (int32_t i = begin; i < end; i++) {
+	NamedString* ns = params().getParam(String(i));
+	if (!ns) {
+	    // if missing, insert undefined element in array also
+	    array->m_length++;
+	    continue;
+	}
+	ExpOperation* arg = YOBJECT(ExpOperation,ns);
+	arg = arg ? arg->clone() : new ExpOperation(*ns,0,true);
+	const_cast<String&>(arg->name()) = (unsigned int)array->m_length++;
+	array->params().addParam(arg);
     }
+    ExpEvaluator::pushOne(stack,new ExpWrapper(array));
     return true;
 }
 
@@ -870,55 +891,76 @@ bool JsArray::runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObjec
     // Returns an array containing the removed elements
     // array.splice(index , howMany[, element1[, ...[, elementN]]])
     // array.splice(index ,[ howMany[, element1[, ...[, elementN]]]])
-    ObjList arguments;
-    int argc = extractArgs(this,stack,oper,context,arguments);
+    ObjList args;
+    int argc = extractArgs(this,stack,oper,context,args);
     if (!argc)
 	return false;
     // get start index
-    ExpOperation* op = static_cast<ExpOperation*>(arguments[0]);
-    int begin = (int)op->number();
+    int32_t len = length();
+    ExpOperation* op = static_cast<ExpOperation*>(args.remove(false));
+    int32_t begin = (int)(op->number() > len ? len : op->number());
     if (begin < 0)
-	begin = length() + begin;
-    // get count to delete
-    int count = length() - begin;
-    if (arguments.count() > 1) {
-	// get count
-	op = static_cast<ExpOperation*>(arguments[1]);
-	count = (int)op->number();
+	begin = len + begin > 0 ? len + begin : 0;
+    TelEngine::destruct(op);
+    argc--;
+    // get count of objects to delete
+    int32_t delCount = len - begin;
+    if (argc) {
+	op = static_cast<ExpOperation*>(args.remove(false));
+	// howMany is negative, set it to 0
+	if (op->number() < 0)
+	    delCount = 0;
+	// if howMany is greater than the length of remaining elements from start index, do not set it
+	else if (op->number() < delCount)
+	    delCount = op->number();
+	TelEngine::destruct(op);
+	argc--;
     }
 
     // remove elements
     JsArray* removed = new JsArray(context,mutex());
-    for (int i = begin; i < begin + count; i++) {
-	removed->params().setParam(String(begin + count - begin),params().getValue(String(i)));
-	params().clearParam(String(i));
+    for (int32_t i = begin; i < begin + delCount; i++) {
+	NamedString* ns = params().getParam(String(i));
+	if (!ns) {
+	    // if missing, insert undefined element in array also
+	    removed->m_length++;
+	    continue;
+	}
+	params().paramList()->remove(ns,false);
+	ExpOperation* op = YOBJECT(ExpOperation,ns);
+	if (!op) {
+	    op = new ExpOperation(*ns,0,true);
+	    TelEngine::destruct(ns);
+	}
+	const_cast<String&>(op->name()) = (unsigned int)removed->m_length++;
+	removed->params().addParam(op);
     }
-    removed->setLength(count);
 
-    // add the trailing array elements
-    // index for trailing array elements arfer removing the specified count
-    int shiftIdx = begin + count;
-    // shift how many positions for trailing array elements
-    int shiftWith = arguments.count() > 2 ? arguments.count() - 2 - count : -count;
-    if (shiftWith > 0) {
-	// shift everything starting at index shiftIdx with shiftWith positions to the right
-	for (int i = length(); i > shiftIdx; i--)
-	    params().setParam(String(i - 1 + shiftWith),params().getValue(String(i - 1)));
+    int32_t shiftIdx = argc - delCount;
+    // shift elements to make room for those that are to be inserted or move the ones that remained
+    // after delete
+    if (shiftIdx > 0) {
+	for (int32_t i = m_length - 1; i >= begin + delCount; i--) {
+	    NamedString* ns = static_cast<NamedString*>((*params().paramList())[String(i)]);
+	    if (ns)
+		const_cast<String&>(ns->name()) = i + shiftIdx;
+	}
     }
-    else if (shiftWith < 0) {
-	// shift everything starting at index shiftIdx with shiftWith positions to the left
-	for (int i = shiftIdx; i < length(); i++)
-	    params().setParam(String(i + shiftWith),params().getValue(String(i)));
+    else if (shiftIdx < 0) {
+	for (int32_t i = begin + delCount; i < m_length; i++) {
+	    NamedString* ns = static_cast<NamedString*>((*params().paramList())[String(i)]);
+	    if (ns)
+		const_cast<String&>(ns->name()) = i + shiftIdx;
+	}
     }
-    // insert the new ones
-    for (int i = begin;(arguments.count() > 2) && (i < length()); i++) {
-	GenObject* obj = arguments[2 + i - begin];
-	params().setParam(new NamedPointer(String(i),obj));
+    setLength(length() + shiftIdx);
+    // insert the new elements
+    for (int i = 0; i < argc; i++) {
+	ExpOperation* arg = static_cast<ExpOperation*>(args.remove(false));
+	const_cast<String&>(arg->name()) = (unsigned int)(begin + i);
+	params().addParam(arg);
     }
-    // set length
-    setLength(arguments.count() > 2 ? length() + arguments.count() - 2 - count : length() - count);
-    // push the removed array on stack
-    ExpEvaluator::pushOne(stack,new ExpWrapper(removed,0));
+    ExpEvaluator::pushOne(stack,new ExpWrapper(removed));
     return true;
 }
 

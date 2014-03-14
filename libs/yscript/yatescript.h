@@ -2429,8 +2429,9 @@ public:
     /**
      * Adjust a file script path to include default if needed
      * @param script File path to adjust
+     * @param extraInc True to check the extra include path first
      */
-    void adjustPath(String& script) const;
+    void adjustPath(String& script, bool extraInc = false) const;
 
     /**
      * Retrieve the base script path
@@ -2440,11 +2441,19 @@ public:
 	{ return m_basePath; }
 
     /**
+     * Retrieve the extra include script path
+     * @return Include path added to relative script paths
+     */
+    inline const String& includePath() const
+	{ return m_includePath; }
+
+    /**
      * Set the base script path
      * @param path Base path to add to relative script paths
+     * @param incPath Extra include path to add to relative script paths
      */
-    inline void basePath(const char* path)
-	{ m_basePath = path; }
+    inline void basePath(const char* path, const char* incPath = 0)
+	{ m_basePath = path; m_includePath = incPath; }
 
     /**
      * Retrieve the last parsed file name
@@ -2464,10 +2473,11 @@ public:
      * Check if the script or any includes have changed
      * @param file Name of the file to check
      * @param path New base path to check
+     * @param incPath New extra include path to check
      * @return True if the script may have changed, false if not changed
      */
-    inline bool scriptChanged(const char* file, const String& path) const
-	{ return (path != m_basePath) || scriptChanged(file); }
+    inline bool scriptChanged(const char* file, const String& path, const String& incPath = String::empty()) const
+	{ return (path != m_basePath) || (incPath != m_includePath) || scriptChanged(file); }
 
     /**
      * Set whether the Javascript code should be linked or not
@@ -2520,6 +2530,7 @@ public:
 
 private:
     String m_basePath;
+    String m_includePath;
     String m_parsedFile;
     bool m_allowLink;
     bool m_allowTrace;

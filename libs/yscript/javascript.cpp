@@ -1215,7 +1215,7 @@ bool JsCode::preProcessInclude(ParsePoint& expr, bool once, GenObject* context)
 	String str;
 	if (ExpEvaluator::getString(expr,str)) {
 	    DDebug(this,DebugAll,"Found include '%s'",str.safe());
-	    parser->adjustPath(str);
+	    parser->adjustPath(str,true);
 	    str.trimSpaces();
 	    bool ok = !str.null();
 	    if (ok) {
@@ -3364,11 +3364,14 @@ bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject*
 
 
 // Adjust a script file include path
-void JsParser::adjustPath(String& script) const
+void JsParser::adjustPath(String& script, bool extraInc) const
 {
     if (script.null() || script.startsWith(Engine::pathSeparator()))
 	return;
-    script = m_basePath + script;
+    if (extraInc && m_includePath && File::exists(m_includePath + script))
+	script = m_includePath + script;
+    else
+	script = m_basePath + script;
 }
 
 // Create Javascript context

@@ -652,12 +652,12 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 		int len = ja->length();
 		for (int i = 0; i < len; i++) {
 		    NamedString* ns = ja->params().getParam(String(i));
-		    op = YOBJECT(ExpOperation,ns);
-		    op = op ? op->clone() : new ExpOperation(*ns,0,true);
-		    const_cast<String&>(op->name()) = (unsigned int)array->m_length++;
-		    array->params().addParam(op);
+		    ExpOperation* arg = YOBJECT(ExpOperation,ns);
+		    arg = arg ? arg->clone() : new ExpOperation(*ns,0,true);
+		    const_cast<String&>(arg->name()) = (unsigned int)array->m_length++;
+		    array->params().addParam(arg);
 		}
-		TelEngine::destruct(ja);
+		TelEngine::destruct(op);
 	    }
 	    else {
 		const_cast<String&>(op->name()) = (unsigned int)array->m_length++;

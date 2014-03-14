@@ -636,7 +636,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	ObjList args;
 	extractArgs(this,stack,oper,context,args);
 
-	JsArray* array = new JsArray(mutex());
+	JsArray* array = new JsArray(context,mutex());
 	// copy this array - only numerically indexed elements!
 	for (int i = 0; i < m_length; i++) {
 	    NamedString* ns = params().getParam(String(i));
@@ -857,7 +857,7 @@ bool JsArray::runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject
     if (end < begin)
 	return false;
     // TODO
-    //JsArray* slice = new JsArray(mutex());
+    //JsArray* slice = new JsArray(context,mutex());
     for (long int i = begin; i < end; i++) {
 //	slice->params().addParam(new NamedString(String(i - begin),
     }
@@ -888,7 +888,7 @@ bool JsArray::runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObjec
     }
 
     // remove elements
-    JsArray* removed = new JsArray(mutex());
+    JsArray* removed = new JsArray(context,mutex());
     for (int i = begin; i < begin + count; i++) {
 	removed->params().setParam(String(begin + count - begin),params().getValue(String(i)));
 	params().clearParam(String(i));

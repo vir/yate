@@ -535,6 +535,7 @@ private:
 };
 
 static String s_basePath;
+static String s_libsPath;
 static bool s_engineStop = false;
 static bool s_allowAbort = false;
 static bool s_allowTrace = false;
@@ -2596,7 +2597,7 @@ JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath)
     : NamedString(scriptName,fileName),
       m_inUse(true)
 {
-    m_jsCode.basePath(s_basePath);
+    m_jsCode.basePath(s_basePath,s_libsPath);
     if (relPath)
 	m_jsCode.adjustPath(*this);
     m_jsCode.link(s_allowLink);
@@ -2625,7 +2626,7 @@ JsGlobal::~JsGlobal()
 
 bool JsGlobal::fileChanged(const char* fileName) const
 {
-    return m_jsCode.scriptChanged(fileName,s_basePath);
+    return m_jsCode.scriptChanged(fileName,s_basePath,s_libsPath);
 }
 
 void JsGlobal::markUnused()
@@ -2793,7 +2794,7 @@ bool JsModule::commandExecute(String& retVal, const String& line)
 bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* context)
 {
     JsParser parser;
-    parser.basePath(s_basePath);
+    parser.basePath(s_basePath,s_libsPath);
     parser.link(s_allowLink);
     parser.trace(s_allowTrace);
     if (!parser.parse(cmd)) {
@@ -2974,9 +2975,15 @@ void JsModule::initialize()
     String tmp = Engine::sharedPath();
     tmp << Engine::pathSeparator() << "scripts";
     tmp = cfg.getValue("general","scripts_dir",tmp);
-    if (!tmp.endsWith(Engine::pathSeparator()))
+    Engine::runParams().replaceParams(tmp);
+    if (tmp && !tmp.endsWith(Engine::pathSeparator()))
 	tmp += Engine::pathSeparator();
     s_basePath = tmp;
+    tmp = cfg.getValue("general","include_dir","${configpath}");
+    Engine::runParams().replaceParams(tmp);
+    if (tmp && !tmp.endsWith(Engine::pathSeparator()))
+	tmp += Engine::pathSeparator();
+    s_libsPath = tmp;
     s_allowAbort = cfg.getBoolValue("general","allow_abort");
     bool changed = false;
     if (cfg.getBoolValue("general","allow_trace") != s_allowTrace) {
@@ -2988,12 +2995,13 @@ void JsModule::initialize()
 	changed = true;
     }
     tmp = cfg.getValue("general","routing");
+    Engine::runParams().replaceParams(tmp);
     lock();
-    if (changed || m_assistCode.scriptChanged(tmp,s_basePath)) {
+    if (changed || m_assistCode.scriptChanged(tmp,s_basePath,s_libsPath)) {
 	m_assistCode.clear();
 	m_assistCode.link(s_allowLink);
 	m_assistCode.trace(s_allowTrace);
-	m_assistCode.basePath(s_basePath);
+	m_assistCode.basePath(s_basePath,s_libsPath);
 	m_assistCode.adjustPath(tmp);
 	if (m_assistCode.parseFile(tmp))
 	    Debug(this,DebugInfo,"Parsed routing script: %s",tmp.c_str());
@@ -3007,8 +3015,11 @@ void JsModule::initialize()
 	unsigned int len = sect->length();
 	for (unsigned int i=0; i<len; i++) {
 	    NamedString *n = sect->getParam(i);
-	    if (n)
-		JsGlobal::initScript(n->name(),*n);
+	    if (n) {
+		tmp = *n;
+		Engine::runParams().replaceParams(tmp);
+		JsGlobal::initScript(n->name(),tmp);
+	    }
 	}
     }
     JsGlobal::freeUnused();

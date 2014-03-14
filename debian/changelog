@@ -1,4 +1,4 @@
-yate (5.1.1~svn5796) UNRELEASED; urgency=low
+yate (5.1.1~svn5800) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1056,8 +1056,17 @@ yate (5.1.1~svn5796) UNRELEASED; urgency=low
     JsObject::setPrototype() in order to set an objects prototype from
     given context.  + Bug fix: properly set prototype property on JS
     Array objects.
+  * Updated to SVN revision 5800: + Added JsObject::setPrototype() in
+    order to set an objects prototype from given context.  + Bug fix:
+    properly set prototype property on JS Array objects.  + Use new
+    JsArray constructor in the implementation of Array methods.  + Fixed
+    a memory leak in JS Array.concat(Array), wrapper object was not
+    destroyed.  + Engine runtime parameters can be used in
+    javascript.conf for script paths.  + Added and extra include path
+    (defaulting to config dir) for JS scripts.  + Fixed implementation
+    of Array.splice() and Array.slice() functions.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 14 Mar 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 15 Mar 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

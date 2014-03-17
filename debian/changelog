@@ -1,4 +1,4 @@
-yate (5.1.1~svn5800) UNRELEASED; urgency=low
+yate (5.2.1~svn5803) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1065,8 +1065,10 @@ yate (5.1.1~svn5800) UNRELEASED; urgency=low
     javascript.conf for script paths.  + Added and extra include path
     (defaulting to config dir) for JS scripts.  + Fixed implementation
     of Array.splice() and Array.slice() functions.
+  * Updated to SVN revision 5803: + Bumped version, 5.2 release.  +
+    Bumped version to 5.2.1 devel.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 15 Mar 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 18 Mar 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

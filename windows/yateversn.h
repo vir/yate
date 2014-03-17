@@ -25,20 +25,20 @@
 
 /* Version numbers */
 #define YATE_MAJOR 5
-#define YATE_MINOR 1
-#define YATE_BUILD 1
+#define YATE_MINOR 2
+#define YATE_BUILD 0
 
 /* Version strings */
 #define YATE_MAJOR_S "5"
-#define YATE_MINOR_S "1"
-#define YATE_BUILD_S "1"
-#define YATE_VERSION "5.1.1"
+#define YATE_MINOR_S "2"
+#define YATE_BUILD_S "0"
+#define YATE_VERSION "5.2.0"
 #define YATE_RELEASE "1"
-#define YATE_STATUS  "alpha"
-#define YATE_REVISION "5776"
+#define YATE_STATUS  ""
+#define YATE_REVISION "5801"
 
 /* Windows version resource - file and string style */
-#define YATE_WINVER_F 5,1,1,1
-#define YATE_WINVER_S "5, 1, 1, 1\0"
+#define YATE_WINVER_F 5,2,0,1
+#define YATE_WINVER_S "5, 2, 0, 1\0"
 
 #endif /* __YATEVERSN_H */

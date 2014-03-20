@@ -1,4 +1,4 @@
-yate (5.2.1~svn5803) UNRELEASED; urgency=low
+yate (5.2.1~svn5804) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1067,8 +1067,10 @@ yate (5.2.1~svn5803) UNRELEASED; urgency=low
     of Array.splice() and Array.slice() functions.
   * Updated to SVN revision 5803: + Bumped version, 5.2 release.  +
     Bumped version to 5.2.1 devel.
+  * Updated to SVN revision 5804: + Fixed bug: properly initialize class
+    member from constructor parameter.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 18 Mar 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 21 Mar 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

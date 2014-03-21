@@ -561,9 +561,11 @@ bool JBStream::sendStanza(XmlElement*& xml)
 	TelEngine::destruct(xml);
 	return false;
     }
-    Lock lock(this);
-    m_pending.append(new XmlElementOut(xml));
+    XmlElementOut* xo = new XmlElementOut(xml);
     xml = 0;
+    xo->prepareToSend();
+    Lock lock(this);
+    m_pending.append(xo);
     sendPending();
     return true;
 }

@@ -1,4 +1,4 @@
-yate (5.2.1~svn5804) UNRELEASED; urgency=low
+yate (5.2.1~svn5805) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1069,8 +1069,10 @@ yate (5.2.1~svn5804) UNRELEASED; urgency=low
     Bumped version to 5.2.1 devel.
   * Updated to SVN revision 5804: + Fixed bug: properly initialize class
     member from constructor parameter.
+  * Updated to SVN revision 5805: + Prepare ougoing xml's buffer before
+    adding it to queue to reduce stream mutex contention.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 21 Mar 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 22 Mar 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -93,6 +93,7 @@ static inline void addEnc(String& dest, unsigned int& idx, unsigned char ch,
 	unsigned int& lines, unsigned int& crtLine, unsigned int lineLen)
 {
     ((char*)dest.c_str())[idx++] = s_alphabet[ch & 0x3f];
+    crtLine++;
     addEoln(dest,idx,lines,crtLine,lineLen);
 }
 

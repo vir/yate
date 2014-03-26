@@ -241,6 +241,10 @@ public:
 	    params().addParam(new ExpFunction("clearInterval"));
 	    params().addParam(new ExpFunction("setTimeout"));
 	    params().addParam(new ExpFunction("clearTimeout"));
+	    params().addParam(new ExpFunction("atob"));
+	    params().addParam(new ExpFunction("btoa"));
+	    params().addParam(new ExpFunction("atoh"));
+	    params().addParam(new ExpFunction("htoa"));
 	}
     static void initialize(ScriptContext* context);
     inline void resetWorker()
@@ -866,6 +870,86 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpOperation* id = static_cast<ExpOperation*>(args[0]);
 	bool ret = m_worker->removeEvent((unsigned int)id->valInteger(),oper.name() == YSTRING("clearInterval"));
 	ExpEvaluator::pushOne(stack,new ExpOperation(ret));
+    }
+    else if (oper.name() == YSTRING("atob")) {
+	// str = Engine.atob(b64_str)
+	ObjList args;
+	int argc = extractArgs(stack,oper,context,args);
+	if (argc < 1)
+	    return false;
+	Base64 b64;
+	b64 << *static_cast<ExpOperation*>(args[0]);
+	DataBlock buf;
+	if (b64.decode(buf)) {
+	    String tmp((const char*)buf.data(),buf.length());
+	    ExpEvaluator::pushOne(stack,new ExpOperation(tmp,"bin"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
+    }
+    else if (oper.name() == YSTRING("btoa")) {
+	// b64_str = Engine.btoa(str,line_len,add_eol)
+	ObjList args;
+	int argc = extractArgs(stack,oper,context,args);
+	if (argc < 1)
+	    return false;
+	int len = 0;
+	bool eol = false;
+	if (argc >= 3)
+	    eol = static_cast<ExpOperation*>(args[2])->valBoolean();
+	if (argc >= 2) {
+	    len = static_cast<ExpOperation*>(args[1])->valInteger();
+	    if (len < 0)
+		len = 0;
+	}
+	Base64 b64;
+	b64 << *static_cast<ExpOperation*>(args[0]);
+	String buf;
+	b64.encode(buf,len,eol);
+	ExpEvaluator::pushOne(stack,new ExpOperation(buf,"b64"));
+    }
+    else if (oper.name() == YSTRING("atoh")) {
+	// hex_str = Engine.atoh(b64_str,hex_sep,hex_upcase)
+	ObjList args;
+	int argc = extractArgs(stack,oper,context,args);
+	if (argc < 1)
+	    return false;
+	Base64 b64;
+	b64 << *static_cast<ExpOperation*>(args[0]);
+	DataBlock buf;
+	if (b64.decode(buf)) {
+	    char sep = (argc >= 2) ? static_cast<ExpOperation*>(args[1])->at(0) : '\0';
+	    bool upCase = (argc >= 3) && static_cast<ExpOperation*>(args[2])->valBoolean();
+	    String tmp;
+	    tmp.hexify(buf.data(),buf.length(),sep,upCase);
+	    ExpEvaluator::pushOne(stack,new ExpOperation(tmp,"hex"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
+    }
+    else if (oper.name() == YSTRING("htoa")) {
+	// b64_str = Engine.htoa(hex_str,line_len,add_eol)
+	ObjList args;
+	int argc = extractArgs(stack,oper,context,args);
+	if (argc < 1)
+	    return false;
+	Base64 b64;
+	if (b64.unHexify(*static_cast<ExpOperation*>(args[0]))) {
+	    int len = 0;
+	    bool eol = false;
+	    if (argc >= 3)
+		eol = static_cast<ExpOperation*>(args[2])->valBoolean();
+	    if (argc >= 2) {
+		len = static_cast<ExpOperation*>(args[1])->valInteger();
+		if (len < 0)
+		    len = 0;
+	    }
+	    String buf;
+	    b64.encode(buf,len,eol);
+	    ExpEvaluator::pushOne(stack,new ExpOperation(buf,"b64"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
     }
     else
 	return JsObject::runNative(stack,oper,context);

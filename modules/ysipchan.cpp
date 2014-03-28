@@ -5400,6 +5400,11 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     URI uri(message->uri);
     String user;
     YateSIPLine* line = plugin.findLine(host,portNum,uri.getUser());
+    m.addParam("called",uri.getUser(),false);
+    uri = message->getHeader("From");
+    uri.parse();
+    m.addParam("caller",uri.getUser(),false);
+    m.addParam("callername",uri.getDescription(),false);
     if (line) {
 	// message comes from line we have registered to
 	if (user.null())
@@ -5429,11 +5434,6 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
 	}
     }
     m.addParam("username",user,false);
-    m.addParam("called",uri.getUser(),false);
-    uri = message->getHeader("From");
-    uri.parse();
-    m.addParam("caller",uri.getUser(),false);
-    m.addParam("callername",uri.getDescription(),false);
 
     String tmp(message->getHeaderValue("Max-Forwards"));
     int maxf = tmp.toInteger(s_maxForwards);

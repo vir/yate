@@ -1,4 +1,4 @@
-yate (5.2.1~svn5807) UNRELEASED; urgency=low
+yate (5.2.1~svn5809) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1073,8 +1073,11 @@ yate (5.2.1~svn5807) UNRELEASED; urgency=low
     adding it to queue to reduce stream mutex contention.
   * Updated to SVN revision 5807: + Fixed base64 line breaking at a
     length.  + Added Base64 handling methods to Javascript.
+  * Updated to SVN revision 5809: + Make "caller", "callername" and
+    "called" available in user.auth for generic SIP messages.  + Handle
+    the "noautoauth" error in calls as well.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 27 Mar 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 29 Mar 2014 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

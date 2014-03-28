@@ -65,6 +65,7 @@ static const TokenDict dict_errors[] = {
     { "noconn", 503 },
     { "noconn", 408 },
     { "noauth", 401 },
+    { "noautoauth", 401 },
     { "nomedia", 415 },
     { "nocall", 481 },
     { "busy", 486 },
@@ -1231,7 +1232,8 @@ static int s_expires_def = EXPIRES_DEF;
 static int s_expires_max = EXPIRES_MAX;
 static int s_defEncoding = SipHandler::BodyBase64;
 
-static String s_statusCmd = "status";
+static const String s_statusCmd = "status";
+static const String s_noAutoAuth = "noautoauth";
 
 static u_int64_t s_printFloodTime = 0;
 
@@ -2107,7 +2109,7 @@ static void setAuthError(SIPTransaction* trans, const NamedList& params,
 	int code = error.toInteger(dict_errors,401);
 	if (code < 400 || code > 699)
 	    break;
-	if ((code == 401) && (error != YSTRING("noautoauth")))
+	if ((code == 401) && (s_noAutoAuth != error))
 	    break;
 	SIPMessage* m = new SIPMessage(trans->initialMessage(),code,params.getValue(YSTRING("reason")));
 	copySipHeaders(*m,params);
@@ -7612,9 +7614,15 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 	code = 500;
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
-	if (code == 401) {
+	if ((code == 401) && (s_noAutoAuth != error)) {
 	    Lock lck(s_globalMutex);
 	    m_tr->requestAuth(s_realm,m_domain,false);
+	}
+	else if (msg) {
+	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),code,reason);
+	    copySipHeaders(*m,*msg);
+	    m_tr->setResponse(m);
+	    m->deref();
 	}
 	else
 	    m_tr->setResponse(code,reason);

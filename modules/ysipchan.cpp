@@ -1234,6 +1234,7 @@ static int s_defEncoding = SipHandler::BodyBase64;
 
 static const String s_statusCmd = "status";
 static const String s_noAutoAuth = "noautoauth";
+static const String s_username = "username";
 
 static u_int64_t s_printFloodTime = 0;
 
@@ -4507,7 +4508,7 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
     Message m("user.auth");
     m.addParam("protocol","sip");
     if (username) {
-	m.addParam("username",username);
+	m.addParam(s_username,username);
 	m.addParam("realm",realm);
 	m.addParam("nonce",nonce);
 	m.addParam("response",response);
@@ -4558,9 +4559,13 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
 
     // empty password returned means authentication succeeded
     if (m.retValue().null()) {
-	if (authLine && username.null()) {
-	    username = authLine->getParam("username");
-	    MimeHeaderLine::delQuotes(username);
+	if (username.null()) {
+	    if (authLine) {
+		username = authLine->getParam(s_username);
+		MimeHeaderLine::delQuotes(username);
+	    }
+	    if (username.null())
+		username = m.getValue(s_username);
 	}
 	return copyAuthParams(params,m);
     }
@@ -5261,7 +5266,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 
     if (user.null())
 	user = addr.getUser();
-    msg.setParam("username",user);
+    msg.setParam(s_username,user);
     msg.setParam("driver","sip");
     String data(addr);
     String raddr;
@@ -5471,7 +5476,7 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
 	    conn->deref();
 	}
     }
-    m.addParam("username",user,false);
+    m.addParam(s_username,user,false);
 
     String tmp(message->getHeaderValue("Max-Forwards"));
     int maxf = tmp.toInteger(s_maxForwards);
@@ -5827,7 +5832,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	m_externalAddr = line->getLocalAddr();
 	m_line = *line;
 	m_domain = line->domain();
-	m->addParam("username",m_user);
+	m->addParam(s_username,m_user);
 	m->addParam("domain",m_domain);
 	m->addParam("in_line",m_line);
     }
@@ -5838,7 +5843,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	if (age >= 0) {
 	    if (age < 10) {
 		m_user = user;
-		m->setParam("username",m_user);
+		m->setParam(s_username,m_user);
 	    }
 	    else
 		m->setParam("expired_user",user);
@@ -5883,7 +5888,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     s->addParam("caller",m_uri.getUser());
     s->addParam("called",uri.getUser());
     if (m_user)
-	s->addParam("username",m_user);
+	s->addParam(s_username,m_user);
     Engine::enqueue(s);
 }
 
@@ -7618,7 +7623,7 @@ bool YateSIPConnection::callRouted(Message& msg)
 
 void YateSIPConnection::callAccept(Message& msg)
 {
-    m_user = msg.getValue(YSTRING("username"));
+    m_user = msg.getValue(s_username);
     if (m_authBye)
 	m_authBye = msg.getBoolValue(YSTRING("xsip_auth_bye"),true);
     if (m_rtpForward) {
@@ -7775,7 +7780,7 @@ bool YateSIPConnection::initTransfer(Message*& msg, SIPMessage*& sipNotify,
     if (m_billid)
 	msg->addParam("billid",m_billid);
     if (m_user)
-	msg->addParam("username",m_user);
+	msg->addParam(s_username,m_user);
 
     const MimeHeaderLine* sh = sipRefer->getHeader("To");                   // caller
     if (sh) {
@@ -8001,7 +8006,7 @@ void YateSIPLine::setValid(bool valid, const char* reason, const char* error)
 	Message* m = new Message("user.notify");
 	m->addParam("account",*this);
 	m->addParam("protocol","sip");
-	m->addParam("username",m_username);
+	m->addParam(s_username,m_username);
 	if (m_domain)
 	    m->addParam("domain",m_domain);
 	m->addParam("registered",String::boolText(valid));
@@ -8309,7 +8314,7 @@ bool YateSIPLine::update(const Message& msg)
     bool transChg = chg;
     transChg = updateLocalAddr(msg) || transChg;
     chg = change(m_registrar,msg.getValue(YSTRING("registrar"),msg.getValue(YSTRING("server")))) || chg;
-    chg = change(m_username,msg.getValue(YSTRING("username"))) || chg;
+    chg = change(m_username,msg.getValue(s_username)) || chg;
     chg = change(m_authname,msg.getValue(YSTRING("authname"))) || chg;
     chg = change(m_password,msg.getValue(YSTRING("password"))) || chg;
     chg = change(m_domain,msg.getValue(YSTRING("domain"))) || chg;

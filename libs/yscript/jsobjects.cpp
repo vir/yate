@@ -822,7 +822,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    }
 	}
 	TelEngine::destruct(op1);
-	ExpEvaluator::pushOne(stack,new ExpOperation(String(index)));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)index));
 	return true;
     }
     else

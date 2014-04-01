@@ -1,4 +1,4 @@
-yate (5.2.1~svn5809) UNRELEASED; urgency=low
+yate (5.2.1~svn5813) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1076,8 +1076,14 @@ yate (5.2.1~svn5809) UNRELEASED; urgency=low
   * Updated to SVN revision 5809: + Make "caller", "callername" and
     "called" available in user.auth for generic SIP messages.  + Handle
     the "noautoauth" error in calls as well.
+  * Updated to SVN revision 5813: + Multipart MIME bodies are created as
+    needed.  + Support for custom SIP bodies in call related messages.
+    + Added objects and methods for accessing COnfiguration files from
+    Javascript.  + Fixed the type of the result of Array.indexOf(), must
+    be number.  + Copy the custom username from the "username" parameter
+    of user.auth message.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 29 Mar 2014 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 02 Apr 2014 02:19:41 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

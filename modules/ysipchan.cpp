@@ -1867,13 +1867,24 @@ static void copyPrivacy(SIPMessage& sip, const NamedList& msg)
 	sip.addHeader("Privacy",rfc3323);
 }
 
-// Copy body from SIP message to Yate message
-static void copySipBody(NamedList& msg, const SIPMessage& sip, bool text = false)
+// Copy message body to yate message
+static bool copySipBody(NamedList& msg, const MimeBody* body, bool text = false)
 {
-    if (!sip.body)
-	return;
+    if (!body)
+	return false;
+    if (body->isMultipart()) {
+	for (const ObjList* l = static_cast<const MimeMultipartBody*>(body)->bodies().skipNull();
+		l; l = l->skipNext()) {
+	    if (copySipBody(msg,static_cast<const MimeBody*>(l->get()),text))
+		return true;
+	}
+	return false;
+    }
+
+    if (body->isSDP())
+	return false;
     // add the body if it's a string one
-    MimeStringBody* strBody = YOBJECT(MimeStringBody,sip.body);
+    MimeStringBody* strBody = YOBJECT(MimeStringBody,body);
     if (strBody) {
 	msg.addParam("xsip_type",strBody->getType());
 	msg.addParam("xsip_body",strBody->text());
@@ -1881,14 +1892,16 @@ static void copySipBody(NamedList& msg, const SIPMessage& sip, bool text = false
 	    msg.addParam("text",strBody->text());
     }
     else {
-	MimeLinesBody* txtBody = YOBJECT(MimeLinesBody,sip.body);
+	MimeLinesBody* txtBody = YOBJECT(MimeLinesBody,body);
 	if (txtBody) {
 	    String bodyText((const char*)txtBody->getBody().data(),txtBody->getBody().length());
 	    msg.addParam("xsip_type",txtBody->getType());
 	    msg.addParam("xsip_body",bodyText);
 	}
+	else if (s_sipt_isup && (body->getType() == YSTRING("application/isup")))
+	    return false;
 	else {
-	    const DataBlock& binBody = sip.body->getBody();
+	    const DataBlock& binBody = body->getBody();
 	    String bodyText;
 	    int enc = s_defEncoding;
 	    switch (enc) {
@@ -1909,27 +1922,32 @@ static void copySipBody(NamedList& msg, const SIPMessage& sip, bool text = false
 			b64.clear(false);
 		    }
 	    }
-	    msg.addParam("xsip_type",sip.body->getType());
+	    msg.addParam("xsip_type",body->getType());
 	    msg.addParam("xsip_body_encoding",lookup(enc,SipHandler::s_bodyEnc));
 	    msg.addParam("xsip_body",bodyText);
 	}
     }
+    return true;
 }
 
-// Copy body from Yate message to SIP message
-static bool copySipBody(SIPMessage& sip, const NamedList& msg)
+// Copy body from SIP message to Yate message
+static bool copySipBody(NamedList& msg, const SIPMessage& sip, bool text = false)
+{
+    return copySipBody(msg,sip.body,text);
+}
+
+// Create a custom body from Yate message
+static MimeBody* createSipBody(const NamedList& msg)
 {
     const String& type = msg[YSTRING("xsip_type")];
     const String& body = msg[YSTRING("xsip_body")];
-    bool ok = false;
     if (type && body) {
 	const String& bodyEnc = msg[YSTRING("xsip_body_encoding")];
-	if (bodyEnc.null()) {
-	    sip.setBody(new MimeStringBody(type,body.c_str(),body.length()));
-	    ok = true;
-	}
+	if (bodyEnc.null())
+	    return new MimeStringBody(type,body.c_str(),body.length());
 	else {
 	    DataBlock binBody;
+	    bool ok = false;
 	    switch (bodyEnc.toInteger(SipHandler::s_bodyEnc)) {
 		case SipHandler::BodyRaw:
 		    binBody.append(body);
@@ -1949,12 +1967,22 @@ static bool copySipBody(SIPMessage& sip, const NamedList& msg)
 	    }
 
 	    if (ok)
-		sip.setBody(new MimeBinaryBody(type,(const char*)binBody.data(),binBody.length()));
+		return new MimeBinaryBody(type,(const char*)binBody.data(),binBody.length());
 	    else
 		Debug(&plugin,DebugWarn,"Invalid xsip_body_encoding '%s'",bodyEnc.c_str());
 	}
     }
-    return ok;
+    return 0;
+}
+
+// Copy body from Yate message to SIP message
+static bool copySipBody(SIPMessage& sip, const NamedList& msg)
+{
+    MimeBody* body = createSipBody(msg);
+    if (!body)
+	return false;
+    sip.setBody(body);
+    return true;
 }
 
 // Check if the given body have the given type
@@ -2078,14 +2106,22 @@ static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdp
 	break;
     }
 
-    if (!isup)
+    MimeBody* custom = createSipBody(msg);
+
+    if (!isup && !custom)
 	return sdp;
-    if (!sdp)
+    if (!sdp && !custom)
 	return isup;
+    if (!sdp && !isup)
+	return custom;
     // Build multipart
     MimeMultipartBody* body = new MimeMultipartBody;
-    body->appendBody(sdp);
-    body->appendBody(isup);
+    if (sdp)
+	body->appendBody(sdp);
+    if (isup)
+	body->appendBody(isup);
+    if (custom)
+	body->appendBody(custom);
     return body;
 }
 
@@ -5711,6 +5747,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     YateSIPLine* line = plugin.findLine(m_host,m_port,uri.getUser());
     Message *m = message("call.preroute");
     decodeIsupBody(*m,m_tr->initialMessage()->body);
+    copySipBody(*m,m_tr->initialMessage()->body);
     m->addParam("caller",m_uri.getUser());
     m->addParam("called",uri.getUser());
     if (m_uri.getDescription())
@@ -5836,6 +5873,8 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	if (m_rtpForward)
 	    m->addParam("rtp_forward","possible");
     }
+    else if (ev->getMessage()->body)
+	m->addParam("media",String::boolText(false));
     DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
     if (reason)
 	m->addParam("reason",reason);
@@ -6189,6 +6228,7 @@ void YateSIPConnection::hangup()
 	    if (stats)
 		m->addHeader("P-RTP-Stat",stats);
 	    copySipHeaders(*m,parameters(),0);
+	    copySipBody(*m,parameters());
 	    paramMutex().unlock();
 	    m->setBody(buildSIPBody());
 	    plugin.ep()->engine()->addMessage(m);
@@ -6424,6 +6464,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    paramMutex().unlock();
 	    Message tmp("isup.decode");
 	    bool ok = decodeIsupBody(tmp,msg->body);
+	    ok = copySipBody(tmp,msg->body) || ok;
 	    paramMutex().lock();
 	    if (ok)
 		parameters().copyParams(tmp);
@@ -6579,6 +6620,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	Message *m = message("call.answered");
 	copySipHeaders(*m,*msg);
 	decodeIsupBody(*m,msg->body);
+	copySipBody(*m,msg->body);
 	addRtpParams(*m,natAddr,msg->body);
 	Engine::enqueue(m);
 	startPendingUpdate();
@@ -6610,6 +6652,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 		Message* m = message(name);
 		copySipHeaders(*m,*msg);
 		decodeIsupBody(*m,msg->body);
+		copySipBody(*m,msg->body);
 		if (reason)
 		    m->addParam("reason",reason);
 		addRtpParams(*m,natAddr,msg->body);
@@ -6705,6 +6748,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 
     Message* m = message("call.update");
     decodeIsupBody(*m,msg->body);
+    copySipBody(*m,msg->body);
     if (code < 300) {
 	m->addParam("operation","notify");
 	String natAddr;
@@ -6960,7 +7004,9 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 	setPartyChanged(t->initialMessage()->getParty(),this);
     if (msg->body) {
 	Message tmp("isup.decode");
-	if (decodeIsupBody(tmp,msg->body)) {
+	bool ok = decodeIsupBody(tmp,msg->body);
+	ok = copySipBody(tmp,msg->body) || ok;
+	if (ok) {
 	    paramMutex().lock();
 	    parameters().copyParams(tmp);
 	    paramMutex().unlock();
@@ -7808,8 +7854,6 @@ MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
 // Build the body of a hangup SIP message from disconnect parameters
 MimeBody* YateSIPConnection::buildSIPBody()
 {
-    if (!s_sipt_isup)
-	return 0;
     Message msg("");
     paramMutex().lock();
     msg.copyParams(parameters());

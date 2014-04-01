@@ -237,6 +237,7 @@ public:
 	    params().addParam(new ExpFunction("setDebug"));
 	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
 	    params().addParam(new ExpFunction("runParams"));
+	    params().addParam(new ExpFunction("configFile"));
 	    params().addParam(new ExpFunction("setInterval"));
 	    params().addParam(new ExpFunction("clearInterval"));
 	    params().addParam(new ExpFunction("setTimeout"));
@@ -412,6 +413,64 @@ public:
     static void initialize(ScriptContext* context);
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+};
+
+class JsConfigFile : public JsObject
+{
+    YCLASS(JsConfigFile,JsObject)
+public:
+    inline JsConfigFile(Mutex* mtx)
+	: JsObject("ConfigFile",mtx,true)
+	{
+	    XDebug(DebugAll,"JsConfigFile::JsConfigFile() [%p]",this);
+	}
+    inline JsConfigFile(Mutex* mtx, const char* name, bool warn)
+	: JsObject("ConfigFile",mtx,true),
+	  m_config(name,warn)
+	{
+	    XDebug(DebugAll,"JsConfigFile::JsConfigFile('%s') [%p]",name,this);
+	    params().addParam(new ExpFunction("name"));
+	    params().addParam(new ExpFunction("load"));
+	    params().addParam(new ExpFunction("save"));
+	    params().addParam(new ExpFunction("count"));
+	    params().addParam(new ExpFunction("sections"));
+	    params().addParam(new ExpFunction("getSection"));
+	    params().addParam(new ExpFunction("getValue"));
+	    params().addParam(new ExpFunction("setValue"));
+	    params().addParam(new ExpFunction("clearKey"));
+	    params().addParam(new ExpFunction("keys"));
+	}
+    virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    static void initialize(ScriptContext* context);
+    inline Configuration& config()
+	{ return m_config; }
+    inline const Configuration& config() const
+	{ return m_config; }
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+private:
+    Configuration m_config;
+};
+
+class JsConfigSection : public JsObject
+{
+    friend class JsConfigFile;
+    YCLASS(JsConfigSection,JsObject)
+protected:
+    inline JsConfigSection(JsConfigFile* owner, const char* name)
+	: JsObject(owner->mutex(),name,true),
+	  m_owner(owner)
+	{
+	    XDebug(DebugAll,"JsConfigSection::JsConfigSection(%p,'%s') [%p]",owner,name,this);
+	    params().addParam(new ExpFunction("configFile"));
+	    params().addParam(new ExpFunction("getValue"));
+	    params().addParam(new ExpFunction("setValue"));
+	    params().addParam(new ExpFunction("clearKey"));
+	    params().addParam(new ExpFunction("keys"));
+	}
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+private:
+    RefPointer<JsConfigFile> m_owner;
 };
 
 class JsXML : public JsObject
@@ -832,6 +891,21 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	}
 	else
 	    return false;
+    }
+    else if (oper.name() == YSTRING("configFile")) {
+	bool user = false;
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+		user = static_cast<ExpOperation*>(args[1])->valBoolean();
+		// fall through
+	    case 1:
+		ExpEvaluator::pushOne(stack,new ExpOperation(
+		    Engine::configFile(*static_cast<ExpOperation*>(args[0]),user)));
+		break;
+	    default:
+		return false;
+	}
     }
     else if (oper.name() == YSTRING("setInterval") || oper.name() == YSTRING("setTimeout")) {
 	ObjList args;
@@ -1748,6 +1822,226 @@ void JsFile::initialize(ScriptContext* context)
 }
 
 
+bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsConfigFile::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    ObjList args;
+    int argc = extractArgs(stack,oper,context,args);
+    if (oper.name() == YSTRING("name")) {
+	switch (argc) {
+	    case 0:
+		ExpEvaluator::pushOne(stack,new ExpOperation(m_config));
+		break;
+	    case 1:
+		m_config = *static_cast<ExpOperation*>(args[0]);
+		break;
+	    default:
+		return false;
+	}
+    }
+    else if (oper.name() == YSTRING("load")) {
+	switch (argc) {
+	    case 0:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.load(args[0]
+	    && static_cast<ExpOperation*>(args[0])->valBoolean())));
+    }
+    else if (oper.name() == YSTRING("save")) {
+	if (argc != 0)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.save()));
+    }
+    else if (oper.name() == YSTRING("count")) {
+	if (argc != 0)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_config.sections()));
+    }
+    else if (oper.name() == YSTRING("sections")) {
+	if (argc != 0)
+	    return false;
+	JsArray* jsa = new JsArray(context,mutex());
+	unsigned int n = m_config.sections();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedList* nl = m_config.getSection(i);
+	    if (nl)
+		jsa->params().addParam(new ExpWrapper(new JsConfigSection(this,*nl),*nl));
+	}
+	ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,"sections"));
+    }
+    else if (oper.name() == YSTRING("getSection")) {
+	bool create = false;
+	switch (argc) {
+	    case 2:
+		create = static_cast<ExpOperation*>(args[1])->valBoolean();
+		break;
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	if (create ? m_config.createSection(name) : m_config.getSection(name))
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(new JsConfigSection(this,name),name));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+    }
+    else if (oper.name() == YSTRING("getValue")) {
+	switch (argc) {
+	    case 2:
+	    case 3:
+		break;
+	    default:
+		return false;
+	}
+	const String& name = *static_cast<ExpOperation*>(args[1]);
+	static const char defVal[] = "default";
+	const char* val = m_config.getValue(*static_cast<ExpOperation*>(args[0]),name,defVal);
+	if (val == defVal) {
+	    if (args[2])
+		ExpEvaluator::pushOne(stack,static_cast<ExpOperation*>(args[2])->clone(name));
+	    else
+		ExpEvaluator::pushOne(stack,new ExpWrapper(0,name));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
+    }
+    else if (oper.name() == YSTRING("setValue")) {
+	if (argc != 3)
+	    return false;
+	m_config.setValue(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]),
+	    *static_cast<ExpOperation*>(args[2]));
+    }
+    else if (oper.name() == YSTRING("clearKey")) {
+	if (argc != 2)
+	    return false;
+	m_config.clearKey(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]));
+    }
+    else if (oper.name() == YSTRING("keys")) {
+	if (argc != 1)
+	    return false;
+	NamedList* sect = m_config.getSection(*static_cast<ExpOperation*>(args[0]));
+	if (sect) {
+	    JsArray* jsa = new JsArray(context,mutex());
+	    int32_t len = 0;
+	    for (const ObjList* l = sect->paramList()->skipNull(); l; l = l->skipNext()) {
+		jsa->push(new ExpOperation(static_cast<const NamedString*>(l->get())->name()));
+		len++;
+	    }
+	    jsa->setLength(len);
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,oper.name()));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,oper.name()));
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+JsObject* JsConfigFile::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsConfigFile::runConstructor '%s'("FMT64") [%p]",oper.name().c_str(),oper.number(),this);
+    bool warn = false;
+    const char* name = 0;
+    ObjList args;
+    switch (extractArgs(stack,oper,context,args)) {
+	case 2:
+	    warn = static_cast<ExpOperation*>(args[1])->valBoolean();
+	    // fall through
+	case 1:
+	    name = static_cast<ExpOperation*>(args[0])->c_str();
+	    // fall through
+	case 0:
+	    return new JsConfigFile(mutex(),name,warn);
+	default:
+	    return 0;
+    }
+}
+
+void JsConfigFile::initialize(ScriptContext* context)
+{
+    if (!context)
+	return;
+    Mutex* mtx = context->mutex();
+    Lock mylock(mtx);
+    NamedList& params = context->params();
+    if (!params.getParam(YSTRING("ConfigFile")))
+	addConstructor(params,"ConfigFile",new JsConfigFile(mtx));
+}
+
+
+bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsConfigSection::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    ObjList args;
+    int argc = extractArgs(stack,oper,context,args);
+    if (oper.name() == YSTRING("configFile")) {
+	if (argc != 0)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpWrapper(m_owner->ref() ? m_owner : 0));
+    }
+    else if (oper.name() == YSTRING("getValue")) {
+	switch (argc) {
+	    case 2:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	NamedList* sect = m_owner->config().getSection(toString());
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	static const char defVal[] = "default";
+	const char* val = sect ? sect->getValue(name,defVal) : defVal;
+	if (val == defVal) {
+	    if (args[1])
+		ExpEvaluator::pushOne(stack,static_cast<ExpOperation*>(args[1])->clone(name));
+	    else
+		ExpEvaluator::pushOne(stack,new ExpWrapper(0,name));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
+    }
+    else if (oper.name() == YSTRING("setValue")) {
+	if (argc != 2)
+	    return false;
+	NamedList* sect = m_owner->config().getSection(toString());
+	if (sect)
+	    sect->setParam(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]));
+    }
+    else if (oper.name() == YSTRING("clearKey")) {
+	if (argc != 1)
+	    return false;
+	NamedList* sect = m_owner->config().getSection(toString());
+	if (sect)
+	    sect->clearParam(*static_cast<ExpOperation*>(args[0]));
+    }
+    else if (oper.name() == YSTRING("keys")) {
+	if (argc != 0)
+	    return false;
+	NamedList* sect = m_owner->config().getSection(toString());
+	if (sect) {
+	    JsArray* jsa = new JsArray(context,mutex());
+	    int32_t len = 0;
+	    for (const ObjList* l = sect->paramList()->skipNull(); l; l = l->skipNext()) {
+		jsa->push(new ExpOperation(static_cast<const NamedString*>(l->get())->name()));
+		len++;
+	    }
+	    jsa->setLength(len);
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,oper.name()));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,oper.name()));
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+
 bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(&__plugin,DebugAll,"JsXML::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
@@ -2459,6 +2753,7 @@ bool JsAssist::init()
     JsChannel::initialize(ctx,this);
     JsMessage::initialize(ctx);
     JsFile::initialize(ctx);
+    JsConfigFile::initialize(ctx);
     JsXML::initialize(ctx);
     if (ScriptRun::Invalid == m_runner->reset(true))
 	return false;
@@ -2789,6 +3084,7 @@ bool JsGlobal::runMain()
     JsEngine::initialize(runner->context());
     JsMessage::initialize(runner->context());
     JsFile::initialize(runner->context());
+    JsConfigFile::initialize(runner->context());
     JsXML::initialize(runner->context());
     ScriptRun::Status st = runner->run();
     TelEngine::destruct(runner);
@@ -2891,6 +3187,7 @@ bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* con
 	JsEngine::initialize(runner->context());
 	JsMessage::initialize(runner->context());
 	JsFile::initialize(runner->context());
+	JsConfigFile::initialize(runner->context());
 	JsXML::initialize(runner->context());
     }
     ScriptRun::Status st = runner->run();

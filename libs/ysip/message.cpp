@@ -222,8 +222,14 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	return;
     }
 
-    if (!domain)
-	domain = partyLAddr;
+    String localDomain;
+    if (!domain) {
+	if (partyLPort && (partyLPort != 5060))
+	    SocketAddr::appendTo(localDomain,partyLAddr,partyLPort);
+	else
+	    SocketAddr::appendAddr(localDomain,partyLAddr);
+	domain = localDomain;
+    }
 
     MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(getHeader("Via"));
     if (!hl) {
@@ -261,7 +267,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	    String tmp = "<sip:";
 	    if (user)
 		tmp << String::uriEscape(user,'@',"+?&") << "@";
-	    SocketAddr::appendAddr(tmp,domain) << ">";
+	    tmp << domain << ">";
 	    hl = new MimeHeaderLine("From",tmp);
 	    header.append(hl);
 	}

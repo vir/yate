@@ -99,21 +99,38 @@ static inline void addEnc(String& dest, unsigned int& idx, unsigned char ch,
 
 // Add a decoded char buffer to a destination buffer and increase the index
 // Len must be is 2,3,4
-static inline void addDec(DataBlock& dest, unsigned int& idx,
+static inline bool addDec(DataBlock& dest, unsigned int& idx,
 	unsigned char* dec, unsigned int len)
 {
-    unsigned char* d = ((unsigned char*)dest.data());
-    if (len == 4) {
-	d[idx++] = dec[0] << 2 | dec[1] >> 4;
-	d[idx++] = dec[1] << 4 | dec[2] >> 2;
-	d[idx++] = dec[2] << 6 | dec[3];
+    switch (len) {
+	case 0:
+	    return true;
+	case 2:
+	case 3:
+	case 4:
+	    break;
+	default:
+	    return false;
     }
-    else if (len == 3) {
-	d[idx++] = dec[0] << 2 | dec[1] >> 4;
-	d[idx++] = dec[1] << 4 | dec[2] >> 2;
+    unsigned char* d = dest.data(idx,--len);
+    if (!d)
+	return false;
+    idx += len;
+    switch (len) {
+	case 3:
+	    *d++ = dec[0] << 2 | dec[1] >> 4;
+	    *d++ = dec[1] << 4 | dec[2] >> 2;
+	    *d = dec[2] << 6 | dec[3];
+	    return true;
+	case 2:
+	    *d++ = dec[0] << 2 | dec[1] >> 4;
+	    *d = dec[1] << 4 | dec[2] >> 2;
+	    return !(dec[2] & 0x03);
+	case 1:
+	    *d = dec[0] << 2 | dec[1] >> 4;
+	    return !(dec[1] & 0x0f);
     }
-    else
-	d[idx++] = dec[0] << 2 | dec[1] >> 4;
+    return false;
 }
 
 // Add a padding char to dest and increase index
@@ -194,7 +211,7 @@ bool Base64::decode(DataBlock& dest, bool liberal)
 	for (unsigned int i = 0; i < length(); i++) {
 	    int res = validLiberal(src[i]);
 	    if (!res) {
-		Debug("Base64",DebugNote,"Got invalid char 0x%x at pos %u [%p]",src[i],i,this);
+		Debug("Base64",DebugInfo,"Got invalid char 0x%x at pos %u [%p]",src[i],i,this);
 		return false;
 	    }
 	    if (res > 0)
@@ -212,8 +229,8 @@ bool Base64::decode(DataBlock& dest, bool liberal)
     rest = full % 4;
     full -= rest;
     if (!(full || rest) || rest == 1) {
-	Debug("Base64",DebugNote,"Got invalid length %u [%p]",length(),this);
-	return true;
+	Debug("Base64",DebugInfo,"Got invalid length %u [%p]",length(),this);
+	return false;
     }
     dest.assign(0,full / 4 * 3 + (rest ? rest - 1 : 0));
 
@@ -227,7 +244,7 @@ bool Base64::decode(DataBlock& dest, bool liberal)
 	    if (valid(src[i+a])) \
 		dec[a] = s_ato64[src[i+a]]; \
 	    else { \
-		Debug("Base64",DebugNote,"Got invalid char 0x%x at pos %u [%p]", \
+		Debug("Base64",DebugInfo,"Got invalid char 0x%x at pos %u [%p]", \
 		    src[i+a],i+a,this); \
 		return false; \
 	    }
@@ -260,7 +277,7 @@ bool Base64::decode(DataBlock& dest, bool liberal)
 	for (unsigned int i = 0; i < length(); i++, src++) {
 	    int res = validLiberal(*src);
 	    if (!res) {
-		Debug("Base64",DebugNote,"Got invalid char 0x%x at pos %u [%p]",*src,i,this);
+		Debug("Base64",DebugInfo,"Got invalid char 0x%x at pos %u [%p]",*src,i,this);
 		return false;
 	    }
 	    if (res < 0)
@@ -272,9 +289,10 @@ bool Base64::decode(DataBlock& dest, bool liberal)
 	    }
 	}
     }
-    if (rest)
-	addDec(dest,iDest,dec,rest);
-    return true;
+    if (addDec(dest,iDest,dec,rest))
+	return true;
+    Debug("Base64",DebugInfo,"Got garbage bits at end, probably truncated");
+    return false;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

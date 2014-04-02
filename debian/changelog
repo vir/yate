@@ -1,4 +1,4 @@
-yate (5.2.1~svn5813) UNRELEASED; urgency=low
+yate (5.2.1~svn5815) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1082,8 +1082,13 @@ yate (5.2.1~svn5813) UNRELEASED; urgency=low
     Javascript.  + Fixed the type of the result of Array.indexOf(), must
     be number.  + Copy the custom username from the "username" parameter
     of user.auth message.
+  * Updated to SVN revision 5815: + Reduced the Base64 error logging
+    level to INFO, it returns the error to caller anyway.  + Made Base64
+    decoding check for non-zero bits after the last octet, those
+    indicate truncation.  + When building a default SIP domain from
+    local address include port if not 5060.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 02 Apr 2014 02:19:41 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 03 Apr 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -179,6 +179,7 @@ bool CallEndpoint::disconnect(bool final, const char* reason, bool notify, const
 
     CallEndpoint *temp = m_peer;
     m_peer = 0;
+    m_lastPeer = 0;
     if (!temp)
 	return false;
 
@@ -204,9 +205,12 @@ void CallEndpoint::setPeer(CallEndpoint* peer, const char* reason, bool notify, 
 	setDisconnect(0);
 	connected(reason);
     }
-    else if (notify) {
-	setDisconnect(params);
-	disconnected(false,reason);
+    else {
+	m_lastPeer = 0;
+	if (notify) {
+	    setDisconnect(params);
+	    disconnected(false,reason);
+	}
     }
 }
 
@@ -246,7 +250,7 @@ String CallEndpoint::getPeerId() const
 bool CallEndpoint::getLastPeerId(String& id) const
 {
     id.clear();
-    if (!m_lastPeer)
+    if (m_lastPeerId.null())
 	return false;
     s_lastMutex.lock();
     id = m_lastPeerId;
@@ -510,11 +514,11 @@ void Channel::connected(const char* reason)
 	    m_billid = peer->billid();
     }
     Message* m = message("chan.connected",false,true);
+    setLastPeerId();
     if (reason)
 	m->setParam("reason",reason);
     if (!Engine::enqueue(m))
 	TelEngine::destruct(m);
-    setLastPeerId();
 }
 
 void Channel::disconnected(bool final, const char* reason)

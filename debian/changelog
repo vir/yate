@@ -1,4 +1,4 @@
-yate (5.2.1~svn5816) UNRELEASED; urgency=low
+yate (5.2.1~svn5817) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1091,8 +1091,11 @@ yate (5.2.1~svn5816) UNRELEASED; urgency=low
     "lastpeerid" parameters when a channel is reconnected to another
     channel that happens to be allocated at the same address in memory.
     + Force a (last) peer ID cache flush when a Channel is disconnected.
+  * Updated to SVN revision 5817: + Force a (last) peer ID cache flush
+    when a Channel is disconnected.  + Changed pkg-config detection for
+    OpenSSL support: check only if linker flags are non-empty.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 05 Apr 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 08 Apr 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

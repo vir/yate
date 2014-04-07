@@ -1308,7 +1308,7 @@ if [[ "x$ac_cv_use_openssl" = "xyes" ]]; then
     fi
     incssl=`(pkg-config --cflags $pkg) 2>/dev/null`
     libssl=`(pkg-config --libs $pkg) 2>/dev/null`
-    if [[ "x$incssl" != "x" -a "x$libssl" != "x" ]]; then
+    if [[ "x$libssl" != "x" ]]; then
 	HAVE_OPENSSL=yes
 	OPENSSL_VER="$verssl"
 	OPENSSL_INC="$incssl"

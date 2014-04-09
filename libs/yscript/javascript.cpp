@@ -839,6 +839,10 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	extractArgs(stack,oper,context,args);
 	ExpOperation* op = YOBJECT(ExpOperation,str);
 	if (op && op->isInteger()) {
+	    if (op->isBoolean()) {
+		ExpEvaluator::pushOne(stack,new ExpOperation(String::boolText(op->valBoolean())));
+		return true;
+	    }
 	    ExpOperation* tmp = static_cast<ExpOperation*>(args[0]);
 	    int radix = tmp ? (int)tmp->valInteger() : 0;
 	    if (radix < 2 || radix > 36)

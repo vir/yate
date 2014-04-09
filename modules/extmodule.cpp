@@ -72,6 +72,9 @@ static const char* s_cmds[] = {
     0
 };
 
+static const char s_helpExternalCmd[] = "external [info] [stop scriptname] [[start|restart] scriptname [parameter]] [execute progname [parameter]]";
+static const char s_helpExternalInfo[] = "List, (re)start and stop scripts or execute an external program";
+
 class ExtModReceiver;
 class ExtModChan;
 
@@ -329,6 +332,15 @@ public:
 	: MessageHandler("engine.status",110,__plugin.name())
 	{ }
     virtual bool received(Message &msg);
+};
+
+class ExtModHelp : public MessageHandler
+{
+public:
+    ExtModHelp()
+	: MessageHandler("engine.help",100,__plugin.name())
+	{ }
+    virtual bool received(Message& msg);
 };
 
 class ExtListener : public Thread
@@ -1748,7 +1760,7 @@ bool ExtModCommand::complete(const String& partLine, const String& partWord, Str
 {
     if (partLine.null() && partWord.null())
 	return false;
-    if (partLine.null() || partLine == YSTRING("status"))
+    if (partLine.null() || partLine == YSTRING("status") || partLine == YSTRING("help"))
 	Module::itemComplete(rval,"external",partWord);
     else if (partLine == YSTRING("external")) {
 	for (const char** list = s_cmds; *list; list++)
@@ -1786,6 +1798,18 @@ bool ExtModStatus::received(Message& msg)
 	<< ",chans=" << s_chans.count() << "\r\n";
     s_mutex.unlock();
     return !dest.null();
+}
+
+
+bool ExtModHelp::received(Message& msg)
+{
+    const String& line = msg[YSTRING("line")];
+    if (line && (line != YSTRING("external")))
+	return false;
+    msg.retValue() << "  " << s_helpExternalCmd << "\r\n";
+    if (line)
+	msg.retValue() << s_helpExternalInfo << "\r\n";
+    return !line.null();
 }
 
 
@@ -1930,6 +1954,7 @@ void ExtModulePlugin::initialize()
 	Engine::install(m_handler);
 	Engine::install(new ExtModCommand);
 	Engine::install(new ExtModStatus);
+	Engine::install(new ExtModHelp);
 	NamedList *sect = 0;
 	int n = s_cfg.sections();
 	for (int i = 0; i < n; i++) {

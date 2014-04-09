@@ -1504,7 +1504,7 @@ const char* ExpOperation::typeOf() const
     switch (opcode()) {
 	case ExpEvaluator::OpcPush:
 	case ExpEvaluator::OpcCopy:
-	    return isInteger() ? "number" : "string";
+	    return isInteger() ? ( isBoolean() ? "boolean" : "number" ) : "string";
 	case ExpEvaluator::OpcFunc:
 	    return "function";
 	default:

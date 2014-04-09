@@ -1,4 +1,4 @@
-yate (5.2.1~svn5817) UNRELEASED; urgency=low
+yate (5.2.1~svn5819) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1094,8 +1094,11 @@ yate (5.2.1~svn5817) UNRELEASED; urgency=low
   * Updated to SVN revision 5817: + Force a (last) peer ID cache flush
     when a Channel is disconnected.  + Changed pkg-config detection for
     OpenSSL support: check only if linker flags are non-empty.
+  * Updated to SVN revision 5819: + Added help for 'external' command.
+    + Return proper results for typeof and toString() calls for boolean
+    values.  + Added discrimination between boolean and integer values.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 08 Apr 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 10 Apr 2014 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -19,8 +19,22 @@ RETVAL=0
 
 start() {
     echo -n $"Starting YATE: "
+    force=
+    case "X$1" in
+	Xcheck)
+	    if kill -0 `cat /var/run/yate.pid 2>/dev/null` 2>/dev/null; then
+		warning
+		RETVAL=0
+		echo
+		return
+	    fi
+	    ;;
+	Xforce)
+	    force="--force"
+	    ;;
+    esac
     export PWLIB_ASSERT_ACTION=C
-    daemon yate -d -p /var/run/yate.pid $OPTS
+    daemon $force yate -d -p /var/run/yate.pid $OPTS
     RETVAL=$?
     echo
     [ $RETVAL -eq 0 ] && touch /var/lock/subsys/yate
@@ -39,7 +53,7 @@ stop() {
 # See how we were called.
 case "$1" in
     start)
-	start
+	start check
 	;;
     stop)
 	stop
@@ -58,12 +72,17 @@ case "$1" in
 	    start
 	fi
 	;;
+    force-start)
+	start force
+	;;
     reload)
+	echo -n $"Reloading YATE: "
   	killproc yate -HUP
 	RETVAL=$?
+	echo
         ;;
     *)
-	echo $"Usage: $0 {start|stop|status|restart|condrestart|reload}"
+	echo $"Usage: $0 {start|stop|status|restart|condrestart|force-start|reload}"
 	;;
 esac
 exit $RETVAL

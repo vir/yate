@@ -1,4 +1,4 @@
-yate (5.2.1~svn5820) UNRELEASED; urgency=low
+yate (5.2.1~svn5821) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1101,8 +1101,11 @@ yate (5.2.1~svn5820) UNRELEASED; urgency=low
     and integer values.  + Added "force-start" for those who want to
     override any checks.  + On "start" command check for Yate process by
     PID file, warn if already running.
+  * Updated to SVN revision 5821: + On "start" command check for Yate
+    process by PID file, warn if already running.  + Workaround for very
+    old init systems that do not define the "warning" function.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 11 Apr 2014 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 15 Apr 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -23,7 +23,11 @@ start() {
     case "X$1" in
 	Xcheck)
 	    if kill -0 `cat /var/run/yate.pid 2>/dev/null` 2>/dev/null; then
-		warning
+		if type warning >/dev/null 2>&1; then
+		    warning
+		else
+		    echo_warning
+		fi
 		RETVAL=0
 		echo
 		return

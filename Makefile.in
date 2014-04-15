@@ -7,6 +7,10 @@ DESTDIR :=
 # override DEBUG at compile time to enable full debug or remove it all
 DEBUG :=
 
+YATE_VERSION := @PACKAGE_VERSION@
+YATE_RELEASE := @PACKAGE_STATUS@@PACKAGE_RELEASE@
+YATE_REVISION:= @PACKAGE_REVISION@
+
 CXX := @CXX@ -Wall
 SED := sed
 DEFS :=

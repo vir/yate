@@ -106,6 +106,9 @@ while [ "$#" != 0 ]; do
 	--release)
 	    echo "@PACKAGE_STATUS@@PACKAGE_RELEASE@"
 	    ;;
+	--revision)
+	    echo "@PACKAGE_REVISION@"
+	    ;;
 	--cflags)
 	    echo "$s1"
 	    ;;

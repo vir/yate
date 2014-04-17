@@ -1,3 +1,5 @@
+# to force creation of a systemd service unit run rpmbuild --define 'systemd 1'
+# to force creation of a System V init script run rpmbuild --define 'systemd 0'
 # to add a distro release tag run rpmbuild --define 'dist value'
 # to add a revision tag run rpmbuild --define 'revision value'
 # to create a debug info package run rpmbuild --define 'debuginfo 1'
@@ -9,6 +11,8 @@
 # to disable only Zaptel support run rpmbuild --define 'nozap 1'
 # to disable only TDMV support run rpmbuild --define 'notdm 1'
 
+%{!?systemd:%define systemd %(test -x /usr/bin/systemd && echo 1 || echo 0)}
+%{!?_unitdir:%define _unitdir /usr/lib/systemd/system}
 %{!?dist:%define dist %{nil}}
 %{!?revision:%define revision %{nil}}
 %{?nodeps:%define no_auto_deps 1}
@@ -90,7 +94,11 @@ for small to large scale projects.
 %{_libdir}/libyatemgcp.so.*
 %{_bindir}/yate
 %{_mandir}/*/yate.*
+%if "%{systemd}" != "0"
+%{_unitdir}/yate.service
+%else
 %{_initrddir}/yate
+%endif
 %dir %{_datadir}/yate/data
 %{_datadir}/yate/data/*
 %dir %{_libdir}/yate
@@ -594,8 +602,13 @@ make %{stripped}
 %install
 make install DESTDIR=%{buildroot}
 rm %{buildroot}%{_sysconfdir}/yate/amrnbcodec.conf
+%if "%{systemd}" != "0"
+mkdir -p %{buildroot}%{_unitdir}
+cp -p %{_builddir}/%{name}/packing/rpm/yate.service %{buildroot}%{_unitdir}/yate.service
+%else
 mkdir -p %{buildroot}%{_initrddir}
 cp -p %{_builddir}/%{name}/packing/rpm/yate.init %{buildroot}%{_initrddir}/yate
+%endif
 mkdir -p %{buildroot}%{_sysconfdir}/logrotate.d
 cp -p %{_builddir}/%{name}/packing/yate.logrotate %{buildroot}%{_sysconfdir}/logrotate.d/yate
 

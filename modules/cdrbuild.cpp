@@ -695,7 +695,6 @@ void CustomTimer::process(const String& value)
 	extractUsec(value);
 	return;
     }
-    Debug(DebugWarn,"Requested to process: %s",value.c_str());
     String tmp = value;
     int count = 4;
     // YYYY or YY the year
@@ -705,11 +704,9 @@ void CustomTimer::process(const String& value)
 	if (i >= 0)
 	    count = 2;
     }
-    if (i >= 0) {
-	Debug(DebugNote," i = %d count = %d",i,count);
+    if (i >= 0)
 	tmp = tmp.substr(0,i) + ((count == 2) ? YSTRING("%y") : YSTRING("%Y")) +
 		tmp.substr(i + count);
-    }
     // MM month
     i = tmp.find(YSTRING("MM"));
     if (i >= 0)

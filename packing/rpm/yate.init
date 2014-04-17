@@ -9,8 +9,11 @@
 # pidfile: /var/run/yate.pid
 #
 
-# Extra Yate command line options
+# Extra Yate command line options, do not edit them here
 OPTS="-F -s -r -l /var/log/yate -vvv -Df"
+
+# To override create file /etc/sysconfig/yate and put OPTS=... in it
+[ -r /etc/sysconfig/yate ] && . /etc/sysconfig/yate
 
 # Source function library.
 . /etc/rc.d/init.d/functions

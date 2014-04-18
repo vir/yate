@@ -3,8 +3,12 @@
 
 ; scripts_dir: string: The absolute or relative path used by default to load
 ;  scripts if no full path is specified
-; Note that a trailing path separator should be added
-;scripts_dir=share/scripts/
+;scripts_dir=${sharedpath}/scripts
+
+; include_dir: string: The absolute or relative path used when including other
+;  files via #include or #require if no full path is specified
+; If the file is not found in include_dir it will be searched in scripts_dir
+;include_dir=${configpath}
 
 ; routing: string: Name of the file holding the routing instructions
 ; Example: routing=route.js

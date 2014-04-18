@@ -948,7 +948,7 @@ public:
      */
     inline ExpOperation(const ExpOperation& original)
 	: NamedString(original.name(),original),
-	  m_opcode(original.opcode()), m_number(original.number()),
+	  m_opcode(original.opcode()), m_number(original.number()), m_bool(original.isBoolean()),
 	  m_lineNo(0), m_barrier(original.barrier())
 	{ }
 
@@ -959,7 +959,7 @@ public:
      */
     inline ExpOperation(const ExpOperation& original, const char* name)
 	: NamedString(name,original),
-	  m_opcode(original.opcode()), m_number(original.number()),
+	  m_opcode(original.opcode()), m_number(original.number()), m_bool(original.isBoolean()),
 	  m_lineNo(0), m_barrier(original.barrier())
 	{ }
 
@@ -973,8 +973,9 @@ public:
 	: NamedString(name,value),
 	  m_opcode(ExpEvaluator::OpcPush),
 	  m_number(autoNum ? value.toInt64(nonInteger()) : nonInteger()),
+	  m_bool(autoNum && value.isBoolean()),
 	  m_lineNo(0), m_barrier(false)
-	{ if (autoNum && value.isBoolean()) m_number = value.toBoolean() ? 1 : 0; }
+	{ if (m_bool) m_number = value.toBoolean() ? 1 : 0; }
 
     /**
      * Push literal string constructor
@@ -983,7 +984,8 @@ public:
      */
     inline explicit ExpOperation(const char* value, const char* name = 0)
 	: NamedString(name,value),
-	  m_opcode(ExpEvaluator::OpcPush), m_number(nonInteger()), m_lineNo(0), m_barrier(false)
+	  m_opcode(ExpEvaluator::OpcPush), m_number(nonInteger()), m_bool(false),
+	  m_lineNo(0), m_barrier(false)
 	{ }
 
     /**
@@ -994,7 +996,7 @@ public:
     inline explicit ExpOperation(int64_t value, const char* name = 0)
 	: NamedString(name,"NaN"),
 	  m_opcode(ExpEvaluator::OpcPush),
-	  m_number(value), m_lineNo(0), m_barrier(false)
+	  m_number(value), m_bool(false), m_lineNo(0), m_barrier(false)
 	{ if (value != nonInteger()) String::operator=(value); }
 
     /**
@@ -1005,7 +1007,8 @@ public:
     inline explicit ExpOperation(bool value, const char* name = 0)
 	: NamedString(name,String::boolText(value)),
 	  m_opcode(ExpEvaluator::OpcPush),
-	  m_number(value ? 1 : 0), m_lineNo(0), m_barrier(false)
+	  m_number(value ? 1 : 0), m_bool(true),
+	  m_lineNo(0), m_barrier(false)
 	{ }
 
     /**
@@ -1017,7 +1020,7 @@ public:
      */
     inline ExpOperation(ExpEvaluator::Opcode oper, const char* name = 0, int64_t value = nonInteger(), bool barrier = false)
 	: NamedString(name,""),
-	  m_opcode(oper), m_number(value), m_lineNo(0), m_barrier(barrier)
+	  m_opcode(oper), m_number(value), m_bool(false), m_lineNo(0), m_barrier(barrier)
 	{ }
 
     /**
@@ -1029,7 +1032,7 @@ public:
      */
     inline ExpOperation(ExpEvaluator::Opcode oper, const char* name, const char* value, bool barrier = false)
 	: NamedString(name,value),
-	  m_opcode(oper), m_number(nonInteger()), m_lineNo(0), m_barrier(barrier)
+	  m_opcode(oper), m_number(nonInteger()), m_bool(false), m_lineNo(0), m_barrier(barrier)
 	{ }
 
     /**
@@ -1042,7 +1045,7 @@ public:
      */
     inline ExpOperation(ExpEvaluator::Opcode oper, const char* name, const char* value, int64_t number, bool barrier)
 	: NamedString(name,value),
-	  m_opcode(oper), m_number(number), m_lineNo(0), m_barrier(barrier)
+	  m_opcode(oper), m_number(number), m_bool(false), m_lineNo(0), m_barrier(barrier)
 	{ }
 
     /**
@@ -1065,6 +1068,13 @@ public:
      */
     inline int64_t number() const
 	{ return m_number; }
+
+    /**
+     * Check if a boolean value is stored
+     * @return True if a boolean value is stored
+     */
+    inline bool isBoolean() const
+	{ return m_bool; }
 
     /**
      * Check if this operation acts as an evaluator barrier on the stack
@@ -1138,6 +1148,7 @@ public:
 private:
     ExpEvaluator::Opcode m_opcode;
     int64_t m_number;
+    bool m_bool;
     unsigned int m_lineNo;
     bool m_barrier;
 };
@@ -1882,6 +1893,13 @@ public:
 	{ return clone(toString()); }
 
     /**
+     * Set the object prototype
+     * @param context  Pointer to arbitrary object passed from evaluation methods
+     * @param objName Name of the object prototype to set the this object
+     */
+    void setPrototype(GenObject* context, const String& objName);
+
+    /**
      * Deep copy method
      * @param mtx Pointer to the mutex that serializes the copied object
      * @return New object instance, does not keep references to old object
@@ -2187,13 +2205,16 @@ private:
  */
 class YSCRIPT_API JsArray : public JsObject
 {
+    friend class JsObject;
     YCLASS(JsArray,JsObject)
 public:
+
     /**
-     * Constructor
+     * Constructor for an empty array with prototype
+     * @param context Script context from which Array prototype is obtainend
      * @param mtx Pointer to the mutex that serializes this object
      */
-    JsArray(Mutex* mtx = 0);
+    JsArray(GenObject* context, Mutex* mtx = 0);
 
     /**
      * Constructor for an empty array
@@ -2261,6 +2282,7 @@ public:
     virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
 protected:
+
     /**
      * Clone and rename method
      * @param name Name of the cloned object
@@ -2280,6 +2302,13 @@ protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
 private:
+
+    /**
+     * Private constructor
+     * @param mtx Pointer to the mutex that serializes this object
+     */
+    JsArray(Mutex* mtx = 0);
+
     bool runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context);
     bool runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObject* context);
     bool runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject* context);
@@ -2411,8 +2440,9 @@ public:
     /**
      * Adjust a file script path to include default if needed
      * @param script File path to adjust
+     * @param extraInc True to check the extra include path first
      */
-    void adjustPath(String& script) const;
+    void adjustPath(String& script, bool extraInc = false) const;
 
     /**
      * Retrieve the base script path
@@ -2422,11 +2452,19 @@ public:
 	{ return m_basePath; }
 
     /**
+     * Retrieve the extra include script path
+     * @return Include path added to relative script paths
+     */
+    inline const String& includePath() const
+	{ return m_includePath; }
+
+    /**
      * Set the base script path
      * @param path Base path to add to relative script paths
+     * @param incPath Extra include path to add to relative script paths
      */
-    inline void basePath(const char* path)
-	{ m_basePath = path; }
+    inline void basePath(const char* path, const char* incPath = 0)
+	{ m_basePath = path; m_includePath = incPath; }
 
     /**
      * Retrieve the last parsed file name
@@ -2446,10 +2484,11 @@ public:
      * Check if the script or any includes have changed
      * @param file Name of the file to check
      * @param path New base path to check
+     * @param incPath New extra include path to check
      * @return True if the script may have changed, false if not changed
      */
-    inline bool scriptChanged(const char* file, const String& path) const
-	{ return (path != m_basePath) || scriptChanged(file); }
+    inline bool scriptChanged(const char* file, const String& path, const String& incPath = String::empty()) const
+	{ return (path != m_basePath) || (incPath != m_includePath) || scriptChanged(file); }
 
     /**
      * Set whether the Javascript code should be linked or not
@@ -2502,6 +2541,7 @@ public:
 
 private:
     String m_basePath;
+    String m_includePath;
     String m_parsedFile;
     bool m_allowLink;
     bool m_allowTrace;

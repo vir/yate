@@ -7,6 +7,10 @@ DESTDIR :=
 # override DEBUG at compile time to enable full debug or remove it all
 DEBUG :=
 
+YATE_VERSION := @PACKAGE_VERSION@
+YATE_RELEASE := @PACKAGE_STATUS@@PACKAGE_RELEASE@
+YATE_REVISION:= @PACKAGE_REVISION@
+
 CC  := @CC@ -Wall
 CXX := @CXX@ -Wall
 MOC := @QT4_MOC@
@@ -325,7 +329,7 @@ server/mysqldb.yate: EXTERNLIBS = $(MYSQL_LIB)
 
 client/alsachan.yate: EXTERNLIBS = -lasound
 
-client/coreaudio.yate: EXTERNLIBS = -framework CoreServices -framework CoreAudio -framework AudioUnit -framework AudioToolBox
+client/coreaudio.yate: EXTERNLIBS = -framework CoreServices -framework CoreAudio -framework AudioUnit -framework AudioToolbox
 
 yiaxchan.yate: ../libs/yiax/libyateiax.a
 yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yiax

@@ -237,10 +237,15 @@ public:
 	    params().addParam(new ExpFunction("setDebug"));
 	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
 	    params().addParam(new ExpFunction("runParams"));
+	    params().addParam(new ExpFunction("configFile"));
 	    params().addParam(new ExpFunction("setInterval"));
 	    params().addParam(new ExpFunction("clearInterval"));
 	    params().addParam(new ExpFunction("setTimeout"));
 	    params().addParam(new ExpFunction("clearTimeout"));
+	    params().addParam(new ExpFunction("atob"));
+	    params().addParam(new ExpFunction("btoa"));
+	    params().addParam(new ExpFunction("atoh"));
+	    params().addParam(new ExpFunction("htoa"));
 	}
     static void initialize(ScriptContext* context);
     inline void resetWorker()
@@ -410,6 +415,64 @@ protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
 
+class JsConfigFile : public JsObject
+{
+    YCLASS(JsConfigFile,JsObject)
+public:
+    inline JsConfigFile(Mutex* mtx)
+	: JsObject("ConfigFile",mtx,true)
+	{
+	    XDebug(DebugAll,"JsConfigFile::JsConfigFile() [%p]",this);
+	}
+    inline JsConfigFile(Mutex* mtx, const char* name, bool warn)
+	: JsObject("ConfigFile",mtx,true),
+	  m_config(name,warn)
+	{
+	    XDebug(DebugAll,"JsConfigFile::JsConfigFile('%s') [%p]",name,this);
+	    params().addParam(new ExpFunction("name"));
+	    params().addParam(new ExpFunction("load"));
+	    params().addParam(new ExpFunction("save"));
+	    params().addParam(new ExpFunction("count"));
+	    params().addParam(new ExpFunction("sections"));
+	    params().addParam(new ExpFunction("getSection"));
+	    params().addParam(new ExpFunction("getValue"));
+	    params().addParam(new ExpFunction("setValue"));
+	    params().addParam(new ExpFunction("clearKey"));
+	    params().addParam(new ExpFunction("keys"));
+	}
+    virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    static void initialize(ScriptContext* context);
+    inline Configuration& config()
+	{ return m_config; }
+    inline const Configuration& config() const
+	{ return m_config; }
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+private:
+    Configuration m_config;
+};
+
+class JsConfigSection : public JsObject
+{
+    friend class JsConfigFile;
+    YCLASS(JsConfigSection,JsObject)
+protected:
+    inline JsConfigSection(JsConfigFile* owner, const char* name)
+	: JsObject(owner->mutex(),name,true),
+	  m_owner(owner)
+	{
+	    XDebug(DebugAll,"JsConfigSection::JsConfigSection(%p,'%s') [%p]",owner,name,this);
+	    params().addParam(new ExpFunction("configFile"));
+	    params().addParam(new ExpFunction("getValue"));
+	    params().addParam(new ExpFunction("setValue"));
+	    params().addParam(new ExpFunction("clearKey"));
+	    params().addParam(new ExpFunction("keys"));
+	}
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+private:
+    RefPointer<JsConfigFile> m_owner;
+};
+
 class JsXML : public JsObject
 {
     YCLASS(JsXML,JsObject)
@@ -535,6 +598,7 @@ private:
 };
 
 static String s_basePath;
+static String s_libsPath;
 static bool s_engineStop = false;
 static bool s_allowAbort = false;
 static bool s_allowTrace = false;
@@ -828,6 +892,21 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	else
 	    return false;
     }
+    else if (oper.name() == YSTRING("configFile")) {
+	bool user = false;
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+		user = static_cast<ExpOperation*>(args[1])->valBoolean();
+		// fall through
+	    case 1:
+		ExpEvaluator::pushOne(stack,new ExpOperation(
+		    Engine::configFile(*static_cast<ExpOperation*>(args[0]),user)));
+		break;
+	    default:
+		return false;
+	}
+    }
     else if (oper.name() == YSTRING("setInterval") || oper.name() == YSTRING("setTimeout")) {
 	ObjList args;
 	if (extractArgs(stack,oper,context,args) < 2)
@@ -865,6 +944,86 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpOperation* id = static_cast<ExpOperation*>(args[0]);
 	bool ret = m_worker->removeEvent((unsigned int)id->valInteger(),oper.name() == YSTRING("clearInterval"));
 	ExpEvaluator::pushOne(stack,new ExpOperation(ret));
+    }
+    else if (oper.name() == YSTRING("atob")) {
+	// str = Engine.atob(b64_str)
+	ObjList args;
+	int argc = extractArgs(stack,oper,context,args);
+	if (argc < 1)
+	    return false;
+	Base64 b64;
+	b64 << *static_cast<ExpOperation*>(args[0]);
+	DataBlock buf;
+	if (b64.decode(buf)) {
+	    String tmp((const char*)buf.data(),buf.length());
+	    ExpEvaluator::pushOne(stack,new ExpOperation(tmp,"bin"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
+    }
+    else if (oper.name() == YSTRING("btoa")) {
+	// b64_str = Engine.btoa(str,line_len,add_eol)
+	ObjList args;
+	int argc = extractArgs(stack,oper,context,args);
+	if (argc < 1)
+	    return false;
+	int len = 0;
+	bool eol = false;
+	if (argc >= 3)
+	    eol = static_cast<ExpOperation*>(args[2])->valBoolean();
+	if (argc >= 2) {
+	    len = static_cast<ExpOperation*>(args[1])->valInteger();
+	    if (len < 0)
+		len = 0;
+	}
+	Base64 b64;
+	b64 << *static_cast<ExpOperation*>(args[0]);
+	String buf;
+	b64.encode(buf,len,eol);
+	ExpEvaluator::pushOne(stack,new ExpOperation(buf,"b64"));
+    }
+    else if (oper.name() == YSTRING("atoh")) {
+	// hex_str = Engine.atoh(b64_str,hex_sep,hex_upcase)
+	ObjList args;
+	int argc = extractArgs(stack,oper,context,args);
+	if (argc < 1)
+	    return false;
+	Base64 b64;
+	b64 << *static_cast<ExpOperation*>(args[0]);
+	DataBlock buf;
+	if (b64.decode(buf)) {
+	    char sep = (argc >= 2) ? static_cast<ExpOperation*>(args[1])->at(0) : '\0';
+	    bool upCase = (argc >= 3) && static_cast<ExpOperation*>(args[2])->valBoolean();
+	    String tmp;
+	    tmp.hexify(buf.data(),buf.length(),sep,upCase);
+	    ExpEvaluator::pushOne(stack,new ExpOperation(tmp,"hex"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
+    }
+    else if (oper.name() == YSTRING("htoa")) {
+	// b64_str = Engine.htoa(hex_str,line_len,add_eol)
+	ObjList args;
+	int argc = extractArgs(stack,oper,context,args);
+	if (argc < 1)
+	    return false;
+	Base64 b64;
+	if (b64.unHexify(*static_cast<ExpOperation*>(args[0]))) {
+	    int len = 0;
+	    bool eol = false;
+	    if (argc >= 3)
+		eol = static_cast<ExpOperation*>(args[2])->valBoolean();
+	    if (argc >= 2) {
+		len = static_cast<ExpOperation*>(args[1])->valInteger();
+		if (len < 0)
+		    len = 0;
+	    }
+	    String buf;
+	    b64.encode(buf,len,eol);
+	    ExpEvaluator::pushOne(stack,new ExpOperation(buf,"b64"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
     }
     else
 	return JsObject::runNative(stack,oper,context);
@@ -1314,7 +1473,7 @@ void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* co
 		}
 	    }
 	    if (idx >= 0 && idx < cols) {
-		JsArray* jsa = new JsArray(mutex());
+		JsArray* jsa = new JsArray(context,mutex());
 		for (int r = 1; r <= rows; r++) {
 		    GenObject* o = arr->get(idx,r);
 		    if (o)
@@ -1333,7 +1492,7 @@ void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* co
 		const String* name = YOBJECT(String,arr->get(c,0));
 		if (TelEngine::null(name))
 		    continue;
-		JsArray* jsa = new JsArray(mutex());
+		JsArray* jsa = new JsArray(context,mutex());
 		for (int r = 1; r <= rows; r++) {
 		    GenObject* o = arr->get(c,r);
 		    if (o)
@@ -1379,7 +1538,7 @@ void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* conte
 	}
 	else {
 	    // [ { col1: val11, col2: val12 }, { col1: val21, col2: val22 } ]
-	    JsArray* jsa = new JsArray(mutex());
+	    JsArray* jsa = new JsArray(context,mutex());
 	    for (int r = 1; r <= rows; r++) {
 		JsObject* jso = new JsObject("Object",mutex());
 		for (int c = 0; c < cols; c++) {
@@ -1663,6 +1822,226 @@ void JsFile::initialize(ScriptContext* context)
 }
 
 
+bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsConfigFile::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    ObjList args;
+    int argc = extractArgs(stack,oper,context,args);
+    if (oper.name() == YSTRING("name")) {
+	switch (argc) {
+	    case 0:
+		ExpEvaluator::pushOne(stack,new ExpOperation(m_config));
+		break;
+	    case 1:
+		m_config = *static_cast<ExpOperation*>(args[0]);
+		break;
+	    default:
+		return false;
+	}
+    }
+    else if (oper.name() == YSTRING("load")) {
+	switch (argc) {
+	    case 0:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.load(args[0]
+	    && static_cast<ExpOperation*>(args[0])->valBoolean())));
+    }
+    else if (oper.name() == YSTRING("save")) {
+	if (argc != 0)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.save()));
+    }
+    else if (oper.name() == YSTRING("count")) {
+	if (argc != 0)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_config.sections()));
+    }
+    else if (oper.name() == YSTRING("sections")) {
+	if (argc != 0)
+	    return false;
+	JsArray* jsa = new JsArray(context,mutex());
+	unsigned int n = m_config.sections();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedList* nl = m_config.getSection(i);
+	    if (nl)
+		jsa->params().addParam(new ExpWrapper(new JsConfigSection(this,*nl),*nl));
+	}
+	ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,"sections"));
+    }
+    else if (oper.name() == YSTRING("getSection")) {
+	bool create = false;
+	switch (argc) {
+	    case 2:
+		create = static_cast<ExpOperation*>(args[1])->valBoolean();
+		break;
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	if (create ? m_config.createSection(name) : m_config.getSection(name))
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(new JsConfigSection(this,name),name));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+    }
+    else if (oper.name() == YSTRING("getValue")) {
+	switch (argc) {
+	    case 2:
+	    case 3:
+		break;
+	    default:
+		return false;
+	}
+	const String& name = *static_cast<ExpOperation*>(args[1]);
+	static const char defVal[] = "default";
+	const char* val = m_config.getValue(*static_cast<ExpOperation*>(args[0]),name,defVal);
+	if (val == defVal) {
+	    if (args[2])
+		ExpEvaluator::pushOne(stack,static_cast<ExpOperation*>(args[2])->clone(name));
+	    else
+		ExpEvaluator::pushOne(stack,new ExpWrapper(0,name));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
+    }
+    else if (oper.name() == YSTRING("setValue")) {
+	if (argc != 3)
+	    return false;
+	m_config.setValue(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]),
+	    *static_cast<ExpOperation*>(args[2]));
+    }
+    else if (oper.name() == YSTRING("clearKey")) {
+	if (argc != 2)
+	    return false;
+	m_config.clearKey(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]));
+    }
+    else if (oper.name() == YSTRING("keys")) {
+	if (argc != 1)
+	    return false;
+	NamedList* sect = m_config.getSection(*static_cast<ExpOperation*>(args[0]));
+	if (sect) {
+	    JsArray* jsa = new JsArray(context,mutex());
+	    int32_t len = 0;
+	    for (const ObjList* l = sect->paramList()->skipNull(); l; l = l->skipNext()) {
+		jsa->push(new ExpOperation(static_cast<const NamedString*>(l->get())->name()));
+		len++;
+	    }
+	    jsa->setLength(len);
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,oper.name()));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,oper.name()));
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+JsObject* JsConfigFile::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsConfigFile::runConstructor '%s'("FMT64") [%p]",oper.name().c_str(),oper.number(),this);
+    bool warn = false;
+    const char* name = 0;
+    ObjList args;
+    switch (extractArgs(stack,oper,context,args)) {
+	case 2:
+	    warn = static_cast<ExpOperation*>(args[1])->valBoolean();
+	    // fall through
+	case 1:
+	    name = static_cast<ExpOperation*>(args[0])->c_str();
+	    // fall through
+	case 0:
+	    return new JsConfigFile(mutex(),name,warn);
+	default:
+	    return 0;
+    }
+}
+
+void JsConfigFile::initialize(ScriptContext* context)
+{
+    if (!context)
+	return;
+    Mutex* mtx = context->mutex();
+    Lock mylock(mtx);
+    NamedList& params = context->params();
+    if (!params.getParam(YSTRING("ConfigFile")))
+	addConstructor(params,"ConfigFile",new JsConfigFile(mtx));
+}
+
+
+bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsConfigSection::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    ObjList args;
+    int argc = extractArgs(stack,oper,context,args);
+    if (oper.name() == YSTRING("configFile")) {
+	if (argc != 0)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpWrapper(m_owner->ref() ? m_owner : 0));
+    }
+    else if (oper.name() == YSTRING("getValue")) {
+	switch (argc) {
+	    case 2:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	NamedList* sect = m_owner->config().getSection(toString());
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	static const char defVal[] = "default";
+	const char* val = sect ? sect->getValue(name,defVal) : defVal;
+	if (val == defVal) {
+	    if (args[1])
+		ExpEvaluator::pushOne(stack,static_cast<ExpOperation*>(args[1])->clone(name));
+	    else
+		ExpEvaluator::pushOne(stack,new ExpWrapper(0,name));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
+    }
+    else if (oper.name() == YSTRING("setValue")) {
+	if (argc != 2)
+	    return false;
+	NamedList* sect = m_owner->config().getSection(toString());
+	if (sect)
+	    sect->setParam(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]));
+    }
+    else if (oper.name() == YSTRING("clearKey")) {
+	if (argc != 1)
+	    return false;
+	NamedList* sect = m_owner->config().getSection(toString());
+	if (sect)
+	    sect->clearParam(*static_cast<ExpOperation*>(args[0]));
+    }
+    else if (oper.name() == YSTRING("keys")) {
+	if (argc != 0)
+	    return false;
+	NamedList* sect = m_owner->config().getSection(toString());
+	if (sect) {
+	    JsArray* jsa = new JsArray(context,mutex());
+	    int32_t len = 0;
+	    for (const ObjList* l = sect->paramList()->skipNull(); l; l = l->skipNext()) {
+		jsa->push(new ExpOperation(static_cast<const NamedString*>(l->get())->name()));
+		len++;
+	    }
+	    jsa->setLength(len);
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,oper.name()));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,oper.name()));
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+
 bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(&__plugin,DebugAll,"JsXML::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
@@ -1817,7 +2196,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	if (m_xml)
 	    xml = m_xml->findFirstChild(name,ns);
 	if (xml) {
-	    JsArray* jsa = new JsArray(mutex());
+	    JsArray* jsa = new JsArray(context,mutex());
 	    while (xml) {
 		jsa->push(new ExpWrapper(new JsXML(mutex(),xml,owner())));
 		xml = m_xml->findNextChild(xml,name,ns);
@@ -2374,6 +2753,7 @@ bool JsAssist::init()
     JsChannel::initialize(ctx,this);
     JsMessage::initialize(ctx);
     JsFile::initialize(ctx);
+    JsConfigFile::initialize(ctx);
     JsXML::initialize(ctx);
     if (ScriptRun::Invalid == m_runner->reset(true))
 	return false;
@@ -2596,7 +2976,7 @@ JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath)
     : NamedString(scriptName,fileName),
       m_inUse(true)
 {
-    m_jsCode.basePath(s_basePath);
+    m_jsCode.basePath(s_basePath,s_libsPath);
     if (relPath)
 	m_jsCode.adjustPath(*this);
     m_jsCode.link(s_allowLink);
@@ -2625,7 +3005,7 @@ JsGlobal::~JsGlobal()
 
 bool JsGlobal::fileChanged(const char* fileName) const
 {
-    return m_jsCode.scriptChanged(fileName,s_basePath);
+    return m_jsCode.scriptChanged(fileName,s_basePath,s_libsPath);
 }
 
 void JsGlobal::markUnused()
@@ -2704,6 +3084,7 @@ bool JsGlobal::runMain()
     JsEngine::initialize(runner->context());
     JsMessage::initialize(runner->context());
     JsFile::initialize(runner->context());
+    JsConfigFile::initialize(runner->context());
     JsXML::initialize(runner->context());
     ScriptRun::Status st = runner->run();
     TelEngine::destruct(runner);
@@ -2793,7 +3174,7 @@ bool JsModule::commandExecute(String& retVal, const String& line)
 bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* context)
 {
     JsParser parser;
-    parser.basePath(s_basePath);
+    parser.basePath(s_basePath,s_libsPath);
     parser.link(s_allowLink);
     parser.trace(s_allowTrace);
     if (!parser.parse(cmd)) {
@@ -2806,6 +3187,7 @@ bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* con
 	JsEngine::initialize(runner->context());
 	JsMessage::initialize(runner->context());
 	JsFile::initialize(runner->context());
+	JsConfigFile::initialize(runner->context());
 	JsXML::initialize(runner->context());
     }
     ScriptRun::Status st = runner->run();
@@ -2974,9 +3356,15 @@ void JsModule::initialize()
     String tmp = Engine::sharedPath();
     tmp << Engine::pathSeparator() << "scripts";
     tmp = cfg.getValue("general","scripts_dir",tmp);
-    if (!tmp.endsWith(Engine::pathSeparator()))
+    Engine::runParams().replaceParams(tmp);
+    if (tmp && !tmp.endsWith(Engine::pathSeparator()))
 	tmp += Engine::pathSeparator();
     s_basePath = tmp;
+    tmp = cfg.getValue("general","include_dir","${configpath}");
+    Engine::runParams().replaceParams(tmp);
+    if (tmp && !tmp.endsWith(Engine::pathSeparator()))
+	tmp += Engine::pathSeparator();
+    s_libsPath = tmp;
     s_allowAbort = cfg.getBoolValue("general","allow_abort");
     bool changed = false;
     if (cfg.getBoolValue("general","allow_trace") != s_allowTrace) {
@@ -2988,12 +3376,13 @@ void JsModule::initialize()
 	changed = true;
     }
     tmp = cfg.getValue("general","routing");
+    Engine::runParams().replaceParams(tmp);
     lock();
-    if (changed || m_assistCode.scriptChanged(tmp,s_basePath)) {
+    if (changed || m_assistCode.scriptChanged(tmp,s_basePath,s_libsPath)) {
 	m_assistCode.clear();
 	m_assistCode.link(s_allowLink);
 	m_assistCode.trace(s_allowTrace);
-	m_assistCode.basePath(s_basePath);
+	m_assistCode.basePath(s_basePath,s_libsPath);
 	m_assistCode.adjustPath(tmp);
 	if (m_assistCode.parseFile(tmp))
 	    Debug(this,DebugInfo,"Parsed routing script: %s",tmp.c_str());
@@ -3007,8 +3396,11 @@ void JsModule::initialize()
 	unsigned int len = sect->length();
 	for (unsigned int i=0; i<len; i++) {
 	    NamedString *n = sect->getParam(i);
-	    if (n)
-		JsGlobal::initScript(n->name(),*n);
+	    if (n) {
+		tmp = *n;
+		Engine::runParams().replaceParams(tmp);
+		JsGlobal::initScript(n->name(),tmp);
+	    }
 	}
     }
     JsGlobal::freeUnused();

@@ -218,7 +218,7 @@ QueuedCall::QueuedCall(const String& queue, const String& chan, unsigned int sta
     int queuePrio, int callerPrio)
     : Mutex(true,"QueuedCall"),
     m_queue(queue), m_channelid(chan),
-    m_queuePrio(m_queuePrio), m_callerPrio(callerPrio),
+    m_queuePrio(queuePrio), m_callerPrio(callerPrio),
     m_startTime(start), m_caller(caller),
     m_called(called), m_callername(callername),
     m_destroyTime(0)

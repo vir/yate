@@ -729,7 +729,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 		ok = buf.matches(r);
 	    }
 	    if (ok) {
-		JsArray* jsa = new JsArray(mutex());
+		JsArray* jsa = new JsArray(context,mutex());
 		for (int i = 0; i <= buf.matchCount(); i++)
 		    jsa->push(new ExpOperation(buf.matchString(i)));
 		jsa->params().addParam(new ExpOperation((int64_t)buf.matchOffset(),"index"));
@@ -808,7 +808,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
     } while (false);
     if (name == YSTRING("split")) {
 	ObjList args;
-	JsArray* array = new JsArray(mutex());
+	JsArray* array = new JsArray(context,mutex());
 	if (!(extractArgs(stack,oper,context,args) && args.skipNull()))
 	    SPLIT_EMPTY();
 	String* s = static_cast<String*>(args[0]);
@@ -839,6 +839,10 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	extractArgs(stack,oper,context,args);
 	ExpOperation* op = YOBJECT(ExpOperation,str);
 	if (op && op->isInteger()) {
+	    if (op->isBoolean()) {
+		ExpEvaluator::pushOne(stack,new ExpOperation(String::boolText(op->valBoolean())));
+		return true;
+	    }
 	    ExpOperation* tmp = static_cast<ExpOperation*>(args[0]);
 	    int radix = tmp ? (int)tmp->valInteger() : 0;
 	    if (radix < 2 || radix > 36)
@@ -1215,7 +1219,7 @@ bool JsCode::preProcessInclude(ParsePoint& expr, bool once, GenObject* context)
 	String str;
 	if (ExpEvaluator::getString(expr,str)) {
 	    DDebug(this,DebugAll,"Found include '%s'",str.safe());
-	    parser->adjustPath(str);
+	    parser->adjustPath(str,true);
 	    str.trimSpaces();
 	    bool ok = !str.null();
 	    if (ok) {
@@ -3364,11 +3368,14 @@ bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject*
 
 
 // Adjust a script file include path
-void JsParser::adjustPath(String& script) const
+void JsParser::adjustPath(String& script, bool extraInc) const
 {
     if (script.null() || script.startsWith(Engine::pathSeparator()))
 	return;
-    script = m_basePath + script;
+    if (extraInc && m_includePath && File::exists(m_includePath + script))
+	script = m_includePath + script;
+    else
+	script = m_basePath + script;
 }
 
 // Create Javascript context

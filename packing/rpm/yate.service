@@ -1,0 +1,20 @@
+[Unit]
+Description=YATE Telephony Server
+Documentation=man:yate(8)
+After=network.target
+After=mysql.service
+After=postgresql.service
+
+[Service]
+Type=forking
+ExecStart=/usr/bin/yate -d -p /var/run/yate.pid $OPTS
+ExecReload=/bin/kill -HUP $MAINPID
+PIDFile=/var/run/yate.pid
+TimeoutSec=30
+# Default Yate command line options, do not edit them here
+Environment="OPTS=-F -s -r -l /var/log/yate -vvv -Df" "PWLIB_ASSERT_ACTION=C"
+# To override create file /etc/sysconfig/yate and put OPTS=... in it
+EnvironmentFile=-/etc/sysconfig/yate
+
+[Install]
+WantedBy=multi-user.target

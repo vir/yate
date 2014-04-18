@@ -1,3 +1,9 @@
+yate (5.2.1~vir2014041801) UNRELEASED; urgency=low
+
+  * Merged upsetream updates and fixes
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Fri, 18 Apr 2014 14:11:15 +0400
+
 yate (5.1.1~vir2014030101) UNRELEASED; urgency=low
 
   * Merged upsetream updates and fixes (like eliza chat bot)

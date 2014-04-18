@@ -1060,6 +1060,47 @@ bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
     return true;
 }
 
+JsObject* JsRegExp::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    ObjList args;
+    switch (extractArgs(stack,oper,context,args)) {
+	case 1:
+	case 2:
+	    break;
+	default:
+	    return 0;
+    }
+    ExpOperation* pattern = static_cast<ExpOperation*>(args[0]);
+    ExpOperation* flags = static_cast<ExpOperation*>(args[1]);
+    if (!pattern)
+	return 0;
+    bool insensitive = false;
+    bool extended = true;
+    if (flags)  {
+	const char* f = *flags;
+	char c = *f++;
+	while (c) {
+	    switch (c) {
+		case 'i':
+		    c = *f++;
+		    insensitive = true;
+		    break;
+		case 'b':
+		    c = *f++;
+		    extended = false;
+		    break;
+		default:
+		    c = 0;
+	    }
+	}
+    }
+    if (!ref())
+	return 0;
+    JsRegExp* obj = new JsRegExp(mutex(),*pattern,*pattern,insensitive,extended);
+    obj->params().addParam(new ExpWrapper(this,protoName()));
+    return obj;
+}
+
 
 bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {

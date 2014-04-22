@@ -1,22 +1,22 @@
 # Makefile
-# This file holds the make rules for the libyatejabber
+# This file holds the make rules for the libyateice
 
 DEBUG :=
 
 CXX  := @CXX@ -Wall
 AR  := ar
 DEFS :=
-INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@/../yxml -I@srcdir@/../yice -I@srcdir@
+INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@/../yxml -I@srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@
 SONAME_OPT := @SONAME_OPT@
 YATELIBS := -L../.. -lyate @LIBS@
-INCFILES := @top_srcdir@/yateclass.h @srcdir@/../yxml/yatexml.h @srcdir@/../yice/yateice.h @srcdir@/xmpputils.h @srcdir@/yatejabber.h @srcdir@/yatejingle.h
+INCFILES := @top_srcdir@/yateclass.h @srcdir@/../yxml/yatexml.h
 
 PROGS=
-LIBS = libyatejabber.a
-OBJS = xmpputils.o jbstream.o jbengine.o session.o jgengine.o
-LIBD_DEV:= libyatejabber.so
+LIBS = libyateice.a
+OBJS = ice.o
+LIBD_DEV:= libyateice.so
 LIBD_VER:= $(LIBD_DEV).@PACKAGE_VERSION@
 LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)
 YXML:= ../yxml/libyatexml.a

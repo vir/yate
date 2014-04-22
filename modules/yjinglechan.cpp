@@ -253,7 +253,7 @@ protected:
     bool startRtp();
     // Check a received candidate's parameters
     // Return false if some parameter's value is incorrect
-    bool checkRecvCandidate(JGSessionContent& content, JGRtpCandidate& candidate);
+    bool checkRecvCandidate(JGSessionContent& content, IceRtpCandidate& candidate);
     // Check a received content(s). Fill received lists with accepted/rejected content(s)
     // The lists don't own their pointers
     // Return false on error
@@ -2263,10 +2263,10 @@ bool YJGConnection::processStreamHosts(JGEvent* ev)
 bool YJGConnection::updateCandidate(unsigned int component, JGSessionContent& local,
     JGSessionContent& recv)
 {
-    JGRtpCandidate* rtpRecv = recv.m_rtpRemoteCandidates.findByComponent(component);
+    IceRtpCandidate* rtpRecv = recv.m_rtpRemoteCandidates.findByComponent(component);
     if (!rtpRecv)
 	return false;
-    JGRtpCandidate* rtp = local.m_rtpRemoteCandidates.findByComponent(component);
+    IceRtpCandidate* rtp = local.m_rtpRemoteCandidates.findByComponent(component);
 #ifdef DEBUG
     String s1;
     String s2;
@@ -2381,7 +2381,7 @@ void YJGConnection::removeCurrentAudioContent(bool removeReq)
     bool check = (m_audioContent->isSession() == isAnswered());
     bool removeFromList = removeReq;
     if (check && (0 != m_audioContent->m_rtpMedia.m_cryptoLocal.skipNull())) {
-	JGRtpCandidate* rtpLocal = m_audioContent->m_rtpLocalCandidates.findByComponent(1);
+	IceRtpCandidate* rtpLocal = m_audioContent->m_rtpLocalCandidates.findByComponent(1);
 	if (rtpLocal && rtpLocal->m_address) {
 	    removeFromList = true;
 	    // Build a new content
@@ -2455,7 +2455,7 @@ bool YJGConnection::resetCurrentAudioContent(bool session, bool earlyMedia,
 	m_audioContent = newContent;
 	Debug(this,DebugAll,"Using audio content '%s' [%p]",
 	    m_audioContent->toString().c_str(),this);
-	JGRtpCandidate* rtp = m_audioContent->m_rtpLocalCandidates.findByComponent(1);
+	IceRtpCandidate* rtp = m_audioContent->m_rtpLocalCandidates.findByComponent(1);
 	if (!(rtp && rtp->m_address))
 	    initLocalCandidates(*m_audioContent,sendTransInfo);
 	// Reset ring content sent flag
@@ -2482,8 +2482,8 @@ bool YJGConnection::startRtp()
     if (m_sessVersion == JGSession::Version0 && m_rtpStarted)
 	return true;
 
-    JGRtpCandidate* rtpLocal = m_audioContent->m_rtpLocalCandidates.findByComponent(1);
-    JGRtpCandidate* rtpRemote = m_audioContent->m_rtpRemoteCandidates.findByComponent(1);
+    IceRtpCandidate* rtpLocal = m_audioContent->m_rtpLocalCandidates.findByComponent(1);
+    IceRtpCandidate* rtpRemote = m_audioContent->m_rtpRemoteCandidates.findByComponent(1);
     if (!(rtpLocal && rtpRemote)) {
 	Debug(this,DebugNote,
 	    "Failed to start RTP for content='%s' candidates local=%s remote=%s [%p]",
@@ -2599,7 +2599,7 @@ bool YJGConnection::startRtp()
 
 // Check a received candidate's parameters
 // Return false if some parameter's value is incorrect
-bool YJGConnection::checkRecvCandidate(JGSessionContent& content, JGRtpCandidate& c)
+bool YJGConnection::checkRecvCandidate(JGSessionContent& content, IceRtpCandidate& c)
 {
     // Check address and port for all
     if (!c.m_address || c.m_port.toInteger() <= 0)
@@ -2689,7 +2689,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 
 	// Check candidates
 	// XEP-0177 Raw UDP: the content must contain valid transport data
-	JGRtpCandidate* rtp = c->m_rtpRemoteCandidates.findByComponent(1);
+	IceRtpCandidate* rtp = c->m_rtpRemoteCandidates.findByComponent(1);
 	if (rtp) {
 	    if (!checkRecvCandidate(*c,*rtp)) {
 		Debug(this,DebugNote,
@@ -2706,7 +2706,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	    remove.append(c)->setDelete(false);
 	    continue;
 	}
-	JGRtpCandidate* rtcp = c->m_rtpRemoteCandidates.findByComponent(2);
+	IceRtpCandidate* rtcp = c->m_rtpRemoteCandidates.findByComponent(2);
 	if (rtcp && !checkRecvCandidate(*c,*rtcp)) {
 	    Debug(this,DebugNote,
 		"Event(%s) content='%s' has invalid RTCP candidate [%p]",
@@ -2853,7 +2853,7 @@ bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTran
 {
     if (m_hangup)
 	return false;
-    JGRtpCandidate* rtp = content.m_rtpLocalCandidates.findByComponent(1);
+    IceRtpCandidate* rtp = content.m_rtpLocalCandidates.findByComponent(1);
     bool incGeneration = (0 != rtp);
     if (!rtp) {
 	bool nonP2P = content.type() != JGSessionContent::RtpP2P &&
@@ -2874,7 +2874,7 @@ bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTran
     if (m_localip)
 	m.addParam("localip",m_localip);
     else if (!plugin.addLocalIp(m)) {
-	JGRtpCandidate* remote = content.m_rtpRemoteCandidates.findByComponent(1);
+	IceRtpCandidate* remote = content.m_rtpRemoteCandidates.findByComponent(1);
 	if (remote && remote->m_address)
 	    m.addParam("remoteip",remote->m_address);
     }
@@ -3659,7 +3659,7 @@ void YJGConnection::sendRinging(NamedList* params)
     if (sendContent) {
 	if (!m_audioContent || m_audioContent->isEarlyMedia())
 	    resetCurrentAudioContent(true,false,true,0,false);
-	JGRtpCandidate* rtp = m_audioContent ? m_audioContent->m_rtpLocalCandidates.findByComponent(1) : 0;
+	IceRtpCandidate* rtp = m_audioContent ? m_audioContent->m_rtpLocalCandidates.findByComponent(1) : 0;
 	if (rtp && rtp->m_address) {
 	    cXml = m_audioContent->toXml(false,true,true,true,false);
 	    m_ringFlags |= RingContentSent;

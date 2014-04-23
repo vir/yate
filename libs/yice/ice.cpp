@@ -16,6 +16,20 @@ void IceRtpCandidate::fromSDPAttribute(const String& str, const IceRtpCandidates
 {
 }
 
+// Utility function needed for debug: dump a candidate to a string
+void IceRtpCandidate::dump(String& buf, char sep = ' ')
+{
+    buf << "name=" << *c;
+    buf << sep << "addr=" << c->m_address;
+    buf << sep << "port=" << c->m_port;
+    buf << sep << "component=" << c->m_component;
+    buf << sep << "generation=" << c->m_generation;
+    buf << sep << "network=" << c->m_network;
+    buf << sep << "priority=" << c->m_priority;
+    buf << sep << "protocol=" << c->m_protocol;
+    buf << sep << "type=" << c->m_type;
+}
+
 /*
  * IceRtpCandidates
  */

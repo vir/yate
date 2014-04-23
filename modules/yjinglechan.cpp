@@ -712,20 +712,7 @@ static void dumpCandidate(String& buf, JGRtpCandidate* c, char sep = ' ')
 {
     if (!c)
 	return;
-    buf << "name=" << *c;
-    buf << sep << "addr=" << c->m_address;
-    buf << sep << "port=" << c->m_port;
-    buf << sep << "component=" << c->m_component;
-    buf << sep << "generation=" << c->m_generation;
-    buf << sep << "network=" << c->m_network;
-    buf << sep << "priority=" << c->m_priority;
-    buf << sep << "protocol=" << c->m_protocol;
-    buf << sep << "type=" << c->m_type;
-    JGRtpCandidateP2P* p2p = YOBJECT(JGRtpCandidateP2P,c);
-    if (p2p) {
-	buf << sep << "username=" << p2p->m_username;
-	buf << sep << "password=" << p2p->m_password;
-    }
+    c->dump(buf, sep);
 }
 #endif
 

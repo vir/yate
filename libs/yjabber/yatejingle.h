@@ -483,6 +483,13 @@ public:
      */
     void fromXml(XmlElement* xml, const JGRtpCandidates& container);
 
+    /**
+     * Utility function needed for debug: dump a candidate to a string
+     * @param buf String buffer
+     * @param sep Parameters separator character
+     */
+    virtual void dump(String& buf, char sep = ' ');
+
     String m_username;
     String m_password;
 };

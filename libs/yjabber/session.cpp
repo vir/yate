@@ -663,6 +663,13 @@ void JGRtpCandidateP2P::fromXml(XmlElement* xml, const JGRtpCandidates& containe
     m_password = xml->attribute("password");
 }
 
+// Utility function needed for debug: dump a candidate to a string
+void JGRtpCandidateP2P::dump(String& buf, char sep)
+{
+    IceRtpCandidate::dump(buf, sep);
+    buf << sep << "username=" << m_username;
+    buf << sep << "password=" << m_password;
+}
 
 /*
  * JGRtpCandidates

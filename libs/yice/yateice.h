@@ -67,6 +67,13 @@ public:
      */
     virtual void fromSDPAttribute(const String& str, const IceRtpCandidates& container);
 
+    /**
+     * Utility function needed for debug: dump a candidate to a string
+     * @param buf String buffer
+     * @param sep Parameters separator character
+     */
+    virtual void dump(String& buf, char sep = ' ');
+
     String m_address;
     String m_port;
     String m_component;                  // Candidate component

@@ -410,6 +410,8 @@ private:
     // Address authenticated ?
     bool m_notFound;                     // Flag set when we found the right address for the remote peer
     String m_security;                   // Random string used to build id for a binding request
+    bool m_rfc5389;                      // RFC5389 - "new" stun (XOR mapped addr and others - used in ICE).
+    String m_localPassword, m_remotePassword; // passwords used in message integrity checks
 };
 
 /**
@@ -939,7 +941,8 @@ YStunSocketFilter::YStunSocketFilter()
       m_bindReq(0),
       m_bindReqMutex(true,"YStunSocketFilter::bindReq"),
       m_bindReqNext(0),
-      m_notFound(true)
+      m_notFound(true),
+      m_rfc5389(false)
 {
     DDebug(&iplugin,DebugAll,"YStunSocketFilter. [%p]",this);
     for (; m_security.length() < FILTER_SECURITYLENGTH; )
@@ -1007,6 +1010,11 @@ bool YStunSocketFilter::install(Socket* sock, const Message* msg)
     m_remoteAddr.host(msg->getValue("remoteip"));
     m_remoteAddr.port(msg->getIntValue("remoteport"));
     m_userId = msg->getValue("userid");
+    m_rfc5389 = msg->getBoolValue("rfc5389");
+    if(rfc5389) {
+	m_localPassword = msg->getValue("localpassword");
+	m_remotePassword = msg->getValue("remotepassword");
+    }
     // Install
     if (!sock->installFilter(this)) {
 	Debug(&iplugin,DebugGoOn,

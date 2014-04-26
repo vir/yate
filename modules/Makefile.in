@@ -339,6 +339,7 @@ yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate client/jabbercl
 yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate client/jabberclient.yate: LOCALFLAGS = -I@top_srcdir@/libs/yjabber
 yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate client/jabberclient.yate: LOCALLIBS = -lyatejabber
 yjinglechan.yate: LOCALFLAGS += -I@top_srcdir@/libs/yice
+yjinglechan.yate: LOCALFLAGS += -lyateice
 
 server/dbpbx.yate server/pbxassist.yate: ../libs/ypbx/libyatepbx.a
 server/dbpbx.yate server/pbxassist.yate: LOCALFLAGS = -I@top_srcdir@/libs/ypbx
@@ -347,10 +348,14 @@ server/dbpbx.yate server/pbxassist.yate: LOCALLIBS = -L../libs/ypbx -lyatepbx
 server/mgcpca.yate: ../libyatemgcp.so ../libyatesig.so ../libs/ysdp/libyatesdp.a
 server/mgcpca.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/ysdp
 server/mgcpca.yate: LOCALLIBS = -lyatemgcp -lyatesig -L../libs/ysdp -lyatesdp
+server/mgcpca.yate: LOCALFLAGS += -I@top_srcdir@/libs/yice
+server/mgcpca.yate: LOCALFLAGS += -lyateice
 
 server/mgcpgw.yate: ../libyatemgcp.so ../libs/ysdp/libyatesdp.a
 server/mgcpgw.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysdp
 server/mgcpgw.yate: LOCALLIBS = -lyatemgcp -L../libs/ysdp -lyatesdp
+server/mgcpgw.yate: LOCALFLAGS += -I@top_srcdir@/libs/yice
+server/mgcpgw.yate: LOCALFLAGS += -lyateice
 
 server/lksctp.yate: EXTERNFLAGS = @SCTP_FLAGS@
 server/lksctp.yate: EXTERNLIBS = -lsctp
@@ -382,6 +387,8 @@ faxchan.yate: EXTERNLIBS = $(SPANDSP_LIB)
 ysipchan.yate: ../libs/ysip/libyatesip.a ../libs/ysdp/libyatesdp.a
 ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysip -I@top_srcdir@/libs/ysdp
 ysipchan.yate: LOCALLIBS = -L../libs/ysip -lyatesip -L../libs/ysdp -lyatesdp
+ysipchan.yate: LOCALFLAGS += -I@top_srcdir@/libs/yice
+ysipchan.yate: LOCALFLAGS += -lyateice
 
 yrtpchan.yate: ../libs/yrtp/libyatertp.a
 yrtpchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yrtp

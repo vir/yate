@@ -53,6 +53,7 @@ namespace TelEngine {
 class SDPMedia;
 class SDPSession;
 class SDPParser;
+class IceRtpCandidates;
 
 /**
  * This class holds a single SDP media description
@@ -325,6 +326,14 @@ public:
      */
     void putMedia(NamedList& msg, bool putPort = true);
 
+    void ice(IceRtpCandidates* c, bool remote);
+
+    const IceRtpCandidates* localIceCandidates() const
+	{ return m_lIceCandidates; }
+
+    const IceRtpCandidates* remoteIceCandidates() const
+	{ return m_rIceCandidates; }
+
 private:
     bool m_audio;
     bool m_video;
@@ -358,6 +367,10 @@ private:
     String m_rCrypto;
     // local security descriptor
     String m_lCrypto;
+    // local ICE candidates
+    IceRtpCandidates* m_lIceCandidates;
+    // remote ICE candidates
+    IceRtpCandidates* m_rIceCandidates;
 };
 
 
@@ -613,6 +626,13 @@ public:
      * @return The message with user data set but no media information
      */
     virtual Message* buildChanRtp(RefObject* context) = 0;
+
+    /**
+     * Build a socket.stun message
+     * @param context Pointer to reference counted user provided context
+     * @return The message with user data set
+     */
+    virtual Message* buildSocketStun(RefObject* context) = 0;
 
     /**
      * Check if local RTP data changed for at least one media

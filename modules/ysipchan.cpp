@@ -984,6 +984,7 @@ public:
 
 protected:
     virtual Message* buildChanRtp(RefObject* context);
+    virtual Message* buildSocketStun(RefObject* context);
     MimeSdpBody* createProvisionalSDP(Message& msg);
     virtual void mediaChanged(const SDPMedia& media);
     virtual void dispatchingRtp(Message*& msg, SDPMedia* media);
@@ -6390,6 +6391,15 @@ Message* YateSIPConnection::buildChanRtp(RefObject* context)
 	m->addParam("call_billid",billid());
 	m->userData(static_cast<CallEndpoint*>(this));
     }
+    return m;
+}
+
+// Build socket.stun message
+Message* YateSIPConnection::buildSocketStun(RefObject* context)
+{
+    Message* m = new Message("socket.stun");
+    if (context)
+	m->userData(context);
     return m;
 }
 

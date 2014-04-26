@@ -20,6 +20,7 @@
  */
 
 #include <yatesdp.h>
+#include <yateice.h>
 
 namespace TelEngine {
 
@@ -123,6 +124,29 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
 	return false;
     }
     media->update(*m,start);
+
+    const IceRtpCandidates* iceLocal = media->localIceCandidates();
+    if(iceLocal) {
+	const IceRtpCandidates* iceRemote = media->remoteIceCandidates();
+	// Start STUN
+	Message* msg = buildSocketStun(m->userData());
+	if(msg) {
+	    //IceRtpCandidate* local =  YOBJECT(IceRtpCandidate,iceLocal);
+	    //IceRtpCandidate* remote = YOBJECT(IceRtpCandidate,iceRemote);
+	    msg->addParam("localusername",iceLocal->m_ufrag);
+	    msg->addParam("localpassword",iceLocal->m_password);
+	    if(iceRemote) {
+		msg->addParam("remoteusername",iceRemote->m_ufrag);
+		msg->addParam("remotepassword",iceRemote->m_password);
+		//msg->addParam("remoteip",m->getValue("remoteip"));
+		//msg->addParam("remoteport",rtpRemote->m_port);
+	    }
+	    msg->addParam("userid", m->getValue("rtpid"));
+	    msg->addParam("rfc5389", String::boolText(true));
+	    Engine::enqueue(msg);
+	}
+    }
+
     if (!pick) {
 	TelEngine::destruct(m);
 	return true;
@@ -562,6 +586,14 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	    sdp->addLine("a","crypto:" + m->localCrypto());
 	    if (!enc)
 		sdp->addLine("a","encryption:optional");
+	}
+	const IceRtpCandidates* ice = m->localIceCandidates();
+	if(ice) {
+	    for (ObjList* o = ice->skipNull(); o; o = o->skipNext())
+		sdp->addLine("a", ((static_cast<IceRtpCandidate*>(o->get()))->toSDPAttribute(*ice)));
+	    sdp->addLine("a", ice->toSDPAttribute(false));
+	    sdp->addLine("a", ice->toSDPAttribute(true));
+	    sdp->addLine("a", "ice-lite");
 	}
     }
 

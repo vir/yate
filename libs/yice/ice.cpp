@@ -9,6 +9,18 @@ using namespace TelEngine;
 // Create a 'a=candidate:...' line from this object
 String IceRtpCandidate::toSDPAttribute(const IceRtpCandidates& container) const
 {
+    String s = "candidate:";
+    s << m_generation << " " << m_component << " "; // foundation
+    s << m_protocol << " "; // transport
+    s << m_priority << " ";
+    s << m_address << " ";
+    s << m_port;
+    s << " " << m_type;
+#if 0
+    s << " " << m_rel_addr;
+    s << " " << m_rel_port;
+#endif
+    return s;
 }
 
 // Fill this object from a candidate SDP addtribute
@@ -17,17 +29,17 @@ void IceRtpCandidate::fromSDPAttribute(const String& str, const IceRtpCandidates
 }
 
 // Utility function needed for debug: dump a candidate to a string
-void IceRtpCandidate::dump(String& buf, char sep = ' ')
+void IceRtpCandidate::dump(String& buf, char sep)
 {
-    buf << "name=" << *c;
-    buf << sep << "addr=" << c->m_address;
-    buf << sep << "port=" << c->m_port;
-    buf << sep << "component=" << c->m_component;
-    buf << sep << "generation=" << c->m_generation;
-    buf << sep << "network=" << c->m_network;
-    buf << sep << "priority=" << c->m_priority;
-    buf << sep << "protocol=" << c->m_protocol;
-    buf << sep << "type=" << c->m_type;
+    buf << "name=" << *this;
+    buf << sep << "addr=" << m_address;
+    buf << sep << "port=" << m_port;
+    buf << sep << "component=" << m_component;
+    buf << sep << "generation=" << m_generation;
+    buf << sep << "network=" << m_network;
+    buf << sep << "priority=" << m_priority;
+    buf << sep << "protocol=" << m_protocol;
+    buf << sep << "type=" << m_type;
 }
 
 /*
@@ -72,6 +84,14 @@ void IceRtpCandidates::generateOldIceToken(String& dest)
     dest = dest.substr(0,16);
 }
 
+String IceRtpCandidates::toSDPAttribute(bool password) const
+{
+    if(password)
+	return YSTRING("ice-pwd:") + m_password;
+    else
+	return YSTRING("ice-ufrag:") + m_ufrag;
+
+}
 
 /* vi: set ts=8 sw=4 sts=4 noet: */
 

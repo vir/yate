@@ -2,7 +2,6 @@
 #define __YATEICE_H
 
 #include <yateclass.h>
-#include <yatexml.h>
 
 #ifdef _WINDOWS
 
@@ -124,6 +123,8 @@ public:
      * @param dest Destination string
      */
     static void generateOldIceToken(String& dest);
+
+    virtual String toSDPAttribute(bool password) const;
 
     String m_password;
     String m_ufrag;

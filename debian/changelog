@@ -1,4 +1,4 @@
-yate (5.2.1~svn5825) UNRELEASED; urgency=low
+yate (5.3.0~svn5826) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1111,8 +1111,9 @@ yate (5.2.1~svn5825) UNRELEASED; urgency=low
     support it.
   * Updated to SVN revision 5825: + Added support for Javascript RegExp
     constructor from string.
+  * Updated to SVN revision 5826: + Bumped version to 5.3.0 release.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 19 Apr 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 27 Apr 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

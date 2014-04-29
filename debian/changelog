@@ -1,4 +1,4 @@
-yate (5.3.1~svn5828) UNRELEASED; urgency=low
+yate (5.3.1~svn5829) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1113,8 +1113,10 @@ yate (5.3.1~svn5828) UNRELEASED; urgency=low
     constructor from string.
   * Updated to SVN revision 5826: + Bumped version to 5.3.0 release.
   * Updated to SVN revision 5828: + Bumped version to 5.3.1 devel.
+  * Updated to SVN revision 5829: + Fixes a warning caused on some
+    versions of MySQL.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 29 Apr 2014 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 30 Apr 2014 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

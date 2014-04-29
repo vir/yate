@@ -620,7 +620,7 @@ MYSQL_VER=`(mysql_config --version) 2>/dev/null`
 if [[ x`echo "$MYSQL_INC $MYSQL_LIB $MYSQL_VER" | wc -l | sed 's/^ *//g'` != "x1" ]]; then
 MYSQL_INC=""
 fi
-if [[ ! -f `echo "$MYSQL_INC" | sed 's,^-I\(.*\)$,\1/mysql.h,'` ]]; then
+if [[ ! -f `echo "$MYSQL_INC" | sed -n 's,^-I\([^ ]\+\)\( .*\)\?$,\1/mysql.h,p'` ]]; then
 MYSQL_INC=""
 fi
 if [[ "x$MYSQL_INC" != "x" -a "x$MYSQL_LIB" != "x" -a "x$MYSQL_VER" != "x" ]]; then

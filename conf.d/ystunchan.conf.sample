@@ -1,4 +1,6 @@
 [general]
+; software: string: String to set in SOFTWARE STUN attributes
+;software=YATE/3.0.0
 
 
 [filters]

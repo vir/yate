@@ -345,13 +345,13 @@ server/dbpbx.yate server/pbxassist.yate: ../libs/ypbx/libyatepbx.a
 server/dbpbx.yate server/pbxassist.yate: LOCALFLAGS = -I@top_srcdir@/libs/ypbx
 server/dbpbx.yate server/pbxassist.yate: LOCALLIBS = -L../libs/ypbx -lyatepbx
 
-server/mgcpca.yate: ../libyatemgcp.so ../libyatesig.so ../libs/ysdp/libyatesdp.a
+server/mgcpca.yate: ../libyatemgcp.so ../libyatesig.so ../libs/ysdp/libyatesdp.a ../libs/yice/libyateice.a
 server/mgcpca.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/ysdp
 server/mgcpca.yate: LOCALLIBS = -lyatemgcp -lyatesig -L../libs/ysdp -lyatesdp
 server/mgcpca.yate: LOCALFLAGS += -I@top_srcdir@/libs/yice
 server/mgcpca.yate: LOCALFLAGS += -lyateice
 
-server/mgcpgw.yate: ../libyatemgcp.so ../libs/ysdp/libyatesdp.a
+server/mgcpgw.yate: ../libyatemgcp.so ../libs/ysdp/libyatesdp.a ../libs/yice/libyateice.a
 server/mgcpgw.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysdp
 server/mgcpgw.yate: LOCALLIBS = -lyatemgcp -L../libs/ysdp -lyatesdp
 server/mgcpgw.yate: LOCALFLAGS += -I@top_srcdir@/libs/yice
@@ -384,7 +384,7 @@ amrnbcodec.yate: EXTERNLIBS = @AMRNB_LIB@
 faxchan.yate: EXTERNFLAGS = $(SPANDSP_INC)
 faxchan.yate: EXTERNLIBS = $(SPANDSP_LIB)
 
-ysipchan.yate: ../libs/ysip/libyatesip.a ../libs/ysdp/libyatesdp.a
+ysipchan.yate: ../libs/ysip/libyatesip.a ../libs/ysdp/libyatesdp.a ../libs/yice/libyateice.a
 ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysip -I@top_srcdir@/libs/ysdp
 ysipchan.yate: LOCALLIBS = -L../libs/ysip -lyatesip -L../libs/ysdp -lyatesdp
 ysipchan.yate: LOCALFLAGS += -I@top_srcdir@/libs/yice
@@ -465,3 +465,7 @@ server/ysnmpagent.yate: LOCALLIBS = -L../libs/yasn -lyasn -L../libs/ysnmp -lysnm
 
 ../libs/ysnmp/libysnmp.a: @top_srcdir@/libs/ysnmp/yatesnmp.h
 	$(MAKE) -C ../libs/ysnmp
+
+../libs/yice/libyateice.a: @top_srcdir@/libs/yice/yateice.h @top_srcdir@/libs/yice/ice.cpp
+	$(MAKE) -C ../libs/yice
+

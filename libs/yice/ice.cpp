@@ -15,7 +15,7 @@ String IceRtpCandidate::toSDPAttribute(const IceRtpCandidates& container) const
     s << m_priority << " ";
     s << m_address << " ";
     s << m_port;
-    s << " " << m_type;
+    s << " typ " << m_type;
 #if 0
     s << " " << m_rel_addr;
     s << " " << m_rel_port;

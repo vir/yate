@@ -150,19 +150,20 @@ void SDPMedia::update(const NamedList& msg, bool pickFormat)
 	    }
 	}
     }
-    IceRtpCandidate* c;
+    IceRtpCandidate* c = NULL;
     if(!m_lIceCandidates) {
 	m_lIceCandidates = new IceRtpCandidates();
 	m_lIceCandidates->generateIceAuth();
 	c = new IceRtpCandidate(m_id + "_candidate_" + String((int)Random::random()));
 	c->m_component = 1; // rtp
-	c->m_generation = 1;
-	c->m_protocol = "UDP";
+	c->m_generation = 666;
+	c->m_priority = 10;
+	c->m_protocol = "udp";
 	c->m_type = "host";
 	m_lIceCandidates->append(c);
     }
     else
-	c = YOBJECT(IceRtpCandidate,m_lIceCandidates);
+	c = m_lIceCandidates->findByComponent(1);
     c->m_address = msg.getValue("localip");
     c->m_port = m_lPort;
 }

@@ -20,6 +20,7 @@
  */
 
 #include <yatesdp.h>
+#include <yateice.h>
 
 namespace TelEngine {
 
@@ -159,6 +160,7 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 	ObjList fmtps;
 	ObjList params;
 	ObjList* dest = &params;
+	IceRtpCandidates* cands = new IceRtpCandidates;
 	bool first = true;
 	int ptime = 0;
 	int rfc2833 = -1;
@@ -232,6 +234,20 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 			    amrOctet = (0 != line.toInteger(0));
 			else if(payload.length())
 			    fmtps.append(new NamedString(payload, line));
+		    }
+		}
+		else if (line.startSkip("candidate:", false)) {
+		    IceRtpCandidate* c = new IceRtpCandidate("ICE_RTP_candidate_" + String((int)Random::random()));
+		    c->fromSDPAttribute(line, *cands);
+		    cands->append(c);
+		}
+		else if (line.startSkip("ice-", false)) {
+		    if (line.startSkip("ufrag:", false))
+			cands->m_ufrag = line;
+		    else if (line.startSkip("pwd:", false))
+			cands->m_password = line;
+		    else {
+			Debug(this,DebugWarn,"Unknown ICE attribute '%s' for media '%s'", line.c_str(),type.c_str());
 		    }
 		}
 		else if (first) {
@@ -311,6 +327,7 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 	net->mappings(mappings);
 	net->rfc2833(rfc2833);
 	net->crypto(crypto,true);
+	net->ice(cands, true);
 	if (!lst)
 	    lst = new ObjList;
 	lst->append(net);

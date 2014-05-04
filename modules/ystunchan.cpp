@@ -21,6 +21,7 @@
  */
 
 #include <yatephone.h>
+#include <yateversn.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -44,6 +45,7 @@ namespace { // anonymous
   remoteport              The initial remote port
   userid                  The id of the user that requested the filter
                           Defaults to 'UNKNOWN'
+  rfc5389                 New STUN
 
   The message's userdata must be a RefObject with the socket to filter
 
@@ -56,6 +58,7 @@ class YStunAttributeChangeReq;           //    CHANGE-REQUEST
 class YStunAttributeAuth;                //    USERNAME, PASSWORD
 class YStunAttributeAddr;                //    MAPPED-ADDRESS, RESPONSE-ADDRESS,
                                          //    SOURCE-ADDRESS, CHANGED-ADDRESS, REFLECTED-FROM
+class YStunAttributeSoftware;            //    SOFTWARE
 class YStunAttributeUnknown;             //    The others
 class YStunMessage;                      // STUN message
 class YStunUtils;                        // General usefull functions
@@ -109,6 +112,15 @@ inline void getHeader(const u_int8_t* buffer, u_int16_t& type, u_int16_t& len)
     len = buffer[2] << 8 | buffer[3];
 }
 
+static union { // Magic cookie
+    u_int8_t u8[4];
+    u_int16_t u16[2];
+    u_int32_t u32;
+} magic_cookie = {
+    { 0x21, 0x12, 0xA4, 0x42 }
+};
+
+
 /**
  * YStunError
  */
@@ -118,6 +130,7 @@ public:
     enum Type {
 	BadReq = 144,                    // BAD REQUEST
 	Auth   = 174,                    // STALE CREDENDIALS
+	RoleConflict = 487,              // rfc5245 section 19.2
     };
     static TokenDict s_tokens[];         // Error strings
 };
@@ -130,17 +143,36 @@ class YStunAttribute : public RefObject
 public:
     enum Type {
 	MappedAddress =       0x0001,    // MAPPED-ADDRESS
-	ResponseAddress =     0x0002,    // RESPONSE-ADDRESS
-	ChangeRequest =       0x0003,    // CHANGE-REQUEST
-	SourceAddress =       0x0004,    // SOURCE-ADDRESS
-	ChangedAddress =      0x0005,    // CHANGED-ADDRESS
+	ResponseAddress =     0x0002,    // RESPONSE-ADDRESS    (Reserved in rfc5389)
+	ChangeRequest =       0x0003,    // CHANGE-REQUEST      (Reserved in rfc5389)
+	SourceAddress =       0x0004,    // SOURCE-ADDRESS      (Reserved in rfc5389)
+	ChangedAddress =      0x0005,    // CHANGED-ADDRESS     (Reserved in rfc5389)
 	Username =            0x0006,    // USERNAME
-	Password =            0x0007,    // PASSWORD
+	Password =            0x0007,    // PASSWORD            (Reserved in rfc5389)
 	MessageIntegrity =    0x0008,    // MESSAGE-INTEGRITY
 	ErrorCode =           0x0009,    // ERROR-CODE
 	UnknownAttributes =   0x000a,    // UNKNOWN-ATTRIBUTES
-	ReflectedFrom =       0x000b,    // REFLECTED-FROM
-
+	ReflectedFrom =       0x000b,    // REFLECTED-FROM      (Reserved in rfc5389)
+	// rfc5389 (new STUN) and others
+	ChannelNumber =       0x000c,    // CHANNEL-NUMBER      (rfc5766 - TURN)
+	Lifetime =            0x000d,    // LIFETIME            (rfc5766 - TURN)
+	XorPeerAddress =      0x0012,    // XOR-PEER-ADDRESS    (rfc5766 - TURN)
+	Data =                0x0013,    // DATA                (rfc5766 - TURN)
+	Realm =               0x0014,    // REALM
+	Nonce =               0x0015,    // NONCE
+	XorRelayedAddress =   0x0016,    // XOR-RELAYED-ADDRESS (rfc5766 - TURN)
+	EvenPort =            0x0018,    // EVEN-PORT           (rfc5766 - TURN)
+	RequestedTransport =  0x0019,    // REQUESTED-TRANSPORT (rfc5766 - TURN)
+	DontFragment =        0x001a,    // DONT-FRAGMENT       (rfc5766 - TURN)
+	XorMappedAddress =    0x0020,    // XOR-MAPPED-ADDRESS
+	ReservationToken =    0x0022,    // RESERVATION-TOKEN   (rfc5766 - TURN)
+	Software =            0x8022,    // SOFTWARE
+	AlternateServer =     0x8023,    // ALTERNATE-SERVER
+	Priority =            0x0024,    // PRIORITY            (rfc5245 - ICE)
+	UseCandidate =        0x0025,    // USE-CANDIDATE       (rfc5245 - ICE)
+	Fingerprint =         0x0028,    // FINGERPRINT
+	IceControlled =       0x8029,    // ICE-CONTROLLED      (rfc5245 - ICE)
+	IceControlling =      0x802A,    // ICE-CONTROLLING     (rfc5245 - ICE)
 	Unknown,                         // None of the above
     };
 
@@ -249,6 +281,24 @@ private:
     u_int16_t m_port;                    // Port
 };
 
+// Software + version
+class YStunAttributeSoftware : public YStunAttribute
+{
+public:
+    inline YStunAttributeSoftware()
+	: YStunAttribute(Software)
+	{}
+    inline YStunAttributeSoftware(const String& soft)
+	: YStunAttribute(Software), m_soft(soft)
+	{}
+    virtual ~YStunAttributeSoftware() {}
+    virtual void toString(String& dest);
+    virtual bool fromBuffer(u_int8_t* buffer, u_int16_t len);
+    virtual void toBuffer(DataBlock& buffer);
+private:
+    String m_soft;
+};
+
 // Unknown
 class YStunAttributeUnknown : public YStunAttribute
 {
@@ -273,17 +323,23 @@ class YStunMessage : public RefObject
 public:
     enum Type {
 	BindReq =   0x0001,              // Binding Request
+	Allocate =  0x0003,              // TURN (rfc5766) Allocate
+	Refresh =   0x0004,              // TURN (rfc5766) Refresh
+	Send =      0x0006,              // TURN (rfc5766) Send
+	Data =      0x0007,              // TURN (rfc5766) Data
+	CreatePermission = 0x0008,       // TURN (rfc5766) CreatePermission
+	ChannelBind = 0x0009,            // TURN (rfc5766) ChannelBind
 	BindRsp =   0x0101,              // Binding Response
 	BindErr =   0x0111,              // Binding Error Response
 	SecretReq = 0x0002,              // Shared Secret Request
 	SecretRsp = 0x0102,              // Shared Secret Response
 	SecretErr = 0x0112,              // Shared Secret Error Response
     };
-    YStunMessage(Type type, const char* id = 0);
+    YStunMessage(Type type, void* id, size_t id_len);
     virtual ~YStunMessage() {}
     inline Type type() const
 	{ return m_type; }
-    inline const String& id() const
+    inline const DataBlock& id() const
 	{ return m_id; }
     const char* text() const
 	{ return lookup(m_type,s_tokens); }
@@ -296,7 +352,7 @@ public:
     static TokenDict s_tokens[];
 private:
     Type m_type;                         // Message type
-    String m_id;                         // Message id
+    DataBlock m_id;                         // Message id
     ObjList m_attributes;                // Message attributes
 };
 
@@ -307,10 +363,10 @@ class YStunUtils
 {
 public:
     YStunUtils();
-    static bool isStun(const void* data, u_int32_t len, YStunMessage::Type& type);
-    static YStunMessage* decode(const void* data, u_int32_t len, bool& isStun);
+    static YStunMessage* decode(const void* data, u_int32_t len, YStunMessage::Type type);
     // Create an id used to send a binding request
     static void createId(String& id);
+    static void createId(DataBlock& id);
     // Send a message through the given socket
     static bool sendMessage(Socket* socket, const YStunMessage* msg,
 	const SocketAddr& addr, void* sender = 0);
@@ -325,6 +381,8 @@ public:
     // Return false if the message doesn't have this attribute
     static bool getAttrAuth(YStunMessage* msg, YStunAttribute::Type type,
 	String& auth);
+    // Calculate FINGERPRINT value
+    static u_int32_t calcFingerprint(const void * data, u_int32_t len);
 protected:
     static Mutex s_idMutex;              // Lock id changes
     static unsigned int m_id;            // Used to generate unique id for requests
@@ -342,7 +400,9 @@ public:
     inline bool isId(const YStunMessage* msg) const {
 	    if (!(m_msg && msg))
 		return false;
-	    return msg->id().endsWith(m_msg->id().c_str() + FILTER_SECURITYLENGTH);
+	    String id;
+	    id.assign((char*)msg->id().data(), msg->id().length());
+	    return id.endsWith(id.c_str() + FILTER_SECURITYLENGTH);
 	}
     inline bool timeToSend(u_int64_t time)
 	{ return time >= m_next; }
@@ -388,6 +448,7 @@ public:
     // Install the filter. Return false if it fails
     bool install(Socket* sock, const Message* msg);
 protected:
+    bool isStun(const void* data, u_int32_t len, YStunMessage::Type& type);
     // Process a received message. Destroy it after processing
     bool processMessage(YStunMessage* msg);
     // Process a received binding request
@@ -412,6 +473,7 @@ private:
     String m_security;                   // Random string used to build id for a binding request
     bool m_rfc5389;                      // RFC5389 - "new" stun (XOR mapped addr and others - used in ICE).
     String m_localPassword, m_remotePassword; // passwords used in message integrity checks
+    bool m_passive;                      // Do not send any bind requests, just reply on incoming
 };
 
 /**
@@ -426,8 +488,11 @@ public:
 
     inline u_int64_t bindInterval()
 	{ return m_bindInterval; }
+    inline const String& software()
+        { return m_software; }
 private:
     u_int32_t m_bindInterval;            // Bind request interval
+    String m_software;
 };
 
 /**
@@ -442,6 +507,7 @@ static Configuration s_cfg;
 TokenDict YStunError::s_tokens[] = {
 	{"BAD REQUEST",        BadReq},
 	{"STALE CREDENDIALS",  Auth},
+	{"ROLE CONFLICT",      RoleConflict},
 	{0,0}
 	};
 
@@ -461,6 +527,25 @@ TokenDict YStunAttribute::s_tokens[] = {
 	{"UNKNOWN-ATTRIBUTES", UnknownAttributes},
 	{"REFLECTED-FROM",     ReflectedFrom},
 	{"UNKNOWN",            Unknown},
+	{"CHANNEL-NUMBER",     ChannelNumber},         // (rfc5766 - TURN)
+	{"LIFETIME",           Lifetime},              // (rfc5766 - TURN)
+	{"XOR-PEER-ADDRESS",   XorPeerAddress},        // (rfc5766 - TURN)
+	{"DATA",               Data},                  // (rfc5766 - TURN)
+	{"REALM",              Realm},
+	{"NONCE",              Nonce},
+	{"XOR-RELAYED-ADDRESS", XorRelayedAddress},    // (rfc5766 - TURN)
+	{"EVEN-PORT",          EvenPort},              // (rfc5766 - TURN)
+	{"REQUESTED-TRANSPORT", RequestedTransport},   // (rfc5766 - TURN)
+	{"DONT-FRAGMENT",      DontFragment},          // (rfc5766 - TURN)
+	{"XOR-MAPPED-ADDRESS", XorMappedAddress},
+	{"RESERVATION-TOKEN",  ReservationToken},      // (rfc5766 - TURN)
+	{"SOFTWARE",           Software},
+	{"ALTERNATE-SERVER",   AlternateServer},
+	{"PRIORITY",           Priority},              // (rfc5245 - ICE)
+	{"USE-CANDIDATE",      UseCandidate},          // (rfc5245 - ICE)
+	{"FINGERPRINT",        Fingerprint},
+	{"ICE-CONTROLLED",     IceControlled},         // (rfc5245 - ICE)
+	{"ICE-CONTROLLING",    IceControlling},        // (rfc5245 - ICE)
 	{0,0}
 	};
 
@@ -500,7 +585,7 @@ bool YStunAttributeError::fromBuffer(u_int8_t* buffer, u_int16_t len)
 void YStunAttributeError::toBuffer(DataBlock& buffer)
 {
     u_int8_t header[8] = {0,0,0,0,
-		0,0,m_code / 100,m_code % 100};
+		0,0,u_int8_t(m_code / 100),u_int8_t(m_code % 100)};
     setHeader(header,type(),4 + m_text.length());
     DataBlock tmp(header,sizeof(header));
     buffer += tmp;
@@ -524,7 +609,7 @@ bool YStunAttributeChangeReq::fromBuffer(u_int8_t* buffer, u_int16_t len)
 void YStunAttributeChangeReq::toBuffer(DataBlock& buffer)
 {
     u_int8_t header[8] = {0,0,0,0,
-		m_flags >> 24,m_flags >> 16,m_flags >> 8,m_flags};
+		u_int8_t(m_flags >> 24),u_int8_t(m_flags >> 16),u_int8_t(m_flags >> 8),(u_int8_t)m_flags};
     setHeader(header,type(),4);
     DataBlock tmp(header,sizeof(header));
     buffer += tmp;
@@ -538,7 +623,7 @@ void YStunAttributeAuth::toString(String& dest)
 
 bool YStunAttributeAuth::fromBuffer(u_int8_t* buffer, u_int16_t len)
 {
-    if (!(buffer && (len % 4) == 0))
+    if (!(buffer && len))
 	return false;
     m_auth.assign((const char*)buffer,len);
     return true;
@@ -574,7 +659,7 @@ bool YStunAttributeAddr::fromBuffer(u_int8_t* buffer, u_int16_t len)
 void YStunAttributeAddr::toBuffer(DataBlock& buffer)
 {
     u_int8_t header[12] = {0,0,0,0,
-		0,STUN_ATTR_ADDR_IPV4,m_port >> 8,(u_int8_t)m_port,
+		0,STUN_ATTR_ADDR_IPV4,u_int8_t(m_port >> 8),(u_int8_t)m_port,
 		0,0,0,0};
     setHeader(header,type(),8);
     for (int start = 0, i = 8; i < 12; i++) {
@@ -587,8 +672,37 @@ void YStunAttributeAddr::toBuffer(DataBlock& buffer)
 	    break;
 	start = end + 1;
     }
+    if(type() == XorMappedAddress) {
+	uint16_t* p = (uint16_t*)&header[6];
+	uint32_t* a = (uint32_t*)&header[8];
+	*p ^= magic_cookie.u16[0];
+	*a ^= magic_cookie.u32; // XXX IPV4 only
+    }
     DataBlock tmp(header,sizeof(header));
     buffer += tmp;
+}
+
+// YStunAttributeSoftware
+void YStunAttributeSoftware::toString(String& dest)
+{
+    dest = m_soft;
+}
+
+bool YStunAttributeSoftware::fromBuffer(u_int8_t* buffer, u_int16_t len)
+{
+    if (!(buffer && len))
+	return false;
+    m_soft.assign((const char*)buffer,len);
+    return true;
+}
+
+void YStunAttributeSoftware::toBuffer(DataBlock& buffer)
+{
+    u_int8_t header[4];
+    setHeader(header,type(),m_soft.length());
+    DataBlock tmp(header,sizeof(header));
+    buffer += tmp;
+    buffer.append(m_soft);
 }
 
 // YStunAttributeUnknown
@@ -629,9 +743,9 @@ TokenDict YStunMessage::s_tokens[] = {
 	{0,0}
 	};
 
-YStunMessage::YStunMessage(Type type, const char* id)
+YStunMessage::YStunMessage(Type type, void* id, size_t id_len)
     : m_type(type),
-      m_id(id)
+      m_id(id, id_len)
 {
     if (!id)
 	YStunUtils::createId(m_id);
@@ -653,8 +767,10 @@ YStunAttribute* YStunMessage::getAttribute(u_int16_t attrType, bool remove)
 
 void YStunMessage::toMessage(Message& msg) const
 {
+    String id;
+    id.hexify(m_id.data(), m_id.length());
     msg.addParam("message_type",text());
-    msg.addParam("message_id",m_id);
+    msg.addParam("message_id",id);
     // Add attributes
     ObjList* obj = m_attributes.skipNull();
     for (; obj; obj = obj->skipNext()) {
@@ -673,6 +789,9 @@ bool YStunMessage::toBuffer(DataBlock& buffer) const
     for(; obj; obj = obj->skipNext()) {
 	YStunAttribute* attr = static_cast<YStunAttribute*>(obj->get());
 	attr->toBuffer(attr_buffer);
+	size_t padding = attr_buffer.length() % 4;
+	if(padding)
+	    attr_buffer.append(const_cast<char*>("\0\0\0\0"), 4 - padding);
     }
     // Set message buffer
     u_int8_t header[4];
@@ -685,8 +804,10 @@ bool YStunMessage::toBuffer(DataBlock& buffer) const
 
 void YStunMessage::print()
 {
+    String id;
+    id.hexify(m_id.data(), m_id.length());
     Debug(&iplugin,DebugAll,"YStunMessage [%p]. Type: '%s'. ID: '%s'.",
-	this,text(),m_id.c_str());
+	this,text(),id.c_str());
     // Print attributes
     ObjList* obj = m_attributes.skipNull();
     for (; obj; obj = obj->skipNext()) {
@@ -708,7 +829,7 @@ YStunUtils::YStunUtils()
 {
 }
 
-bool YStunUtils::isStun(const void* data, u_int32_t len,
+bool YStunSocketFilter::isStun(const void* data, u_int32_t len,
 	YStunMessage::Type& type)
 {
 // Check if received buffer is a STUN message:
@@ -722,8 +843,22 @@ bool YStunUtils::isStun(const void* data, u_int32_t len,
 	return false;
     u_int16_t msg_type, msg_len;
     getHeader(buffer,msg_type,msg_len);
-    //TODO: Check if the message contains a message integrity attribute: Size is different
-    if (msg_len != len - STUN_MSG_HEADERLENGTH)
+    if(m_rfc5389) {
+	if(msg_type & 0xC000) // fixed message type bits
+	    return false;
+	if( 0 != memcmp(buffer + 4, magic_cookie.u8, sizeof(magic_cookie)))
+	    return false;
+    }
+    // Check if the message contains a fingerprint attribute
+    if (msg_len == len - STUN_MSG_HEADERLENGTH - 8) {
+	if (buffer[msg_len] != 0x80 || buffer[msg_len + 1] != 0x28
+#if 0 // TODO: implement calcFingerprint() (rfc5389 section 15.5) and uncomment
+	    || YStunUtils::calcFingerprint(buffer, msg_len) != *(u_int32_t*)&buffer[msg_len + 4]
+#endif
+	)
+	    return false;
+    }
+    else if (msg_len != len - STUN_MSG_HEADERLENGTH)
 	return false;
     // Check type
     switch (msg_type) {
@@ -742,16 +877,10 @@ bool YStunUtils::isStun(const void* data, u_int32_t len,
     return true;
 }
 
-YStunMessage* YStunUtils::decode(const void* data, u_int32_t len, bool& isStun)
+YStunMessage* YStunUtils::decode(const void* data, u_int32_t len, YStunMessage::Type type)
 {
     u_int8_t* buffer = (u_int8_t*)data;
-    YStunMessage::Type type;
-    isStun = YStunUtils::isStun(data,len,type);
-    if (!isStun)
-	return 0;
-    // Get ID
-    String id((const char*)buffer + 4,STUN_MSG_IDLENGTH);
-    YStunMessage* msg = new YStunMessage(type,id);
+    YStunMessage* msg = new YStunMessage(type, (char*)buffer + 4, STUN_MSG_IDLENGTH);
     // Get attributes
     u_int32_t i = STUN_MSG_HEADERLENGTH;
     for (; i < len;) {
@@ -762,6 +891,7 @@ YStunMessage* YStunUtils::decode(const void* data, u_int32_t len, bool& isStun)
 	u_int16_t attr_type, attr_len;
 	getHeader(buffer+i,attr_type,attr_len);
 	i += 4;
+DDebug(&iplugin,DebugAll,"Parsing at offset %u attribute %04X (%d bytes)", i, attr_type, attr_len);
 	// Check if length matches
 	if (i + attr_len > len)
 	    break;
@@ -774,6 +904,7 @@ YStunMessage* YStunUtils::decode(const void* data, u_int32_t len, bool& isStun)
 	    case YStunAttribute::SourceAddress:
 	    case YStunAttribute::ChangedAddress:
 	    case YStunAttribute::ReflectedFrom:
+	    case YStunAttribute::XorMappedAddress:
 		attr = new YStunAttributeAddr(attr_type);
 		break;
 	    // Error
@@ -792,6 +923,8 @@ YStunMessage* YStunUtils::decode(const void* data, u_int32_t len, bool& isStun)
 	    //
 	    case YStunAttribute::MessageIntegrity:
 	    case YStunAttribute::UnknownAttributes:
+	    case YStunAttribute::Realm:
+	    case YStunAttribute::Nonce:
 		attr = new YStunAttributeUnknown(attr_type);
 		break;
 	    default:
@@ -805,8 +938,11 @@ YStunMessage* YStunUtils::decode(const void* data, u_int32_t len, bool& isStun)
 	msg->addAttribute(attr);
 	// Skip processed data
 	i += attr_len;
+	// Skip padding
+	i += (4 - (i % 4)) % 4;
     }
     if (i < len) {
+DDebug(&iplugin,DebugAll,"Error parsing attributes at offset %u", i);
 	msg->deref();
 	return 0;
     }
@@ -822,6 +958,13 @@ void YStunUtils::createId(String& id)
     for (; id.length() < STUN_MSG_IDLENGTH;)
  	id << (int)Random::random();
     id = id.substr(0,STUN_MSG_IDLENGTH);
+}
+
+void YStunUtils::createId(DataBlock& id)
+{
+    String s;
+    createId(s);
+    id.assign(const_cast<char*>(s.c_str()), s.length());
 }
 
 bool YStunUtils::sendMessage(Socket* socket, const YStunMessage* msg,
@@ -902,6 +1045,11 @@ bool YStunUtils::getAttrAuth(YStunMessage* msg, YStunAttribute::Type type,
     return true;
 }
 
+u_int32_t YStunUtils::calcFingerprint(const void * data, u_int32_t len)
+{
+    return 0; // TODO
+}
+
 /**
  * YStunMessageOut
  */
@@ -942,7 +1090,8 @@ YStunSocketFilter::YStunSocketFilter()
       m_bindReqMutex(true,"YStunSocketFilter::bindReq"),
       m_bindReqNext(0),
       m_notFound(true),
-      m_rfc5389(false)
+      m_rfc5389(false),
+      m_passive(false)
 {
     DDebug(&iplugin,DebugAll,"YStunSocketFilter. [%p]",this);
     for (; m_security.length() < FILTER_SECURITYLENGTH; )
@@ -958,9 +1107,10 @@ YStunSocketFilter::~YStunSocketFilter()
 bool YStunSocketFilter::received(void* buffer, int length, int flags,
 	const struct sockaddr* addr, socklen_t addrlen)
 {
-    bool isStun = false;
-    YStunMessage* msg = YStunUtils::decode(buffer,length,isStun);
-    if (!isStun) {
+    YStunMessage* msg = NULL;
+    YStunMessage::Type type;
+    bool ok = isStun(buffer,length,type);
+    if (!ok) {
 #ifdef XDEBUG
 	SocketAddr tmp(addr,addrlen);
 	Debug(&iplugin,DebugAll,"Non-STUN from '%s:%d' length %d [%p]",
@@ -968,6 +1118,16 @@ bool YStunSocketFilter::received(void* buffer, int length, int flags,
 #endif
 	return false;
     }
+    else
+	msg = YStunUtils::decode(buffer,length,type);
+
+#if 1
+    {
+	SocketAddr tmp(addr,addrlen);
+	DDebug(&iplugin,DebugAll,"STUN from '%s:%d' length %d [%p]", tmp.host().c_str(),tmp.port(),length,msg);
+    }
+#endif
+
     if (msg) {
 	SocketAddr tmp(addr,addrlen);
 	if (m_remoteAddr != tmp) {
@@ -1003,15 +1163,16 @@ bool YStunSocketFilter::install(Socket* sock, const Message* msg)
     if (socket() || !(sock && msg))
 	return false;
     // Set data
-    m_useLocalUsername = msg->getBoolValue("uselocalusername",true);
     m_localUsername = msg->getValue("localusername");
-    m_useRemoteUsername = msg->getBoolValue("useremoteusername",true);
+    m_useLocalUsername = msg->getBoolValue("uselocalusername", !m_localUsername.null());
     m_remoteUsername = msg->getValue("remoteusername");
+    m_useRemoteUsername = msg->getBoolValue("useremoteusername", !m_remoteUsername.null());
     m_remoteAddr.host(msg->getValue("remoteip"));
     m_remoteAddr.port(msg->getIntValue("remoteport"));
     m_userId = msg->getValue("userid");
     m_rfc5389 = msg->getBoolValue("rfc5389");
-    if(rfc5389) {
+    m_passive = msg->getBoolValue("passive", m_rfc5389);
+    if(m_rfc5389) {
 	m_localPassword = msg->getValue("localpassword");
 	m_remotePassword = msg->getValue("remotepassword");
     }
@@ -1033,6 +1194,8 @@ bool YStunSocketFilter::install(Socket* sock, const Message* msg)
 
 void YStunSocketFilter::timerTick(const Time& when)
 {
+    if (m_passive)
+	return;
     u_int64_t time = when.msec();
     Lock lock(m_bindReqMutex);
     // Send another request ?
@@ -1040,10 +1203,11 @@ void YStunSocketFilter::timerTick(const Time& when)
 	// It's time to send ?
 	if (time < m_bindReqNext)
 	    return;
-	String id;
+	DataBlock id;
 	YStunUtils::createId(id);
-	id = id.substr(0,FILTER_SECURITYLENGTH) + m_security;
-	YStunMessage* req = new YStunMessage(YStunMessage::BindReq,id);
+	id.resize(FILTER_SECURITYLENGTH);
+	id.append(m_security);
+	YStunMessage* req = new YStunMessage(YStunMessage::BindReq,id.data(), id.length());
 	if (m_useLocalUsername)
 	    req->addAttribute(new YStunAttributeAuth(m_localUsername));
 	m_bindReq = new YStunMessageOut(req,m_remoteAddr,this);
@@ -1070,10 +1234,12 @@ bool YStunSocketFilter::processMessage(YStunMessage* msg)
 {
     if (!msg)
 	return false;
+    String id;
+    id.hexify(msg->id().data(), msg->id().length());
     DDebug(&iplugin,DebugAll,
 	"Filter received %s (%p) from '%s:%d'. Id: '%s'. [%p]",
 	msg->text(),msg,m_remoteAddr.host().c_str(),
-	m_remoteAddr.port(),msg->id().c_str(),this);
+	m_remoteAddr.port(),id.c_str(),this);
     switch(msg->type()) {
 	case YStunMessage::BindReq:
 	    processBindReq(msg);
@@ -1104,12 +1270,26 @@ void YStunSocketFilter::processBindReq(YStunMessage* msg)
     YStunMessage::Type response = YStunMessage::BindRsp;
     String username;
     // Check username
-    if (m_useRemoteUsername &&
+    if (m_rfc5389) {
+	if (m_useLocalUsername &&
+	    (!YStunUtils::getAttrAuth(msg,YStunAttribute::Username,username) ||
+	    ! username.startSkip(m_localUsername + ":", false)))
+	{
+Debug(&iplugin,DebugInfo, "Filter: Bind request (%p) username: %s, localusername: %s. [%p]", msg, username.c_str(), m_localUsername.c_str(), this);
+	    response = YStunMessage::BindErr;
+	}
+	else if (m_useRemoteUsername && username != m_remoteUsername)
+	{
+Debug(&iplugin,DebugInfo, "Filter: Bind request (%p) username: %s, remoteusername: %s. [%p]", msg, username.c_str(), m_remoteUsername.c_str(), this);
+	    response = YStunMessage::BindErr;
+	}
+    }
+    else if (m_useRemoteUsername &&
 	(!YStunUtils::getAttrAuth(msg,YStunAttribute::Username,username) ||
 	username != m_remoteUsername))
 	response = YStunMessage::BindErr;
     // Create response
-    YStunMessage* rspMsg = new YStunMessage(response,msg->id());
+    YStunMessage* rspMsg = new YStunMessage(response, msg->id().data(), msg->id().length());
     rspMsg->addAttribute(new YStunAttributeAuth(username));
     if (response == YStunMessage::BindErr) {
 	Debug(&iplugin,DebugInfo,
@@ -1121,9 +1301,12 @@ void YStunSocketFilter::processBindReq(YStunMessage* msg)
     else {
 	// Add mapped address attribute
 	rspMsg->addAttribute(new YStunAttributeAddr(
-	    YStunAttribute::MappedAddress,m_remoteAddr.host(),
-	    m_remoteAddr.port()));
+	    m_rfc5389
+		? YStunAttribute::XorMappedAddress
+		: YStunAttribute::MappedAddress,
+	    m_remoteAddr.host(), m_remoteAddr.port()));
     }
+    rspMsg->addAttribute(new YStunAttributeSoftware(iplugin.software()));
     YStunUtils::sendMessage(socket(),rspMsg,m_remoteAddr,this);
     rspMsg->deref();
 }
@@ -1242,6 +1425,11 @@ void YStunPlugin::initialize()
 	m_bindInterval = STUN_BINDINTERVAL_MAX;
     Debug(this,DebugAll,"Bind request interval set to %u msec.",
 	m_bindInterval);
+
+    m_software = s_cfg.getValue("general", "software", "YATE/" YATE_VERSION);
+//    if (m_software.null())
+//	m_software << "YATE/" << YATE_VERSION;
+
     // Do the first time jobs
     if (notFirst)
 	return;

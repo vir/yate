@@ -117,6 +117,7 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
     DDebug(m_enabler,DebugAll,"SDPSession::dispatchRtp(%p,%s,%u,%u,%p) [%p]",
 	media,addr,start,pick,context,m_ptr);
     Message* m = buildChanRtp(media,addr,start,context);
+    m->addParam("getsession","true");
     if (m)
 	dispatchingRtp(m,media);
     if (!(m && Engine::dispatch(m))) {

@@ -73,6 +73,11 @@ public:
      */
     virtual void dump(String& buf, char sep = ' ');
 
+    /**
+     * Update candidate's foundation and priority fields
+     */
+    virtual void Update();
+
     String m_address;
     String m_port;
     String m_component;                  // Candidate component

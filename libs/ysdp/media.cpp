@@ -155,9 +155,7 @@ void SDPMedia::update(const NamedList& msg, bool pickFormat)
 	m_lIceCandidates = new IceRtpCandidates();
 	m_lIceCandidates->generateIceAuth();
 	c = new IceRtpCandidate(m_id + "_candidate_" + String((int)Random::random()));
-	c->m_component = 1; // rtp
-	c->m_generation = 666;
-	c->m_priority = 10;
+	c->m_component = "1"; // rtp
 	c->m_protocol = "udp";
 	c->m_type = "host";
 	m_lIceCandidates->append(c);
@@ -166,6 +164,7 @@ void SDPMedia::update(const NamedList& msg, bool pickFormat)
 	c = m_lIceCandidates->findByComponent(1);
     c->m_address = msg.getValue("localip");
     c->m_port = m_lPort;
+    c->Update();
 }
 
 // Add or replace a parameter by name and value, set the modified flag

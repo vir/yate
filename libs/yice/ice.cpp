@@ -42,6 +42,15 @@ void IceRtpCandidate::dump(String& buf, char sep)
     buf << sep << "type=" << m_type;
 }
 
+// Update candidate's foundation and priority fields
+void IceRtpCandidate::Update()
+{
+    // Simple implementation for ICE-Lite (See rfc5245 section 4.2)
+    m_generation = m_address.hash();
+    const unsigned int IP_precedence = 65535;
+    m_priority = (126 << 24) + (IP_precedence << 8) + (256 - m_component.toInteger());
+}
+
 /*
  * IceRtpCandidates
  */

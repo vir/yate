@@ -80,6 +80,7 @@ class YStunPlugin;                       // The plugin
 #define STUN_ATTR_ADDR_IPV4        0x01  // IPv4 type address for address attributes
 #define STUN_ATTR_CHGREQ_PORT         2  // CHANGE-REQUEST: Change port flag
 #define STUN_ATTR_CHGREQ_ADDR         4  // CHANGE-REQUEST: Change address flag
+#define STUN_ATTR_MI_LENGTH           (STUN_ATTR_HEADERLENGTH + 20) // Size of MESSAGE-INTEGRITY attribute in bytes
 
 // *** Filters
 #define FILTER_SECURITYLENGTH         8  // The length of the string used in id generation
@@ -299,6 +300,29 @@ private:
     String m_soft;
 };
 
+// Message Integrity (rfc5389 section 15.4)
+class YStunAttributeMessageIntegrity: public YStunAttribute
+{
+public:
+    inline YStunAttributeMessageIntegrity()
+	: YStunAttribute(MessageIntegrity)
+	, m_pos(0)
+	{}
+    inline YStunAttributeMessageIntegrity(const String& password)
+	: YStunAttribute(MessageIntegrity)
+	, m_password(password)
+	, m_pos(0)
+	{}
+    virtual ~YStunAttributeMessageIntegrity() {}
+    virtual void toString(String& dest);
+    virtual bool fromBuffer(u_int8_t* buffer, u_int16_t len);
+    virtual void toBuffer(DataBlock& buffer);
+public:
+    DataBlock m_mac;
+    String m_password;
+    u_int32_t m_pos;
+};
+
 // Unknown
 class YStunAttributeUnknown : public YStunAttribute
 {
@@ -345,6 +369,8 @@ public:
 	{ return lookup(m_type,s_tokens); }
     inline void addAttribute(YStunAttribute* attr)
 	{ m_attributes.append(attr); }
+    bool checkIntegrity(const u_int8_t* data, const String& password) const;
+    void updateIntegrity(DataBlock& msg, const String& password) const;
     YStunAttribute* getAttribute(u_int16_t attrType, bool remove = false);
     void toMessage(Message& msg) const;
     bool toBuffer(DataBlock& buffer) const;
@@ -383,6 +409,8 @@ public:
 	String& auth);
     // Calculate FINGERPRINT value
     static u_int32_t calcFingerprint(const void * data, u_int32_t len);
+    // Calculate HMAC-SHA1 MESSAGE-INTEGRITY value
+    static bool calcMessageIntegrity(const String& password, const u_int8_t * data, u_int32_t m_i_attr_pos, DataBlock& result);
 protected:
     static Mutex s_idMutex;              // Lock id changes
     static unsigned int m_id;            // Used to generate unique id for requests
@@ -649,10 +677,22 @@ bool YStunAttributeAddr::fromBuffer(u_int8_t* buffer, u_int16_t len)
 {
     if (!(buffer && len == 8 && buffer[1] == STUN_ATTR_ADDR_IPV4))
 	return false;
-    m_port = buffer[2] << 8 | buffer[3];
-    m_addr = "";
-    m_addr << buffer[4] << "." << buffer[5] << "." << buffer[6] << "."
-	<< buffer[7];
+    if(type() == XorMappedAddress) {
+	uint16_t p = *(uint16_t*)&buffer[2];
+	uint32_t a = *(uint32_t*)&buffer[4];
+	p ^= magic_cookie.u16[0];
+	a ^= magic_cookie.u32; // XXX IPV4 only
+	m_port = ntohs(p);
+	m_addr = "";
+	u_int8_t* tmp = (u_int8_t*)&a;
+	m_addr << tmp[0] << "." << tmp[1] << "." << tmp[2] << "." << tmp[3];
+    }
+    else {
+	m_port = buffer[2] << 8 | buffer[3];
+	m_addr = "";
+	m_addr << buffer[4] << "." << buffer[5] << "." << buffer[6] << "."
+	    << buffer[7];
+    }
     return true;
 }
 
@@ -703,6 +743,31 @@ void YStunAttributeSoftware::toBuffer(DataBlock& buffer)
     DataBlock tmp(header,sizeof(header));
     buffer += tmp;
     buffer.append(m_soft);
+}
+
+// YStunAttributeMessageIntegrity
+void YStunAttributeMessageIntegrity::toString(String& dest)
+{
+    dest.hexify(m_mac.data(), m_mac.length());
+}
+
+bool YStunAttributeMessageIntegrity::fromBuffer(u_int8_t* buffer, u_int16_t len)
+{
+    if (!(buffer && len == 20))
+	return false;
+    m_mac.assign((char*)buffer, len);
+    return true;
+}
+
+void YStunAttributeMessageIntegrity::toBuffer(DataBlock& buffer)
+{
+    u_int8_t header[4];
+    if(m_mac.length() != 20)
+	m_mac.resize(20); // MUST be 20 bytes long
+    setHeader(header,type(),m_mac.length());
+    DataBlock tmp(header,sizeof(header));
+    buffer += tmp;
+    buffer += m_mac;
 }
 
 // YStunAttributeUnknown
@@ -783,14 +848,17 @@ void YStunMessage::toMessage(Message& msg) const
 
 bool YStunMessage::toBuffer(DataBlock& buffer) const
 {
+    YStunAttributeMessageIntegrity* mi = NULL;
     // Create attributes
     DataBlock attr_buffer;
     ObjList* obj = m_attributes.skipNull();
     for(; obj; obj = obj->skipNext()) {
 	YStunAttribute* attr = static_cast<YStunAttribute*>(obj->get());
+	if (attr->type() == YStunAttribute::MessageIntegrity)
+	    (mi = static_cast<YStunAttributeMessageIntegrity*>(attr))->m_pos = STUN_MSG_HEADERLENGTH + attr_buffer.length();
 	attr->toBuffer(attr_buffer);
 	size_t padding = attr_buffer.length() % 4;
-	if(padding)
+	if (padding)
 	    attr_buffer.append(const_cast<char*>("\0\0\0\0"), 4 - padding);
     }
     // Set message buffer
@@ -799,6 +867,8 @@ bool YStunMessage::toBuffer(DataBlock& buffer) const
     buffer.assign(header,sizeof(header));
     buffer.append(m_id);
     buffer.append(attr_buffer);
+    if (mi)
+	updateIntegrity(buffer, mi->m_password);
     return true;
 }
 
@@ -818,6 +888,28 @@ void YStunMessage::print()
 	    this,attr->text(),tmp.c_str());
     }
 }
+
+bool YStunMessage::checkIntegrity(const u_int8_t* data, const String& password) const
+{
+    const YStunAttributeMessageIntegrity* mia = static_cast<YStunAttributeMessageIntegrity*>(const_cast<YStunMessage*>(this)->getAttribute(YStunAttribute::MessageIntegrity));
+    if (! mia)
+	return false;
+    DataBlock mac;
+    YStunUtils::calcMessageIntegrity(password, data, mia->m_pos, mac);
+    return mac.length() == mia->m_mac.length() && 0 == memcmp(mac.data(), mia->m_mac.data(), mac.length());
+}
+
+void YStunMessage::updateIntegrity(DataBlock& msg, const String& password) const
+{
+    const YStunAttributeMessageIntegrity* mia = static_cast<YStunAttributeMessageIntegrity*>(const_cast<YStunMessage*>(this)->getAttribute(YStunAttribute::MessageIntegrity));
+    if (! mia)
+	return;
+    DataBlock mac;
+    YStunUtils::calcMessageIntegrity(password, (u_int8_t*)msg.data(), mia->m_pos, mac);
+    memcpy(msg.data(mia->m_pos + 4), mac.data(), mac.length());
+}
+
+
 
 /**
  * YStunUtils
@@ -890,8 +982,10 @@ YStunMessage* YStunUtils::decode(const void* data, u_int32_t len, YStunMessage::
 	// Get type & length
 	u_int16_t attr_type, attr_len;
 	getHeader(buffer+i,attr_type,attr_len);
+#ifdef XDEBUG
+	Debug(&iplugin,DebugAll,"Parsing at offset %u attribute %04X (%d bytes)", i, attr_type, attr_len);
+#endif
 	i += 4;
-DDebug(&iplugin,DebugAll,"Parsing at offset %u attribute %04X (%d bytes)", i, attr_type, attr_len);
 	// Check if length matches
 	if (i + attr_len > len)
 	    break;
@@ -920,8 +1014,11 @@ DDebug(&iplugin,DebugAll,"Parsing at offset %u attribute %04X (%d bytes)", i, at
 	    case YStunAttribute::Password:
 		attr = new YStunAttributeAuth(attr_type);
 		break;
-	    //
+	    // Message Integrity
 	    case YStunAttribute::MessageIntegrity:
+		attr = new YStunAttributeMessageIntegrity();
+		static_cast<YStunAttributeMessageIntegrity*>(attr)->m_pos = i - 4; // remember attribute offset
+		break;
 	    case YStunAttribute::UnknownAttributes:
 	    case YStunAttribute::Realm:
 	    case YStunAttribute::Nonce:
@@ -942,7 +1039,7 @@ DDebug(&iplugin,DebugAll,"Parsing at offset %u attribute %04X (%d bytes)", i, at
 	i += (4 - (i % 4)) % 4;
     }
     if (i < len) {
-DDebug(&iplugin,DebugAll,"Error parsing attributes at offset %u", i);
+	DDebug(&iplugin,DebugWarn,"Error parsing attribute at packet offset %u", i);
 	msg->deref();
 	return 0;
     }
@@ -956,7 +1053,7 @@ void YStunUtils::createId(String& id)
     id << m_id++ << "_";
     s_idMutex.unlock();
     for (; id.length() < STUN_MSG_IDLENGTH;)
- 	id << (int)Random::random();
+	id << (int)Random::random();
     id = id.substr(0,STUN_MSG_IDLENGTH);
 }
 
@@ -1050,6 +1147,40 @@ u_int32_t YStunUtils::calcFingerprint(const void * data, u_int32_t len)
     return 0; // TODO
 }
 
+bool YStunUtils::calcMessageIntegrity(const String& password, const u_int8_t * data, u_int32_t m_i_attr_pos, DataBlock& result)
+{
+#ifdef XDEBUG
+    String d;
+    d.hexify(const_cast<u_int8_t*>(data), m_i_attr_pos);
+    Debug(&iplugin,DebugAll,"calcMessageIntegrity(%s, %s, %d)",password.c_str(), d.c_str(), m_i_attr_pos);
+#endif
+    DataBlock key;
+    key += password;
+
+    u_int16_t msg_type, msg_len;
+    getHeader(data, msg_type, msg_len);
+    u_int8_t fake_header[4];
+    setHeader(fake_header, msg_type, m_i_attr_pos + STUN_ATTR_MI_LENGTH - STUN_MSG_HEADERLENGTH);
+
+    SHA1 h;
+    DataBlock pad;
+    if (! h.hmacStart(pad, key))
+	return false;
+    if (! h.update(fake_header, sizeof(fake_header)))
+	return false;
+    if (! h.update(data + sizeof(fake_header), m_i_attr_pos - sizeof(fake_header)))
+	return false;
+    if (! h.hmacFinal(pad))
+	return false;
+    result.assign(const_cast<u_int8_t*>(h.rawDigest()), h.hashLength());
+
+#ifdef XDEBUG
+    d.hexify(const_cast<u_int8_t*>(h.rawDigest()), h.hashLength());
+    Debug(&iplugin,DebugAll,"calcMessageIntegrity: %s", d.c_str());
+#endif
+    return true;
+}
+
 /**
  * YStunMessageOut
  */
@@ -1121,12 +1252,12 @@ bool YStunSocketFilter::received(void* buffer, int length, int flags,
     else
 	msg = YStunUtils::decode(buffer,length,type);
 
-#if 1
-    {
-	SocketAddr tmp(addr,addrlen);
-	DDebug(&iplugin,DebugAll,"STUN from '%s:%d' length %d [%p]", tmp.host().c_str(),tmp.port(),length,msg);
+    if (msg && !m_localPassword.null() && !msg->checkIntegrity((u_int8_t*)buffer, m_localPassword)) {
+	Debug(&iplugin,DebugInfo, "Filter ignoring message - failed integrity check. [%p]", this);
+	msg->deref();
+	msg = NULL;
+	return true;
     }
-#endif
 
     if (msg) {
 	SocketAddr tmp(addr,addrlen);
@@ -1273,14 +1404,13 @@ void YStunSocketFilter::processBindReq(YStunMessage* msg)
     if (m_rfc5389) {
 	if (m_useLocalUsername &&
 	    (!YStunUtils::getAttrAuth(msg,YStunAttribute::Username,username) ||
-	    ! username.startSkip(m_localUsername + ":", false)))
-	{
-Debug(&iplugin,DebugInfo, "Filter: Bind request (%p) username: %s, localusername: %s. [%p]", msg, username.c_str(), m_localUsername.c_str(), this);
+	    ! username.startSkip(m_localUsername + ":", false))) {
+Debug(&iplugin,DebugInfo, "Filter: Bind request (%p) has invalid username (1) %s. [%p]",msg,username.c_str(),this);
 	    response = YStunMessage::BindErr;
 	}
 	else if (m_useRemoteUsername && username != m_remoteUsername)
 	{
-Debug(&iplugin,DebugInfo, "Filter: Bind request (%p) username: %s, remoteusername: %s. [%p]", msg, username.c_str(), m_remoteUsername.c_str(), this);
+Debug(&iplugin,DebugInfo, "Filter: Bind request (%p) has invalid username (2) %s. [%p]",msg,username.c_str(),this);
 	    response = YStunMessage::BindErr;
 	}
     }
@@ -1290,10 +1420,12 @@ Debug(&iplugin,DebugInfo, "Filter: Bind request (%p) username: %s, remoteusernam
 	response = YStunMessage::BindErr;
     // Create response
     YStunMessage* rspMsg = new YStunMessage(response, msg->id().data(), msg->id().length());
-    rspMsg->addAttribute(new YStunAttributeAuth(username));
+    if(! m_rfc5389) // in fact, this attribute should not be added anyway, but leave it here to be backward-compatible
+	rspMsg->addAttribute(new YStunAttributeAuth(username));
+    rspMsg->addAttribute(new YStunAttributeSoftware(iplugin.software()));
     if (response == YStunMessage::BindErr) {
 	Debug(&iplugin,DebugInfo,
-	    "Filter: Bind request (%p) has invalid username. [%p]",msg,this);
+	    "Filter: Bind request (%p) has invalid username. Expected %s:%s [%p]",msg,m_localUsername.c_str(),m_remoteUsername.c_str(),this);
 	// Add error attribute
 	rspMsg->addAttribute(new YStunAttributeError(YStunError::Auth,
 	    lookup(YStunError::Auth,YStunError::s_tokens)));
@@ -1305,8 +1437,8 @@ Debug(&iplugin,DebugInfo, "Filter: Bind request (%p) username: %s, remoteusernam
 		? YStunAttribute::XorMappedAddress
 		: YStunAttribute::MappedAddress,
 	    m_remoteAddr.host(), m_remoteAddr.port()));
+	rspMsg->addAttribute(new YStunAttributeMessageIntegrity(m_localPassword));
     }
-    rspMsg->addAttribute(new YStunAttributeSoftware(iplugin.software()));
     YStunUtils::sendMessage(socket(),rspMsg,m_remoteAddr,this);
     rspMsg->deref();
 }

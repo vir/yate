@@ -1,6 +1,27 @@
 [general]
-; software: string: String to set in SOFTWARE STUN attributes
-;software=YATE/3.0.0
+; software: string: String to set in SOFTWARE STUN attribute
+; Defaults to string 'YATE/x.x.x', where x.x.x is Yate version
+;software=YATE/0.0.0
+
+
+;[listener name]
+; This section configures a STUN Server named 'name'
+
+; Type: string: IP protocol, only 'udp' is supported.
+; Defaults to udp if missing or invalid
+;type=udp
+
+; addr: ipaddress: IP address to bind to
+; Leave it empty to listen on all available interfaces
+;addr=
+
+; port: integer: Port to bind to
+; Defaults to 3478
+;port=3478
+
+; thread: keyword: Listener thread priority
+; Can be one of: lowest, low, normal, high, highest
+;thread=normal
 
 
 [filters]

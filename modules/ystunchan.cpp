@@ -389,6 +389,7 @@ class YStunUtils
 {
 public:
     YStunUtils();
+    static bool isStun(const void* data, u_int32_t len, YStunMessage::Type& type, bool& isRfc5766);
     static YStunMessage* decode(const void* data, u_int32_t len, YStunMessage::Type type);
     // Create an id used to send a binding request
     static void createId(String& id);
@@ -476,7 +477,6 @@ public:
     // Install the filter. Return false if it fails
     bool install(Socket* sock, const Message* msg);
 protected:
-    bool isStun(const void* data, u_int32_t len, YStunMessage::Type& type);
     // Process a received message. Destroy it after processing
     bool processMessage(YStunMessage* msg);
     // Process a received binding request
@@ -505,6 +505,24 @@ private:
 };
 
 /**
+ * YStunListener
+ */
+class YStunListener:  public Thread, public Mutex, public RefObject
+{
+public:
+    YStunListener(const String& name, Thread::Priority prio = Thread::Normal);
+    ~YStunListener();
+    void init(const NamedList& params);
+protected:
+    virtual void run();
+    bool received(DataBlock& pkt, const SocketAddr& remote);
+private:
+    String m_name;
+    Socket* m_sock;
+    unsigned int m_maxpkt;               // Max receive packet length
+};
+
+/**
  * YStunPlugin
  */
 class YStunPlugin : public Module
@@ -518,9 +536,14 @@ public:
 	{ return m_bindInterval; }
     inline const String& software()
         { return m_software; }
+protected:
+    void setupListener(const String& name, const NamedList& params);
+    YStunListener* findListener(const String& name);
 private:
     u_int32_t m_bindInterval;            // Bind request interval
     String m_software;
+    ObjList m_listeners;
+    Mutex m_mutex;
 };
 
 /**
@@ -805,6 +828,13 @@ TokenDict YStunMessage::s_tokens[] = {
 	{"SecretReq", SecretReq},
 	{"SecretRsp", SecretRsp},
 	{"SecretErr", SecretErr},
+	// TURN methods
+	{"Allocate",  Allocate},
+	{"Refresh",   Refresh},
+	{"Send",      Send},
+	{"Data",      Data},
+	{"CreatePermission", CreatePermission},
+	{"ChannelBind", ChannelBind},
 	{0,0}
 	};
 
@@ -921,8 +951,8 @@ YStunUtils::YStunUtils()
 {
 }
 
-bool YStunSocketFilter::isStun(const void* data, u_int32_t len,
-	YStunMessage::Type& type)
+bool YStunUtils::isStun(const void* data, u_int32_t len,
+	YStunMessage::Type& type, bool& isRfc576)
 {
 // Check if received buffer is a STUN message:
 //	- Length:      Greater then or equal to STUN_MSG_HEADERLENGTH
@@ -935,14 +965,12 @@ bool YStunSocketFilter::isStun(const void* data, u_int32_t len,
 	return false;
     u_int16_t msg_type, msg_len;
     getHeader(buffer,msg_type,msg_len);
-    if(m_rfc5389) {
-	if(msg_type & 0xC000) // fixed message type bits
-	    return false;
-	if( 0 != memcmp(buffer + 4, magic_cookie.u8, sizeof(magic_cookie)))
-	    return false;
-    }
+    if(msg_type & 0xC000) // fixed message type bits
+	return false;
+    isRfc576 = 0 == memcmp(buffer + 4, magic_cookie.u8, sizeof(magic_cookie));
+
     // Check if the message contains a fingerprint attribute
-    if (msg_len == len - STUN_MSG_HEADERLENGTH - 8) {
+    if (isRfc576 && msg_len == len - STUN_MSG_HEADERLENGTH - 8) {
 	if (buffer[msg_len] != 0x80 || buffer[msg_len + 1] != 0x28
 #if 0 // TODO: implement calcFingerprint() (rfc5389 section 15.5) and uncomment
 	    || YStunUtils::calcFingerprint(buffer, msg_len) != *(u_int32_t*)&buffer[msg_len + 4]
@@ -960,6 +988,12 @@ bool YStunSocketFilter::isStun(const void* data, u_int32_t len,
 	case YStunMessage::SecretReq:
 	case YStunMessage::SecretRsp:
 	case YStunMessage::SecretErr:
+	case YStunMessage::Allocate:
+	case YStunMessage::Refresh:
+	case YStunMessage::Send:
+	case YStunMessage::Data:
+	case YStunMessage::CreatePermission:
+	case YStunMessage::ChannelBind:
 	    break;
 	default:
 	    return false;
@@ -1240,8 +1274,9 @@ bool YStunSocketFilter::received(void* buffer, int length, int flags,
 {
     YStunMessage* msg = NULL;
     YStunMessage::Type type;
-    bool ok = isStun(buffer,length,type);
-    if (!ok) {
+    bool rfc5389;
+    bool ok = YStunUtils::isStun(buffer, length, type, rfc5389);
+    if (!ok || (m_rfc5389 && !rfc5389)) {
 #ifdef XDEBUG
 	SocketAddr tmp(addr,addrlen);
 	Debug(&iplugin,DebugAll,"Non-STUN from '%s:%d' length %d [%p]",
@@ -1404,15 +1439,10 @@ void YStunSocketFilter::processBindReq(YStunMessage* msg)
     if (m_rfc5389) {
 	if (m_useLocalUsername &&
 	    (!YStunUtils::getAttrAuth(msg,YStunAttribute::Username,username) ||
-	    ! username.startSkip(m_localUsername + ":", false))) {
-Debug(&iplugin,DebugInfo, "Filter: Bind request (%p) has invalid username (1) %s. [%p]",msg,username.c_str(),this);
+	    ! username.startSkip(m_localUsername + ":", false)))
 	    response = YStunMessage::BindErr;
-	}
 	else if (m_useRemoteUsername && username != m_remoteUsername)
-	{
-Debug(&iplugin,DebugInfo, "Filter: Bind request (%p) has invalid username (2) %s. [%p]",msg,username.c_str(),this);
 	    response = YStunMessage::BindErr;
-	}
     }
     else if (m_useRemoteUsername &&
 	(!YStunUtils::getAttrAuth(msg,YStunAttribute::Username,username) ||
@@ -1527,6 +1557,151 @@ bool StunHandler::received(Message& msg)
 }
 
 /**
+ * YStunListener
+ */
+YStunListener::YStunListener(const String& name, Thread::Priority prio)
+    : Thread("YStunListener", prio)
+    , m_name(name)
+    , m_sock(NULL)
+    , m_maxpkt(1500)
+{
+}
+
+YStunListener::~YStunListener()
+{
+    if(m_sock)
+	m_sock->setLinger(-1);
+    delete m_sock;
+}
+
+void YStunListener::init(const NamedList& params)
+{
+    String addr = params.getValue("addr", "0.0.0.0");
+    int port = params.getIntValue("port", 3478);
+
+    SocketAddr lAddr;
+    lAddr.assign(SocketAddr::IPv4);
+    if (addr && !lAddr.host(addr)) {
+	Debug(&iplugin,DebugConf,"Invalid address '%s' configured", addr.c_str());
+	return;
+    }
+    lAddr.port(port);
+    m_sock = new Socket(lAddr.family(), SOCK_DGRAM, IPPROTO_UDP);
+    if (!m_sock->valid()) {
+	Debug(&iplugin,DebugWarn,"Listener %s: Create socket failed (%s:%d)", m_name.c_str(), addr.c_str(), port);
+	return;
+    }
+#if 0
+    if (!udp)
+	sock->setReuse();
+#endif
+    bool ok = m_sock->bind(lAddr);
+    if (!ok) {
+	Debug(&iplugin,DebugWarn,"Listener %s: Socket bind failed (%s:%d)", m_name.c_str(), addr.c_str(), port);
+	return;
+    }
+    if (!m_sock->setBlocking(false)) {
+	Debug(&iplugin,DebugWarn,"Listener %s: Failed to set non-blocking mode (%s:%d)", m_name.c_str(), addr.c_str(), port);
+	return;
+    }
+#if 0
+    if (!udp && !m_sock->listen(backLogBuffer)) {
+	Debug(&iplugin,DebugWarn,"Listener %s: Socket listen failed (%s:%d)", m_name.c_str(), addr.c_str(), port);
+	break;
+    }
+#endif
+
+    startup();
+}
+
+void YStunListener::run()
+{
+    DataBlock buffer;                  // Read buffer
+    DDebug(&iplugin,DebugAll,"Listener %s start running [%p]", m_name.c_str(), this);
+    while (true) {
+	if (Thread::check(false))
+	    break;
+
+	if (m_sock->canSelect()) {
+	    bool ok = false;
+	    if (m_sock->select(&ok,0,0,Thread::idleUsec())) {
+		if (!ok)
+		    continue;
+	    }
+	    else {
+		// Select failed
+		if (! m_sock->canRetry()) {
+		    String tmp;
+		    Thread::errorString(tmp,m_sock->error());
+		    Debug(&iplugin,DebugWarn,"Listener %s: select failed: %d '%s' [%p]",
+			m_name.c_str(), m_sock->error(), tmp.c_str(), this);
+		}
+	    }
+	}
+
+	buffer.resize(m_maxpkt);
+	SocketAddr remote;
+	int res = m_sock->recvFrom((void*)buffer.data(), buffer.length() - 1, remote);
+	if (res <= 0) {
+	    Thread::usleep(Thread::idleUsec());
+	    continue;
+	}
+	buffer.truncate(res);
+
+	Debug(&iplugin, DebugInfo, "Listener %s got %d bytes packet from %s:%d [%p]", m_name.c_str(), res, remote.host().c_str(), remote.port(), this);
+#ifdef XDEBUG
+	String tmp;
+	tmp.hexify(buffer.data(), buffer.length());
+	Debug(&iplugin, DebugAll, "Packet content: %s", tmp.c_str());
+#endif
+	bool ok = received(buffer, remote);
+	if(! ok) {
+	    String tmp;
+	    tmp.hexify(buffer.data(), buffer.length());
+	    Debug(&iplugin, DebugWarn, "Listener %s got invalid %d bytes packet from %s:%d: %s [%p]", m_name.c_str(), buffer.length(), remote.host().c_str(), remote.port(), tmp.c_str(), this);
+	}
+    }
+}
+
+bool YStunListener::received(DataBlock& pkt, const SocketAddr& remote)
+{
+    bool rfc5389;
+    YStunMessage::Type type;
+    if (! YStunUtils::isStun(pkt.data(), pkt.length(), type, rfc5389))
+	return false;
+
+    // Looks like a real STUN message
+
+    if (type != YStunMessage::BindReq) // Process only bind requests
+	return false;
+
+    YStunMessage* msg = YStunUtils::decode(pkt.data(), pkt.length(), type);
+    if (! msg)
+	return false;
+
+    String id;
+    id.hexify(msg->id().data(), msg->id().length());
+    Debug(&iplugin,DebugAll,
+	"Listener %s received BindReq %s (%p) from '%s:%d'. Id: '%s'. [%p]",
+	m_name.c_str(), msg->text(), msg, remote.host().c_str(),
+	remote.port(), id.c_str(), this);
+
+    // Create response
+    YStunMessage* rspMsg = new YStunMessage(YStunMessage::BindRsp, msg->id().data(), msg->id().length());
+    rspMsg->addAttribute(new YStunAttributeSoftware(iplugin.software()));
+    rspMsg->addAttribute(new YStunAttributeAddr(
+	rfc5389
+	    ? YStunAttribute::XorMappedAddress
+	    : YStunAttribute::MappedAddress,
+	remote.host(), remote.port()));
+    YStunUtils::sendMessage(m_sock, rspMsg, remote, this);
+    rspMsg->deref();
+    msg->deref();
+    return true;
+}
+
+
+/**
  * YStunPlugin
  */
 YStunPlugin::YStunPlugin()
@@ -1568,7 +1743,63 @@ void YStunPlugin::initialize()
     notFirst = true;
     // Install message handlers
     Engine::install(new StunHandler);
+    // Setup listeners
+    unsigned int n = s_cfg.sections();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedList* nl = s_cfg.getSection(i);
+	String name = nl ? nl->c_str() : "";
+	if (!name.startSkip("listener ",false))
+	    continue;
+	name.trimBlanks();
+	if (name)
+	    setupListener(name, *nl);
+    }
     setup();
+}
+
+void YStunPlugin::setupListener(const String& name, const NamedList& params)
+{
+    const String& type = params[YSTRING("type")];
+    if(type != "udp") {
+	Debug(this,DebugConf,"Invalid listener type '%s' in section '%s': defaults to %s",
+	    type.c_str(), params.c_str(), "udp");
+    }
+    bool enabled = params.getBoolValue(YSTRING("enable"),true);
+    YStunListener* sl = findListener(name);
+    if (sl) {
+	if (enabled)
+	    sl->init(params);
+	else {
+	    m_listeners.remove(sl,false);
+	    sl->cancel();
+	    sl->deref();
+	}
+	TelEngine::destruct(sl);
+    }
+    if (!enabled)
+	return;
+    Lock lock(m_mutex);
+    sl = new YStunListener(name, Thread::priority(params.getValue("thread")));
+    sl->init(params);
+    if (sl->startup()) {
+	m_listeners.append(sl);
+	DDebug(&iplugin,DebugAll,"Added listener %p '%s'", sl, sl->toString().c_str());
+    }
+    else {
+	Alarm(&iplugin,"config",DebugWarn,"Failed to start listener thread name='%s'", name.c_str());
+	sl->deref();
+    }
+}
+
+// Retrieve a listener by name. Return referrenced object
+YStunListener* YStunPlugin::findListener(const String& name)
+{
+    if (!name)
+	return 0;
+    Lock lock(m_mutex);
+    ObjList* o = m_listeners.find(name);
+    YStunListener* t = o ? static_cast<YStunListener*>(o->get()) : 0;
+    return (t && t->ref()) ? t : 0;
 }
 
 }; // anonymous namespace

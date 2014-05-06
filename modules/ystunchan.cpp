@@ -507,7 +507,7 @@ private:
 /**
  * YStunListener
  */
-class YStunListener:  public Thread, public Mutex, public RefObject
+class YStunListener: public GenObject, public Thread, public Mutex
 {
 public:
     YStunListener(const String& name, Thread::Priority prio = Thread::Normal);
@@ -527,6 +527,10 @@ private:
  */
 class YStunPlugin : public Module
 {
+    friend class YStunListener;
+    enum Relay {
+	Stop = Private,
+    };
 public:
     YStunPlugin();
     virtual ~YStunPlugin();
@@ -537,8 +541,9 @@ public:
     inline const String& software()
         { return m_software; }
 protected:
+    bool received(Message& msg, int id);
+    void cancelAllListeners();
     void setupListener(const String& name, const NamedList& params);
-    YStunListener* findListener(const String& name);
 private:
     u_int32_t m_bindInterval;            // Bind request interval
     String m_software;
@@ -704,7 +709,7 @@ bool YStunAttributeAddr::fromBuffer(u_int8_t* buffer, u_int16_t len)
 	uint16_t p = *(uint16_t*)&buffer[2];
 	uint32_t a = *(uint32_t*)&buffer[4];
 	p ^= magic_cookie.u16[0];
-	a ^= magic_cookie.u32; // XXX IPV4 only
+	a ^= magic_cookie.u32; // IPV4 only
 	m_port = ntohs(p);
 	m_addr = "";
 	u_int8_t* tmp = (u_int8_t*)&a;
@@ -739,7 +744,7 @@ void YStunAttributeAddr::toBuffer(DataBlock& buffer)
 	uint16_t* p = (uint16_t*)&header[6];
 	uint32_t* a = (uint32_t*)&header[8];
 	*p ^= magic_cookie.u16[0];
-	*a ^= magic_cookie.u32; // XXX IPV4 only
+	*a ^= magic_cookie.u32; // IPV4 only
     }
     DataBlock tmp(header,sizeof(header));
     buffer += tmp;
@@ -1572,6 +1577,8 @@ YStunListener::~YStunListener()
     if(m_sock)
 	m_sock->setLinger(-1);
     delete m_sock;
+    Lock lck(iplugin.m_mutex);
+    iplugin.m_listeners.remove(this, false);
 }
 
 void YStunListener::init(const NamedList& params)
@@ -1734,13 +1741,12 @@ void YStunPlugin::initialize()
 	m_bindInterval);
 
     m_software = s_cfg.getValue("general", "software", "YATE/" YATE_VERSION);
-//    if (m_software.null())
-//	m_software << "YATE/" << YATE_VERSION;
 
     // Do the first time jobs
     if (notFirst)
 	return;
     notFirst = true;
+    installRelay(Stop,"engine.stop");
     // Install message handlers
     Engine::install(new StunHandler);
     // Setup listeners
@@ -1757,49 +1763,56 @@ void YStunPlugin::initialize()
     setup();
 }
 
+bool YStunPlugin::received(Message& msg, int id)
+{
+    switch(id) {
+    case Stop:
+	cancelAllListeners();
+	return true;
+    }
+    return Module::received(msg,id);
+}
+
+void YStunPlugin::cancelAllListeners()
+{
+    {
+	Lock lck(m_mutex);
+	for (ObjList* l = m_listeners.skipNull(); l; l = l->skipNext()) {
+	    YStunListener* t = static_cast<YStunListener*>(l->get());
+	    if(! t)
+		continue;
+	    t->cancel();
+	}
+    }
+    while (true) {
+	Thread::idle();
+	Lock lck(m_mutex);
+	if (! m_listeners.skipNull())
+	    break;
+    }
+}
+
 void YStunPlugin::setupListener(const String& name, const NamedList& params)
 {
+    bool enabled = params.getBoolValue(YSTRING("enable"),true);
+    if (!enabled)
+	return;
+
     const String& type = params[YSTRING("type")];
     if(type != "udp") {
 	Debug(this,DebugConf,"Invalid listener type '%s' in section '%s': defaults to %s",
 	    type.c_str(), params.c_str(), "udp");
     }
-    bool enabled = params.getBoolValue(YSTRING("enable"),true);
-    YStunListener* sl = findListener(name);
-    if (sl) {
-	if (enabled)
-	    sl->init(params);
-	else {
-	    m_listeners.remove(sl,false);
-	    sl->cancel();
-	    sl->deref();
-	}
-	TelEngine::destruct(sl);
-    }
-    if (!enabled)
-	return;
+
     Lock lock(m_mutex);
-    sl = new YStunListener(name, Thread::priority(params.getValue("thread")));
+    YStunListener* sl = new YStunListener(name, Thread::priority(params.getValue("thread")));
     sl->init(params);
     if (sl->startup()) {
 	m_listeners.append(sl);
 	DDebug(&iplugin,DebugAll,"Added listener %p '%s'", sl, sl->toString().c_str());
     }
-    else {
+    else
 	Alarm(&iplugin,"config",DebugWarn,"Failed to start listener thread name='%s'", name.c_str());
-	sl->deref();
-    }
-}
-
-// Retrieve a listener by name. Return referrenced object
-YStunListener* YStunPlugin::findListener(const String& name)
-{
-    if (!name)
-	return 0;
-    Lock lock(m_mutex);
-    ObjList* o = m_listeners.find(name);
-    YStunListener* t = o ? static_cast<YStunListener*>(o->get()) : 0;
-    return (t && t->ref()) ? t : 0;
 }
 
 }; // anonymous namespace

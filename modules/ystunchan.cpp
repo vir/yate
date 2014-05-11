@@ -121,6 +121,61 @@ static union { // Magic cookie
     { 0x21, 0x12, 0xA4, 0x42 }
 };
 
+/**
+ * CRC32 calculator
+ */
+class CRC32
+{
+public:
+    enum Crc32Poly {
+	Crc32  = 0xEDB88320, // HDLC, ANSI X3.66, ITU-T V.42, Ethernet, Serial ATA, MPEG-2, PKZIP, Gzip, Bzip2, PNG
+	Crc32C = 0x82F63B78, // iSCSI, SCTP, G.hn payload, SSE4.2, Btrfs, ext4
+	Crc32K = 0xEB31D82E,
+	Crc32Q = 0xD5828281,
+    };
+    /**
+     * Construct CRC32 calculator.
+     * @param polynom CRC32 polynomial to use
+     */
+    CRC32(Crc32Poly polynom = Crc32)
+    {
+	u_int32_t poly = polynom;
+	for (size_t i = 0; i < 256; ++i) {
+	    u_int32_t crc = i;
+	    for (size_t j = 0; j < 8; ++j) {
+		if (crc & 1)
+		    crc = (crc >> 1) ^ poly;
+		else
+		    crc >>= 1;
+	    }
+	    table[i] = crc;
+	}
+    }
+    /**
+     * Calculate CRC32 of specified block
+     * @param buf address of data block
+     * @param size size of data block
+     * @param crc CRC32 of previous data block or zero
+     * @return CRC32 of data block
+     */
+    u_int32_t crc32(const u_int8_t *buf, size_t size, u_int32_t crc = 0) const
+    {
+	crc = ~crc;
+	for (size_t i = 0; i < size; ++i)
+	    crc = table[buf[i] ^ (crc & 0xFF)] ^ (crc >> 8);
+	return ~crc;
+    }
+    /**
+     * Fancy way to call 'crc32' method
+     */
+    inline u_int32_t operator()(const uint8_t *buf, size_t size, u_int32_t crc = 0)
+    {
+	return crc32(buf, size, crc);
+    }
+private:
+    u_int32_t table[256];
+};
+
 
 /**
  * YStunError
@@ -171,7 +226,7 @@ public:
 	AlternateServer =     0x8023,    // ALTERNATE-SERVER
 	Priority =            0x0024,    // PRIORITY            (rfc5245 - ICE)
 	UseCandidate =        0x0025,    // USE-CANDIDATE       (rfc5245 - ICE)
-	Fingerprint =         0x0028,    // FINGERPRINT
+	Fingerprint =         0x8028,    // FINGERPRINT
 	IceControlled =       0x8029,    // ICE-CONTROLLED      (rfc5245 - ICE)
 	IceControlling =      0x802A,    // ICE-CONTROLLING     (rfc5245 - ICE)
 	Unknown,                         // None of the above
@@ -317,10 +372,29 @@ public:
     virtual void toString(String& dest);
     virtual bool fromBuffer(u_int8_t* buffer, u_int16_t len);
     virtual void toBuffer(DataBlock& buffer);
+    void updateMsg(DataBlock& msg) const;
 public:
     DataBlock m_mac;
     String m_password;
     u_int32_t m_pos;
+};
+
+// Fingerprint (rfc5389 section 15.4)
+class YStunAttributeFingerprint: public YStunAttribute
+{
+public:
+    inline YStunAttributeFingerprint()
+	: YStunAttribute(Fingerprint)
+	, m_pos(0)
+	{}
+    virtual ~YStunAttributeFingerprint() {}
+    virtual void toString(String& dest);
+    virtual bool fromBuffer(u_int8_t* buffer, u_int16_t len);
+    virtual void toBuffer(DataBlock& buffer);
+    void updateMsg(DataBlock& msg) const;
+public:
+    u_int32_t m_pos;
+    u_int32_t m_value;
 };
 
 // Unknown
@@ -370,7 +444,6 @@ public:
     inline void addAttribute(YStunAttribute* attr)
 	{ m_attributes.append(attr); }
     bool checkIntegrity(const u_int8_t* data, const String& password) const;
-    void updateIntegrity(DataBlock& msg, const String& password) const;
     YStunAttribute* getAttribute(u_int16_t attrType, bool remove = false);
     void toMessage(Message& msg) const;
     bool toBuffer(DataBlock& buffer) const;
@@ -513,11 +586,16 @@ public:
     YStunListener(const String& name, Thread::Priority prio = Thread::Normal);
     ~YStunListener();
     void init(const NamedList& params);
+    virtual const String& toString()
+	{ return m_name; }
+    const String& addr() const
+	{ return m_addr.addr(); }
 protected:
     virtual void run();
     bool received(DataBlock& pkt, const SocketAddr& remote);
 private:
     String m_name;
+    SocketAddr m_addr;                   // Address to bind socket to
     Socket* m_sock;
     unsigned int m_maxpkt;               // Max receive packet length
 };
@@ -798,6 +876,42 @@ void YStunAttributeMessageIntegrity::toBuffer(DataBlock& buffer)
     buffer += m_mac;
 }
 
+void YStunAttributeMessageIntegrity::updateMsg(DataBlock& msg) const
+{
+    DataBlock mac;
+    YStunUtils::calcMessageIntegrity(m_password, (u_int8_t*)msg.data(), m_pos, mac);
+    memcpy(msg.data(m_pos + 4), mac.data(), mac.length());
+}
+
+// YStunAttributeFingerprint
+void YStunAttributeFingerprint::toString(String& dest)
+{
+    dest.hexify(&m_value, sizeof(m_value));
+}
+
+bool YStunAttributeFingerprint::fromBuffer(u_int8_t* buffer, u_int16_t len)
+{
+    if (!(buffer && len == 4))
+	return false;
+    m_value = ntohl(*(u_int32_t*)buffer);
+    return true;
+}
+
+void YStunAttributeFingerprint::toBuffer(DataBlock& buffer)
+{
+    DataBlock tmp;
+    tmp.resize(8);
+    setHeader((u_int8_t*)tmp.data(), type(), 4);
+    *(u_int32_t*)tmp.data(4) = htonl(m_value);
+    buffer += tmp;
+}
+
+void YStunAttributeFingerprint::updateMsg(DataBlock& msg) const
+{
+    u_int32_t fp = YStunUtils::calcFingerprint(msg.data(), m_pos);
+    *(u_int32_t*)msg.data(m_pos + 4) = htonl(fp);
+}
+
 // YStunAttributeUnknown
 void YStunAttributeUnknown::toString(String& dest)
 {
@@ -884,13 +998,22 @@ void YStunMessage::toMessage(Message& msg) const
 bool YStunMessage::toBuffer(DataBlock& buffer) const
 {
     YStunAttributeMessageIntegrity* mi = NULL;
+    YStunAttributeFingerprint* fp = NULL;
     // Create attributes
     DataBlock attr_buffer;
     ObjList* obj = m_attributes.skipNull();
     for(; obj; obj = obj->skipNext()) {
 	YStunAttribute* attr = static_cast<YStunAttribute*>(obj->get());
-	if (attr->type() == YStunAttribute::MessageIntegrity)
+	switch(attr->type()) {
+	case YStunAttribute::MessageIntegrity:
 	    (mi = static_cast<YStunAttributeMessageIntegrity*>(attr))->m_pos = STUN_MSG_HEADERLENGTH + attr_buffer.length();
+	    break;
+	case YStunAttribute::Fingerprint:
+	    (fp = static_cast<YStunAttributeFingerprint*>(attr))->m_pos = STUN_MSG_HEADERLENGTH + attr_buffer.length();
+	    break;
+	default:
+	    break;
+	}
 	attr->toBuffer(attr_buffer);
 	size_t padding = attr_buffer.length() % 4;
 	if (padding)
@@ -903,7 +1026,9 @@ bool YStunMessage::toBuffer(DataBlock& buffer) const
     buffer.append(m_id);
     buffer.append(attr_buffer);
     if (mi)
-	updateIntegrity(buffer, mi->m_password);
+	mi->updateMsg(buffer);
+    if (fp)
+	fp->updateMsg(buffer);
     return true;
 }
 
@@ -934,17 +1059,6 @@ bool YStunMessage::checkIntegrity(const u_int8_t* data, const String& password) 
     return mac.length() == mia->m_mac.length() && 0 == memcmp(mac.data(), mia->m_mac.data(), mac.length());
 }
 
-void YStunMessage::updateIntegrity(DataBlock& msg, const String& password) const
-{
-    const YStunAttributeMessageIntegrity* mia = static_cast<YStunAttributeMessageIntegrity*>(const_cast<YStunMessage*>(this)->getAttribute(YStunAttribute::MessageIntegrity));
-    if (! mia)
-	return;
-    DataBlock mac;
-    YStunUtils::calcMessageIntegrity(password, (u_int8_t*)msg.data(), mia->m_pos, mac);
-    memcpy(msg.data(mia->m_pos + 4), mac.data(), mac.length());
-}
-
-
 
 /**
  * YStunUtils
@@ -974,17 +1088,23 @@ bool YStunUtils::isStun(const void* data, u_int32_t len,
 	return false;
     isRfc576 = 0 == memcmp(buffer + 4, magic_cookie.u8, sizeof(magic_cookie));
 
-    // Check if the message contains a fingerprint attribute
-    if (isRfc576 && msg_len == len - STUN_MSG_HEADERLENGTH - 8) {
-	if (buffer[msg_len] != 0x80 || buffer[msg_len + 1] != 0x28
-#if 0 // TODO: implement calcFingerprint() (rfc5389 section 15.5) and uncomment
-	    || YStunUtils::calcFingerprint(buffer, msg_len) != *(u_int32_t*)&buffer[msg_len + 4]
-#endif
-	)
-	    return false;
-    }
-    else if (msg_len != len - STUN_MSG_HEADERLENGTH)
+    if (msg_len != len - STUN_MSG_HEADERLENGTH)
 	return false;
+    {
+	String t;
+	t.hexify(const_cast<uint8_t*>(buffer + len - 8), 8);
+	DDebug(&iplugin, DebugAll, "Last 8 bytes of incoming message: %s", t.c_str());
+    }
+    if (buffer[len - 8] == 0x80 && buffer[len - 8 + 1] == 0x28) {
+	DDebug(&iplugin, DebugAll, "Found Fingerprint attribute");
+	u_int32_t c1 = YStunUtils::calcFingerprint(buffer, len - 8);
+	u_int32_t c2 = ntohl(*(u_int32_t*)&buffer[len - 4]);
+	if(c1 != c2) {
+	    DDebug(&iplugin, DebugAll, "Fingerprint verification failed, calc=%08X, got=%08X", c1, c2);
+	    return false;
+	}
+    }
+
     // Check type
     switch (msg_type) {
 	case YStunMessage::BindReq:
@@ -1181,9 +1301,11 @@ bool YStunUtils::getAttrAuth(YStunMessage* msg, YStunAttribute::Type type,
     return true;
 }
 
-u_int32_t YStunUtils::calcFingerprint(const void * data, u_int32_t len)
+u_int32_t YStunUtils::calcFingerprint(const void * data, u_int32_t fppos)
 {
-    return 0; // TODO
+    static CRC32 crc32;
+    u_int32_t c = crc32((u_int8_t*)data, fppos /*len - 8*/);
+    return c ^ 0x5354554e;
 }
 
 bool YStunUtils::calcMessageIntegrity(const String& password, const u_int8_t * data, u_int32_t m_i_attr_pos, DataBlock& result)
@@ -1407,7 +1529,7 @@ bool YStunSocketFilter::processMessage(YStunMessage* msg)
 	return false;
     String id;
     id.hexify(msg->id().data(), msg->id().length());
-    DDebug(&iplugin,DebugAll,
+    Debug(&iplugin,DebugAll,
 	"Filter received %s (%p) from '%s:%d'. Id: '%s'. [%p]",
 	msg->text(),msg,m_remoteAddr.host().c_str(),
 	m_remoteAddr.port(),id.c_str(),this);
@@ -1472,7 +1594,10 @@ void YStunSocketFilter::processBindReq(YStunMessage* msg)
 		? YStunAttribute::XorMappedAddress
 		: YStunAttribute::MappedAddress,
 	    m_remoteAddr.host(), m_remoteAddr.port()));
-	rspMsg->addAttribute(new YStunAttributeMessageIntegrity(m_localPassword));
+	if(m_rfc5389) {
+	    rspMsg->addAttribute(new YStunAttributeMessageIntegrity(m_localPassword));
+	    rspMsg->addAttribute(new YStunAttributeFingerprint);
+	}
     }
     YStunUtils::sendMessage(socket(),rspMsg,m_remoteAddr,this);
     rspMsg->deref();
@@ -1586,14 +1711,13 @@ void YStunListener::init(const NamedList& params)
     String addr = params.getValue("addr", "0.0.0.0");
     int port = params.getIntValue("port", 3478);
 
-    SocketAddr lAddr;
-    lAddr.assign(SocketAddr::IPv4);
-    if (addr && !lAddr.host(addr)) {
+    m_addr.assign(SocketAddr::IPv4);
+    if (addr && !m_addr.host(addr)) {
 	Debug(&iplugin,DebugConf,"Invalid address '%s' configured", addr.c_str());
 	return;
     }
-    lAddr.port(port);
-    m_sock = new Socket(lAddr.family(), SOCK_DGRAM, IPPROTO_UDP);
+    m_addr.port(port);
+    m_sock = new Socket(m_addr.family(), SOCK_DGRAM, IPPROTO_UDP);
     if (!m_sock->valid()) {
 	Debug(&iplugin,DebugWarn,"Listener %s: Create socket failed (%s:%d)", m_name.c_str(), addr.c_str(), port);
 	return;
@@ -1602,7 +1726,7 @@ void YStunListener::init(const NamedList& params)
     if (!udp)
 	sock->setReuse();
 #endif
-    bool ok = m_sock->bind(lAddr);
+    bool ok = m_sock->bind(m_addr);
     if (!ok) {
 	Debug(&iplugin,DebugWarn,"Listener %s: Socket bind failed (%s:%d)", m_name.c_str(), addr.c_str(), port);
 	return;
@@ -1655,7 +1779,7 @@ void YStunListener::run()
 	}
 	buffer.truncate(res);
 
-	Debug(&iplugin, DebugInfo, "Listener %s got %d bytes packet from %s:%d [%p]", m_name.c_str(), res, remote.host().c_str(), remote.port(), this);
+	DDebug(&iplugin, DebugAll, "Listener %s got %d bytes packet from %s:%d [%p]", m_name.c_str(), res, remote.host().c_str(), remote.port(), this);
 #ifdef XDEBUG
 	String tmp;
 	tmp.hexify(buffer.data(), buffer.length());
@@ -1809,7 +1933,7 @@ void YStunPlugin::setupListener(const String& name, const NamedList& params)
     sl->init(params);
     if (sl->startup()) {
 	m_listeners.append(sl);
-	DDebug(&iplugin,DebugAll,"Added listener %p '%s'", sl, sl->toString().c_str());
+	Debug(&iplugin,DebugNote, "Added listener %p '%s' at %s", sl, sl->toString().c_str(), sl->addr().c_str());
     }
     else
 	Alarm(&iplugin,"config",DebugWarn,"Failed to start listener thread name='%s'", name.c_str());

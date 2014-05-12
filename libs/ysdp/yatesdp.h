@@ -269,6 +269,12 @@ public:
     void parameter(const char* name, const char* value, bool append);
 
     /**
+     * Removes a parameter by name, set the modified flag
+     * @param name Parameter name
+     */
+    void deleteParameter(const char* name);
+
+    /**
      * Add or replace a parameter, set the modified flag
      * @param param The parameter
      * @param append True to append, false to replace

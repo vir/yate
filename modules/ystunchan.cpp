@@ -1090,13 +1090,7 @@ bool YStunUtils::isStun(const void* data, u_int32_t len,
 
     if (msg_len != len - STUN_MSG_HEADERLENGTH)
 	return false;
-    {
-	String t;
-	t.hexify(const_cast<uint8_t*>(buffer + len - 8), 8);
-	DDebug(&iplugin, DebugAll, "Last 8 bytes of incoming message: %s", t.c_str());
-    }
     if (buffer[len - 8] == 0x80 && buffer[len - 8 + 1] == 0x28) {
-	DDebug(&iplugin, DebugAll, "Found Fingerprint attribute");
 	u_int32_t c1 = YStunUtils::calcFingerprint(buffer, len - 8);
 	u_int32_t c2 = ntohl(*(u_int32_t*)&buffer[len - 4]);
 	if(c1 != c2) {
@@ -1414,11 +1408,23 @@ bool YStunSocketFilter::received(void* buffer, int length, int flags,
     else
 	msg = YStunUtils::decode(buffer,length,type);
 
-    if (msg && !m_localPassword.null() && !msg->checkIntegrity((u_int8_t*)buffer, m_localPassword)) {
-	Debug(&iplugin,DebugInfo, "Filter ignoring message - failed integrity check. [%p]", this);
-	msg->deref();
-	msg = NULL;
-	return true;
+    switch(msg->type()) {
+	case YStunMessage::BindReq:
+	    if (msg && !m_localPassword.null() && !msg->checkIntegrity((u_int8_t*)buffer, m_localPassword)) {
+		Debug(&iplugin,DebugInfo, "Filter ignoring message - failed integrity check. [%p]", this);
+		msg->deref();
+		return true;
+	    }
+	    break;
+	case YStunMessage::BindRsp:
+	    if (msg && !m_remotePassword.null() && !msg->checkIntegrity((u_int8_t*)buffer, m_remotePassword)) {
+		Debug(&iplugin,DebugInfo, "Filter ignoring message - failed integrity check. [%p]", this);
+		msg->deref();
+		return true;
+	    }
+	    break;
+	default:
+	    break;
     }
 
     if (msg) {
@@ -1489,6 +1495,8 @@ void YStunSocketFilter::timerTick(const Time& when)
 {
     if (m_passive)
 	return;
+    if (m_rfc5389 && !(m_localUsername && m_remoteUsername && m_remotePassword))
+	return;
     u_int64_t time = when.msec();
     Lock lock(m_bindReqMutex);
     // Send another request ?
@@ -1500,8 +1508,17 @@ void YStunSocketFilter::timerTick(const Time& when)
 	YStunUtils::createId(id);
 	id.resize(FILTER_SECURITYLENGTH);
 	id.append(m_security);
+	if (m_rfc5389)
+	    memcpy(id.data(), magic_cookie.u8, sizeof(magic_cookie));
 	YStunMessage* req = new YStunMessage(YStunMessage::BindReq,id.data(), id.length());
-	if (m_useLocalUsername)
+	if (m_rfc5389) {
+	    req->addAttribute(new YStunAttributeAuth(m_remoteUsername + ":" + m_localUsername));
+	    // TODO: priority && ice-controlled
+	    req->addAttribute(new YStunAttributeSoftware(iplugin.software()));
+	    req->addAttribute(new YStunAttributeMessageIntegrity(m_remotePassword));
+	    req->addAttribute(new YStunAttributeFingerprint);
+	}
+	else if (m_useLocalUsername)
 	    req->addAttribute(new YStunAttributeAuth(m_localUsername));
 	m_bindReq = new YStunMessageOut(req,m_remoteAddr,this);
 	m_bindReq->send(socket(),time);

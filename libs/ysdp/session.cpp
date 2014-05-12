@@ -148,7 +148,7 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
 	const String* suite = m->getParam("ocrypto_suite");
 	const String* key = m->getParam("ocrypto_key");
 	const String* params = m->getParam("ocrypto_params");
-	if (suite && key && (tag > 0)) {
+	if (suite && key && (tag >= 0)) {
 	    String sdes(tag);
 	    sdes << " " << *suite << " " << *key;
 	    if (params)

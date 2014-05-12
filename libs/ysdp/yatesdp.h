@@ -304,8 +304,13 @@ public:
     void parameter(bool remote, const char* name, const char* value, bool append);
 
     /**
+     * Removes a parameter by name, set the modified flag
+     * @param name Parameter name
+     */
+    void deleteParameter(const char* name);
+
+    /**
      * Add or replace a parameter (SDP attribute), set the modified flag
-     * @param remote True to set the remote parameter, false to set the local one
      * @param param The parameter
      * @param append True to append, false to replace
      */

@@ -56,6 +56,7 @@ SDPMedia::~SDPMedia()
 {
     DDebug(DebugAll,"SDPMedia::~SDPMedia() '%s' [%p]",c_str(),this);
     delete m_lIceCandidates;
+    delete m_rIceCandidates;
 }
 
 const char* SDPMedia::fmtList() const
@@ -210,6 +211,15 @@ void SDPMedia::fmtp(NamedString* parameter)
 	return;
     m_fmtps.setParam(parameter);
     m_modified = true;
+}
+
+// Removes a parameter by name, set the modified flag
+void SDPMedia::deleteParameter(const char* name)
+{
+    if (!name)
+	return;
+    m_modified = true;
+    clearParam(name);
 }
 
 void SDPMedia::crypto(const char* desc, bool remote)

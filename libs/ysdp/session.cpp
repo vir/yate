@@ -155,6 +155,21 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
     m_rtpForward = false;
     m_rtpLocalAddr = m->getValue("localip",m_rtpLocalAddr);
     m_mediaStatus = m_rtpLocalAddr.null() ? MediaMuted : MediaStarted;
+
+#if 1
+    /*
+     * Remove some unsupported SDP attributes here,
+     * assuming that we will handle rtp ourselves and
+     * we do not support any of this extensions.
+     */
+    media->deleteParameter("fingerprint"); // rfc4572.txt
+    media->deleteParameter("rtcp"); // rfc3605
+    //media->deleteParameter("mid"); // rfc5888 // seems harmless
+    media->deleteParameter("setup"); // rfc4145, rfc6135
+    media->deleteParameter("extmap"); // rfc5285
+    media->deleteParameter("rtcp-mux"); // rfc5761
+#endif
+
     const char* sdpPrefix = m->getValue("osdp-prefix","osdp");
     if (sdpPrefix) {
 	unsigned int n = m->length();
@@ -576,7 +591,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 		    String tmp = param->name();
 		    if (*param)
 			tmp << ":" << *param;
-		    sdp->addLine("a",tmp);
+		    sdp->addLine("a",tmp); // XXX XXX XXX XXX here we add those evil lines like 'setup', 'rtcp', 'rtcp-mux', ... XXX XXX XXX XXX
 		    enc = enc || (param->name() == "encryption");
 		}
 	    }
@@ -593,11 +608,11 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	}
 	const IceRtpCandidates* ice = m->localIceCandidates();
 	if(ice) {
+	    sdp->addLine("a", "ice-lite");
 	    for (ObjList* o = ice->skipNull(); o; o = o->skipNext())
 		sdp->addLine("a", ((static_cast<IceRtpCandidate*>(o->get()))->toSDPAttribute(*ice)));
 	    sdp->addLine("a", ice->toSDPAttribute(false));
 	    sdp->addLine("a", ice->toSDPAttribute(true));
-	    sdp->addLine("a", "ice-lite");
 	}
     }
     // increment version if body hash changed

@@ -709,6 +709,7 @@ protected:
     String m_host;
     bool m_secure;
     int m_rfc2833;                       // Payload of RFC 2833 for remote party
+    bool m_ice;                          // ICE support
     bool m_ipv6;                         // IPv6 support
 
 private:
@@ -734,7 +735,7 @@ public:
     inline SDPParser(const char* dbgName, const char* sessName, const char* fmts = "alaw,mulaw")
 	: Mutex(true,"SDPParser"),
 	  m_rfc2833(101),
-	  m_sdpForward(false), m_secure(false), m_ignorePort(false),
+	  m_sdpForward(false), m_secure(false), m_ignorePort(false), m_ice(false),
 	  m_sessionName(sessName), m_audioFormats(fmts),
 	  m_codecs(""), m_hacks("")
 	{ debugName(dbgName); }
@@ -760,6 +761,13 @@ public:
      */
     inline bool secure() const
 	{ return m_secure; }
+
+    /**
+     * Get the ICE support flag
+     * @return True if ICE is enabled in configuration file
+     */
+    inline bool ice() const
+	{ return m_ice; }
 
     /**
      * Get the SDP forward flag
@@ -829,6 +837,7 @@ private:
     bool m_sdpForward;                   // Include raw SDP for forwarding
     bool m_secure;                       // Offer SRTP
     bool m_ignorePort;                   // Ignore port only changes in SDP
+    bool m_ice;                          // ICE support
     String m_sessionName;
     String m_audioFormats;               // Default audio formats to be advertised to remote party
     NamedList m_codecs;                  // Codecs configuration list

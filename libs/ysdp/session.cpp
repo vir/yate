@@ -32,7 +32,7 @@ SDPSession::SDPSession(SDPParser* parser)
       m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_sdpHash(YSTRING_INIT_HASH),
       m_secure(m_parser->m_secure), m_rfc2833(m_parser->m_rfc2833),
-      m_ipv6(false), m_enabler(0), m_ptr(0)
+      m_ice(m_parser->m_ice), m_ipv6(false), m_enabler(0), m_ptr(0)
 {
     setSdpDebug();
 }
@@ -47,6 +47,7 @@ SDPSession::SDPSession(SDPParser* parser, NamedList& params)
     m_rtpForward = params.getBoolValue("rtp_forward");
     m_secure = params.getBoolValue("secure",parser->m_secure);
     m_rfc2833 = parser->m_rfc2833;
+    m_ice = params.getBoolValue("ice",parser->m_ice);
     setRfc2833(params.getParam("rfc2833"));
 }
 
@@ -164,10 +165,11 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
      */
     media->deleteParameter("fingerprint"); // rfc4572.txt
     media->deleteParameter("rtcp"); // rfc3605
-    //media->deleteParameter("mid"); // rfc5888 // seems harmless
+    media->deleteParameter("mid"); // rfc5888 requires rtcp-mux
     media->deleteParameter("setup"); // rfc4145, rfc6135
     media->deleteParameter("extmap"); // rfc5285
     media->deleteParameter("rtcp-mux"); // rfc5761
+    media->deleteParameter("ssrc"); // draft-ietf-mmusic-sdp-source-attributes-02
 #endif
 
     const char* sdpPrefix = m->getValue("osdp-prefix","osdp");
@@ -400,6 +402,8 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
     sdp->addLine("s",m_parser->m_sessionName);
     sdp->addLine("c",conn);
     sdp->addLine("t","0 0");
+    if (m_ice)
+	sdp->addLine("a", "ice-lite");
 
     Lock lock(m_parser);
     bool defcodecs = m_parser->m_codecs.getBoolValue("default",true);
@@ -608,7 +612,6 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	}
 	const IceRtpCandidates* ice = m->localIceCandidates();
 	if(ice) {
-	    sdp->addLine("a", "ice-lite");
 	    for (ObjList* o = ice->skipNull(); o; o = o->skipNext())
 		sdp->addLine("a", ((static_cast<IceRtpCandidate*>(o->get()))->toSDPAttribute(*ice)));
 	    sdp->addLine("a", ice->toSDPAttribute(false));
@@ -816,6 +819,7 @@ void SDPSession::resetSdp(bool all)
     if (all) {
 	m_secure = m_parser->secure();
 	m_rfc2833 = m_parser->rfc2833();
+	m_ice = m_parser->ice();
     }
 }
 

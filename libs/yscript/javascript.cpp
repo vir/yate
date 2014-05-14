@@ -3484,6 +3484,13 @@ ExpOperation* JsParser::nullClone(const char* name)
     return TelEngine::null(name) ? s_null.ExpOperation::clone() : s_null.clone(name);
 }
 
+// Return the "null" object
+JsObject* JsParser::nullObject()
+{
+    JsObject* n = YOBJECT(JsObject,s_null.object());
+    return (n && n->ref()) ? n : 0;
+}
+
 // Check if an object is identic to null
 bool JsParser::isNull(const ExpOperation& oper)
 {

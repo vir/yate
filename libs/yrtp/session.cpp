@@ -124,6 +124,11 @@ void RTPReceiver::rtpData(const void* data, int len)
     // check protocol version number
     if ((pc[0] & 0xc0) != 0x80)
 	return;
+    // check for multiplexed RTCP
+    if (m_rtcp_mux && (pc[1]&0x7F) >= 72 && (pc[1]&0x7F) <= 80) {
+	rtcpData(data, len);
+	return;
+    }
     const unsigned char* secPtr = 0;
     if (m_secLen) {
 	// security info is placed after data and padding
@@ -666,7 +671,7 @@ RTPSession::RTPSession()
       m_direction(FullStop),
       m_send(0), m_recv(0), m_secure(0),
       m_reportTime(0), m_reportInterval(0),
-      m_warnSeq(1)
+      m_warnSeq(1), m_rtcp_mux(false)
 {
     DDebug(DebugInfo,"RTPSession::RTPSession() [%p]",this);
 }
@@ -761,7 +766,7 @@ RTPSender* RTPSession::createSender()
 
 RTPReceiver* RTPSession::createReceiver()
 {
-    return new RTPReceiver(this);
+    return new RTPReceiver(this, m_rtcp_mux);
 }
 
 Cipher* RTPSession::createCipher(const String& name, Cipher::Direction dir)

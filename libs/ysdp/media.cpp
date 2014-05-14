@@ -192,12 +192,19 @@ void SDPMedia::parameter(NamedString* param, bool append)
 }
 
 // Removes a parameter by name, set the modified flag
-void SDPMedia::deleteParameter(const char* name)
+void SDPMedia::deleteParameter(const char* name, char childSep)
 {
     if (!name)
 	return;
+    clearParam(name, childSep);
     m_modified = true;
-    clearParam(name);
+}
+
+// Removes all parameters, set the modified flag
+void SDPMedia::deleteParameters()
+{
+    clearParams();
+    m_modified = true;
 }
 
 void SDPMedia::crypto(const char* desc, bool remote)

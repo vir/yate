@@ -397,6 +397,25 @@ public:
     u_int32_t m_value;
 };
 
+// UseCandidate (ICE)
+class YStunAttributeUseCandidate: public YStunAttribute
+{
+public:
+    inline YStunAttributeUseCandidate()
+	: YStunAttribute(UseCandidate)
+	{}
+    virtual ~YStunAttributeUseCandidate() {}
+    virtual void toString(String& dest) { }
+    virtual bool fromBuffer(u_int8_t* buffer, u_int16_t len) { return len == 0; }
+    virtual void toBuffer(DataBlock& buffer)
+    {
+	DataBlock tmp;
+	tmp.resize(4);
+	setHeader((u_int8_t*)tmp.data(), type(), 0);
+	buffer += tmp;
+    }
+};
+
 // Unknown
 class YStunAttributeUnknown : public YStunAttribute
 {
@@ -557,6 +576,8 @@ protected:
     void processBindReq(YStunMessage* msg);
     // Process a received binding response (error or response)
     void processBindResult(YStunMessage* msg);
+    // Send chan.rtp message to update RTP peer address
+    void dispatchChanRtp();
 private:
     SocketAddr m_remoteAddr;             // Last received packet's address
     bool m_useLocalUsername;             // True to use local username when sending bind request
@@ -1172,6 +1193,9 @@ YStunMessage* YStunUtils::decode(const void* data, u_int32_t len, YStunMessage::
 		attr = new YStunAttributeMessageIntegrity();
 		static_cast<YStunAttributeMessageIntegrity*>(attr)->m_pos = i - 4; // remember attribute offset
 		break;
+	    case YStunAttribute::UseCandidate:
+		attr = new YStunAttributeUseCandidate();
+		break;
 	    case YStunAttribute::UnknownAttributes:
 	    case YStunAttribute::Realm:
 	    case YStunAttribute::Nonce:
@@ -1605,6 +1629,11 @@ void YStunSocketFilter::processBindReq(YStunMessage* msg)
 	    lookup(YStunError::Auth,YStunError::s_tokens)));
     }
     else {
+	if (m_notFound && msg->getAttribute(YStunAttribute::UseCandidate)) {
+	    Debug(&iplugin, DebugInfo, "Got valid bind request with USE-CANDIDATE attribute, updating rtp %s address to %s", m_userId.c_str(), m_remoteAddr.addr().c_str());
+	    m_notFound = false;
+	    dispatchChanRtp();
+	}
 	// Add mapped address attribute
 	rspMsg->addAttribute(new YStunAttributeAddr(
 	    m_rfc5389
@@ -1645,12 +1674,7 @@ void YStunSocketFilter::processBindResult(YStunMessage* msg)
 		"Filter: Response authenticated for '%s:%d' - notifying RTP. [%p]",
 		m_remoteAddr.host().c_str(),m_remoteAddr.port(),this);
 	    m_notFound = false;
-	    Message* m = new Message("chan.rtp");
-	    m->addParam("direction","bidir");
-	    m->addParam("remoteip",m_remoteAddr.host());
-	    m->addParam("remoteport",String(m_remoteAddr.port()));
-	    m->addParam("rtpid",m_userId);
-	    Engine::enqueue(m);
+	    dispatchChanRtp();
 	}
     }
     if (msg->type() == YStunMessage::BindRsp) {
@@ -1685,6 +1709,16 @@ void YStunSocketFilter::processBindResult(YStunMessage* msg)
     // Remove request
     m_bindReq->deref();
     m_bindReq = 0;
+}
+
+void YStunSocketFilter::dispatchChanRtp()
+{
+    Message* m = new Message("chan.rtp");
+    m->addParam("direction","bidir");
+    m->addParam("remoteip",m_remoteAddr.host());
+    m->addParam("remoteport",String(m_remoteAddr.port()));
+    m->addParam("rtpid",m_userId);
+    Engine::enqueue(m);
 }
 
 /**

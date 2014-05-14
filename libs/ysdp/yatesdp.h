@@ -306,8 +306,14 @@ public:
     /**
      * Removes a parameter by name, set the modified flag
      * @param name Parameter name
+     * @param childSep If set clears all child parameters in format name+childSep+anything 
      */
-    void deleteParameter(const char* name);
+    void deleteParameter(const char* name, char childSep = 0);
+
+    /**
+     * Removes all parameters
+     */
+    void deleteParameters();
 
     /**
      * Add or replace a parameter (SDP attribute), set the modified flag

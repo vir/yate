@@ -168,8 +168,14 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
     media->deleteParameter("mid"); // rfc5888 requires rtcp-mux
     media->deleteParameter("setup"); // rfc4145, rfc6135
     media->deleteParameter("extmap"); // rfc5285
-    media->deleteParameter("rtcp-mux"); // rfc5761
+    media->deleteParameter("rtcp-mux"); // rfc5761 // will be re-added later if RTP module supports
     media->deleteParameter("ssrc"); // draft-ietf-mmusic-sdp-source-attributes-02
+#elif 1
+    /*
+     * In fact, no sdp attributes should be copied from one call leg to
+     * another if RTP is handled by Yate.
+     */
+    media->deleteParameter(NULL);
 #endif
 
     const char* sdpPrefix = m->getValue("osdp-prefix","osdp");

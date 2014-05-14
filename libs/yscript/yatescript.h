@@ -2537,6 +2537,12 @@ public:
     static ExpOperation* nullClone(const char* name = 0);
 
     /**
+     * Obtain the "null" object
+     * @return Referenced "null" object (0 if ref() fails)
+     */
+    static JsObject* nullObject();
+
+    /**
      * Check if an operation holds a null value
      * @return True if the operation holds a null object
      */

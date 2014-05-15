@@ -900,6 +900,28 @@ static String s_lastFileFilter;          // Last filter used to pick a file to s
 static NamedList s_generic("");          // List for generic strings/data used across module
 static unsigned int s_fileInfoMax = 20;  // Max file info items to be returned in a single message
 static String s_dirUp = "..";
+// Dynamic load
+static bool s_loadIAX = true;
+
+// Check for protocol or target
+// Load a module is needed
+static void checkLoadModule(const NamedList* params, const String* target = 0)
+{
+    if (!s_loadIAX)
+	return;
+    bool load = (target && target->startsWith("iax/")) ||
+	(params && (*params)[YSTRING("protocol")] == YSTRING("iax"));
+    if (!load)
+	return;
+    s_loadIAX = false;
+    Message m("engine.command");
+    m.addParam("line","module load yiaxchan.yate");
+    m.addParam("cmd_address","client");
+    Engine::dispatch(m);
+    const char* res = m.retValue();
+    if (res)
+	Output("%s",res);
+}
 
 static void copySubParams(NamedList& dest, const NamedList& src, const String& prefix,
     const char* newPrefix, const String& skip = String::empty())
@@ -3160,6 +3182,8 @@ static void setAccountStatus(ClientAccountList* accounts, ClientAccount* acc,
 	    addAccPendingStatus(*m,acc,stat);
 	    // Make sure we see the login fail notification
 	    acc->m_params.clearParam(YSTRING("internal.nologinfail"));
+	    // Load module ?
+	    checkLoadModule(&acc->params());
 	}
 	else {
 	    acc->resource().m_status = ClientResource::Offline;
@@ -4471,6 +4495,7 @@ bool AccountWizard::changePage(const String& page, const String& old)
 	    m_account = a;
 	    setAccountContact(acc);
 	    Message* m = userLogin(acc,true);
+	    checkLoadModule(&acc->params());
 	    addAccPendingStatus(*m,acc);
 	    m->addParam("send_presence",String::boolText(false));
 	    m->addParam("request_roster",String::boolText(false));
@@ -7794,6 +7819,7 @@ bool DefaultLogic::callStart(NamedList& params, Window* wnd, const String& cmd)
 	    }
 	}
     }
+    checkLoadModule(&params,target ? (const String*)&target : &ns);
     // Delete the number from the "callto" widget and put it in the callto history
     if (ns) {
 	Client::self()->delTableRow(s_calltoList,ns);
@@ -7920,6 +7946,7 @@ bool DefaultLogic::loginAccount(const NamedList& account, bool login)
     if (acc) {
 	m = userLogin(acc,login);
 	if (login) {
+	    checkLoadModule(&acc->params());
 	    if (acc->resource().offline() || !isTelProto(acc->protocol()))
 		newStat = ClientResource::Connecting;
 	}
@@ -7932,8 +7959,10 @@ bool DefaultLogic::loginAccount(const NamedList& account, bool login)
     }
     else {
 	m = Client::buildMessage("user.login",account,login ? "login" : "logout");
-	if (login)
+	if (login) {
 	    m->copyParams(account);
+	    checkLoadModule(&account);
+	}
 	else
 	    m->copyParams(account,YSTRING("protocol"));
     }

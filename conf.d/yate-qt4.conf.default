@@ -10,3 +10,6 @@ h323chan.yate=yes
 ;stylesheet_file=
 ;device=
 ;greeting=Yate ${version} - ${release}
+
+[modules]
+yiaxchan.yate=no

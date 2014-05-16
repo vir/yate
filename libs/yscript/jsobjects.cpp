@@ -968,15 +968,18 @@ class JsComparator
 {
 public:
     JsComparator(const char* funcName, ScriptRun* runner)
-	: m_name(funcName), m_runner(runner)
+	: m_name(funcName), m_runner(runner), m_failed(false)
 	{ }
     const char* m_name;
     ScriptRun* m_runner;
+    bool m_failed;
 };
 
 int compare(GenObject* op1, GenObject* op2, void* data)
 {
     JsComparator* cmp = static_cast<JsComparator*>(data);
+    if (cmp && cmp->m_failed)
+	return 0;
     if (!(cmp && cmp->m_runner))
 	return ::strcmp(*(static_cast<String*>(op1)),*(static_cast<String*>(op2)));
     ScriptRun* runner = cmp->m_runner->code()->createRunner(cmp->m_runner->context());
@@ -988,10 +991,16 @@ int compare(GenObject* op1, GenObject* op2, void* data)
     ScriptRun::Status rval = runner->call(cmp->m_name,stack);
     int ret = 0;
     if (ScriptRun::Succeeded == rval) {
-	String* sret = static_cast<String*>(ExpEvaluator::popOne(runner->stack()));
-	ret = sret->toInteger();
-	TelEngine::destruct(sret);
+	ExpOperation* sret = static_cast<ExpOperation*>(ExpEvaluator::popOne(runner->stack()));
+	if (sret) {
+	    ret = sret->toInteger();
+	    TelEngine::destruct(sret);
+	}
+	else
+	    cmp->m_failed = true;
     }
+    else
+	cmp->m_failed = true;
     TelEngine::destruct(runner);
     return ret;
 }
@@ -1014,17 +1023,20 @@ bool JsArray::runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject*
 	return false;
     JsComparator* comp = op ? new JsComparator(op->name() ,runner) : 0;
     sorted.sort(&compare,comp);
+    bool ok = comp ? !comp->m_failed : true;
     delete comp;
-    int i = 0;
-    for (ObjList* o = sorted.skipNull();o;o = o->skipNext()) {
-	NamedString* slice = static_cast<NamedString*>(o->get());
-	String* name = (String*)(&slice->name());
-	*name = String(i++);
-	params().addParam(slice);
-	o->setDelete(false);
+    if (ok) {
+	int i = 0;
+	for (ObjList* o = sorted.skipNull();o;o = o->skipNext()) {
+	    NamedString* slice = static_cast<NamedString*>(o->get());
+	    String* name = (String*)(&slice->name());
+	    *name = String(i++);
+	    params().addParam(slice);
+	    o->setDelete(false);
+	}
+	setLength(i);
     }
-    setLength(i);
-    return true;
+    return ok;
 }
 
 

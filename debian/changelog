@@ -1,4 +1,4 @@
-yate (5.3.1~svn5832) UNRELEASED; urgency=low
+yate (5.3.1~svn5833) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1121,8 +1121,13 @@ yate (5.3.1~svn5832) UNRELEASED; urgency=low
   * Updated to SVN revision 5832: + Disable yiaxchan.yate module load in
     yate-qt4.conf file. Dispatch an engine.command message to load it
     when making a call using iax or enabling an iax account.
+  * Updated to SVN revision 5833: + This avoids segmentation faults
+    caused by a callback compare function for Array.sort() which doesn't
+    return anything. Instead, signal a runtime error.  + Bug fix: check
+    that we extract a valid pointer from the stack when running the
+    compare function for Array.sort().
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 16 May 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 17 May 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

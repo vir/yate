@@ -350,14 +350,18 @@ static void merge(ObjList* first, ObjList* second,int (*compare)(GenObject* obj1
 {
     if (!(first && second))
 	return;
+    bool del = true;
     if (!first->skipNull()) {
-	while (second->skipNull())
-	    first->append(second->remove(false));
+	while (second->skipNull()) {
+	    del = second->autoDelete();
+	    first->append(second->remove(false))->setDelete(del);
+	}
 	return;
     }
     ObjList* head = first->skipNull();
     GenObject* current = head->get();
     while (second->skipNull()) {
+	del = second->autoDelete();
 	GenObject* next = second->remove(false);
 	while (current && compare(current,next,dat) < 1) {
 	    if (!head->skipNext()) {
@@ -368,10 +372,10 @@ static void merge(ObjList* first, ObjList* second,int (*compare)(GenObject* obj1
 	    current = head->get();
 	}
 	if (!current) {
-	    first->append(next);
+	    first->append(next)->setDelete(del);
 	    continue;
 	}
-	head->insert(next);
+	head->insert(next)->setDelete(del);
 	head = head->skipNext();
     }
 }
@@ -382,17 +386,19 @@ static void splitList(ObjList& list, ObjList& splits, int (*compare)(GenObject* 
 	return;
     ObjList* slice = new ObjList();
     splits.append(slice);
+    bool autodel = list.autoDelete();
     GenObject* last = list.remove(false);
-    slice->append(last);
+    slice->append(last)->setDelete(autodel);
     while (list.skipNull()) {
+	autodel = list.autoDelete();
 	GenObject* next = list.remove(false);
 	if (compare(last,next,data) < 1) {
-	    slice->append(next);
+	    slice->append(next)->setDelete(autodel);
 	    last = next;
 	    continue;
 	}
 	slice = new ObjList();
-	slice->append(next);
+	slice->append(next)->setDelete(autodel);
 	splits.append(slice);
 	last = next;
     }

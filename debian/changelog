@@ -1,4 +1,4 @@
-yate (5.3.1~svn5833) UNRELEASED; urgency=low
+yate (5.3.1~svn5835) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1126,8 +1126,14 @@ yate (5.3.1~svn5833) UNRELEASED; urgency=low
     return anything. Instead, signal a runtime error.  + Bug fix: check
     that we extract a valid pointer from the stack when running the
     compare function for Array.sort().
+  * Updated to SVN revision 5835: + Bug fix: check that we extract a
+    valid pointer from the stack when running the compare function for
+    Array.sort().  + Bug fix: keep the ObjList autodelete flag when
+    doing ObjList::sort().  + Leave Javascript array data untouched if
+    sorting fails. Slightly optimized the native sort procedure for
+    Javascript array.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 17 May 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 20 May 2014 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -1011,30 +1011,36 @@ bool JsArray::runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject*
     ExpOperation* op = 0;
     if (extractArgs(this,stack,oper,context,arguments))
 	op = static_cast<ExpOperation*>(arguments[0]);
-    ObjList sorted;
-    // Copy the arguments in a ObjList for sorting
-    for (int i = 0;i < length();i++) {
-	NamedString* param = params().getParam(String(i));
-	sorted.append(param);
-	params().clearParam(param,false);
-    }
     ScriptRun* runner = YOBJECT(ScriptRun,context);
     if (op && !runner)
 	return false;
+    ObjList sorted;
+    ObjList* last = &sorted;
+    // Copy the arguments in a ObjList for sorting
+    for (ObjList* o = params().paramList()->skipNull(); o; o = o->skipNext()) {
+	NamedString* str = static_cast<NamedString*>(o->get());
+	if (str->name().toInteger(-1) > -1)
+	    (last = last->append(str))->setDelete(false);
+    }
     JsComparator* comp = op ? new JsComparator(op->name() ,runner) : 0;
     sorted.sort(&compare,comp);
     bool ok = comp ? !comp->m_failed : true;
     delete comp;
     if (ok) {
-	int i = 0;
-	for (ObjList* o = sorted.skipNull();o;o = o->skipNext()) {
-	    NamedString* slice = static_cast<NamedString*>(o->get());
-	    String* name = (String*)(&slice->name());
-	    *name = String(i++);
-	    params().addParam(slice);
-	    o->setDelete(false);
+	for (ObjList* o = params().paramList()->skipNull(); o;) {
+	    NamedString* str = static_cast<NamedString*>(o->get());
+	    if (str && str->name().toInteger(-1) > -1)
+		o->remove(false);
+	    else
+		o = o->skipNext();
 	}
-	setLength(i);
+	int i = 0;
+	last = params().paramList()->last();
+	for (ObjList* o = sorted.skipNull();o; o = o->skipNull()) {
+	    ExpOperation* slice = static_cast<ExpOperation*>(o->remove(false));
+	    const_cast<String&>(slice->name()) = i++;
+	    last = last->append(slice);
+	}
     }
     return ok;
 }

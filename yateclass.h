@@ -1408,6 +1408,7 @@ public:
      *     obj2 Second object of the comparation
      *     context Data context
      *     return 0 if the objects are equal; positive value if obj2 > obj1; negative value if obj1 > obj2
+     *     Note: the function should expect receiving null pointers
      * </pre>
      * @param context Context data.
      */

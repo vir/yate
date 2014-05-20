@@ -317,6 +317,7 @@ public:
 
     /**
      * Add or replace a parameter (SDP attribute), set the modified flag
+     * @param remote True to set the remote parameter, false to set the local one
      * @param param The parameter
      * @param append True to append, false to replace
      */

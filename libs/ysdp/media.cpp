@@ -213,19 +213,22 @@ void SDPMedia::fmtp(NamedString* parameter)
     m_modified = true;
 }
 
-// Removes a parameter by name, set the modified flag
-void SDPMedia::deleteParameter(const char* name, char childSep)
+// Set or reset format parameter
+void SDPMedia::fmtp(const char* format, const char* parameter)
 {
-    if (!name)
-	return;
-    clearParam(name, childSep);
+    if(parameter)
+	m_fmtps.setParam(format, parameter);
+    else
+	m_fmtps.clearParam(format);
     m_modified = true;
 }
 
-// Removes all parameters, set the modified flag
-void SDPMedia::deleteParameters()
+// Set format parameter
+void SDPMedia::fmtp(NamedString* parameter)
 {
-    clearParams();
+    if(! parameter)
+	return;
+    m_fmtps.setParam(parameter);
     m_modified = true;
 }
 

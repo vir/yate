@@ -968,15 +968,18 @@ class JsComparator
 {
 public:
     JsComparator(const char* funcName, ScriptRun* runner)
-	: m_name(funcName), m_runner(runner)
+	: m_name(funcName), m_runner(runner), m_failed(false)
 	{ }
     const char* m_name;
     ScriptRun* m_runner;
+    bool m_failed;
 };
 
 int compare(GenObject* op1, GenObject* op2, void* data)
 {
     JsComparator* cmp = static_cast<JsComparator*>(data);
+    if (cmp && cmp->m_failed)
+	return 0;
     if (!(cmp && cmp->m_runner))
 	return ::strcmp(*(static_cast<String*>(op1)),*(static_cast<String*>(op2)));
     ScriptRun* runner = cmp->m_runner->code()->createRunner(cmp->m_runner->context());
@@ -988,10 +991,16 @@ int compare(GenObject* op1, GenObject* op2, void* data)
     ScriptRun::Status rval = runner->call(cmp->m_name,stack);
     int ret = 0;
     if (ScriptRun::Succeeded == rval) {
-	String* sret = static_cast<String*>(ExpEvaluator::popOne(runner->stack()));
-	ret = sret->toInteger();
-	TelEngine::destruct(sret);
+	ExpOperation* sret = static_cast<ExpOperation*>(ExpEvaluator::popOne(runner->stack()));
+	if (sret) {
+	    ret = sret->toInteger();
+	    TelEngine::destruct(sret);
+	}
+	else
+	    cmp->m_failed = true;
     }
+    else
+	cmp->m_failed = true;
     TelEngine::destruct(runner);
     return ret;
 }
@@ -1002,29 +1011,38 @@ bool JsArray::runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject*
     ExpOperation* op = 0;
     if (extractArgs(this,stack,oper,context,arguments))
 	op = static_cast<ExpOperation*>(arguments[0]);
-    ObjList sorted;
-    // Copy the arguments in a ObjList for sorting
-    for (int i = 0;i < length();i++) {
-	NamedString* param = params().getParam(String(i));
-	sorted.append(param);
-	params().clearParam(param,false);
-    }
     ScriptRun* runner = YOBJECT(ScriptRun,context);
     if (op && !runner)
 	return false;
+    ObjList sorted;
+    ObjList* last = &sorted;
+    // Copy the arguments in a ObjList for sorting
+    for (ObjList* o = params().paramList()->skipNull(); o; o = o->skipNext()) {
+	NamedString* str = static_cast<NamedString*>(o->get());
+	if (str->name().toInteger(-1) > -1)
+	    (last = last->append(str))->setDelete(false);
+    }
     JsComparator* comp = op ? new JsComparator(op->name() ,runner) : 0;
     sorted.sort(&compare,comp);
+    bool ok = comp ? !comp->m_failed : true;
     delete comp;
-    int i = 0;
-    for (ObjList* o = sorted.skipNull();o;o = o->skipNext()) {
-	NamedString* slice = static_cast<NamedString*>(o->get());
-	String* name = (String*)(&slice->name());
-	*name = String(i++);
-	params().addParam(slice);
-	o->setDelete(false);
+    if (ok) {
+	for (ObjList* o = params().paramList()->skipNull(); o;) {
+	    NamedString* str = static_cast<NamedString*>(o->get());
+	    if (str && str->name().toInteger(-1) > -1)
+		o->remove(false);
+	    else
+		o = o->skipNext();
+	}
+	int i = 0;
+	last = params().paramList()->last();
+	for (ObjList* o = sorted.skipNull();o; o = o->skipNull()) {
+	    ExpOperation* slice = static_cast<ExpOperation*>(o->remove(false));
+	    const_cast<String&>(slice->name()) = i++;
+	    last = last->append(slice);
+	}
     }
-    setLength(i);
-    return true;
+    return ok;
 }
 
 
@@ -1058,6 +1076,47 @@ bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
+}
+
+JsObject* JsRegExp::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    ObjList args;
+    switch (extractArgs(stack,oper,context,args)) {
+	case 1:
+	case 2:
+	    break;
+	default:
+	    return 0;
+    }
+    ExpOperation* pattern = static_cast<ExpOperation*>(args[0]);
+    ExpOperation* flags = static_cast<ExpOperation*>(args[1]);
+    if (!pattern)
+	return 0;
+    bool insensitive = false;
+    bool extended = true;
+    if (flags)  {
+	const char* f = *flags;
+	char c = *f++;
+	while (c) {
+	    switch (c) {
+		case 'i':
+		    c = *f++;
+		    insensitive = true;
+		    break;
+		case 'b':
+		    c = *f++;
+		    extended = false;
+		    break;
+		default:
+		    c = 0;
+	    }
+	}
+    }
+    if (!ref())
+	return 0;
+    JsRegExp* obj = new JsRegExp(mutex(),*pattern,*pattern,insensitive,extended);
+    obj->params().addParam(new ExpWrapper(this,protoName()));
+    return obj;
 }
 
 

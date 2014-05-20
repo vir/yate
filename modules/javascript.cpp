@@ -2276,7 +2276,7 @@ JsObject* JsXML::runConstructor(ObjList& stack, const ExpOperation& oper, GenObj
 		ExpOperation* text = static_cast<ExpOperation*>(args[0]);
 		XmlElement* xml = getXml(text,false);
 		if (!xml)
-		    return 0;
+		    return JsParser::nullObject();
 		obj = new JsXML(mutex(),xml);
 	    }
 	    break;
@@ -2291,7 +2291,7 @@ JsObject* JsXML::runConstructor(ObjList& stack, const ExpOperation& oper, GenObj
 		bool take = tmp && tmp->valBoolean();
 		XmlElement* xml = getXml(jso->getField(stack,*name,context),take);
 		if (!xml)
-		    return 0;
+		    return JsParser::nullObject();
 		obj = new JsXML(mutex(),xml);
 	    }
 	    break;

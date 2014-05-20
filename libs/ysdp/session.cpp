@@ -157,27 +157,6 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
     m_rtpLocalAddr = m->getValue("localip",m_rtpLocalAddr);
     m_mediaStatus = m_rtpLocalAddr.null() ? MediaMuted : MediaStarted;
 
-#if 1
-    /*
-     * Remove some unsupported SDP attributes here,
-     * assuming that we will handle rtp ourselves and
-     * we do not support any of this extensions.
-     */
-    media->deleteParameter("fingerprint"); // rfc4572.txt
-    media->deleteParameter("rtcp"); // rfc3605
-    media->deleteParameter("mid"); // rfc5888 requires rtcp-mux
-    media->deleteParameter("setup"); // rfc4145, rfc6135
-    media->deleteParameter("extmap"); // rfc5285
-    media->deleteParameter("rtcp-mux"); // rfc5761 // will be re-added later if RTP module supports
-    media->deleteParameter("ssrc"); // draft-ietf-mmusic-sdp-source-attributes-02
-#elif 1
-    /*
-     * In fact, no sdp attributes should be copied from one call leg to
-     * another if RTP is handled by Yate.
-     */
-    media->deleteParameter(NULL);
-#endif
-
     const char* sdpPrefix = m->getValue("osdp-prefix","osdp");
     if (sdpPrefix) {
 	unsigned int n = m->length();
@@ -187,7 +166,7 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
 		continue;
 	    String tmp = param->name();
 	    if (tmp.startSkip(sdpPrefix,false) && tmp.startSkip("_",false) && tmp)
-	        media->parameter(tmp,*param,false);
+	        media->parameter(false, tmp,*param,false); // set local parameter
 	}
     }
     if (m_secure) {
@@ -311,11 +290,22 @@ bool SDPSession::updateSDP(const NamedList& params)
 		    continue;
 		tmp = param->name();
 		if (tmp.startSkip(sdpPrefix + rtp->suffix() + "_",false) && (tmp.find('_') < 0))
-		    rtp->parameter(tmp,*param,append);
+		    rtp->parameter(false, tmp,*param,append);
 	    }
 	}
 	if (!lst)
 	    lst = new ObjList;
+
+	// Copy fmtps for existing formats
+	ObjList* l1 = rtp->formats().split(',',false);
+	for (ObjList* fmt = l1->skipNull(); fmt; fmt = fmt->skipNext()) {
+	    String key = "fmtp_" + fmt->get()->toString();
+	    NamedString* ns = params.getParam(key);
+	    if (ns)
+		rtp->fmtp(fmt->get()->toString().c_str(), ns->c_str());
+	}
+	TelEngine::destruct(l1);
+
 	lst->append(rtp);
     }
     if (defaults && !lst) {
@@ -538,15 +528,11 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 			}
 
 			if(s->length()) {
-			    String key("fmtp-");
-			    key << *s;
-			    for(unsigned int i = 0; i < m->length(); ++i) {
-				const NamedString *ns = m->getParam(i);
-				if(ns && ns->name() == key) {
-				    temp = new String("fmtp:");
-				    *temp << payload << " " << *ns;
-				    rtpmap.append(temp);
-				}
+			    const NamedString *ns = m->fmtps().getParam(*s);
+			    if(ns && *ns) {
+				temp = new String("fmtp:");
+				*temp << payload << " " << *ns;
+				rtpmap.append(temp);
 			    }
 			}
 		    }
@@ -589,13 +575,12 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	sdp->addLine("m",mline + frm);
 	bool enc = false;
 	if (m->isModified()) {
-	    unsigned int n = m->length();
+	    const NamedList& la = m->localAttrs();
+	    unsigned int n = la.length();
 	    for (unsigned int i = 0; i < n; i++) {
-		const NamedString* param = m->getParam(i);
+		const NamedString* param = la.getParam(i);
 		if (param) {
 		    String tmp = param->name();
-		    if (tmp.startsWith("fmtp-"))
-			continue;
 		    if (*param)
 			tmp << ":" << *param;
 		    sdp->addLine("a",tmp); // XXX XXX XXX XXX here we add those evil lines like 'setup', 'rtcp', 'rtcp-mux', ... XXX XXX XXX XXX
@@ -656,6 +641,8 @@ MimeSdpBody* SDPSession::createPasstroughSDP(NamedList& msg, bool update,
 	    return new MimeSdpBody("application/sdp",raw->safe(),raw->length());
 	}
     }
+    if(! msg.getParam("osdp-prefix"))
+	msg.addParam("osdp-prefix", "sdp"); // copy all media attributes
     String addr;
     ObjList* lst = updateRtpSDP(msg,addr,update ? m_rtpMedia : 0,allowEmptyAddr);
     if (!lst)
@@ -673,6 +660,7 @@ MimeSdpBody* SDPSession::createPasstroughSDP(NamedList& msg, bool update,
 }
 
 // Update media format lists from parameters
+// to update SDP that will be sent back in OK reply to initial offer
 void SDPSession::updateFormats(const NamedList& msg, bool changeMedia)
 {
     if (!m_rtpMedia)
@@ -828,8 +816,13 @@ Message* SDPSession::buildChanRtp(SDPMedia* media, const char* addr, bool start,
     m->addParam("media",*media);
     m->addParam("transport",media->transport());
     m->addParam("direction","bidir");
-    if (media->format())
-	m->addParam("format",media->format());
+    if (media->format()) {
+	String format = media->format();
+	m->addParam("format", format);
+	NamedString* ns = media->fmtps().getParam(format);
+	if (ns && *ns)
+	    m->addParam("fmtp", *ns);
+    }
     m->addParam("ipv6_support",String::boolText(m_ipv6));
     if (m_rtpLocalAddr)
 	m->addParam("localip",m_rtpLocalAddr);
@@ -873,9 +866,10 @@ Message* SDPSession::buildChanRtp(SDPMedia* media, const char* addr, bool start,
     }
     else
 	media->crypto(0,true);
-    unsigned int n = media->length();
+    const NamedList& ra = media->remoteAttrs();
+    unsigned int n = ra.length();
     for (unsigned int i = 0; i < n; i++) {
-	const NamedString* param = media->getParam(i);
+	const NamedString* param = ra.getParam(i);
 	if (!param)
 	    continue;
 	m->addParam("sdp_" + param->name(),*param);
@@ -964,10 +958,18 @@ ObjList* SDPSession::updateRtpSDP(const NamedList& params, String& rtpAddr, ObjL
 		    continue;
 		tmp = param->name();
 		if (tmp.startSkip(sdpPrefix + rtp->suffix() + "_",false) && (tmp.find('_') < 0))
-		    rtp->parameter(tmp,*param,append);
+		    rtp->parameter(false, tmp,*param,append);
 	    }
 	}
 	rtp->mappings(params.getValue("rtp_mapping" + rtp->suffix()));
+	for (unsigned int j = 0; j < n; j++) {
+	    const NamedString* param = params.getParam(j);
+	    if (!param)
+		continue;
+	    tmp = param->name();
+	    if (tmp.startSkip("fmtp_",false))
+		rtp->fmtp(tmp.c_str(), param->c_str());
+	}
 	if (audio)
 	    rtp->rfc2833(params.getIntValue("rtp_rfc2833",-1));
 	rtp->crypto(params.getValue("crypto" + rtp->suffix()),false);

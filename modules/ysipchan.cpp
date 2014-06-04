@@ -6548,11 +6548,14 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    m_tr->deref();
 	    m_tr = 0;
 	}
-	if (m_state != Established)
+	if (m_state != Established) {
+	    lock.drop();
 	    hangup();
+	}
 	else if (s_ack_required && (code == 408)) {
 	    // call was established but we didn't got the ACK
 	    setReason("Not received ACK",code);
+	    lock.drop();
 	    hangup();
 	}
 	else {

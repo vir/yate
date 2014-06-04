@@ -1,4 +1,4 @@
-yate (5.3.1~svn5835) UNRELEASED; urgency=low
+yate (5.3.1~svn5836) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1132,8 +1132,10 @@ yate (5.3.1~svn5835) UNRELEASED; urgency=low
     doing ObjList::sort().  + Leave Javascript array data untouched if
     sorting fails. Slightly optimized the native sort procedure for
     Javascript array.
+  * Updated to SVN revision 5836: + Unlock driver before hangup to avoid
+    deadlock when disconnecting the channel.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 20 May 2014 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 05 Jun 2014 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

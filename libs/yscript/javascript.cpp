@@ -1787,11 +1787,7 @@ bool JsCode::parseFuncDef(ParsePoint& expr, bool publish)
     if (*expr != '}')
 	return gotError("Expecting '}'",expr);
     expr++;
-    // Add an OpcReturn just in case there is no return in the function block.
-    // If we get to executing this opCode, it means that no return was found
-    // in the function block, so the function should not return anything.
-    // If there is a return in the function block, and it's executed, the
-    // runtime won't get to executing this opcode
+    // Add the implicit "return undefined" at end of function
     addOpcode((Opcode)OpcReturn);
     addOpcode(OpcLabel,jump->number());
     JsFunction* obj = new JsFunction(0,name,&args,(long int)lbl->number(),this);

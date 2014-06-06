@@ -1369,6 +1369,8 @@ bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
 	    addOpcode(op);
 	    break;
 	case OpcReturn:
+	{
+	    int64_t pop = ExpOperation::nonInteger();
 	    switch (skipComments(expr)) {
 		case ';':
 		case '}':
@@ -1376,11 +1378,13 @@ bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
 		default:
 		    if (!runCompile(expr,';'))
 			return false;
+		    pop = 1;
 		    if ((skipComments(expr) != ';') && (*expr != '}'))
 			return gotError("Expecting ';' or '}'",expr);
 	    }
-	    addOpcode(op);
+	    addOpcode(op,pop);
 	    break;
+	}
 	case OpcIf:
 	    return parseIf(expr,nested);
 	case OpcElse:
@@ -1783,6 +1787,11 @@ bool JsCode::parseFuncDef(ParsePoint& expr, bool publish)
     if (*expr != '}')
 	return gotError("Expecting '}'",expr);
     expr++;
+    // Add an OpcReturn just in case there is no return in the function block.
+    // If we get to executing this opCode, it means that no return was found
+    // in the function block, so the function should not return anything.
+    // If there is a return in the function block, and it's executed, the
+    // runtime won't get to executing this opcode
     addOpcode((Opcode)OpcReturn);
     addOpcode(OpcLabel,jump->number());
     JsFunction* obj = new JsFunction(0,name,&args,(long int)lbl->number(),this);
@@ -2230,7 +2239,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    break;
 	case OpcReturn:
 	    {
-		ExpOperation* op = popValue(stack,context);
+		ExpOperation* op = oper.valInteger() ? popValue(stack,context) : new ExpWrapper(0,"undefined");
 		ExpOperation* thisObj = 0;
 		bool ok = false;
 		while (ExpOperation* drop = popAny(stack)) {

@@ -1,4 +1,4 @@
-yate (5.3.1~svn5838) UNRELEASED; urgency=low
+yate (5.3.1~svn5839) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1137,8 +1137,10 @@ yate (5.3.1~svn5838) UNRELEASED; urgency=low
   * Updated to SVN revision 5838: + Bug fix: avoid returning arbitrary
     values for functions that have no return value. Return undefined
     instead.  + Replaced commentary with a shorter version.
+  * Updated to SVN revision 5839: + Added missing apostrophe in sample
+    user.register query.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 07 Jun 2014 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 11 Jun 2014 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

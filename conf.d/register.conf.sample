@@ -86,7 +86,7 @@
 [user.register]
 ; Query for the user.register message
 
-;query=UPDATE users SET location='${data},expires=CURRENT_TIMESTAMP + INTERVAL '${expires} s' WHERE username='${username}'
+;query=UPDATE users SET location='${data}',expires=CURRENT_TIMESTAMP + INTERVAL '${expires} s' WHERE username='${username}'
 
 
 [user.unregister]

@@ -653,14 +653,6 @@ UNLOAD_PLUGIN(unloadNow)
     return true;
 }
 
-// Unhexify a string, call the right DataBlock method
-static inline bool unHexify(DataBlock& dest, const String& data, const String& sep)
-{
-    if (!sep)
-	return dest.unHexify(data.c_str(),data.length());
-    return dest.unHexify(data.c_str(),data.length(),sep.at(0));
-}
-
 // Extract arguments from stack
 // Maximum allowed number of arguments is given by arguments to extract
 // Return false if the number of arguments is not the expected one
@@ -2157,15 +2149,15 @@ bool JsHasher::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    return false;
 	ObjList args;
 	ExpOperation* data = 0;
-	ExpOperation* hexSep = 0;
-	if (!extractStackArgs(1,this,stack,oper,context,args,&data,&hexSep))
+	ExpOperation* isHex = 0;
+	if (!extractStackArgs(1,this,stack,oper,context,args,&data,&isHex))
 	    return false;
 	bool ok = false;
-	if (!hexSep || JsParser::isNull(*hexSep) || JsParser::isUndefined(*hexSep))
+	if (!(isHex && isHex->valBoolean()))
 	    ok = m_hasher->update(*data);
 	else {
 	    DataBlock tmp;
-	    ok = unHexify(tmp,*data,*hexSep) && m_hasher->update(tmp);
+	    ok = tmp.unHexify(*data) && m_hasher->update(tmp);
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
@@ -2175,15 +2167,15 @@ bool JsHasher::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ObjList args;
 	ExpOperation* key = 0;
 	ExpOperation* msg = 0;
-	ExpOperation* hexSep = 0;
-	if (!extractStackArgs(2,this,stack,oper,context,args,&key,&msg,&hexSep))
+	ExpOperation* isHex = 0;
+	if (!extractStackArgs(2,this,stack,oper,context,args,&key,&msg,&isHex))
 	    return false;
 	bool ok = false;
-	if (!hexSep || JsParser::isNull(*hexSep) || JsParser::isUndefined(*hexSep))
+	if (!(isHex && isHex->valBoolean()))
 	    ok = m_hasher->hmac(*key,*msg);
 	else {
 	    DataBlock k, m;
-	    ok = unHexify(k,*key,*hexSep) && unHexify(m,*msg,*hexSep) && m_hasher->hmac(k,m);
+	    ok = k.unHexify(*key) && m.unHexify(*msg) && m_hasher->hmac(k,m);
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }

@@ -534,6 +534,45 @@ private:
     RefPointer<JsXML> m_owner;
 };
 
+class JsHasher : public JsObject
+{
+    YCLASS(JsHasher,JsObject)
+public:
+    inline JsHasher(Mutex* mtx)
+	: JsObject("Hasher",mtx,true),
+	  m_hasher(0)
+	{
+	    XDebug(DebugAll,"JsHasher::JsHasher() [%p]",this);
+	    params().addParam(new ExpFunction("update"));
+	    params().addParam(new ExpFunction("hmac"));
+	    params().addParam(new ExpFunction("hexDigest"));
+	    params().addParam(new ExpFunction("clear"));
+	    params().addParam(new ExpFunction("finalize"));
+	    params().addParam(new ExpFunction("hashLength"));
+	    params().addParam(new ExpFunction("hmacBlockSize"));
+	}
+    inline JsHasher(GenObject* context, Mutex* mtx, Hasher* h)
+	: JsObject(mtx,"Hasher",false),
+	  m_hasher(h)
+	{
+	    XDebug(DebugAll,"JsHasher::JsHasher(%p) [%p]",m_hasher,this);
+	    setPrototype(context,YSTRING("Hasher"));
+	}
+    virtual ~JsHasher()
+	{
+	    if (m_hasher) {
+		delete m_hasher;
+		m_hasher = 0;
+	    }
+	}
+    virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    static void initialize(ScriptContext* context);
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+private:
+    Hasher* m_hasher;
+};
+
 class JsChannel : public JsObject
 {
     YCLASS(JsChannel,JsObject)
@@ -614,6 +653,41 @@ UNLOAD_PLUGIN(unloadNow)
     return true;
 }
 
+// Unhexify a string, call the right DataBlock method
+static inline bool unHexify(DataBlock& dest, const String& data, const String& sep)
+{
+    if (!sep)
+	return dest.unHexify(data.c_str(),data.length());
+    return dest.unHexify(data.c_str(),data.length(),sep.at(0));
+}
+
+// Extract arguments from stack
+// Maximum allowed number of arguments is given by arguments to extract
+// Return false if the number of arguments is not the expected one
+static bool extractStackArgs(int minArgc, JsObject* obj,
+    ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& args,
+    ExpOperation** op1, ExpOperation** op2, ExpOperation** op3 = 0)
+{
+    if (!obj)
+	return false;
+    int argc = obj->extractArgs(stack,oper,context,args);
+    if (minArgc > argc)
+	return false;
+    switch (argc) {
+#define EXTRACT_ARG_CHECK(var,n) { \
+    case n: \
+	if (!var) \
+	    return false; \
+	*var = static_cast<ExpOperation*>(args[n - 1]); \
+}
+	EXTRACT_ARG_CHECK(op3,3);
+	EXTRACT_ARG_CHECK(op2,2);
+	EXTRACT_ARG_CHECK(op1,1);
+	return true;
+#undef EXTRACT_ARG_CHECK
+    }
+    return false;
+}
 
 bool JsEngAsync::run()
 {
@@ -2042,6 +2116,108 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
 }
 
 
+JsObject* JsHasher::runConstructor(ObjList& stack, const ExpOperation& oper,
+    GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsHasher::runConstructor '%s'("FMT64") [%p]",
+	oper.name().c_str(),oper.number(),this);
+    ObjList args;
+    if (extractArgs(stack,oper,context,args) != 1)
+	return 0;
+    ExpOperation* name = static_cast<ExpOperation*>(args[0]);
+    Hasher* h = 0;
+    if (*name == "md5")
+	h = new MD5;
+    else if (*name == "sha1")
+	h = new SHA1;
+    else if (*name == "sha256")
+	h = new SHA256;
+    else
+	return 0;
+    return new JsHasher(context,mutex(),h);
+}
+
+void JsHasher::initialize(ScriptContext* context)
+{
+    if (!context)
+	return;
+    Mutex* mtx = context->mutex();
+    Lock mylock(mtx);
+    NamedList& params = context->params();
+    if (!params.getParam(YSTRING("Hasher")))
+	addConstructor(params,"Hasher",new JsHasher(mtx));
+}
+
+bool JsHasher::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsHasher::runNative '%s'("FMT64") [%p]",
+	oper.name().c_str(),oper.number(),this);
+    if (oper.name() == YSTRING("update")) {
+	if (!m_hasher)
+	    return false;
+	ObjList args;
+	ExpOperation* data = 0;
+	ExpOperation* hexSep = 0;
+	if (!extractStackArgs(1,this,stack,oper,context,args,&data,&hexSep))
+	    return false;
+	bool ok = false;
+	if (!hexSep || JsParser::isNull(*hexSep) || JsParser::isUndefined(*hexSep))
+	    ok = m_hasher->update(*data);
+	else {
+	    DataBlock tmp;
+	    ok = unHexify(tmp,*data,*hexSep) && m_hasher->update(tmp);
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
+    else if (oper.name() == YSTRING("hmac")) {
+	if (!m_hasher)
+	    return false;
+	ObjList args;
+	ExpOperation* key = 0;
+	ExpOperation* msg = 0;
+	ExpOperation* hexSep = 0;
+	if (!extractStackArgs(2,this,stack,oper,context,args,&key,&msg,&hexSep))
+	    return false;
+	bool ok = false;
+	if (!hexSep || JsParser::isNull(*hexSep) || JsParser::isUndefined(*hexSep))
+	    ok = m_hasher->hmac(*key,*msg);
+	else {
+	    DataBlock k, m;
+	    ok = unHexify(k,*key,*hexSep) && unHexify(m,*msg,*hexSep) && m_hasher->hmac(k,m);
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
+    else if (oper.name() == YSTRING("hexDigest")) {
+	if (!m_hasher || oper.number())
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_hasher->hexDigest()));
+    }
+    else if (oper.name() == YSTRING("clear")) {
+	if (!m_hasher || oper.number())
+	    return false;
+	m_hasher->clear();
+    }
+    else if (oper.name() == YSTRING("finalize")) {
+	if (!m_hasher || oper.number())
+	    return false;
+	m_hasher->finalize();
+    }
+    else if (oper.name() == YSTRING("hashLength")) {
+	if (!m_hasher || oper.number())
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_hasher->hashLength()));
+    }
+    else if (oper.name() == YSTRING("hmacBlockSize")) {
+	if (!m_hasher || oper.number())
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_hasher->hmacBlockSize()));
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+
 bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(&__plugin,DebugAll,"JsXML::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
@@ -2755,6 +2931,7 @@ bool JsAssist::init()
     JsFile::initialize(ctx);
     JsConfigFile::initialize(ctx);
     JsXML::initialize(ctx);
+    JsHasher::initialize(ctx);
     if (ScriptRun::Invalid == m_runner->reset(true))
 	return false;
     ScriptContext* chan = YOBJECT(ScriptContext,ctx->getField(m_runner->stack(),YSTRING("Channel"),m_runner));
@@ -3086,6 +3263,7 @@ bool JsGlobal::runMain()
     JsFile::initialize(runner->context());
     JsConfigFile::initialize(runner->context());
     JsXML::initialize(runner->context());
+    JsHasher::initialize(runner->context());
     ScriptRun::Status st = runner->run();
     TelEngine::destruct(runner);
     return (ScriptRun::Succeeded == st);
@@ -3189,6 +3367,7 @@ bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* con
 	JsFile::initialize(runner->context());
 	JsConfigFile::initialize(runner->context());
 	JsXML::initialize(runner->context());
+	JsHasher::initialize(runner->context());
     }
     ScriptRun::Status st = runner->run();
     if (st == ScriptRun::Succeeded) {

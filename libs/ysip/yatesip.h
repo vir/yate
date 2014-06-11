@@ -260,6 +260,13 @@ public:
 	{ return m_cseq; }
 
     /**
+     * Set the Command Sequence number for this message
+     * @param cseq Sequence number for this message
+     */
+    inline void setCSeq(int cseq)
+	{ m_cseq = cseq; }
+
+    /**
      * Get the last flags used by this message
      * @return Flags last used, ORed together
      */
@@ -474,7 +481,9 @@ public:
     /**
      * Default constructor, build an empty SIP dialog
      */
-    SIPDialog();
+    inline SIPDialog()
+	: localCSeq(-1), remoteCSeq(-1)
+	{ }
 
     /**
      * Copy constructor
@@ -493,7 +502,7 @@ public:
      * @param callid Call ID to insert in the dialog
      */
     inline explicit SIPDialog(const String& callid)
-	: String(callid)
+	: String(callid), localCSeq(-1), remoteCSeq(-1)
 	{ }
 
     /**
@@ -590,6 +599,22 @@ public:
 	{ return outgoing ? remoteTag : localTag; }
 
     /**
+     * Adjust the last seen remote CSeq
+     * @param cseq Remote sequence number
+     * @return True if remote sequence was adjusted
+     */
+    inline bool adjustCSeq(int cseq)
+	{ return (cseq > remoteCSeq) && ((remoteCSeq = cseq) >= 0); }
+
+    /**
+     * Adjust the last seen remote CSeq from a SIP message
+     * @param message Pointer to received SIP message
+     * @return True if remote sequence was adjusted
+     */
+    inline bool adjustCSeq(const SIPMessage* message)
+	{ return message && adjustCSeq(message->getCSeq()); }
+
+    /**
      * Local URI of the dialog
      */
     String localURI;
@@ -608,6 +633,16 @@ public:
      * Tag parameter of the remote URI
      */
     String remoteTag;
+
+    /**
+     * Last generated Command Sequence Number
+     */
+    int localCSeq;
+
+    /**
+     * Last seen Command Sequence Number
+     */
+    int remoteCSeq;
 };
 
 /**

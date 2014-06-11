@@ -1955,12 +1955,34 @@ JsObject* JsCode::parseArray(ParsePoint& expr, bool constOnly)
 	    expr++;
 	    break;
 	}
-	if (!first) {
+	if (first) {
+	    if (*expr == ',') {
+		ParsePoint next = expr;
+		next++;
+		// A construct like [,] creates an empty Array
+		if (skipComments(next) == ']') {
+		    next++;
+		    expr = next;
+		    break;
+		}
+	    }
+	}
+	else {
 	    if (*expr != ',') {
 		TelEngine::destruct(jsa);
 		break;
 	    }
 	    expr++;
+	}
+	// Swallow the single comma allowed after last item
+	if (skipComments(expr) == ']') {
+	    expr++;
+	    break;
+	}
+	// Successive commas insert an undefined between them
+	if (skipComments(expr) == ',') {
+	    jsa->push(new ExpWrapper(0,"undefined"));
+	    continue;
 	}
 	bool ok = constOnly ? getSimple(expr,true) : getOperand(expr,false);
 	if (!ok) {
@@ -1994,6 +2016,11 @@ JsObject* JsCode::parseObject(ParsePoint& expr, bool constOnly)
 		break;
 	    }
 	    expr++;
+	    // A single comma is allowed after last property
+	    if (skipComments(expr) == '}') {
+		expr++;
+		break;
+	    }
 	}
 	char c = skipComments(expr);
 	String name;

@@ -957,7 +957,7 @@ public:
     inline SIPTransaction* getTransaction() const
 	{ return m_tr; }
     inline const String& callid() const
-	{ return m_callid; }
+	{ return m_dialog; }
     inline const String& user() const
 	{ return m_user; }
     inline int getPort() const
@@ -1028,7 +1028,6 @@ private:
     int m_state;
     String m_reason;
     int m_reasonCode;
-    String m_callid;
     // SIP dialog of this call, used for re-INVITE or BYE
     SIPDialog m_dialog;
     // remote URI as we send in dialog messages
@@ -5732,7 +5731,6 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     setReason();
     m_tr->ref();
     m_routes = m_tr->initialMessage()->getRoutes();
-    m_callid = m_tr->getCallID();
     m_dialog = *m_tr->initialMessage();
     m_tr->initialMessage()->getParty()->getAddr(m_host,m_port,false);
     SocketAddr::appendTo(m_address,m_host,m_port);
@@ -5783,7 +5781,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("sip_uri",uri);
     m->addParam("sip_from",m_uri);
     m->addParam("sip_to",ev->getMessage()->getHeaderValue("To"));
-    m->addParam("sip_callid",m_callid);
+    m->addParam("sip_callid",callid(),false);
     m->addParam("device",ev->getMessage()->getHeaderValue("User-Agent"));
     copySipHeaders(*m,*ev->getMessage(),true,static_cast<const YateSIPEngine*>(tr->getEngine())->foreignAuth());
 
@@ -6010,6 +6008,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     SocketAddr::appendTo(m_address,m_host,m_port);
     filterDebug(m_address);
     m_dialog = *m;
+    m_dialog.localCSeq = m->getCSeq();
     if (s_privacy)
 	copyPrivacy(*m,msg);
 
@@ -6067,7 +6066,6 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_tr = plugin.ep()->engine()->addMessage(m);
     if (m_tr) {
 	m_tr->ref();
-	m_callid = m_tr->getCallID();
 	m_tr->setUserData(this);
     }
     m->deref();
@@ -6077,8 +6075,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     s->setParam("caller",caller);
     s->copyParams(msg,"callername,called,billid,callto,username");
     s->setParam("calledfull",m_uri.getUser());
-    if (m_callid)
-	s->setParam("sip_callid",m_callid);
+    if (callid())
+	s->setParam("sip_callid",callid());
     Engine::enqueue(s);
 }
 
@@ -6197,9 +6195,7 @@ void YateSIPConnection::hangup()
 		    m->copyHeader(i,"From");
 		    m->copyHeader(i,"To");
 		    m->copyHeader(i,"Call-ID");
-		    String tmp;
-		    tmp << i->getCSeq() << " CANCEL";
-		    m->addHeader("CSeq",tmp);
+		    m->setCSeq(i->getCSeq());
 		    if (res == YSTRING("pickup")) {
 			MimeHeaderLine* hl = new MimeHeaderLine("Reason","SIP");
 			hl->setParam("cause","200");
@@ -6258,7 +6254,11 @@ SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
 	m->destruct();
 	return 0;
     }
-    m->addHeader("Call-ID",m_callid);
+    if (m_dialog.localCSeq > 0)
+	m->setCSeq(++m_dialog.localCSeq);
+    else
+	m->setCSeq(m_dialog.localCSeq = plugin.ep()->engine()->getNextCSeq());
+    m->addHeader("Call-ID",callid());
     String tmp;
     tmp << "<" << m_dialog.localURI << ">";
     MimeHeaderLine* hl = new MimeHeaderLine("From",tmp);
@@ -6814,6 +6814,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
     if (!checkUser(t))
 	return;
     DDebug(this,DebugAll,"YateSIPConnection::reInvite(%p) [%p]",t,this);
+    m_dialog.adjustCSeq(t->initialMessage());
     // Change party
     if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
 	setPartyChanged(t->initialMessage()->getParty(),this);
@@ -7007,6 +7008,7 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 	return;
     DDebug(this,DebugAll,"YateSIPConnection::doBye(%p) [%p]",t,this);
     const SIPMessage* msg = t->initialMessage();
+    m_dialog.adjustCSeq(msg);
     // Change party
     if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
 	setPartyChanged(t->initialMessage()->getParty(),this);
@@ -7072,6 +7074,7 @@ bool YateSIPConnection::doInfo(SIPTransaction* t)
     if (m_authBye && !checkUser(t))
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::doInfo(%p) [%p]",t,this);
+    m_dialog.adjustCSeq(t->initialMessage());
     // Change party
     if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
 	setPartyChanged(t->initialMessage()->getParty(),this);
@@ -7119,6 +7122,7 @@ void YateSIPConnection::doRefer(SIPTransaction* t)
     if (m_authBye && !checkUser(t))
 	return;
     DDebug(this,DebugAll,"doRefer(%p) [%p]",t,this);
+    m_dialog.adjustCSeq(t->initialMessage());
     // Change party
     if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
 	setPartyChanged(t->initialMessage()->getParty(),this);
@@ -7223,6 +7227,7 @@ void YateSIPConnection::doMessage(SIPTransaction* t)
 	return;
     if (m_authBye && !checkUser(t))
 	return;
+    m_dialog.adjustCSeq(sip);
     // Change party
     if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
 	setPartyChanged(t->initialMessage()->getParty(),this);

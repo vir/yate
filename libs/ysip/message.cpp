@@ -160,12 +160,13 @@ SIPMessage::SIPMessage(const SIPMessage* original, const SIPMessage* answer)
 	    TelEngine::destruct(routeset);
 	}
     }
+    m_cseq = original->getCSeq();
     copyAllHeaders(original,"Route");
     copyHeader(original,"From");
     copyHeader(original,"To");
     copyHeader(original,"Call-ID");
     String tmp;
-    tmp << original->getCSeq() << " " << method;
+    tmp << m_cseq << " " << method;
     addHeader("CSeq",tmp);
     copyHeader(original,"Max-Forwards");
     copyAllHeaders(original,"Contact");
@@ -293,7 +294,8 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 
     if (!(isAnswer() || getHeader("CSeq"))) {
 	String tmp;
-	m_cseq = engine->getNextCSeq();
+	if (m_cseq <= 0)
+	    m_cseq = engine->getNextCSeq();
 	tmp << m_cseq << " " << method;
 	addHeader("CSeq",tmp);
     }
@@ -794,14 +796,12 @@ void SIPMessage::addRoutes(const ObjList* routes)
 	addHeader(hl);
 }
 
-SIPDialog::SIPDialog()
-{
-}
 
 SIPDialog::SIPDialog(const SIPDialog& original)
     : String(original),
       localURI(original.localURI), localTag(original.localTag),
-      remoteURI(original.remoteURI), remoteTag(original.remoteTag)
+      remoteURI(original.remoteURI), remoteTag(original.remoteTag),
+      localCSeq(original.localCSeq), remoteCSeq(original.remoteCSeq)
 {
     DDebug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
 	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
@@ -814,6 +814,8 @@ SIPDialog& SIPDialog::operator=(const SIPDialog& original)
     localTag = original.localTag;
     remoteURI = original.remoteURI;
     remoteTag = original.remoteTag;
+    localCSeq = original.localCSeq;
+    remoteCSeq = original.remoteCSeq;
     DDebug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
 	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
     return *this;
@@ -832,7 +834,8 @@ SIPDialog& SIPDialog::operator=(const String& callid)
 }
 
 SIPDialog::SIPDialog(const SIPMessage& message)
-    : String(message.getHeaderValue("Call-ID"))
+    : String(message.getHeaderValue("Call-ID")),
+      localCSeq(-1), remoteCSeq(-1)
 {
     bool local = message.isOutgoing() ^ message.isAnswer();
     const MimeHeaderLine* hl = message.getHeader(local ? "From" : "To");
@@ -847,6 +850,8 @@ SIPDialog::SIPDialog(const SIPMessage& message)
         remoteURI = remoteURI.matchString(1);
     if (hl)
 	remoteTag = hl->getParam("tag");
+    if (!(message.isOutgoing() || message.isAnswer() || message.isACK() || remoteCSeq >= message.getCSeq()))
+	remoteCSeq = message.getCSeq();
     DDebug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
 	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
 }
@@ -869,6 +874,8 @@ SIPDialog& SIPDialog::operator=(const SIPMessage& message)
         remoteURI = remoteURI.matchString(1);
     if (hl)
 	remoteTag = hl->getParam("tag");
+    if (!(message.isOutgoing() || message.isAnswer() || message.isACK() || remoteCSeq >= message.getCSeq()))
+	remoteCSeq = message.getCSeq();
     DDebug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
 	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
     return *this;

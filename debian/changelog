@@ -1,4 +1,4 @@
-yate (5.3.1~svn5839) UNRELEASED; urgency=low
+yate (5.3.1~svn5843) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1139,8 +1139,15 @@ yate (5.3.1~svn5839) UNRELEASED; urgency=low
     instead.  + Replaced commentary with a shorter version.
   * Updated to SVN revision 5839: + Added missing apostrophe in sample
     user.register query.
+  * Updated to SVN revision 5843: + Handle successive commas in Array
+    initializers by inserting undefined.  + Ignore final commas in Array
+    and Object initializers.  + Generate monotonic per-dialog Command
+    Sequence numbers (CSeq) derived from the global sequence.  + Added
+    Hasher object exposing Engine Hasher class methods.  + Use a boolean
+    parameter to indicate hexified data in Hasher update and hmac
+    methods.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 11 Jun 2014 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 12 Jun 2014 02:19:19 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -838,6 +838,19 @@ public:
 	{ changeState(Cleared); }
 
     /**
+     * Get the transmission attempts count for non-reliable transports
+     * @return Current number of transmission attempts
+     */
+    inline unsigned int getTransCount() const
+	{ return m_transCount; }
+
+    /**
+     * Set the number of transmission attempts for non-reliable transports
+     * @param count Transmission attempts, clamped between 2 and 10, negative values ignored
+     */
+    void setTransCount(int count);
+
+    /**
      * Send back an authentication required response
      * @param realm Authentication realm to send in the answer
      * @param domain Domain for which it will authenticate
@@ -1021,6 +1034,7 @@ protected:
     bool m_transmit;
     int m_state;
     int m_response;
+    unsigned int m_transCount;
     unsigned int m_timeouts;
     u_int64_t m_delay;
     u_int64_t m_timeout;

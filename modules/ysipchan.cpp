@@ -726,6 +726,7 @@ private:
     int m_interval;
     int m_alive;
     int m_flags;
+    int m_trans;
     SIPTransaction* m_tr;
     bool m_marked;
     bool m_valid;
@@ -1057,7 +1058,7 @@ class YateSIPGenerate : public GenObject
 {
     YCLASS(YateSIPGenerate,GenObject)
 public:
-    YateSIPGenerate(SIPMessage* m);
+    YateSIPGenerate(SIPMessage* m, int tries);
     virtual ~YateSIPGenerate();
     bool process(SIPEvent* ev);
     inline bool busy() const
@@ -5333,8 +5334,10 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     }
     copySipHeaders(msg,*message,true,static_cast<const YateSIPEngine*>(t->getEngine())->foreignAuth());
     SIPMessage* r = 0;
+    bool ok = Engine::dispatch(msg);
+    t->setTransCount(msg.getIntValue(YSTRING("xsip_trans_count"),-1));
     // Always OK deregistration attempts
-    if (Engine::dispatch(msg) || dereg) {
+    if (ok || dereg) {
 	if (dereg) {
 	    r = new SIPMessage(t->initialMessage(),200);
 	    Debug(&plugin,DebugNote,"Unregistered user '%s'",user.c_str());
@@ -5508,6 +5511,7 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
 
     int code = 0;
     bool ok = Engine::dispatch(m);
+    t->setTransCount(m.getIntValue(YSTRING("xsip_trans_count"),-1));
     while (isMsg && ok) {
 	ok = m.retValue() && m.retValue() != YSTRING("-") &&
 	    m.retValue() != YSTRING("error");
@@ -6063,10 +6067,12 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     if (!sdp)
 	sdp = createRtpSDP(m_host,msg);
     m->setBody(buildSIPBody(msg,sdp));
+    int tries = msg.getIntValue(YSTRING("xsip_trans_count"),-1);
     m_tr = plugin.ep()->engine()->addMessage(m);
     if (m_tr) {
 	m_tr->ref();
 	m_tr->setUserData(this);
+	m_tr->setTransCount(tries);
     }
     m->deref();
     setMaxcall(msg);
@@ -7574,6 +7580,7 @@ bool YateSIPConnection::callRouted(Message& msg)
     if (m_hungup || !m_tr)
 	return false;
     if (m_tr->getState() == SIPTransaction::Process) {
+	m_tr->setTransCount(msg.getIntValue(YSTRING("isip_trans_count"),-1));
 	String s(msg.retValue());
 	if (s.startSkip("sip/",false) && s && msg.getBoolValue(YSTRING("redirect"))) {
 	    Debug(this,DebugAll,"YateSIPConnection redirecting to '%s' [%p]",s.c_str(),this);
@@ -7969,7 +7976,7 @@ bool YateSIPConnection::sendTone(Message& msg, const char* tone, int meth, bool&
 YateSIPLine::YateSIPLine(const String& name)
     : String(name), Mutex(true,"YateSIPLine"),
       m_resend(0), m_keepalive(0), m_interval(0), m_alive(0),
-      m_flags(-1), m_tr(0), m_marked(false), m_valid(false),
+      m_flags(-1), m_trans(-1), m_tr(0), m_marked(false), m_valid(false),
       m_localPort(0), m_partyPort(0), m_localDetect(false),
       m_keepTcpOffline(s_lineKeepTcpOffline),
       m_matchPort(true), m_matchUser(true)
@@ -8126,6 +8133,7 @@ void YateSIPLine::login()
     if (m_tr) {
 	m_tr->ref();
 	m_tr->setUserData(this);
+	m_tr->setTransCount(m_trans);
 	if (m_callid.null())
 	    m_callid = m_tr->getCallID();
     }
@@ -8327,6 +8335,7 @@ bool YateSIPLine::update(const Message& msg)
     chg = change(m_password,msg.getValue(YSTRING("password"))) || chg;
     chg = change(m_domain,msg.getValue(YSTRING("domain"))) || chg;
     chg = change(m_flags,msg.getIntValue(YSTRING("xsip_flags"),-1)) || chg;
+    m_trans = msg.getIntValue(YSTRING("xsip_trans_count"),-1);
     m_display = msg.getValue(YSTRING("description"));
     m_interval = msg.getIntValue(YSTRING("interval"),600);
     m_matchPort = msg.getBoolValue(YSTRING("match_port"),true);
@@ -8407,13 +8416,14 @@ void YateSIPLine::transportChangedStatus(int stat, const String& reason)
     }
 }
 
-YateSIPGenerate::YateSIPGenerate(SIPMessage* m)
+YateSIPGenerate::YateSIPGenerate(SIPMessage* m, int tries)
     : m_tr(0), m_code(0)
 {
     m_tr = plugin.ep()->engine()->addMessage(m);
     if (m_tr) {
 	m_tr->ref();
 	m_tr->setUserData(this);
+	m_tr->setTransCount(tries);
     }
     m->deref();
 }
@@ -9055,7 +9065,7 @@ bool SIPDriver::sendMethod(Message& msg, const char* method, bool msgExec,
 	sip->deref();
 	return true;
     }
-    YateSIPGenerate gen(sip);
+    YateSIPGenerate gen(sip,msg.getIntValue(YSTRING("xsip_trans_count"),-1));
     while (gen.busy())
 	Thread::idle();
     if (gen.code()) {

@@ -28,7 +28,8 @@ using namespace TelEngine;
 
 // Constructor from new message
 SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outgoing)
-    : m_outgoing(outgoing), m_invite(false), m_transmit(false), m_state(Invalid), m_response(0), m_timeout(0),
+    : m_outgoing(outgoing), m_invite(false), m_transmit(false), m_state(Invalid),
+      m_response(0), m_timeouts(0), m_timeout(0),
       m_firstMessage(message), m_lastMessage(0), m_pending(0), m_engine(engine), m_private(0)
 {
     DDebug(getEngine(),DebugAll,"SIPTransaction::SIPTransaction(%p,%p,%d) [%p]",
@@ -64,13 +65,15 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
     }
     m_invite = (getMethod() == YSTRING("INVITE"));
     m_state = Initial;
+    m_transCount = outgoing ? m_engine->getReqTransCount() : m_engine->getRspTransCount();
     m_engine->append(this);
 }
 
 // Constructor from original and authentication requesting answer
 SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
-    : m_outgoing(true), m_invite(original.m_invite), m_transmit(false),
-      m_state(Process), m_response(original.m_response), m_timeout(0),
+    : m_outgoing(true), m_invite(original.m_invite), m_transmit(false), m_state(Process),
+      m_response(original.m_response), m_transCount(original.m_transCount),
+      m_timeouts(0), m_timeout(0),
       m_firstMessage(original.m_firstMessage), m_lastMessage(original.m_lastMessage),
       m_pending(0), m_engine(original.m_engine),
       m_branch(original.m_branch), m_callid(original.m_callid), m_tag(original.m_tag),
@@ -113,8 +116,9 @@ SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
 
 // Constructor from original and forked dialog tag
 SIPTransaction::SIPTransaction(const SIPTransaction& original, const String& tag)
-    : m_outgoing(true), m_invite(original.m_invite), m_transmit(false),
-      m_state(Process), m_response(original.m_response), m_timeout(0),
+    : m_outgoing(true), m_invite(original.m_invite), m_transmit(false), m_state(Process),
+      m_response(original.m_response), m_transCount(original.m_transCount),
+      m_timeouts(0), m_timeout(0),
       m_firstMessage(original.m_firstMessage), m_lastMessage(0),
       m_pending(0), m_engine(original.m_engine),
       m_branch(original.m_branch), m_callid(original.m_callid), m_tag(tag),
@@ -230,6 +234,18 @@ void SIPTransaction::setPendingEvent(SIPEvent* event, bool replace)
 	m_pending = event;
 }
 
+void SIPTransaction::setTransCount(int count)
+{
+    if (count < 0)
+	return;
+    else if (count < 2)
+	m_transCount = 2;
+    else if (count > 10)
+	m_transCount = 10;
+    else
+	m_transCount = count;
+}
+
 void SIPTransaction::setTimeout(u_int64_t delay, unsigned int count)
 {
     m_timeouts = count;
@@ -319,7 +335,7 @@ void SIPTransaction::setResponse(SIPMessage* message)
 		bool reliable = message->getParty() && message->getParty()->isReliable();
 		bool retrans = !reliable || message->code < 300;
 		setTimeout(m_engine->getTimer(retrans ? 'G' : 'H',reliable),
-		    retrans ? m_engine->getRspTransCount() : 1);
+		    retrans ? getTransCount() : 1);
 	    }
 	}
 	else {
@@ -593,7 +609,7 @@ SIPEvent* SIPTransaction::getClientEvent(int state, int timeout)
 	    if (changeState(Trying)) {
 		bool reliable = e->getParty() && e->getParty()->isReliable();
 		if (!reliable)
-		    setTimeout(m_engine->getTimer(isInvite() ? 'A' : 'E'),m_engine->getReqTransCount());
+		    setTimeout(m_engine->getTimer(isInvite() ? 'A' : 'E'),getTransCount());
 		else
 		    setTimeout(m_engine->getTimer(isInvite() ? 'B' : 'F',true),1);
 	    }
@@ -706,9 +722,9 @@ void SIPTransaction::msgTransmitFailed(SIPMessage* msg)
 	    if (msg != m_firstMessage)
 		return;
 	    // Reliable transport: terminate now
-	    // Non reliable: terminate if this is the first attempt
+	    // Non reliable: terminate if this is the last attempt
 	    if ((msg->getParty() && msg->getParty()->isReliable()) ||
-		m_engine->getReqTransCount() == m_timeouts) {
+		    m_timeouts >= getTransCount()) {
 		Debug(getEngine(),DebugInfo,
 		    "SIPTransaction send failed state=%s: clearing [%p]",
 		    stateName(m_state),this);

@@ -1369,6 +1369,8 @@ bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
 	    addOpcode(op);
 	    break;
 	case OpcReturn:
+	{
+	    int64_t pop = ExpOperation::nonInteger();
 	    switch (skipComments(expr)) {
 		case ';':
 		case '}':
@@ -1376,11 +1378,13 @@ bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
 		default:
 		    if (!runCompile(expr,';'))
 			return false;
+		    pop = 1;
 		    if ((skipComments(expr) != ';') && (*expr != '}'))
 			return gotError("Expecting ';' or '}'",expr);
 	    }
-	    addOpcode(op);
+	    addOpcode(op,pop);
 	    break;
+	}
 	case OpcIf:
 	    return parseIf(expr,nested);
 	case OpcElse:
@@ -1783,6 +1787,7 @@ bool JsCode::parseFuncDef(ParsePoint& expr, bool publish)
     if (*expr != '}')
 	return gotError("Expecting '}'",expr);
     expr++;
+    // Add the implicit "return undefined" at end of function
     addOpcode((Opcode)OpcReturn);
     addOpcode(OpcLabel,jump->number());
     JsFunction* obj = new JsFunction(0,name,&args,(long int)lbl->number(),this);
@@ -1950,12 +1955,34 @@ JsObject* JsCode::parseArray(ParsePoint& expr, bool constOnly)
 	    expr++;
 	    break;
 	}
-	if (!first) {
+	if (first) {
+	    if (*expr == ',') {
+		ParsePoint next = expr;
+		next++;
+		// A construct like [,] creates an empty Array
+		if (skipComments(next) == ']') {
+		    next++;
+		    expr = next;
+		    break;
+		}
+	    }
+	}
+	else {
 	    if (*expr != ',') {
 		TelEngine::destruct(jsa);
 		break;
 	    }
 	    expr++;
+	}
+	// Swallow the single comma allowed after last item
+	if (skipComments(expr) == ']') {
+	    expr++;
+	    break;
+	}
+	// Successive commas insert an undefined between them
+	if (skipComments(expr) == ',') {
+	    jsa->push(new ExpWrapper(0,"undefined"));
+	    continue;
 	}
 	bool ok = constOnly ? getSimple(expr,true) : getOperand(expr,false);
 	if (!ok) {
@@ -1989,6 +2016,11 @@ JsObject* JsCode::parseObject(ParsePoint& expr, bool constOnly)
 		break;
 	    }
 	    expr++;
+	    // A single comma is allowed after last property
+	    if (skipComments(expr) == '}') {
+		expr++;
+		break;
+	    }
 	}
 	char c = skipComments(expr);
 	String name;
@@ -2230,7 +2262,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    break;
 	case OpcReturn:
 	    {
-		ExpOperation* op = popValue(stack,context);
+		ExpOperation* op = oper.valInteger() ? popValue(stack,context) : new ExpWrapper(0,"undefined");
 		ExpOperation* thisObj = 0;
 		bool ok = false;
 		while (ExpOperation* drop = popAny(stack)) {

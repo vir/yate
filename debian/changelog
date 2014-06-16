@@ -1,6 +1,12 @@
+yate (5.3.1~vir2014061601) UNRELEASED; urgency=low
+
+  * Merged upstream updates (svn r5844)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Mon, 16 Jun 2014 09:48:46 +0400
+
 yate (5.3.1~vir2014052001) UNRELEASED; urgency=low
 
-  * Merged upsetream updates and fixes (SVN r5835)
+  * Merged upstream updates and fixes (SVN r5835)
   * Applied fix for bug 0000367 (crypto tag)
   * Applied SDP attributes separation patch
 

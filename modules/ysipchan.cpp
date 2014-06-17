@@ -8996,7 +8996,7 @@ bool SIPDriver::sendMethod(Message& msg, const char* method, bool msgExec,
 	    msg.setParam("error","noconn");
 	    return false;
 	}
-	if (msgExec && !uri)
+	if (!(msgExec || uri))
 	    uri = conn->m_uri;
     }
     if (!msgExec)

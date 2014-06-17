@@ -1,4 +1,4 @@
-yate (5.3.1~svn5844) UNRELEASED; urgency=low
+yate (5.3.1~svn5845) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1148,8 +1148,10 @@ yate (5.3.1~svn5844) UNRELEASED; urgency=low
     methods.
   * Updated to SVN revision 5844: + Allow controlling the number of
     (re)transmission per SIP transaction.
+  * Updated to SVN revision 5845: + Fixed bug: set request uri from
+    connection uri if none given when sending a method.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 13 Jun 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 18 Jun 2014 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

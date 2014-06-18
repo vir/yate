@@ -3051,7 +3051,7 @@ static const TokenDict s_rrCauseType[] = {
 
 // reference: ETSI TS 144 018 V11.5.0,, section 10.5.2.67 PS Cause
 static const TokenDict s_psCauseType[] = {
-    {"DTM-multislot-capabilities-volated",                  0x00},
+    {"DTM-multislot-capabilities-violated",                 0x00},
     {"no-uplink-TBFs",                                      0x01},
     {"too-many-TBFs",                                       0x02},
     {0, 0},

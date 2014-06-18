@@ -1554,6 +1554,79 @@ static unsigned int encodeMobileIdent(const GSML3Codec* codec,  uint8_t proto, c
     return GSML3Codec::NoError;
 }
 
+static unsigned int decodeMobileTD(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodeMobileTD(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    if (len != 3)
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    uint32_t val = (((uint32_t)in[0]) << 13) | (((uint32_t)in[1]) << 5) | (in[2] >> 3);
+    addXMLElement(out,new XmlElement(param->name,String(val)));
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeMobileTD(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodeMobileTD(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    const String* valStr = in->childText(param->name);
+    if (TelEngine::null(valStr))
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    int val = valStr->toInteger(-1);
+    if (val < 0 || val > 0x1fffff)
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    uint8_t buf[3];
+    buf[0] = (uint8_t)(val >> 13);
+    buf[1] = (uint8_t)(val >> 5);
+    buf[2] = (uint8_t)(val << 3);
+    out.append(buf,3);
+    return GSML3Codec::NoError;
+}
+
+static unsigned int decodeMobileTDHyper(const GSML3Codec* codec, uint8_t proto, const IEParam* param, const uint8_t*& in,
+	unsigned int& len, XmlElement*& out, const NamedList& params)
+{
+    if (!(codec && in && len && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"decodeMobileTDHyper(param=%s(%p),in=%p,len=%u,out=%p) [%p]",param->name.c_str(),param,
+	    in,len,out,codec->ptr());
+    if (len != 5)
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    uint64_t val = (((uint64_t)in[0]) << 25) | (((uint64_t)in[1]) << 17)
+        | (((uint64_t)in[2]) << 9) | (((uint64_t)in[3]) << 1) | (((uint64_t)in[4]) >> 7);
+    addXMLElement(out,new XmlElement(param->name,String(val)));
+    return GSML3Codec::NoError;
+}
+
+static unsigned int encodeMobileTDHyper(const GSML3Codec* codec,  uint8_t proto, const IEParam* param, XmlElement* in,
+	DataBlock& out, const NamedList& params)
+{
+    if (!(codec && in && param))
+	return CONDITIONAL_ERROR(param,NoError,ParserErr);
+    DDebug(codec->dbg(),DebugAll,"encodeMobileTDHyper(param=%s(%p),xml=%s(%p) [%p]",param->name.c_str(),param,
+	    in->tag(),in,codec->ptr());
+    const String* valStr = in->childText(param->name);
+    if (TelEngine::null(valStr))
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    int64_t val = valStr->toInt64(-1);
+    if (val < 0 || val > 0x1ffffffff)
+	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
+    uint8_t buf[5];
+    buf[0] = (uint8_t)(val >> 25);
+    buf[1] = (uint8_t)(val >> 17);
+    buf[2] = (uint8_t)(val >> 9);
+    buf[3] = (uint8_t)(val >> 1);
+    buf[4] = (uint8_t)(val << 7);
+    out.append(buf,5);
+    return GSML3Codec::NoError;
+}
+
 static const TokenDict s_msNetworkFeatSupport[] = {
     {"MS-does-not-support-the-extended-periodic-timer-in-this-domain", 0},
     {"MS-supports-the-extended-periodic-timer-in-this-domain",         1},
@@ -2976,6 +3049,14 @@ static const TokenDict s_rrCauseType[] = {
     {0, 0},
 };
 
+// reference: ETSI TS 144 018 V11.5.0,, section 10.5.2.67 PS Cause
+static const TokenDict s_psCauseType[] = {
+    {"DTM-multislot-capabilities-volated",                  0x00},
+    {"no-uplink-TBFs",                                      0x01},
+    {"too-many-TBFs",                                       0x02},
+    {0, 0},
+};
+
 // IE Types
 #define MAKE_IE_TYPE(x,decoder,encoder,data) const IEType s_type_##x = {decoder,encoder,data};
 
@@ -3038,6 +3119,9 @@ MAKE_IE_TYPE(SecurityHeader,decodeSecHeader,encodeSecHeader,0)
 MAKE_IE_TYPE(CPCause,decodeEnum,encodeEnum,s_cpCauseType)
 // RR types
 MAKE_IE_TYPE(RRCause,decodeEnum,encodeEnum,s_rrCauseType)
+MAKE_IE_TYPE(PSCause,decodeEnum,encodeEnum,s_psCauseType)
+MAKE_IE_TYPE(MTDiff,decodeMobileTD,encodeMobileTD,0);
+MAKE_IE_TYPE(MTDiffHyper,decodeMobileTDHyper,encodeMobileTDHyper,0);
 
 #define MAKE_IE_PARAM(type,xml,iei,name,optional,length,lowerBits,ieType) \
     {GSML3Codec::type,GSML3Codec::xml,iei,name,optional,length,lowerBits,ieType}
@@ -3711,6 +3795,21 @@ static const IEParam s_rrPagingRespParams[] = {
     s_ie_EndDef,
 };
 
+// reference ETSI TS 144 018 V11.5.0, section 9.1.17 Handover failure
+static const IEParam s_rrHoFailureParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "RRCause",    false,       8,  true, s_type_RRCause),
+    MAKE_IE_PARAM(TV,     XmlElem, 0x90, "PSCause",    true,        8,  true, s_type_PSCause),
+    s_ie_EndDef,
+};
+
+// reference ETSI TS 144 018 V11.5.0, section 9.1.16 Handover complete
+static const IEParam s_rrHoCompleteParams[] = {
+    MAKE_IE_PARAM(V,      XmlElem,    0, "RRCause",                        false,      8,  true, s_type_RRCause),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x77, "MobileTimeDifference",            true,  5 * 8,  true, s_type_MTDiff),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x67, "MobileTimeDifferenceHyperframe",  true,  7 * 8,  true, s_type_MTDiffHyper),
+    s_ie_EndDef,
+};
+
 // reference ETSI TS 144 018 V11.5.0, section 9.1.29 RR Status
 static const IEParam s_rrStatusParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "RRCause",    false,       8,  true, s_type_RRCause),
@@ -3720,8 +3819,11 @@ static const IEParam s_rrStatusParams[] = {
 // Radio Resource Management message types
 // reference ETSI TS 144 018 V11.5.0, section 10.4 Message type
 static const RL3Message s_rrMsgs[] = {
-    //Paging and Notification messages
+    // Paging and Notification messages
     {0x27,    "PagingResponse",   s_rrPagingRespParams,    0},
+    // Handover messages
+    {0x28,    "HandoverFailure",  s_rrHoFailureParams,     0},
+    {0x2c,    "HandoverComplete", s_rrHoCompleteParams,    0},
     // Miscellaneous messages
     {0x12,    "RRStatus",         s_rrStatusParams,        0},
     {0xff,    "",                 0,                       0},

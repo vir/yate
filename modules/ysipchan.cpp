@@ -932,6 +932,7 @@ public:
     virtual bool msgText(Message& msg, const char* text);
     virtual bool msgDrop(Message& msg, const char* reason);
     virtual bool msgUpdate(Message& msg);
+    virtual bool msgControl(Message& msg);
     virtual bool callRouted(Message& msg);
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason, const Message* msg);
@@ -6013,6 +6014,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     filterDebug(m_address);
     m_dialog = *m;
     m_dialog.localCSeq = m->getCSeq();
+    m_dialog.remoteCSeq = msg.getIntValue("remote_cseq",-1);
     if (s_privacy)
 	copyPrivacy(*m,msg);
 
@@ -7527,6 +7529,31 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	return true;
     }
     return false;
+}
+
+bool YateSIPConnection::msgControl(Message& msg)
+{
+    bool ok = false;
+    if (msg[YSTRING("operation")] == YSTRING("query")) {
+	msg.setParam("sip_uri",m_uri);
+	msg.setParam("sip_callid",callid());
+	String tmp;
+	tmp << "<" << m_dialog.localURI << ">";
+	if (m_dialog.localTag)
+	    tmp << ";tag=" << m_dialog.localTag;
+	msg.setParam("sip_from",tmp);
+	tmp.clear();
+	tmp << "<" << m_dialog.remoteURI << ">";
+	if (m_dialog.remoteTag)
+	    tmp << ";tag=" << m_dialog.remoteTag;
+	msg.setParam("sip_to",tmp);
+	if (m_dialog.localCSeq >= 0)
+	    msg.setParam("local_cseq",String(m_dialog.localCSeq));
+	if (m_dialog.remoteCSeq >= 0)
+	    msg.setParam("remote_cseq",String(m_dialog.remoteCSeq));
+	ok = true;
+    }
+    return Channel::msgControl(msg) || ok;
 }
 
 void YateSIPConnection::endDisconnect(const Message& msg, bool handled)

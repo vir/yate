@@ -292,12 +292,21 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	addHeader("Call-ID",tmp);
     }
 
-    if (!(isAnswer() || getHeader("CSeq"))) {
-	String tmp;
-	if (m_cseq <= 0)
-	    m_cseq = engine->getNextCSeq();
-	tmp << m_cseq << " " << method;
-	addHeader("CSeq",tmp);
+    if (!isAnswer()) {
+	hl = const_cast<MimeHeaderLine*>(getHeader("CSeq"));
+	if (hl) {
+	    if (m_cseq <= 0) {
+		String tmp(*hl);
+		tmp >> m_cseq;
+	    }
+	}
+	else {
+	    String tmp;
+	    if (m_cseq <= 0)
+		m_cseq = engine->getNextCSeq();
+	    tmp << m_cseq << " " << method;
+	    addHeader("CSeq",tmp);
+	}
     }
 
     const char* info = isAnswer() ? "Server" : "User-Agent";

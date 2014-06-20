@@ -70,6 +70,8 @@ public:
 	{ return false; }
     virtual ExpOperation* clone(const char* name) const
 	{ return new ExpNull(static_cast<JsNull*>(object()),name); }
+    virtual ExpOperation* copy(Mutex* mtx) const
+	{ return clone(name()); }
 protected:
     inline ExpNull(JsNull* obj, const char* name)
 	: ExpWrapper(obj,name)
@@ -2534,6 +2536,8 @@ void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* co
 	    temp = new NamedString(op->name(),*ns);
 	object->params().setParam(temp);
     }
+    if (object->frozen())
+	return;
     JsArray* arr = YOBJECT(JsArray,object);
     if (arr) {
 	if (arrayProto && arrayProto->ref())

@@ -1615,7 +1615,7 @@ static unsigned int encodeMobileTDHyper(const GSML3Codec* codec,  uint8_t proto,
     if (TelEngine::null(valStr))
 	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
     int64_t val = valStr->toInt64(-1);
-    if (val < 0 || val > 0x1ffffffff)
+    if (val < 0 || val > 0x1ffffffffLL)
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
     uint8_t buf[5];
     buf[0] = (uint8_t)(val >> 25);

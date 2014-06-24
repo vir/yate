@@ -340,7 +340,7 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    else {
 		bool num = true;
 		ExpOperation* o = YOBJECT(ExpOperation,param);
-		if (o && !o->isInteger())
+		if (o && !o->isNumber())
 		    num = false;
 		ExpEvaluator::pushOne(stack,new ExpOperation(*param,oper.name(),num));
 	    }

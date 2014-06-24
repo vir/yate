@@ -34,10 +34,15 @@ AC_MSG_RESULT([$uname_os])
 # Check if we should look for alternate library names
 AC_ARG_WITH(archlib,AC_HELP_STRING([--with-archlib=NAME],[use NAME as library directory name]),[ac_cv_use_archlib=$withval])
 AC_MSG_CHECKING([for libraries directory name])
-archname=`uname -m` 2>/dev/null
-test -z "$archname" && archname=`arch -k`
+archname=`dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null`
+test -z "$archname" && archname=`uname -m 2>/dev/null`
+test -z "$archname" && archname=`arch -k 2>/dev/null`
+test -z "$archname" && archname=`arch 2>/dev/null`
 ARCHLIB="lib"
 case "x$archname" in
+    x*-*-*)
+	ARCHLIB="lib/$archname"
+	;;
     x*x86_64*)
 	ARCHLIB=lib64
 	;;

@@ -602,9 +602,21 @@ done
 if [[ ! -f "$incpq/libpq-fe.h" ]]; then
     incpq="$incpq/pgsql"
 fi
-if [[ -f "$incpq/libpq-fe.h" -a -f "$libpq" ]]; then
-    HAVE_PGSQL=yes
+if [[ -f "$incpq/libpq-fe.h" ]]; then
+if [[ -f "$libpq" ]]; then
+HAVE_PGSQL=yes
+else
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -I$incpq"
+SAVE_LIBS="$LIBS"
+LIBS="$LIBS -lpq"
+AC_TRY_LINK([#include <libpq-fe.h>],[PQconnectStart("");],[HAVE_PGSQL=yes])
+LIBS="$SAVE_LIBS"
+CFLAGS="$SAVE_CFLAGS"
+fi
+if [[ "x$HAVE_PGSQL" = "xyes" ]]; then
     PGSQL_INC="-I$incpq"
+fi
 fi
 AC_MSG_RESULT([$HAVE_PGSQL])
 fi

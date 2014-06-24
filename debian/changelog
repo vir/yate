@@ -1,4 +1,4 @@
-yate (5.3.1~svn5851) UNRELEASED; urgency=low
+yate (5.3.1~svn5854) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1164,8 +1164,12 @@ yate (5.3.1~svn5851) UNRELEASED; urgency=low
     race condition causing random memory corruption.  + Terminate I/O
     streams instead of deleting them when an external module exits.  +
     Fixed build on 32 bit systems.
+  * Updated to SVN revision 5854: + Use dpkg-architecture to find
+    multiarch directory name on Debian.  + Use AC_TRY_LINK to check if
+    the PostgreSQL library is linkable.  + Do proper number conversion
+    for arithmetic operations.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 24 Jun 2014 02:19:19 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 25 Jun 2014 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -1,4 +1,4 @@
-yate (5.3.1~svn5854) UNRELEASED; urgency=low
+yate (5.3.1~svn5857) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1168,8 +1168,16 @@ yate (5.3.1~svn5854) UNRELEASED; urgency=low
     multiarch directory name on Debian.  + Use AC_TRY_LINK to check if
     the PostgreSQL library is linkable.  + Do proper number conversion
     for arithmetic operations.
+  * Updated to SVN revision 5857: + Always parse CSeq in base 10, some
+    implementations left pad with zeros.  + Implement independent CSeq
+    generators for INVITE dialogs and REGISTER sessions.  + Do proper
+    cloning on ExpOperation when resolving fields and do proper
+    detection for number conversion on boolean values.  + Fix loss of
+    boolean type information through assignment due to changes in commit
+    5854.  + Report the ExpOperation types in Engine.print_r().  + Fixed
+    assignment operation changed in Rev. 5856.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 25 Jun 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 26 Jun 2014 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

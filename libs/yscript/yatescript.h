@@ -956,10 +956,12 @@ public:
      * Copy constructor with renaming, to be used for named results
      * @param original Operation to copy
      * @param name Name of the newly created operation
+     * @param copyType True to copy operation type, false to create an OpcPush
      */
-    inline ExpOperation(const ExpOperation& original, const char* name)
+    inline ExpOperation(const ExpOperation& original, const char* name, bool copyType = true)
 	: NamedString(name,original),
-	  m_opcode(original.opcode()), m_number(original.number()), m_bool(original.isBoolean()),
+	  m_opcode(copyType ? original.opcode() : ExpEvaluator::OpcPush),
+	  m_number(original.number()), m_bool(original.isBoolean()),
 	  m_isNumber(original.isNumber()), m_lineNo(0), m_barrier(original.barrier())
 	{ }
 
@@ -976,7 +978,7 @@ public:
 	  m_bool(autoNum && value.isBoolean()),
 	  m_isNumber(autoNum && (value == YSTRING("NaN") || m_number != nonInteger())),
 	  m_lineNo(0), m_barrier(false)
-	{ if (m_bool) m_number = value.toBoolean() ? 1 : 0; }
+	{ if (m_bool) { m_number = value.toBoolean() ? 1 : 0; m_isNumber = true;} }
 
     /**
      * Push literal string constructor

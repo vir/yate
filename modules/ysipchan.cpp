@@ -671,7 +671,7 @@ public:
     virtual ~YateSIPLine();
     bool matchInbound(const String& addr, int port, const String& user) const;
     void setupAuth(SIPMessage* msg) const;
-    SIPMessage* buildRegister(int expires) const;
+    SIPMessage* buildRegister(int expires);
     void login();
     void logout(bool sendLogout = true, const char* reason = 0);
     bool process(SIPEvent* ev);
@@ -728,6 +728,7 @@ private:
     int m_flags;
     int m_trans;
     SIPTransaction* m_tr;
+    RefPointer<SIPSequence> m_seq;
     bool m_marked;
     bool m_valid;
     String m_callid;
@@ -6013,7 +6014,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     SocketAddr::appendTo(m_address,m_host,m_port);
     filterDebug(m_address);
     m_dialog = *m;
-    m_dialog.localCSeq = m->getCSeq();
+    m_dialog.setCSeq(m->getCSeq());
     m_dialog.remoteCSeq = msg.getIntValue("remote_cseq",-1);
     if (s_privacy)
 	copyPrivacy(*m,msg);
@@ -6262,10 +6263,9 @@ SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
 	m->destruct();
 	return 0;
     }
-    if (m_dialog.localCSeq > 0)
-	m->setCSeq(++m_dialog.localCSeq);
-    else
-	m->setCSeq(m_dialog.localCSeq = plugin.ep()->engine()->getNextCSeq());
+    if (m_dialog.getLastCSeq() < 0)
+	m_dialog.setCSeq(plugin.ep()->engine()->getNextCSeq() - 1);
+    m->setSequence(m_dialog.getSequence());
     m->addHeader("Call-ID",callid());
     String tmp;
     tmp << "<" << m_dialog.localURI << ">";
@@ -7547,8 +7547,9 @@ bool YateSIPConnection::msgControl(Message& msg)
 	if (m_dialog.remoteTag)
 	    tmp << ";tag=" << m_dialog.remoteTag;
 	msg.setParam("sip_to",tmp);
-	if (m_dialog.localCSeq >= 0)
-	    msg.setParam("local_cseq",String(m_dialog.localCSeq));
+	int32_t cseq = m_dialog.getLastCSeq();
+	if (cseq >= 0)
+	    msg.setParam("local_cseq",String(cseq));
 	if (m_dialog.remoteCSeq >= 0)
 	    msg.setParam("remote_cseq",String(m_dialog.remoteCSeq));
 	ok = true;
@@ -8064,7 +8065,7 @@ void YateSIPLine::changing()
     logout();
 }
 
-SIPMessage* YateSIPLine::buildRegister(int expires) const
+SIPMessage* YateSIPLine::buildRegister(int expires)
 {
     String exp(expires);
     String tmp;
@@ -8093,6 +8094,11 @@ SIPMessage* YateSIPLine::buildRegister(int expires) const
     m->addHeader("To",tmp);
     if (m_callid)
 	m->addHeader("Call-ID",m_callid);
+    if (!m_seq) {
+	m_seq = new SIPSequence(plugin.ep()->engine()->getNextCSeq() - 1);
+	m_seq->deref();
+    }
+    m->setSequence(m_seq);
     m->complete(plugin.ep()->engine(),m_username,domain(),0,m_flags);
     return m;
 }
@@ -8191,6 +8197,7 @@ void YateSIPLine::logout(bool sendLogout, const char* reason)
 	m->deref();
     }
     m_callid.clear();
+    m_seq = 0;
 }
 
 bool YateSIPLine::process(SIPEvent* ev)

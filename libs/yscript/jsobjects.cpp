@@ -338,11 +338,8 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    if (w)
 		ExpEvaluator::pushOne(stack,w->clone(oper.name()));
 	    else {
-		bool num = true;
 		ExpOperation* o = YOBJECT(ExpOperation,param);
-		if (o && !o->isNumber())
-		    num = false;
-		ExpEvaluator::pushOne(stack,new ExpOperation(*param,oper.name(),num));
+		ExpEvaluator::pushOne(stack,o ? new ExpOperation(*o,oper.name()) : new ExpOperation(*param,oper.name(),true));
 	    }
 	}
     }

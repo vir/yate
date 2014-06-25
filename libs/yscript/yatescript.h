@@ -976,7 +976,7 @@ public:
 	  m_bool(autoNum && value.isBoolean()),
 	  m_isNumber(autoNum && (value == YSTRING("NaN") || m_number != nonInteger())),
 	  m_lineNo(0), m_barrier(false)
-	{ if (m_bool) m_number = value.toBoolean() ? 1 : 0; }
+	{ if (m_bool) { m_number = value.toBoolean() ? 1 : 0; m_isNumber = true;} }
 
     /**
      * Push literal string constructor

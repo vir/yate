@@ -811,6 +811,8 @@ ExtModReceiver::~ExtModReceiver()
     closeAudio();
     Stream* tmp = m_in;
     m_in = 0;
+    if (tmp == m_out)
+	m_out = 0;
     delete tmp;
     tmp = m_out;
     m_out = 0;

@@ -1,4 +1,4 @@
-yate (5.3.1~svn5857) UNRELEASED; urgency=low
+yate (5.3.1~svn5858) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1176,8 +1176,11 @@ yate (5.3.1~svn5857) UNRELEASED; urgency=low
     boolean type information through assignment due to changes in commit
     5854.  + Report the ExpOperation types in Engine.print_r().  + Fixed
     assignment operation changed in Rev. 5856.
+  * Updated to SVN revision 5858: + Fixed assignment operation changed
+    in Rev. 5856.  + Fixed cleanup for TCP connections where same stream
+    is used for In and Out.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 26 Jun 2014 02:19:21 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 01 Jul 2014 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

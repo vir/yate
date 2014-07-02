@@ -885,32 +885,37 @@ bool MimeMultipartBody::getBoundary(String& boundary) const
  */
 YCLASSIMP(MimeSdpBody,MimeBody)
 
-MimeSdpBody::MimeSdpBody()
-    : MimeBody("application/sdp")
+MimeSdpBody::MimeSdpBody(bool hashing)
+    : MimeBody("application/sdp"),
+      m_lineAppend(&m_lines), m_hash(0), m_hashing(hashing)
 {
 }
 
 MimeSdpBody::MimeSdpBody(const String& type, const char* buf, int len)
-    : MimeBody(type)
+    : MimeBody(type),
+      m_lineAppend(&m_lines), m_hash(0), m_hashing(false)
 {
     buildLines(buf,len);
 }
 
 MimeSdpBody::MimeSdpBody(const MimeHeaderLine& type, const char* buf, int len)
-    : MimeBody(type)
+    : MimeBody(type),
+      m_lineAppend(&m_lines), m_hash(0), m_hashing(false)
 {
     buildLines(buf,len);
 }
 
 MimeSdpBody::MimeSdpBody(const MimeSdpBody& original)
-    : MimeBody(original.getType())
+    : MimeBody(original.getType()),
+      m_lineAppend(&m_lines), m_hash(original.m_hash), m_hashing(false)
 {
     const ObjList* l = &original.m_lines;
     for (; l; l = l->next()) {
     	const NamedString* t = static_cast<NamedString*>(l->get());
         if (t)
-	    m_lines.append(new NamedString(t->name(),*t));
+	    addLine(t->name(),*t);
     }
+    m_hashing = original.m_hashing;
 }
 
 MimeSdpBody::~MimeSdpBody()
@@ -965,6 +970,15 @@ const NamedString* MimeSdpBody::getNextLine(const NamedString* line) const
     return 0;
 }
 
+NamedString* MimeSdpBody::addLine(const char* name, const char* value)
+{
+    if (m_hashing)
+	m_hash = String::hash(value,String::hash(name,m_hash));
+    NamedString* line = new NamedString(name,value);
+    m_lineAppend = m_lineAppend->append(line);
+    return line;
+}
+
 // Build the lines from a data buffer
 void MimeSdpBody::buildLines(const char* buf, int len)
 {
@@ -972,7 +986,7 @@ void MimeSdpBody::buildLines(const char* buf, int len)
         String* line = getUnfoldedLine(buf,len);
 	int eq = line->find('=');
 	if (eq > 0)
-	    m_lines.append(new NamedString(line->substr(0,eq),line->substr(eq+1)));
+	    addLine(line->substr(0,eq),line->substr(eq+1));
 	line->destruct();
     }
 }

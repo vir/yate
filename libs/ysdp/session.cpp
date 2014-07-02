@@ -29,7 +29,7 @@ namespace TelEngine {
 SDPSession::SDPSession(SDPParser* parser)
     : m_parser(parser), m_mediaStatus(MediaMissing),
       m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
-      m_sdpSession(0), m_sdpVersion(0),
+      m_sdpSession(0), m_sdpVersion(0), m_sdpHash(YSTRING_INIT_HASH),
       m_secure(m_parser->m_secure), m_rfc2833(m_parser->m_rfc2833),
       m_ipv6(false), m_enabler(0), m_ptr(0)
 {
@@ -39,7 +39,7 @@ SDPSession::SDPSession(SDPParser* parser)
 SDPSession::SDPSession(SDPParser* parser, NamedList& params)
     : m_parser(parser), m_mediaStatus(MediaMissing),
       m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
-      m_sdpSession(0), m_sdpVersion(0),
+      m_sdpSession(0), m_sdpVersion(0), m_sdpHash(YSTRING_INIT_HASH),
       m_ipv6(false), m_enabler(0), m_ptr(0)
 {
     setSdpDebug();
@@ -328,9 +328,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
     // if we got no media descriptors we simply create no SDP
     if (!mediaList)
 	return 0;
-    if (m_sdpSession)
-	++m_sdpVersion;
-    else
+    if (!m_sdpSession)
 	m_sdpVersion = m_sdpSession = Time::secNow();
 
     // override the address with the externally advertised if needed
@@ -340,15 +338,14 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	m_originAddr = addr ? addr : m_host.safe();
     // no address means on hold or muted
     String origin;
-    origin << "yate " << m_sdpSession << " " << m_sdpVersion;
-    origin << " ";
     int f = addIP(origin,m_originAddr);
     String conn;
     addIP(conn,addr,f);
 
-    MimeSdpBody* sdp = new MimeSdpBody;
+    MimeSdpBody* sdp = new MimeSdpBody(true);
     sdp->addLine("v","0");
-    sdp->addLine("o",origin);
+    // insert incomplete origin just for hashing purpose
+    NamedString* org = sdp->addLine("o",origin);
     sdp->addLine("s",m_parser->m_sessionName);
     sdp->addLine("c",conn);
     sdp->addLine("t","0 0");
@@ -549,6 +546,14 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 		sdp->addLine("a","encryption:optional");
 	}
     }
+    // increment version if body hash changed
+    if ((YSTRING_INIT_HASH != m_sdpHash) && (sdp->hash() != m_sdpHash))
+	m_sdpVersion++;
+    m_sdpHash = sdp->hash();
+    // insert version in the origin line
+    origin.clear();
+    origin << "yate " << m_sdpSession << " " << m_sdpVersion << " " << *org;
+    *org = origin;
 
     return sdp;
 }

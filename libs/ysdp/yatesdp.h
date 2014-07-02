@@ -640,6 +640,7 @@ protected:
     ObjList* m_rtpMedia;                 // List of media descriptors
     int m_sdpSession;                    // Unique SDP session number
     int m_sdpVersion;                    // SDP version number, incremented each time we generate a new SDP
+    unsigned int m_sdpHash;              // SDP content hash
     String m_host;
     bool m_secure;
     int m_rfc2833;                       // Payload of RFC 2833 for remote party

@@ -7728,14 +7728,19 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 bool YateSIPConnection::startClientReInvite(NamedList& msg, bool rtpForward)
 {
     bool hadRtp = !m_rtpForward;
+    bool forced = msg.getBoolValue(YSTRING("rtp_forced"));
     if (msg.getBoolValue(YSTRING("rtp_forward"),m_rtpForward) != rtpForward) {
-	msg.setParam("error","failure");
-	msg.setParam("reason","Mismatched RTP forwarding");
-	return false;
+	if (forced)
+	    rtpForward = !rtpForward;
+	else {
+	    msg.setParam("error","failure");
+	    msg.setParam("reason","Mismatched RTP forwarding");
+	    return false;
+	}
     }
     m_rtpForward = rtpForward;
     // this is the point of no return
-    if (hadRtp)
+    if (hadRtp && !forced)
 	clearEndpoint();
     MimeSdpBody* sdp = 0;
     if (rtpForward)

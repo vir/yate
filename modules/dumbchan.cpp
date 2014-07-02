@@ -111,10 +111,15 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
     m.copyParam(msg,"timeout");
     m.copyParams(msg,msg.getValue("copyparams"));
 
-    if (Engine::dispatch(m)) {
+    const String& callto = msg["direct"];
+    if (callto || Engine::dispatch(m)) {
 	m = "call.execute";
-	m.addParam("callto",m.retValue());
-	m.retValue().clear();
+	if (callto)
+	    m.addParam("callto",callto);
+	else {
+	    m.addParam("callto",m.retValue());
+	    m.retValue().clear();
+	}
 	m.setParam("id", c->id());
 	m.userData(c);
 	if (Engine::dispatch(m) && c->callRouted(m)) {

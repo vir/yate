@@ -348,11 +348,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libysig", "libysig.vcproj",
 		{254C6F00-6DE5-44A6-AD44-ACABA8912381} = {254C6F00-6DE5-44A6-AD44-ACABA8912381}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libyxml", "libyxml.vcproj", "{E351C8F9-20A7-4363-909C-1A06E9BEAA6B}"
-	ProjectSection(ProjectDependencies) = postProject
-		{254C6F00-6DE5-44A6-AD44-ACABA8912381} = {254C6F00-6DE5-44A6-AD44-ACABA8912381}
-	EndProjectSection
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "_ysigchan", "_ysigchan.vcproj", "{14D976D9-76B8-48D3-8312-4539D4B610BC}"
 	ProjectSection(ProjectDependencies) = postProject
 		{496A2084-FFED-4F73-8C85-170042A34F38} = {496A2084-FFED-4F73-8C85-170042A34F38}

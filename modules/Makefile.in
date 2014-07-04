@@ -308,9 +308,9 @@ $(JUSTSIG) server/wpcard.yate server/tdmcard.yate server/zapcard.yate: LOCALLIBS
 sig/ss7_lnp_ansi.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/yasn
 sig/ss7_lnp_ansi.yate: LOCALLIBS = -lyatesig -L../libs/yasn -lyasn
 
-sig/camel_map.yate: ../libs/yasn/libyasn.a ../libs/yxml/libyatexml.a
-sig/camel_map.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/yasn -I@top_srcdir@/libs/yxml
-sig/camel_map.yate: LOCALLIBS = -lyatesig -L../libs/yasn -lyasn -L../libs/yxml -lyatexml
+sig/camel_map.yate: ../libs/yasn/libyasn.a
+sig/camel_map.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/yasn
+sig/camel_map.yate: LOCALLIBS = -lyatesig -L../libs/yasn -lyasn
 
 server/analogdetect.yate: ../libs/ymodem/libyatemodem.a
 server/analogdetect.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymodem
@@ -334,7 +334,7 @@ yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yiax
 yiaxchan.yate: LOCALLIBS = -L../libs/yiax -lyateiax
 
 yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate client/jabberclient.yate: ../libyatejabber.so
-yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate client/jabberclient.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml -I@top_srcdir@/libs/yjabber
+yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate client/jabberclient.yate: LOCALFLAGS = -I@top_srcdir@/libs/yjabber
 yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate client/jabberclient.yate: LOCALLIBS = -lyatejabber
 
 server/dbpbx.yate server/pbxassist.yate: ../libs/ypbx/libyatepbx.a
@@ -393,13 +393,9 @@ rmanager.yate: EXTERNLIBS = $(COREDUMP_LIB)
 qt4/updater.yate: EXTERNFLAGS = $(QT4_INC_NET)
 qt4/updater.yate: EXTERNLIBS = $(QT4_LIB_NET)
 
-server/sipfeatures.yate: ../libs/yxml/libyatexml.a
-server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml
-server/sipfeatures.yate: LOCALLIBS = -L../libs/yxml -lyatexml
-
-javascript.yate: ../libyatescript.so ../libs/ypbx/libyatepbx.a ../libs/yxml/libyatexml.a
-javascript.yate: LOCALFLAGS = -I@top_srcdir@/libs/yscript -I@top_srcdir@/libs/ypbx -I@top_srcdir@/libs/yxml
-javascript.yate: LOCALLIBS = -lyatescript -L../libs/ypbx -lyatepbx -L../libs/yxml -lyatexml
+javascript.yate: ../libyatescript.so ../libs/ypbx/libyatepbx.a
+javascript.yate: LOCALFLAGS = -I@top_srcdir@/libs/yscript -I@top_srcdir@/libs/ypbx
+javascript.yate: LOCALLIBS = -lyatescript -L../libs/ypbx -lyatepbx
 
 zlibcompress.yate: EXTERNFLAGS = $(ZLIB_INC)
 zlibcompress.yate: EXTERNLIBS = $(ZLIB_LIB)
@@ -434,9 +430,6 @@ server/ysnmpagent.yate: LOCALLIBS = -L../libs/yasn -lyasn -L../libs/ysnmp -lysnm
 
 ../libs/ymodem/libyatemodem.a: @top_srcdir@/libs/ymodem/yatemodem.h
 	$(MAKE) -C ../libs/ymodem
-
-../libs/yxml/libyatexml.a: @top_srcdir@/libs/yxml/yatexml.h
-	$(MAKE) -C ../libs/yxml
 
 ../libyatejabber.so ../libs/yjabber/libyatejabber.a: @top_srcdir@/libs/yjabber/xmpputils.h @top_srcdir@/libs/yjabber/yatejabber.h @top_srcdir@/libs/yjabber/yatejingle.h
 	$(MAKE) -C ../libs/yjabber

@@ -30,8 +30,8 @@ SLIBS:= $(YLIB) libyate.so \
 	libyategsm.so.@PACKAGE_VERSION@ libyategsm.so \
 	libyatemgcp.so.@PACKAGE_VERSION@ libyatemgcp.so \
 	libyatejabber.so.@PACKAGE_VERSION@ libyatejabber.so
-ILIBS:= ygsm yxml
-INCS := yateclass.h yatemime.h yatengine.h yatephone.h yatecbase.h
+ILIBS:= ygsm
+INCS := yateclass.h yatemime.h yatengine.h yatephone.h yatecbase.h yatexml.h
 GENS := yateversn.h
 LIBS :=
 MAN8 := yate.8 yate-config.8

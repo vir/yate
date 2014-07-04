@@ -47,7 +47,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".,..,..\libs\yjabber,..\libs\yxml"
+				AdditionalIncludeDirectories=".,..,..\libs\yjabber"
 				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_USRDLL"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -144,7 +144,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories=".,..,..\libs\yjabber,..\libs\yxml"
+				AdditionalIncludeDirectories=".,..,..\libs\yjabber"
 				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_USRDLL"
 				StringPooling="true"
 				RuntimeLibrary="2"

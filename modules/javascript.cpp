@@ -246,6 +246,8 @@ public:
 	    params().addParam(new ExpFunction("btoa"));
 	    params().addParam(new ExpFunction("atoh"));
 	    params().addParam(new ExpFunction("htoa"));
+	    params().addParam(new ExpFunction("btoh"));
+	    params().addParam(new ExpFunction("htob"));
 	}
     static void initialize(ScriptContext* context);
     inline void resetWorker()
@@ -1087,6 +1089,39 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    String buf;
 	    b64.encode(buf,len,eol);
 	    ExpEvaluator::pushOne(stack,new ExpOperation(buf,"b64"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
+    }
+    else if (oper.name() == YSTRING("btoh")) {
+	// hex_str = Engine.btoh(str[,sep[,upCase]])
+	ObjList args;
+	ExpOperation* data = 0;
+	ExpOperation* sep = 0;
+	ExpOperation* upCase = 0;
+	if (!extractStackArgs(1,this,stack,oper,context,args,&data,&sep,&upCase))
+	    return false;
+	String tmp;
+	tmp.hexify((void*)data->c_str(),data->length(),(sep ? sep->at(0) : 0),
+	    (upCase && upCase->toBoolean()));
+	ExpEvaluator::pushOne(stack,new ExpOperation(tmp,"hex"));
+    }
+    else if (oper.name() == YSTRING("htob")) {
+	// str = Engine.unHexify(hex_str[,sep])
+	ObjList args;
+	ExpOperation* data = 0;
+	ExpOperation* sep = 0;
+	if (!extractStackArgs(1,this,stack,oper,context,args,&data,&sep))
+	    return false;
+	bool ok = true;
+	DataBlock buf;
+	if (!sep)
+	    ok = buf.unHexify(data->c_str(),data->length());
+	else
+	    ok = buf.unHexify(data->c_str(),data->length(),sep->at(0));
+	if (ok) {
+	    String tmp((const char*)buf.data(),buf.length());
+	    ExpEvaluator::pushOne(stack,new ExpOperation(tmp,"bin"));
 	}
 	else
 	    ExpEvaluator::pushOne(stack,new ExpOperation(false));

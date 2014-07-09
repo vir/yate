@@ -1,4 +1,4 @@
-yate (5.3.1~svn5865) UNRELEASED; urgency=low
+yate (5.3.1~svn5866) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1191,8 +1191,12 @@ yate (5.3.1~svn5865) UNRELEASED; urgency=low
     library.
   * Updated to SVN revision 5865: + Added support for (un)hexify
     functions: btoh and htob.
+  * Updated to SVN revision 5866: + Attempt to detect the proper default
+    to match Debian / Ubuntu install policy.  + Added configuration
+    option --enable-lib-exec that can remove executable permission from
+    installed shared libraries and Yate modules.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 08 Jul 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 10 Jul 2014 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -235,7 +235,7 @@ install: all do-install
 	    mkdir -p "$(DESTDIR)$(moddir)/$$i" ; \
 	done; \
 	for i in $(PROGS) ; do \
-	    @INSTALL_D@ "$$i" "$(DESTDIR)$(moddir)/$$i" ; \
+	    @INSTALL_D@ @INSTALL_L@ "$$i" "$(DESTDIR)$(moddir)/$$i" ; \
 	done;
 
 .PHONY: uninstall

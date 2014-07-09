@@ -1559,6 +1559,31 @@ fi
 fi
 
 
+INSTALL_L=""
+AC_ARG_ENABLE(lib-exec,AC_HELP_STRING([--enable-lib-exec],[Executable libraries and modules (default: auto)]),want_lib_exec=$enableval,want_lib_exec=auto)
+case "x$want_lib_exec" in
+    xyes)
+	;;
+    xno)
+	INSTALL_L="-m 0644"
+	;;
+    xauto)
+	AC_MSG_CHECKING([if shared libraries should be executable])
+	if stat -L "/usr/$ARCHLIB/libm.so" 2>/dev/null | grep -q '(0644/'; then
+	    want_lib_exec=no
+	    INSTALL_L="-m 0644"
+	else
+	    want_lib_exec=yes
+	fi
+	AC_MSG_RESULT([$want_lib_exec])
+	;;
+    *)
+	AC_ERROR([Invalid argument passed to --enable-lib-exec])
+	;;
+esac
+AC_SUBST(INSTALL_L)
+
+
 INSTALL_D="install -D"
 CFLAGS=`echo "$CFLAGS" | sed 's/\(^\| *\)-g[[0-9]]*//' | sed 's/[[[:space:]]]\{2,\}/ /g'`
 MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK $HAVE_BLOCK_RETURN"

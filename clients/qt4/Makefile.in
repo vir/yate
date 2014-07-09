@@ -81,7 +81,7 @@ install: all
 		f=`readlink "../../$$i"` ; \
 		ln -sf "$$f" "$(DESTDIR)$(libdir)/$$i" ; \
 	    else \
-		install ../../$$i "$(DESTDIR)$(libdir)/" ; \
+		install @INSTALL_L@ ../../$$i "$(DESTDIR)$(libdir)/" ; \
 	    fi \
 	done; \
 	mkdir -p "$(DESTDIR)$(incdir)" && \

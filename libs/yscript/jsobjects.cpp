@@ -341,8 +341,13 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    if (w)
 		ExpEvaluator::pushOne(stack,w->clone(oper.name()));
 	    else {
-		ExpOperation* o = YOBJECT(ExpOperation,param);
-		ExpEvaluator::pushOne(stack,o ? new ExpOperation(*o,oper.name(),false) : new ExpOperation(*param,oper.name(),true));
+		JsObject* jso = YOBJECT(JsObject,param);
+		if (jso && jso->ref())
+		    ExpEvaluator::pushOne(stack,new ExpWrapper(jso,oper.name()));
+		else {
+		    ExpOperation* o = YOBJECT(ExpOperation,param);
+		    ExpEvaluator::pushOne(stack,o ? new ExpOperation(*o,oper.name(),false) : new ExpOperation(*param,oper.name(),true));
+		}
 	    }
 	}
     }

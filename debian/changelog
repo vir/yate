@@ -1,4 +1,4 @@
-yate (5.3.1~svn5866) UNRELEASED; urgency=low
+yate (5.3.1~svn5868) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1195,8 +1195,14 @@ yate (5.3.1~svn5866) UNRELEASED; urgency=low
     to match Debian / Ubuntu install policy.  + Added configuration
     option --enable-lib-exec that can remove executable permission from
     installed shared libraries and Yate modules.
+  * Updated to SVN revision 5868: + Added configuration option --enable-
+    lib-exec that can remove executable permission from installed shared
+    libraries and Yate modules.  + When evaluating naked JsObject fields
+    wrap them in an ExpWrapper.  + This allows falling back to the
+    native JsObject methods.  + Extract native function arguments only
+    after recognizing the function name.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 10 Jul 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 12 Jul 2014 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

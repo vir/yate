@@ -2545,9 +2545,10 @@ public:
     /**
      * Parse a complete block of JSON text
      * @param text JSON text to parse
-     * @return JsObject holding the content of JSON, must be dereferenced after use, NULL if parse error
+     * @param mtx Pointer to the mutex that serializes this object
+     * @return ExpOperation holding the content of JSON, must be dereferenced after use, NULL if parse error
      */
-    static JsObject* parseJSON(const char* text);
+    static ExpOperation* parseJSON(const char* text, Mutex* mtx = 0);
 
     /**
      * Get a "null" object wrapper that will identity match another "null"

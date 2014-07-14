@@ -174,8 +174,8 @@ public:
     bool link();
     inline bool traceable() const
 	{ return m_traceable; }
-    JsObject* parseArray(ParsePoint& expr, bool constOnly);
-    JsObject* parseObject(ParsePoint& expr, bool constOnly);
+    JsObject* parseArray(ParsePoint& expr, bool constOnly, Mutex* mtx);
+    JsObject* parseObject(ParsePoint& expr, bool constOnly, Mutex* mtx);
     inline const NamedList& pragmas() const
 	{ return m_pragmas; }
     inline static unsigned int getLineNo(unsigned int line)
@@ -227,6 +227,7 @@ private:
     bool parseVar(ParsePoint& expr);
     bool parseTry(ParsePoint& expr, GenObject* nested);
     bool parseFuncDef(ParsePoint& expr, bool publish);
+    bool parseSimple(ParsePoint& expr, bool constOnly, Mutex* mtx = 0);
     bool evalList(ObjList& stack, GenObject* context) const;
     bool evalVector(ObjList& stack, GenObject* context) const;
     bool jumpToLabel(long int label, GenObject* context) const;
@@ -1909,9 +1910,14 @@ bool JsCode::getSeparator(ParsePoint& expr, bool remove)
 
 bool JsCode::getSimple(ParsePoint& expr, bool constOnly)
 {
+    return parseSimple(expr,constOnly);
+}
+
+bool JsCode::parseSimple(ParsePoint& expr, bool constOnly, Mutex* mtx)
+{
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getSimple(%s) '%.30s'",String::boolText(constOnly),(const char*)expr);
+    XDebug(this,DebugAll,"JsCode::parseSimple(%s) '%.30s'",String::boolText(constOnly),(const char*)expr);
     skipComments(expr);
     ParsePoint save = expr;
     switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_constants)) {
@@ -1936,9 +1942,9 @@ bool JsCode::getSimple(ParsePoint& expr, bool constOnly)
 	default:
 	    break;
     }
-    JsObject* jso = parseArray(expr,constOnly);
+    JsObject* jso = parseArray(expr,constOnly,mtx);
     if (!jso)
-	jso = parseObject(expr,constOnly);
+	jso = parseObject(expr,constOnly,mtx);
     if (!jso)
 	return ExpEvaluator::getSimple(expr,constOnly);
     addOpcode(new ExpWrapper(ExpEvaluator::OpcCopy,jso));
@@ -1946,12 +1952,12 @@ bool JsCode::getSimple(ParsePoint& expr, bool constOnly)
 }
 
 // Parse an inline Javascript Array: [ item1, item2, ... ]
-JsObject* JsCode::parseArray(ParsePoint& expr, bool constOnly)
+JsObject* JsCode::parseArray(ParsePoint& expr, bool constOnly, Mutex* mtx)
 {
     if (skipComments(expr) != '[')
 	return 0;
     expr++;
-    JsArray* jsa = new JsArray(0,"[object Array]");
+    JsArray* jsa = new JsArray(mtx,"[object Array]");
     for (bool first = true; ; first = false) {
 	if (skipComments(expr) == ']') {
 	    expr++;
@@ -1986,7 +1992,7 @@ JsObject* JsCode::parseArray(ParsePoint& expr, bool constOnly)
 	    jsa->push(new ExpWrapper(0,"undefined"));
 	    continue;
 	}
-	bool ok = constOnly ? getSimple(expr,true) : getOperand(expr,false);
+	bool ok = constOnly ? parseSimple(expr,true,mtx) : getOperand(expr,false);
 	if (!ok) {
 	    TelEngine::destruct(jsa);
 	    break;
@@ -2001,12 +2007,12 @@ JsObject* JsCode::parseArray(ParsePoint& expr, bool constOnly)
 
 
 // Parse an inline Javascript Object: { prop1: value1, "prop 2": value2, ... }
-JsObject* JsCode::parseObject(ParsePoint& expr, bool constOnly)
+JsObject* JsCode::parseObject(ParsePoint& expr, bool constOnly, Mutex* mtx)
 {
     if (skipComments(expr) != '{')
 	return 0;
     expr++;
-    JsObject* jso = new JsObject(0,"[object Object]");
+    JsObject* jso = new JsObject(mtx,"[object Object]");
     for (bool first = true; ; first = false) {
 	if (skipComments(expr) == '}') {
 	    expr++;
@@ -2040,7 +2046,7 @@ JsObject* JsCode::parseObject(ParsePoint& expr, bool constOnly)
 	    break;
 	}
 	expr++;
-	bool ok = constOnly ? getSimple(expr,true) : getOperand(expr,false);
+	bool ok = constOnly ? parseSimple(expr,true,mtx) : getOperand(expr,false);
 	if (!ok) {
 	    TelEngine::destruct(jso);
 	    break;
@@ -3505,13 +3511,17 @@ ScriptRun::Status JsParser::eval(const String& text, ExpOperation** result, Scri
 }
 
 // Parse JSON using native methods
-JsObject* JsParser::parseJSON(const char* text)
+ExpOperation* JsParser::parseJSON(const char* text, Mutex* mtx)
 {
+    if (!text)
+	return 0;
+    ExpOperation* ret = 0;
     JsCode* code = new JsCode;
     ParsePoint pp(text,code);
-    JsObject* jso = code->parseObject(pp,true);
+    if (code->parseSimple(pp,true,mtx))
+	ret = code->popOpcode();
     TelEngine::destruct(code);
-    return jso;
+    return ret;
 }
 
 // Return a "null" object wrapper

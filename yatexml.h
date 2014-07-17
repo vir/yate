@@ -22,23 +22,11 @@
 #ifndef __YATEXML_H
 #define __YATEXML_H
 
+#ifndef __cplusplus
+#error C++ is required
+#endif
+
 #include <yateclass.h>
-
-#ifdef _WINDOWS
-
-#ifdef LIBYXML_EXPORTS
-#define YXML_API __declspec(dllexport)
-#else
-#ifndef LIBYXML_STATIC
-#define YXML_API __declspec(dllimport)
-#endif
-#endif
-
-#endif /* _WINDOWS */
-
-#ifndef YXML_API
-#define YXML_API
-#endif
 
 /**
  * Holds all Telephony Engine related classes.
@@ -59,7 +47,7 @@ class XmlText;
 class XmlDoctype;
 
 
-struct YXML_API XmlEscape {
+struct YATE_API XmlEscape {
     /**
      * Value to match
      */
@@ -75,7 +63,7 @@ struct YXML_API XmlEscape {
  * A Serial Access Parser (SAX) for arbitrary XML data
  * @short Serial Access XML Parser
  */
-class YXML_API XmlSaxParser : public DebugEnabler
+class YATE_API XmlSaxParser : public DebugEnabler
 {
 public:
     enum Error {
@@ -513,7 +501,7 @@ protected:
  * Xml Parent for a Xml child
  * @short Xml Parent
  */
-class YXML_API XmlParent
+class YATE_API XmlParent
 {
 public:
     /**
@@ -613,7 +601,7 @@ public:
  * A Document Object Model (DOM) parser for XML documents and fragments
  * @short Document Object Model XML Parser
  */
-class YXML_API XmlDomParser : public XmlSaxParser
+class YATE_API XmlDomParser : public XmlSaxParser
 {
     friend class XmlChild;
 public:
@@ -731,7 +719,7 @@ private:
  * Xml Child for Xml document
  * @short Xml Child
  */
-class YXML_API XmlChild : public GenObject
+class YATE_API XmlChild : public GenObject
 {
     YCLASS(XmlChild,GenObject)
     friend class XmlDomParser;
@@ -796,7 +784,7 @@ public:
  * Xml Declaration for Xml document
  * @short Xml Declaration
  */
-class YXML_API XmlDeclaration : public XmlChild
+class YATE_API XmlDeclaration : public XmlChild
 {
     YCLASS(XmlDeclaration,XmlChild)
 public:
@@ -854,7 +842,7 @@ private:
  * Xml Fragment a fragment from a Xml document
  * @short Xml Fragment
  */
-class YXML_API XmlFragment : public XmlParent
+class YATE_API XmlFragment : public XmlParent
 {
 public:
 
@@ -964,7 +952,7 @@ private:
  * Xml Document
  * @short Xml Document
  */
-class YXML_API XmlDocument : public XmlParent
+class YATE_API XmlDocument : public XmlParent
 {
 public:
 
@@ -1091,7 +1079,7 @@ private:
  * @short Xml Element
  */
 
-class YXML_API XmlElement : public XmlChild, public XmlParent
+class YATE_API XmlElement : public XmlChild, public XmlParent
 {
     YCLASS(XmlElement,XmlChild)
 public:
@@ -1587,7 +1575,7 @@ private:
  * A Xml Comment from Xml document
  * @short Xml Comment
  */
-class YXML_API XmlComment : public XmlChild
+class YATE_API XmlComment : public XmlChild
 {
     YCLASS(XmlComment,XmlChild)
 public:
@@ -1637,7 +1625,7 @@ private:
  * A Xml CData from Xml document
  * @short Xml Declaration
  */
-class YXML_API XmlCData : public XmlChild
+class YATE_API XmlCData : public XmlChild
 {
     YCLASS(XmlCData,XmlChild)
 public:
@@ -1688,7 +1676,7 @@ private:
  * A Xml Declaration for Xml document
  * @short Xml Declaration
  */
-class YXML_API XmlText : public XmlChild
+class YATE_API XmlText : public XmlChild
 {
     YCLASS(XmlText,XmlChild)
 public:
@@ -1751,7 +1739,7 @@ private:
     String m_text;                        // The text
 };
 
-class YXML_API XmlDoctype : public XmlChild
+class YATE_API XmlDoctype : public XmlChild
 {
     YCLASS(XmlDoctype,XmlChild)
 public:

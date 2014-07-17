@@ -949,18 +949,20 @@ public:
     inline ExpOperation(const ExpOperation& original)
 	: NamedString(original.name(),original),
 	  m_opcode(original.opcode()), m_number(original.number()), m_bool(original.isBoolean()),
-	  m_lineNo(0), m_barrier(original.barrier())
+	  m_isNumber(original.isNumber()), m_lineNo(0), m_barrier(original.barrier())
 	{ }
 
     /**
      * Copy constructor with renaming, to be used for named results
      * @param original Operation to copy
      * @param name Name of the newly created operation
+     * @param copyType True to copy operation type, false to create an OpcPush
      */
-    inline ExpOperation(const ExpOperation& original, const char* name)
+    inline ExpOperation(const ExpOperation& original, const char* name, bool copyType = true)
 	: NamedString(name,original),
-	  m_opcode(original.opcode()), m_number(original.number()), m_bool(original.isBoolean()),
-	  m_lineNo(0), m_barrier(original.barrier())
+	  m_opcode(copyType ? original.opcode() : ExpEvaluator::OpcPush),
+	  m_number(original.number()), m_bool(original.isBoolean()),
+	  m_isNumber(original.isNumber()), m_lineNo(0), m_barrier(original.barrier())
 	{ }
 
     /**
@@ -974,8 +976,9 @@ public:
 	  m_opcode(ExpEvaluator::OpcPush),
 	  m_number(autoNum ? value.toInt64(nonInteger()) : nonInteger()),
 	  m_bool(autoNum && value.isBoolean()),
+	  m_isNumber(autoNum && (value == YSTRING("NaN") || m_number != nonInteger())),
 	  m_lineNo(0), m_barrier(false)
-	{ if (m_bool) m_number = value.toBoolean() ? 1 : 0; }
+	{ if (m_bool) { m_number = value.toBoolean() ? 1 : 0; m_isNumber = true;} }
 
     /**
      * Push literal string constructor
@@ -985,7 +988,7 @@ public:
     inline explicit ExpOperation(const char* value, const char* name = 0)
 	: NamedString(name,value),
 	  m_opcode(ExpEvaluator::OpcPush), m_number(nonInteger()), m_bool(false),
-	  m_lineNo(0), m_barrier(false)
+	  m_isNumber(false), m_lineNo(0), m_barrier(false)
 	{ }
 
     /**
@@ -996,7 +999,7 @@ public:
     inline explicit ExpOperation(int64_t value, const char* name = 0)
 	: NamedString(name,"NaN"),
 	  m_opcode(ExpEvaluator::OpcPush),
-	  m_number(value), m_bool(false), m_lineNo(0), m_barrier(false)
+	  m_number(value), m_bool(false), m_isNumber(true), m_lineNo(0), m_barrier(false)
 	{ if (value != nonInteger()) String::operator=(value); }
 
     /**
@@ -1007,7 +1010,7 @@ public:
     inline explicit ExpOperation(bool value, const char* name = 0)
 	: NamedString(name,String::boolText(value)),
 	  m_opcode(ExpEvaluator::OpcPush),
-	  m_number(value ? 1 : 0), m_bool(true),
+	  m_number(value ? 1 : 0), m_bool(true), m_isNumber(true),
 	  m_lineNo(0), m_barrier(false)
 	{ }
 
@@ -1020,7 +1023,8 @@ public:
      */
     inline ExpOperation(ExpEvaluator::Opcode oper, const char* name = 0, int64_t value = nonInteger(), bool barrier = false)
 	: NamedString(name,""),
-	  m_opcode(oper), m_number(value), m_bool(false), m_lineNo(0), m_barrier(barrier)
+	  m_opcode(oper), m_number(value), m_bool(false), m_isNumber(false),
+	  m_lineNo(0), m_barrier(barrier)
 	{ }
 
     /**
@@ -1032,7 +1036,8 @@ public:
      */
     inline ExpOperation(ExpEvaluator::Opcode oper, const char* name, const char* value, bool barrier = false)
 	: NamedString(name,value),
-	  m_opcode(oper), m_number(nonInteger()), m_bool(false), m_lineNo(0), m_barrier(barrier)
+	  m_opcode(oper), m_number(nonInteger()), m_bool(false), m_isNumber(false),
+	  m_lineNo(0), m_barrier(barrier)
 	{ }
 
     /**
@@ -1045,7 +1050,8 @@ public:
      */
     inline ExpOperation(ExpEvaluator::Opcode oper, const char* name, const char* value, int64_t number, bool barrier)
 	: NamedString(name,value),
-	  m_opcode(oper), m_number(number), m_bool(false), m_lineNo(0), m_barrier(barrier)
+	  m_opcode(oper), m_number(number), m_bool(false), m_isNumber(true),
+	  m_lineNo(0), m_barrier(barrier)
 	{ }
 
     /**
@@ -1077,6 +1083,13 @@ public:
 	{ return m_bool; }
 
     /**
+     * Check if a number type value is stored
+     * @return True if a number type value is stored
+     */
+    inline bool isNumber() const
+	{ return m_isNumber; }
+
+    /**
      * Check if this operation acts as an evaluator barrier on the stack
      * @return True if an expression should not pop this operation off the stack
      */
@@ -1103,13 +1116,19 @@ public:
      * @return Assigned number
      */
     inline int64_t operator=(int64_t num)
-	{ m_number = num; String::operator=(num); return num; }
+	{ m_number = num; String::operator=(num); m_isNumber = true; return num; }
 
     /**
      * Retrieve the numeric value of the operation
      * @return Number contained in operation, zero if not a number
      */
     virtual int64_t valInteger() const;
+
+    /**
+     * Convert to number
+     * @return Value converted to number, NaN if not possible of if stored value is NaN
+     */
+    virtual int64_t toNumber() const;
 
     /**
      * Retrieve the boolean value of the operation
@@ -1149,6 +1168,7 @@ private:
     ExpEvaluator::Opcode m_opcode;
     int64_t m_number;
     bool m_bool;
+    bool m_isNumber;
     unsigned int m_lineNo;
     bool m_barrier;
 };
@@ -2525,9 +2545,10 @@ public:
     /**
      * Parse a complete block of JSON text
      * @param text JSON text to parse
-     * @return JsObject holding the content of JSON, must be dereferenced after use, NULL if parse error
+     * @param mtx Pointer to the mutex that serializes this object
+     * @return ExpOperation holding the content of JSON, must be dereferenced after use, NULL if parse error
      */
-    static JsObject* parseJSON(const char* text);
+    static ExpOperation* parseJSON(const char* text, Mutex* mtx = 0);
 
     /**
      * Get a "null" object wrapper that will identity match another "null"

@@ -1019,10 +1019,11 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		switch (oper.opcode()) {
 		    case OpcDiv:
 		    case OpcMod:
-			if (!op2->valInteger())
+			if (!op2->toNumber())
 			    return gotError("Division by zero",oper.lineNumber());
+			break;
 		    case OpcAdd:
-			if (op1->isInteger() && op2->isInteger())
+			if (op1->isNumber() && op2->isNumber())
 			    break;
 			// turn addition into concatenation
 			{
@@ -1037,6 +1038,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 			break;
 		}
 		int64_t val = 0;
+		bool handled = true;
 		switch (oper.opcode()) {
 		    case OpcAnd:
 			val = op1->valInteger() & op2->valInteger();
@@ -1052,21 +1054,6 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 			break;
 		    case OpcShr:
 			val = op1->valInteger() >> op2->valInteger();
-			break;
-		    case OpcAdd:
-			val = op1->valInteger() + op2->valInteger();
-			break;
-		    case OpcSub:
-			val = op1->valInteger() - op2->valInteger();
-			break;
-		    case OpcMul:
-			val = op1->valInteger() * op2->valInteger();
-			break;
-		    case OpcDiv:
-			val = op1->valInteger() / op2->valInteger();
-			break;
-		    case OpcMod:
-			val = op1->valInteger() % op2->valInteger();
 			break;
 		    case OpcLt:
 			val = (op1->valInteger() < op2->valInteger()) ? 1 : 0;
@@ -1087,7 +1074,34 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 			val = (*op1 != *op2) ? 1 : 0;
 			break;
 		    default:
+			handled = false;
 			break;
+		}
+		if (!handled) {
+		    val = ExpOperation::nonInteger();
+		    int64_t op1Val = op1->toNumber();
+		    int64_t op2Val = op2->toNumber();
+		    if (op1Val != ExpOperation::nonInteger() && op2Val != ExpOperation::nonInteger()) {
+			switch(oper.opcode()) {
+			    case OpcAdd:
+				val = op1Val + op2Val;
+				break;
+			    case OpcSub:
+				val = op1Val - op2Val;
+				break;
+			    case OpcMul:
+				val = op1Val * op2Val;
+				break;
+			    case OpcDiv:
+				val = op1Val / op2Val;
+				break;
+			    case OpcMod:
+				val = op1Val % op2Val;
+				break;
+			    default:
+				break;
+			}
+		    }
 		}
 		TelEngine::destruct(op1);
 		TelEngine::destruct(op2);
@@ -1167,7 +1181,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		switch (oper.opcode()) {
 		    case OpcNeg:
-			pushOne(stack,new ExpOperation(-op->valInteger()));
+			pushOne(stack,new ExpOperation(-op->toNumber()));
 			break;
 		    case OpcNot:
 			pushOne(stack,new ExpOperation(~op->valInteger()));
@@ -1494,6 +1508,13 @@ int64_t ExpOperation::valInteger() const
     return isInteger() ? number() : 0;
 }
 
+int64_t  ExpOperation::toNumber() const
+{
+    if (isInteger())
+	return number();
+    return toInt64(nonInteger());
+}
+
 bool ExpOperation::valBoolean() const
 {
     return isInteger() ? (number() != 0) : !null();
@@ -1504,7 +1525,7 @@ const char* ExpOperation::typeOf() const
     switch (opcode()) {
 	case ExpEvaluator::OpcPush:
 	case ExpEvaluator::OpcCopy:
-	    return isInteger() ? ( isBoolean() ? "boolean" : "number" ) : "string";
+	    return isInteger() ? ( isBoolean() ? "boolean" : "number" ) : (isNumber() ? "number" : "string");
 	case ExpEvaluator::OpcFunc:
 	    return "function";
 	default:

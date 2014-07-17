@@ -6,12 +6,12 @@ DEBUG :=
 CXX  := @CXX@ -Wall
 AR  := ar
 DEFS :=
-INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@/../yxml -I@srcdir@
+INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@
 SONAME_OPT := @SONAME_OPT@
 YATELIBS := -L../.. -lyate @LIBS@
-INCFILES := @top_srcdir@/yateclass.h @srcdir@/../yxml/yatexml.h @srcdir@/xmpputils.h @srcdir@/yatejabber.h @srcdir@/yatejingle.h
+INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatexml.h @srcdir@/xmpputils.h @srcdir@/yatejabber.h @srcdir@/yatejingle.h
 
 PROGS=
 LIBS = libyatejabber.a
@@ -19,7 +19,6 @@ OBJS = xmpputils.o jbstream.o jbengine.o session.o jgengine.o
 LIBD_DEV:= libyatejabber.so
 LIBD_VER:= $(LIBD_DEV).@PACKAGE_VERSION@
 LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)
-YXML:= ../yxml/libyatexml.a
 
 LOCALFLAGS =
 LOCALLIBS =
@@ -58,7 +57,7 @@ clean:
 Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
 
-../../$(LIBD_VER): $(OBJS) $(YXML)
+../../$(LIBD_VER): $(OBJS)
 	$(LINK) -o $@ $(SONAME_OPT)$(LIBD_VER) $^ $(YATELIBS)
 
 ../../$(LIBD_DEV): ../../$(LIBD_VER)
@@ -66,6 +65,3 @@ Makefile: @srcdir@/Makefile.in ../../config.status
 
 $(LIBS): $(OBJS)
 	$(AR) rcs $@ $^
-
-$(YXML):
-	$(MAKE) -C ../yxml

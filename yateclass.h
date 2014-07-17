@@ -1994,9 +1994,10 @@ public:
     /**
      * Get the hash of an arbitrary string.
      * @param value C string to hash
+     * @param h Old hash value for incremental hashing
      * @return The hash of the string.
      */
-    static unsigned int hash(const char* value);
+    static unsigned int hash(const char* value, unsigned int h = 0);
 
     /**
      * Clear the string and free the memory

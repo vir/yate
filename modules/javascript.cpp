@@ -246,6 +246,8 @@ public:
 	    params().addParam(new ExpFunction("btoa"));
 	    params().addParam(new ExpFunction("atoh"));
 	    params().addParam(new ExpFunction("htoa"));
+	    params().addParam(new ExpFunction("btoh"));
+	    params().addParam(new ExpFunction("htob"));
 	}
     static void initialize(ScriptContext* context);
     inline void resetWorker()
@@ -571,6 +573,26 @@ protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 private:
     Hasher* m_hasher;
+};
+
+class JsJSON : public JsObject
+{
+    YCLASS(JsJSON,JsObject)
+public:
+    inline JsJSON(Mutex* mtx)
+	: JsObject("JSON",mtx,true)
+	{
+	    params().addParam(new ExpFunction("parse"));
+	    params().addParam(new ExpFunction("stringify"));
+	    params().addParam(new ExpFunction("loadFile"));
+	    params().addParam(new ExpFunction("saveFile"));
+	}
+    static void initialize(ScriptContext* context);
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    static ExpOperation* stringify(const ExpOperation* oper, int spaces);
+    static void stringify(const NamedString* ns, String& buf, int spaces, int indent = 0);
+    static String strEscape(const char* str);
 };
 
 class JsChannel : public JsObject
@@ -1087,6 +1109,39 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    String buf;
 	    b64.encode(buf,len,eol);
 	    ExpEvaluator::pushOne(stack,new ExpOperation(buf,"b64"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
+    }
+    else if (oper.name() == YSTRING("btoh")) {
+	// hex_str = Engine.btoh(str[,sep[,upCase]])
+	ObjList args;
+	ExpOperation* data = 0;
+	ExpOperation* sep = 0;
+	ExpOperation* upCase = 0;
+	if (!extractStackArgs(1,this,stack,oper,context,args,&data,&sep,&upCase))
+	    return false;
+	String tmp;
+	tmp.hexify((void*)data->c_str(),data->length(),(sep ? sep->at(0) : 0),
+	    (upCase && upCase->toBoolean()));
+	ExpEvaluator::pushOne(stack,new ExpOperation(tmp,"hex"));
+    }
+    else if (oper.name() == YSTRING("htob")) {
+	// str = Engine.unHexify(hex_str[,sep])
+	ObjList args;
+	ExpOperation* data = 0;
+	ExpOperation* sep = 0;
+	if (!extractStackArgs(1,this,stack,oper,context,args,&data,&sep))
+	    return false;
+	bool ok = true;
+	DataBlock buf;
+	if (!sep)
+	    ok = buf.unHexify(data->c_str(),data->length());
+	else
+	    ok = buf.unHexify(data->c_str(),data->length(),sep->at(0));
+	if (ok) {
+	    String tmp((const char*)buf.data(),buf.length());
+	    ExpEvaluator::pushOne(stack,new ExpOperation(tmp,"bin"));
 	}
 	else
 	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
@@ -1892,9 +1947,8 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 {
     XDebug(&__plugin,DebugAll,"JsConfigFile::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
     ObjList args;
-    int argc = extractArgs(stack,oper,context,args);
     if (oper.name() == YSTRING("name")) {
-	switch (argc) {
+	switch (extractArgs(stack,oper,context,args)) {
 	    case 0:
 		ExpEvaluator::pushOne(stack,new ExpOperation(m_config));
 		break;
@@ -1906,7 +1960,7 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 	}
     }
     else if (oper.name() == YSTRING("load")) {
-	switch (argc) {
+	switch (extractArgs(stack,oper,context,args)) {
 	    case 0:
 	    case 1:
 		break;
@@ -1917,17 +1971,17 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 	    && static_cast<ExpOperation*>(args[0])->valBoolean())));
     }
     else if (oper.name() == YSTRING("save")) {
-	if (argc != 0)
+	if (extractArgs(stack,oper,context,args) != 0)
 	    return false;
 	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.save()));
     }
     else if (oper.name() == YSTRING("count")) {
-	if (argc != 0)
+	if (extractArgs(stack,oper,context,args) != 0)
 	    return false;
 	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_config.sections()));
     }
     else if (oper.name() == YSTRING("sections")) {
-	if (argc != 0)
+	if (extractArgs(stack,oper,context,args) != 0)
 	    return false;
 	JsArray* jsa = new JsArray(context,mutex());
 	unsigned int n = m_config.sections();
@@ -1940,7 +1994,7 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
     }
     else if (oper.name() == YSTRING("getSection")) {
 	bool create = false;
-	switch (argc) {
+	switch (extractArgs(stack,oper,context,args)) {
 	    case 2:
 		create = static_cast<ExpOperation*>(args[1])->valBoolean();
 		break;
@@ -1956,7 +2010,7 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("getValue")) {
-	switch (argc) {
+	switch (extractArgs(stack,oper,context,args)) {
 	    case 2:
 	    case 3:
 		break;
@@ -1976,18 +2030,18 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 	    ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
     }
     else if (oper.name() == YSTRING("setValue")) {
-	if (argc != 3)
+	if (extractArgs(stack,oper,context,args) != 3)
 	    return false;
 	m_config.setValue(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]),
 	    *static_cast<ExpOperation*>(args[2]));
     }
     else if (oper.name() == YSTRING("clearKey")) {
-	if (argc != 2)
+	if (extractArgs(stack,oper,context,args) != 2)
 	    return false;
 	m_config.clearKey(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]));
     }
     else if (oper.name() == YSTRING("keys")) {
-	if (argc != 1)
+	if (extractArgs(stack,oper,context,args) != 1)
 	    return false;
 	NamedList* sect = m_config.getSection(*static_cast<ExpOperation*>(args[0]));
 	if (sect) {
@@ -2044,14 +2098,13 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
 {
     XDebug(&__plugin,DebugAll,"JsConfigSection::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
     ObjList args;
-    int argc = extractArgs(stack,oper,context,args);
     if (oper.name() == YSTRING("configFile")) {
-	if (argc != 0)
+	if (extractArgs(stack,oper,context,args) != 0)
 	    return false;
 	ExpEvaluator::pushOne(stack,new ExpWrapper(m_owner->ref() ? m_owner : 0));
     }
     else if (oper.name() == YSTRING("getValue")) {
-	switch (argc) {
+	switch (extractArgs(stack,oper,context,args)) {
 	    case 2:
 	    case 1:
 		break;
@@ -2072,21 +2125,21 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
 	    ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
     }
     else if (oper.name() == YSTRING("setValue")) {
-	if (argc != 2)
+	if (extractArgs(stack,oper,context,args) != 2)
 	    return false;
 	NamedList* sect = m_owner->config().getSection(toString());
 	if (sect)
 	    sect->setParam(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]));
     }
     else if (oper.name() == YSTRING("clearKey")) {
-	if (argc != 1)
+	if (extractArgs(stack,oper,context,args) != 1)
 	    return false;
 	NamedList* sect = m_owner->config().getSection(toString());
 	if (sect)
 	    sect->clearParam(*static_cast<ExpOperation*>(args[0]));
     }
     else if (oper.name() == YSTRING("keys")) {
-	if (argc != 0)
+	if (extractArgs(stack,oper,context,args) != 0)
 	    return false;
 	NamedList* sect = m_owner->config().getSection(toString());
 	if (sect) {
@@ -2214,8 +2267,8 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 {
     XDebug(&__plugin,DebugAll,"JsXML::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
     ObjList args;
-    int argc = extractArgs(stack,oper,context,args);
     if (oper.name() == YSTRING("put")) {
+	int argc = extractArgs(stack,oper,context,args);
 	if (argc < 2 || argc > 3)
 	    return false;
 	ScriptContext* list = YOBJECT(ScriptContext,static_cast<ExpOperation*>(args[0]));
@@ -2236,7 +2289,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    params->addParam(*name,txt);
     }
     else if (oper.name() == YSTRING("getOwner")) {
-	if (argc != 0)
+	if (extractArgs(stack,oper,context,args) != 0)
 	    return false;
 	if (m_owner && m_owner->ref())
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(m_owner));
@@ -2244,7 +2297,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("getParent")) {
-	if (argc != 0)
+	if (extractArgs(stack,oper,context,args) != 0)
 	    return false;
 	XmlElement* xml = m_xml ? m_xml->parent() : 0;
 	if (xml)
@@ -2253,7 +2306,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("unprefixedTag")) {
-	if (argc != 0)
+	if (extractArgs(stack,oper,context,args) != 0)
 	    return false;
 	if (m_xml)
 	    ExpEvaluator::pushOne(stack,new ExpOperation(m_xml->unprefixedTag(),m_xml->unprefixedTag()));
@@ -2261,7 +2314,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("getTag")) {
-	if (argc != 0)
+	if (extractArgs(stack,oper,context,args) != 0)
 	    return false;
 	if (m_xml)
 	    ExpEvaluator::pushOne(stack,new ExpOperation(m_xml->getTag(),m_xml->getTag()));
@@ -2269,7 +2322,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("getAttribute")) {
-	if (argc != 1)
+	if (extractArgs(stack,oper,context,args) != 1)
 	    return false;
 	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
 	if (!name)
@@ -2285,7 +2338,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
     else if (oper.name() == YSTRING("setAttribute")) {
 	if (!m_xml)
 	    return false;
-	if (argc != 2)
+	if (extractArgs(stack,oper,context,args) != 2)
 	    return false;
 	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
 	ExpOperation* val = static_cast<ExpOperation*>(args[1]);
@@ -2297,7 +2350,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    m_xml->setAttribute(*name,*val);
     }
     else if (oper.name() == YSTRING("removeAttribute")) {
-	if (argc != 1)
+	if (extractArgs(stack,oper,context,args) != 1)
 	    return false;
 	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
 	if (!name)
@@ -2306,6 +2359,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    m_xml->removeAttribute(*name);
     }
     else if (oper.name() == YSTRING("addChild")) {
+	int argc = extractArgs(stack,oper,context,args);
 	if (argc < 1 || argc > 2)
 	    return false;
 	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
@@ -2345,7 +2399,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	}
     }
     else if (oper.name() == YSTRING("getChild")) {
-	if (argc > 2)
+	if (extractArgs(stack,oper,context,args) > 2)
 	    return false;
 	XmlElement* xml = 0;
 	if (m_xml)
@@ -2356,7 +2410,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("getChildren")) {
-	if (argc > 2)
+	if (extractArgs(stack,oper,context,args) > 2)
 	    return false;
 	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
 	ExpOperation* ns = static_cast<ExpOperation*>(args[1]);
@@ -2375,13 +2429,13 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("clearChildren")) {
-	if (argc)
+	if (extractArgs(stack,oper,context,args))
 	    return false;
 	if (m_xml)
 	    m_xml->clearChildren();
     }
     else if (oper.name() == YSTRING("addText")) {
-	if (argc != 1)
+	if (extractArgs(stack,oper,context,args) != 1)
 	    return false;
 	ExpOperation* text = static_cast<ExpOperation*>(args[0]);
 	if (!m_xml || !text)
@@ -2390,7 +2444,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    m_xml->addText(*text);
     }
     else if (oper.name() == YSTRING("getText")) {
-	if (argc)
+	if (extractArgs(stack,oper,context,args))
 	    return false;
 	if (m_xml)
 	    ExpEvaluator::pushOne(stack,new ExpOperation(m_xml->getText(),m_xml->unprefixedTag()));
@@ -2398,7 +2452,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("setText")) {
-	if (argc != 1)
+	if (extractArgs(stack,oper,context,args) != 1)
 	    return false;
 	ExpOperation* text = static_cast<ExpOperation*>(args[0]);
 	if (!(m_xml && text))
@@ -2406,7 +2460,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	m_xml->setText(*text);
     }
     else if (oper.name() == YSTRING("getChildText")) {
-	if (argc > 2)
+	if (extractArgs(stack,oper,context,args) > 2)
 	    return false;
 	XmlElement* xml = 0;
 	if (m_xml)
@@ -2417,7 +2471,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("xmlText")) {
-	if (argc)
+	if (extractArgs(stack,oper,context,args))
 	    return false;
 	if (m_xml) {
 	    ExpOperation* op = new ExpOperation("",m_xml->unprefixedTag());
@@ -2510,6 +2564,200 @@ void JsXML::initialize(ScriptContext* context)
     if (!params.getParam(YSTRING("XML")))
 	addConstructor(params,"XML",new JsXML(mtx));
 }
+
+
+bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    ObjList args;
+    if (oper.name() == YSTRING("parse")) {
+	if (extractArgs(stack,oper,context,args) != 1)
+	    return false;
+	ExpOperation* op = JsParser::parseJSON(static_cast<ExpOperation*>(args[0])->c_str(),mutex());
+	if (!op)
+	    op = new ExpWrapper(0,"JSON");
+	ExpEvaluator::pushOne(stack,op);
+    }
+    else if (oper.name() == YSTRING("stringify")) {
+	if (extractArgs(stack,oper,context,args) < 1)
+	    return false;
+	int spaces = args[2] ? static_cast<ExpOperation*>(args[2])->number() : 0;
+	ExpOperation* op = stringify(static_cast<ExpOperation*>(args[0]),spaces);
+	if (!op)
+	    op = new ExpWrapper(0,"JSON");
+	ExpEvaluator::pushOne(stack,op);
+    }
+    else if (oper.name() == YSTRING("loadFile")) {
+	if (extractArgs(stack,oper,context,args) != 1)
+	    return false;
+	ExpOperation* op = 0;
+	ExpOperation* file = static_cast<ExpOperation*>(args[0]);
+	if (!TelEngine::null(file)) {
+	    File f;
+	    if (f.openPath(*file)) {
+		int64_t len = f.length();
+		if (len > 0 && len <= 65536) {
+		    DataBlock buf(0,len + 1);
+		    char* text = (char*)buf.data();
+		    if (f.readData(text,len) == len) {
+			text[len] = '\0';
+			op = JsParser::parseJSON(text,mutex());
+		    }
+		}
+	    }
+	}
+	if (!op)
+	    op = new ExpWrapper(0,"JSON");
+	ExpEvaluator::pushOne(stack,op);
+    }
+    else if (oper.name() == YSTRING("saveFile")) {
+	if (extractArgs(stack,oper,context,args) < 2)
+	    return false;
+	ExpOperation* file = static_cast<ExpOperation*>(args[0]);
+	bool ok = !TelEngine::null(file);
+	if (ok) {
+	    ok = false;
+	    int spaces = args[2] ? static_cast<ExpOperation*>(args[2])->number() : 0;
+	    ExpOperation* op = stringify(static_cast<ExpOperation*>(args[1]),spaces);
+	    if (op) {
+		File f;
+		if (f.openPath(*file,true,false,true)) {
+		    int len = op->length();
+		    ok = f.writeData(op->c_str(),len) == len;
+		}
+	    }
+	    TelEngine::destruct(op);
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+ExpOperation* JsJSON::stringify(const ExpOperation* oper, int spaces)
+{
+    if (!oper)
+	return 0;
+    if (spaces < 0)
+	spaces = 0;
+    else if (spaces > 10)
+	spaces = 10;
+    ExpOperation* ret = new ExpOperation("","JSON");
+    stringify(oper,*ret,spaces);
+    return ret;
+}
+
+void JsJSON::stringify(const NamedString* ns, String& buf, int spaces, int indent)
+{
+    const ExpOperation* oper = YOBJECT(ExpOperation,ns);
+    if (!oper) {
+	if (ns)
+	    buf << strEscape(*ns);
+	else
+	    buf << "null";
+	return;
+    }
+    if (JsParser::isNull(*oper) || JsParser::isUndefined(*oper)) {
+	buf << "null";
+	return;
+    }
+    const char* nl = spaces ? "\r\n" : "";
+    JsObject* jso = YOBJECT(JsObject,oper);
+    JsArray* jsa = YOBJECT(JsArray,jso);
+    if (jsa) {
+	if (jsa->length() <= 0) {
+	    buf << "[]";
+	    return;
+	}
+	String li(' ',indent);
+	String ci(' ',indent + spaces);
+	buf << "[" << nl;
+	for (int32_t i = 0; ; ) {
+	    const NamedString* p = jsa->params().getParam(String(i));
+	    if (!p)
+		continue;
+	    buf << ci;
+	    stringify(p,buf,spaces,indent + spaces);
+	    if (++i < jsa->length())
+		buf << "," << nl;
+	    else {
+		buf << nl;
+		break;
+	    }
+	}
+	buf << li << "]";
+	return;
+    }
+    if (jso) {
+	switch (jso->params().count()) {
+	    case 1:
+		if (!jso->params().getParam(protoName()))
+		    break;
+		// fall through
+	    case 0:
+		buf << "{}";
+		return;
+	}
+	ObjList* l = jso->params().paramList()->skipNull();
+	String li(' ',indent);
+	String ci(' ',indent + spaces);
+	const char* sep = spaces ? ": " : ":";
+	buf << "{" << nl;
+	while (l) {
+	    const NamedString* p = static_cast<const NamedString*>(l->get());
+	    l = l->skipNext();
+	    if (p->name() == protoName())
+		continue;
+	    buf << ci << strEscape(p->name()) << sep;
+	    stringify(p,buf,spaces,indent + spaces);
+	    p = static_cast<const NamedString*>(l->get());
+	    if (p->name() == protoName())
+		l = l->skipNext();
+	    if (l)
+		buf << ",";
+	    buf << nl;
+	}
+	buf << li << "}";
+	return;
+    }
+    if (oper->isBoolean())
+	buf << String::boolText(oper->valBoolean());
+    else if (oper->isNumber()) {
+	if (oper->isInteger())
+	    buf << oper->number();
+	else
+	    buf << "null";
+    }
+    else
+	buf << strEscape(*oper);
+}
+
+String JsJSON::strEscape(const char* str)
+{
+{
+    String s("\"");
+    char c;
+    while (str && (c = *str++)) {
+	if (c == '\"' || c == '\\')
+	    s += "\\";
+	s += c;
+    }
+    s += "\"";
+    return s;
+}
+}
+
+void JsJSON::initialize(ScriptContext* context)
+{
+    if (!context)
+	return;
+    Mutex* mtx = context->mutex();
+    Lock mylock(mtx);
+    NamedList& params = context->params();
+    if (!params.getParam(YSTRING("JSON")))
+	addObject(params,"JSON",new JsJSON(mtx));
+}
+
 
 /**
  * class JsTimeEvent
@@ -2924,6 +3172,7 @@ bool JsAssist::init()
     JsConfigFile::initialize(ctx);
     JsXML::initialize(ctx);
     JsHasher::initialize(ctx);
+    JsJSON::initialize(ctx);
     if (ScriptRun::Invalid == m_runner->reset(true))
 	return false;
     ScriptContext* chan = YOBJECT(ScriptContext,ctx->getField(m_runner->stack(),YSTRING("Channel"),m_runner));
@@ -3256,6 +3505,7 @@ bool JsGlobal::runMain()
     JsConfigFile::initialize(runner->context());
     JsXML::initialize(runner->context());
     JsHasher::initialize(runner->context());
+    JsJSON::initialize(runner->context());
     ScriptRun::Status st = runner->run();
     TelEngine::destruct(runner);
     return (ScriptRun::Succeeded == st);
@@ -3360,6 +3610,7 @@ bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* con
 	JsConfigFile::initialize(runner->context());
 	JsXML::initialize(runner->context());
 	JsHasher::initialize(runner->context());
+	JsJSON::initialize(runner->context());
     }
     ScriptRun::Status st = runner->run();
     if (st == ScriptRun::Succeeded) {

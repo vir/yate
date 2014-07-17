@@ -124,6 +124,7 @@ static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int dep
     const NamedString* nstr = YOBJECT(NamedString,obj);
     const NamedPointer* nptr = YOBJECT(NamedPointer,nstr);
     const char* type = nstr ? (nptr ? "NamedPointer" : "NamedString") : "???";
+    const char* subType = 0;
     const ScriptContext* scr = YOBJECT(ScriptContext,obj);
     const ExpWrapper* wrap = 0;
     bool objRecursed = false;
@@ -152,14 +153,16 @@ static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int dep
 	    type = wrap->object() ? "ExpWrapper" : "Undefined";
 	else if (YOBJECT(ExpFunction,exp))
 	    type = "ExpFunction";
-	else
+	else {
 	    type = "ExpOperation";
+	    subType = exp->typeOf();
+	}
     }
     if (nstr)
 	str << "'" << nstr->name() << "' = '" << *nstr << "'";
     else
 	str << "'" << obj->toString() << "'";
-    str << " (" << type << ")";
+    str << " (" << type << (subType ? ", " : "") << subType << ")";
     if (objRecursed)
 	str << " (already seen)";
     buf.append(str,"\r\n");
@@ -338,11 +341,13 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    if (w)
 		ExpEvaluator::pushOne(stack,w->clone(oper.name()));
 	    else {
-		bool num = true;
-		ExpOperation* o = YOBJECT(ExpOperation,param);
-		if (o && !o->isInteger())
-		    num = false;
-		ExpEvaluator::pushOne(stack,new ExpOperation(*param,oper.name(),num));
+		JsObject* jso = YOBJECT(JsObject,param);
+		if (jso && jso->ref())
+		    ExpEvaluator::pushOne(stack,new ExpWrapper(jso,oper.name()));
+		else {
+		    ExpOperation* o = YOBJECT(ExpOperation,param);
+		    ExpEvaluator::pushOne(stack,o ? new ExpOperation(*o,oper.name(),false) : new ExpOperation(*param,oper.name(),true));
+		}
 	    }
 	}
     }

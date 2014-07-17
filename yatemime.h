@@ -558,8 +558,9 @@ class YATE_API MimeSdpBody : public MimeBody
 public:
     /**
      * Default constructor, builds an empty application/sdp
+     * @param hashing Enable hashing the content lines
      */
-    MimeSdpBody();
+    MimeSdpBody(bool hashing = false);
 
     /**
      * Constructor from block of data
@@ -610,12 +611,19 @@ public:
 	{ return m_lines; }
 
     /**
+     * Retrieve the hash of body lines
+     * @return Hash of body, zero if hashing not enabled
+     */
+    inline unsigned int hash() const
+	{ return m_hash; }
+
+    /**
      * Append a new name=value line of SDP data
      * @param name Name of the line, should be one character
      * @param value Text of the line
+     * @return Pointer to new added line
      */
-    inline void addLine(const char* name, const char* value = 0)
-	{ m_lines.append(new NamedString(name,value)); }
+    NamedString* addLine(const char* name, const char* value = 0);
 
     /**
      * Retrieve the first line matching a name
@@ -647,6 +655,9 @@ private:
     void buildLines(const char* buf, int len);
 
     ObjList m_lines;
+    ObjList* m_lineAppend;
+    unsigned int m_hash;
+    bool m_hashing;
 };
 
 /**

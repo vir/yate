@@ -1,3 +1,11 @@
+yate (5.3.1~vir2014071801) UNRELEASED; urgency=low
+
+  * Merged upstream updates (SVN r5869), most notably it is
+    JSON javascript object, SDP version number calculation fixes,
+    CSEq numbers generation fix, several other fixes.
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Fri, 18 Jul 2014 13:22:32 +0400
+
 yate (5.3.1~vir2014061601) UNRELEASED; urgency=low
 
   * Merged upstream updates (svn r5844)

@@ -570,6 +570,11 @@ bool JsArray::runField(ObjList& stack, const ExpOperation& oper, GenObject* cont
     return JsObject::runField(stack,oper,context);
 }
 
+void JsArray::initConstructor(JsFunction* construct)
+{
+    construct->params().addParam(new ExpFunction("isArray"));
+}
+
 JsObject* JsArray::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     if (!ref())
@@ -595,7 +600,13 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 {
     XDebug(DebugAll,"JsArray::runNative() '%s' in '%s' [%p]",
 	oper.name().c_str(),toString().c_str(),this);
-    if (oper.name() == YSTRING("push")) {
+    if (oper.name() == YSTRING("isArray")) {
+	// Static function that checks if the argument is an Array
+	ObjList args;
+	extractArgs(this,stack,oper,context,args);
+	ExpEvaluator::pushOne(stack,new ExpOperation(YOBJECT(JsArray,args[0])));
+    }
+    else if (oper.name() == YSTRING("push")) {
 	// Adds one or more elements to the end of an array and returns the new length of the array.
 	ObjList args;
 	if (!extractArgs(this,stack,oper,context,args))

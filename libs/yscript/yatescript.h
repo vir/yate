@@ -2293,6 +2293,12 @@ public:
     virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
     /**
+     * Array constructor initialization
+     * @param construct The Array function
+     */
+    virtual void initConstructor(JsFunction* construct);
+
+    /**
      * Array object constructor, it's run on the prototype
      * @param stack Evaluation stack in use
      * @param oper Constructor function to evaluate

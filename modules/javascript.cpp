@@ -2710,11 +2710,13 @@ void JsJSON::stringify(const NamedString* ns, String& buf, int spaces, int inden
 		continue;
 	    buf << ci << strEscape(p->name()) << sep;
 	    stringify(p,buf,spaces,indent + spaces);
-	    p = static_cast<const NamedString*>(l->get());
-	    if (p->name() == protoName())
-		l = l->skipNext();
-	    if (l)
-		buf << ",";
+	    if (l) {
+		p = static_cast<const NamedString*>(l->get());
+		if (p->name() == protoName())
+		    l = l->skipNext();
+		if (l)
+		    buf << ",";
+	    }
 	    buf << nl;
 	}
 	buf << li << "}";

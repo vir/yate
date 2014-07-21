@@ -1068,11 +1068,18 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 			val = (op1->valInteger() >= op2->valInteger()) ? 1 : 0;
 			break;
 		    case OpcEq:
-			val = (*op1 == *op2) ? 1 : 0;
-			break;
 		    case OpcNe:
-			val = (*op1 != *op2) ? 1 : 0;
+		    {
+			ExpWrapper* w1 = YOBJECT(ExpWrapper,op1);
+			ExpWrapper* w2 = YOBJECT(ExpWrapper,op2);
+			if (op1->opcode() == op2->opcode() && w1 && w2)
+			    val = w1->object() == w2->object() ? 1 : 0;
+			else
+			    val = (*op1 == *op2) ? 1 : 0;
+			if (oper.opcode() == OpcNe)
+			    val = val ? 0 : 1;
 			break;
+		    }
 		    default:
 			handled = false;
 			break;

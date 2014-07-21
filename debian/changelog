@@ -1,4 +1,4 @@
-yate (5.3.1~svn5870) UNRELEASED; urgency=low
+yate (5.3.1~svn5872) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1205,8 +1205,10 @@ yate (5.3.1~svn5870) UNRELEASED; urgency=low
     only after recognizing the function name.  + Added native JSON
     parser and stringifier.
   * Updated to SVN revision 5870: + Added Javascript Array.isArray()
+  * Updated to SVN revision 5872: + Fixed equal comparison for objects.
+    + Fixed crash in JSON.stringify() for objects having no "__proto__".
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 19 Jul 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 22 Jul 2014 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -5699,8 +5699,9 @@ public:
     /**
      * Constructor of a null address
      * @param family Family of the address to create
+     * @param raw Raw address data
      */
-    explicit SocketAddr(int family);
+    explicit SocketAddr(int family, const void* raw = 0);
 
     /**
      * Constructor that stores a copy of an address
@@ -7323,6 +7324,51 @@ protected:
 };
 
 /**
+ * This class holds a A, AAAA or TXT record from DNS
+ * @short A text based DNS record
+ */
+class YATE_API TxtRecord : public DnsRecord
+{
+    YCLASS(TxtRecord,DnsRecord)
+    YNOCOPY(TxtRecord);
+public:
+    /**
+     * Build a TXT record
+     * @param text Text content of the record
+     */
+    inline TxtRecord(const char* text)
+	: DnsRecord(-1,-1), m_text(text)
+	{}
+
+    /**
+     * Retrieve the record text
+     * @return Record text
+     */
+    inline const String& text() const
+	{ return m_text; }
+
+    /**
+     * Dump this record for debug purposes
+     * @param buf Destination buffer
+     * @param sep Fields separator
+     */
+    virtual void dump(String& buf, const char* sep = " ");
+
+    /**
+     * Copy a TxtRecord list into another one
+     * @param dest Destination list
+     * @param src Source list
+     */
+    static void copy(ObjList& dest, const ObjList& src);
+
+protected:
+    String m_text;
+
+private:
+    TxtRecord() {}                       // No default contructor
+};
+
+/**
  * This class holds a SRV (Service Location) record
  * @short A SRV record
  */
@@ -7405,7 +7451,7 @@ public:
      * @param str String to replace
      * @return True on success
      */
-    bool replace(String& str);
+    bool replace(String& str) const;
 
     /**
      * Dump this record for debug purposes
@@ -7427,6 +7473,20 @@ public:
      */
     inline const String& serv() const
 	{ return m_service; }
+
+    /**
+     * Retrieve the regular expression match
+     * @return Regular expression used in match
+     */
+    inline const Regexp& regexp() const
+	{ return m_regmatch; }
+
+    /**
+     * Retrieve the template for replacing
+     * @return Template used to replace the match
+     */
+    inline const String& repTemplate() const
+	{ return m_template; }
 
     /**
      * Retrieve the next domain name to query
@@ -7460,6 +7520,9 @@ public:
 	Unknown,
 	Srv,                             // SRV (Service Location)
 	Naptr,                           // NAPTR (Naming Authority Pointer)
+	A4,                              // A (Address)
+	A6,                              // AAAA (IPv6 Address)
+	Txt,                             // TXT (Text)
     };
 
     /**
@@ -7505,6 +7568,33 @@ public:
      * @return 0 on success, error code otherwise (h_errno value on Linux)
      */
     static int naptrQuery(const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Make an A (IPv4 Address) query
+     * @param dname Domain to query
+     * @param result List of resulting TxtRecord items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int a4Query(const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Make an AAAA (IPv6 Address) query
+     * @param dname Domain to query
+     * @param result List of resulting TxtRecord items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int a6Query(const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Make a TXT (Text) query
+     * @param dname Domain to query
+     * @param result List of resulting TxtRecord items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int txtQuery(const char* dname, ObjList& result, String* error = 0);
 
     /**
      * Resolver type names

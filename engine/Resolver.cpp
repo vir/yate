@@ -359,6 +359,8 @@ void NaptrRecord::dump(String& buf, const char* sep)
 // Runtime check for resolver availability
 bool Resolver::available(Type t)
 {
+    if (t == A6)
+	return SocketAddr::IPv6 < SocketAddr::AfUnsupported;
 #ifdef _WINDOWS
     if (t == Naptr) {
 	if (!s_winVer.major())
@@ -692,6 +694,8 @@ int Resolver::a6Query(const char* dname, ObjList& result, String* error)
 {
     int code = 0;
     XDebug(DebugAll,"Starting %s query for '%s'",lookup(A6,s_types),dname);
+    if (!available(A6))
+	return printResult(A6,code,dname,result,error);
 #ifdef _WINDOWS
     DNS_RECORD* adr = 0;
     code = (int)::DnsQuery_UTF8(dname,DNS_TYPE_AAAA,DNS_QUERY_STANDARD,NULL,&adr,NULL);
@@ -699,7 +703,7 @@ int Resolver::a6Query(const char* dname, ObjList& result, String* error)
     	for (DNS_RECORD* dr = adr; dr; dr = dr->pNext) {
 	    if (dr->wType != DNS_TYPE_AAAA || dr->wDataLength != sizeof(DNS_AAAA_DATA))
 		continue;
-	    SocketAddr addr(SocketAddr::IPv6,&dr->Data.A.Ip6Address);
+	    SocketAddr addr(SocketAddr::IPv6,&dr->Data.AAAA.Ip6Address);
 	    result.append(new TxtRecord(addr.host()));
 	}
     }
@@ -767,10 +771,10 @@ int Resolver::txtQuery(const char* dname, ObjList& result, String* error)
     XDebug(DebugAll,"Starting %s query for '%s'",lookup(Txt,s_types),dname);
 #ifdef _WINDOWS
     DNS_RECORD* adr = 0;
-    code = (int)::DnsQuery_UTF8(dname,DNS_TYPE_TXT,DNS_QUERY_STANDARD,NULL,&adr,NULL);
+    code = (int)::DnsQuery_UTF8(dname,DNS_TYPE_TEXT,DNS_QUERY_STANDARD,NULL,&adr,NULL);
     if (code == ERROR_SUCCESS) {
     	for (DNS_RECORD* dr = adr; dr; dr = dr->pNext) {
-	    if (dr->wType != DNS_TYPE_TXT || dr->wDataLength < sizeof(DNS_TXT_DATA))
+	    if (dr->wType != DNS_TYPE_TEXT || dr->wDataLength < sizeof(DNS_TXT_DATA))
 		continue;
 	    DNS_TXT_DATA& d = dr->Data.TXT;
 	    for (DWORD i = 0; i < d.dwStringCount; i++)

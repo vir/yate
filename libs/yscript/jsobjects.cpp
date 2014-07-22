@@ -208,6 +208,13 @@ JsObject::JsObject(Mutex* mtx, const char* name, bool frozen)
 	mtx,name,String::boolText(frozen),this);
 }
 
+JsObject::JsObject(GenObject* context, Mutex* mtx, bool frozen)
+    : ScriptContext("[object Object]"),
+      m_frozen(frozen), m_mutex(mtx)
+{
+    setPrototype(context,YSTRING("Object"));
+}
+
 JsObject::~JsObject()
 {
     XDebug(DebugAll,"JsObject::~JsObject '%s' [%p]",toString().c_str(),this);
@@ -1075,6 +1082,15 @@ JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool insensit
     params().addParam(new ExpFunction("test"));
     params().addParam("ignoreCase",String::boolText(insensitive));
     params().addParam("basicPosix",String::boolText(!extended));
+}
+
+JsRegExp::JsRegExp(Mutex* mtx, const Regexp& rexp, bool frozen)
+    : JsObject("RegExp",mtx),
+      m_regexp(rexp)
+{
+    params().addParam(new ExpFunction("test"));
+    params().addParam("ignoreCase",String::boolText(rexp.isCaseInsensitive()));
+    params().addParam("basicPosix",String::boolText(!rexp.isExtended()));
 }
 
 bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)

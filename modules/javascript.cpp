@@ -1006,7 +1006,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
     }
     else if (oper.name() == YSTRING("runParams")) {
 	if (oper.number() == 0) {
-	    JsObject* jso = new JsObject("Object",mutex());
+	    JsObject* jso = new JsObject(context,mutex());
 	    jso->params().copyParams(Engine::runParams());
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(jso,oper.name()));
 	}
@@ -1647,7 +1647,7 @@ void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* co
 	}
 	else {
 	    // { col1: [ val11, val12, val13], col2: [ val21, val22, val23 ] }
-	    JsObject* jso = new JsObject("Object",mutex());
+	    JsObject* jso = new JsObject(context,mutex());
 	    for (int c = 0; c < cols; c++) {
 		const String* name = YOBJECT(String,arr->get(c,0));
 		if (TelEngine::null(name))
@@ -1680,7 +1680,7 @@ void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* conte
 	    if (row->isInteger()) {
 		int idx = (int)row->number() + 1;
 		if (idx > 0 && idx <= rows) {
-		    JsObject* jso = new JsObject("Object",mutex());
+		    JsObject* jso = new JsObject(context,mutex());
 		    for (int c = 0; c < cols; c++) {
 			const String* name = YOBJECT(String,arr->get(c,0));
 			if (TelEngine::null(name))
@@ -1700,7 +1700,7 @@ void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* conte
 	    // [ { col1: val11, col2: val12 }, { col1: val21, col2: val22 } ]
 	    JsArray* jsa = new JsArray(context,mutex());
 	    for (int r = 1; r <= rows; r++) {
-		JsObject* jso = new JsObject("Object",mutex());
+		JsObject* jso = new JsObject(context,mutex());
 		for (int c = 0; c < cols; c++) {
 		    const String* name = YOBJECT(String,arr->get(c,0));
 		    if (TelEngine::null(name))

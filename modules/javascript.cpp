@@ -595,6 +595,26 @@ protected:
     static String strEscape(const char* str);
 };
 
+class JsDNS : public JsObject
+{
+    YCLASS(JsDNS,JsObject)
+public:
+    inline JsDNS(Mutex* mtx)
+	: JsObject("DNS",mtx,true)
+	{
+	    params().addParam(new ExpFunction("query"));
+	    params().addParam(new ExpFunction("queryA"));
+	    params().addParam(new ExpFunction("queryAaaa"));
+	    params().addParam(new ExpFunction("queryNaptr"));
+	    params().addParam(new ExpFunction("querySrv"));
+	    params().addParam(new ExpFunction("queryTxt"));
+	}
+    static void initialize(ScriptContext* context);
+    void runQuery(ObjList& stack, const String& name, Resolver::Type type, GenObject* context);
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+};
+
 class JsChannel : public JsObject
 {
     YCLASS(JsChannel,JsObject)
@@ -656,6 +676,25 @@ private:
     ObjList* m_stack;
     RefPointer<JsMessage> m_msg;
     Message* m_message;
+};
+
+class JsDnsAsync : public ScriptAsync
+{
+    YCLASS(JsDnsAsync,ScriptAsync)
+public:
+    inline JsDnsAsync(ScriptRun* runner, JsDNS* jsDns, ObjList* stack,
+	const String& name, Resolver::Type type, GenObject* context)
+	: ScriptAsync(runner),
+	  m_stack(stack), m_name(name), m_type(type), m_context(context), m_dns(jsDns)
+	{ XDebug(DebugAll,"JsDnsAsync"); }
+    virtual bool run()
+	{ m_dns->runQuery(*m_stack,m_name,m_type,m_context); return true; }
+private:
+    ObjList* m_stack;
+    String m_name;
+    Resolver::Type m_type;
+    GenObject* m_context;
+    RefPointer<JsDNS> m_dns;
 };
 
 static String s_basePath;
@@ -2761,6 +2800,102 @@ void JsJSON::initialize(ScriptContext* context)
 }
 
 
+bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    if (oper.name().startsWith("query")) {
+	String type = oper.name().substr(5);
+	ObjList args;
+	ExpOperation* arg = 0;
+	ExpOperation* async = 0;
+	int argc = extractArgs(stack,oper,context,args);
+	if (type.null() && (argc >= 2)) {
+	    type = static_cast<ExpOperation*>(args[0]);
+	    arg = static_cast<ExpOperation*>(args[1]);
+	    async = static_cast<ExpOperation*>(args[2]);
+	}
+	else if (type && (argc >= 1)) {
+	    arg = static_cast<ExpOperation*>(args[0]);
+	    async = static_cast<ExpOperation*>(args[1]);
+	}
+	else
+	    return false;
+	type.toUpper();
+	int qType = lookup(type,Resolver::s_types,-1);
+	if ((qType < 0) || TelEngine::null(arg))
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,"DNS"));
+	else {
+	    if (async && async->valBoolean()) {
+		ScriptRun* runner = YOBJECT(ScriptRun,context);
+		if (!runner)
+		    return false;
+		runner->insertAsync(new JsDnsAsync(runner,this,&stack,*arg,(Resolver::Type)qType,context));
+		runner->pause();
+		return true;
+	    }
+	    runQuery(stack,*arg,(Resolver::Type)qType,context);
+	}
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+void JsDNS::runQuery(ObjList& stack, const String& name, Resolver::Type type, GenObject* context)
+{
+    JsArray* jsa = 0;
+    ObjList res;
+    if (Resolver::query(type,name,res) == 0) {
+	jsa = new JsArray(context,mutex());
+	switch (type) {
+	    case Resolver::A4:
+	    case Resolver::A6:
+	    case Resolver::Txt:
+		for (ObjList* l = res.skipNull(); l; l = l->skipNext()) {
+		    TxtRecord* r = static_cast<TxtRecord*>(l->get());
+		    jsa->push(new ExpOperation(r->text()));
+		}
+		break;
+	    case Resolver::Naptr:
+		for (ObjList* l = res.skipNull(); l; l = l->skipNext()) {
+		    NaptrRecord* r = static_cast<NaptrRecord*>(l->get());
+		    JsObject* jso = new JsObject(context,mutex());
+		    jso->params().setParam(new ExpOperation(r->flags(),"flags"));
+		    jso->params().setParam(new ExpOperation(r->serv(),"service"));
+		    // Would be nice to create a RegExp here but does not stringify properly
+		    jso->params().setParam(new ExpOperation(r->regexp(),"regexp"));
+		    jso->params().setParam(new ExpOperation(r->repTemplate(),"replacement"));
+		    jso->params().setParam(new ExpOperation(r->nextName(),"name"));
+		    jsa->push(new ExpWrapper(jso));
+		}
+		break;
+	    case Resolver::Srv:
+		for (ObjList* l = res.skipNull(); l; l = l->skipNext()) {
+		    SrvRecord* r = static_cast<SrvRecord*>(l->get());
+		    JsObject* jso = new JsObject(context,mutex());
+		    jso->params().setParam(new ExpOperation((int64_t)r->port(),"port"));
+		    jso->params().setParam(new ExpOperation(r->address(),"name"));
+		    jsa->push(new ExpWrapper(jso));
+		}
+		break;
+	    default:
+		break;
+	}
+    }
+    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,lookup(type,Resolver::s_types)));
+}
+
+void JsDNS::initialize(ScriptContext* context)
+{
+    if (!context)
+	return;
+    Mutex* mtx = context->mutex();
+    Lock mylock(mtx);
+    NamedList& params = context->params();
+    if (!params.getParam(YSTRING("DNS")))
+	addObject(params,"DNS",new JsDNS(mtx));
+}
+
+
 /**
  * class JsTimeEvent
  */
@@ -3175,6 +3310,7 @@ bool JsAssist::init()
     JsXML::initialize(ctx);
     JsHasher::initialize(ctx);
     JsJSON::initialize(ctx);
+    JsDNS::initialize(ctx);
     if (ScriptRun::Invalid == m_runner->reset(true))
 	return false;
     ScriptContext* chan = YOBJECT(ScriptContext,ctx->getField(m_runner->stack(),YSTRING("Channel"),m_runner));
@@ -3508,6 +3644,7 @@ bool JsGlobal::runMain()
     JsXML::initialize(runner->context());
     JsHasher::initialize(runner->context());
     JsJSON::initialize(runner->context());
+    JsDNS::initialize(runner->context());
     ScriptRun::Status st = runner->run();
     TelEngine::destruct(runner);
     return (ScriptRun::Succeeded == st);
@@ -3613,6 +3750,7 @@ bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* con
 	JsXML::initialize(runner->context());
 	JsHasher::initialize(runner->context());
 	JsJSON::initialize(runner->context());
+	JsDNS::initialize(runner->context());
     }
     ScriptRun::Status st = runner->run();
     if (st == ScriptRun::Succeeded) {

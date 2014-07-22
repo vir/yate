@@ -1,4 +1,4 @@
-yate (5.3.1~svn5872) UNRELEASED; urgency=low
+yate (5.3.1~svn5877) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1207,8 +1207,15 @@ yate (5.3.1~svn5872) UNRELEASED; urgency=low
   * Updated to SVN revision 5870: + Added Javascript Array.isArray()
   * Updated to SVN revision 5872: + Fixed equal comparison for objects.
     + Fixed crash in JSON.stringify() for objects having no "__proto__".
+  * Updated to SVN revision 5877: + Added JsRegExp contructor from
+    existing Regexp.  + Added JsObject constructor that populates
+    prototype from a context.  + Added Resolver support for A, AAAA and
+    TXT records.  + Added DNS resolver object in Javascript.  + Use the
+    proper JsObject constructor with prototype where applicable.  +
+    Added A6 (AAAA) resolver availability check. Windows: fixed AAAA DNS
+    query data retrieval and DNS query function call for TXT type.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 22 Jul 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 23 Jul 2014 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

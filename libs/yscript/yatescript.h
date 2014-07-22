@@ -1886,6 +1886,14 @@ public:
     JsObject(Mutex* mtx, const char* name, bool frozen = false);
 
     /**
+     * Constructor for an empty object with prototype
+     * @param context Script context from which Object prototype is obtainend
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param frozen True if the object is to be frozen from creation
+     */
+    JsObject(GenObject* context, Mutex* mtx = 0, bool frozen = false);
+
+    /**
      * Destructor
      */
     virtual ~JsObject();
@@ -2366,6 +2374,14 @@ public:
      */
     JsRegExp(Mutex* mtx, const char* name, const char* rexp = 0, bool insensitive = false,
 	bool extended = true, bool frozen = false);
+
+    /**
+     * Constructor from existing Regexp
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param rexp Regular expression to copy
+     * @param frozen True to create an initially frozen object
+     */
+    JsRegExp(Mutex* mtx, const Regexp& rexp, bool frozen = false);
 
     /**
      * Access the internal Regexp object that does the matching

@@ -310,6 +310,7 @@ public:
 	{
 	    construct->params().addParam(new ExpFunction("install"));
 	    construct->params().addParam(new ExpFunction("uninstall"));
+	    construct->params().addParam(new ExpFunction("handlers"));
 	    construct->params().addParam(new ExpFunction("uninstallHook"));
 	    construct->params().addParam(new ExpFunction("installHook"));
 	    construct->params().addParam(new ExpFunction("trackName"));
@@ -355,6 +356,8 @@ public:
 	    XDebug(&__plugin,DebugAll,"JsHandler::~JsHandler() '%s' [%p]",c_str(),this);
 	}
     virtual bool received(Message& msg);
+    inline const ExpFunction& function() const
+	{ return m_function; }
 private:
     ExpFunction m_function;
     RefPointer<ScriptContext> m_context;
@@ -1485,6 +1488,46 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	if (!name)
 	    return false;
 	m_handlers.remove(*name);
+    }
+    else if (oper.name() == YSTRING("handlers")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 0:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
+	JsRegExp* rexp = YOBJECT(JsRegExp,name);
+	JsArray* jsa = 0;
+	for (ObjList* l = m_handlers.skipNull(); l; l = l->skipNext()) {
+	    const JsHandler* h = static_cast<JsHandler*>(l->get());
+	    if (rexp) {
+		if (!rexp->regexp().matches(*h))
+		    continue;
+	    }
+	    else if (name && (*h != *name))
+		continue;
+	    if (!jsa)
+		jsa = new JsArray(context,mutex());
+	    JsObject* jso = new JsObject(context,mutex());
+	    jso->params().setParam(new ExpOperation(*h,"name"));
+	    jso->params().setParam(new ExpOperation((int64_t)h->priority(),"priority"));
+	    jso->params().setParam(new ExpOperation(h->function().name(),"handler"));
+	    const NamedString* f = h->filter();
+	    if (f) {
+		jso->params().setParam(new ExpOperation(f->name(),"filterName"));
+		jso->params().setParam(new ExpOperation(*f,"filterValue"));
+	    }
+	    if (h->trackName())
+		jso->params().setParam(new ExpOperation(h->trackName(),"trackName"));
+	    jsa->push(new ExpWrapper(jso));
+	}
+	if (jsa)
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,"handlers"));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("installHook"))
 	return installHook(stack,oper,context);

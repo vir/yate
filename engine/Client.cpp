@@ -3543,6 +3543,7 @@ bool ClientChannel::setMedia(bool open, bool replace)
     m.setParam("consumer",dev);
     if (!m_muted)
 	m.setParam("source",dev);
+    m.setParam("force",String::boolText(true));
     Engine::dispatch(m);
     if (getConsumer())
 	checkSilence();

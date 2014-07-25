@@ -1,4 +1,4 @@
-yate (5.3.1~svn5878) UNRELEASED; urgency=low
+yate (5.4.0~svn5881) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1216,8 +1216,12 @@ yate (5.3.1~svn5878) UNRELEASED; urgency=low
     query data retrieval and DNS query function call for TXT type.
   * Updated to SVN revision 5878: + Added Message.handlers() function to
     return list of installed message handlers.
+  * Updated to SVN revision 5881: + Fixes audio failure when answering
+    calls on Linux.  + Allow forcibly closing existing audio device to
+    allow opening a new one.  + Fixes bug #367.  + Accept SDP crypto
+    with tag 0.  + Bumped version to 5.4.0 release.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 25 Jul 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 26 Jul 2014 02:19:23 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

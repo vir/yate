@@ -79,6 +79,7 @@ class OssDevice : public RefObject
 public:
     OssDevice(const String& dev, unsigned int rate = 8000);
     ~OssDevice();
+    void close();
     bool reOpen(int iomode);
     bool setPcmFormat();
     int setInputMode(bool force);
@@ -92,6 +93,8 @@ public:
 	{ return m_fullDuplex; }
     inline unsigned int rate() const
 	{ return m_rate; }
+    inline const String& device() const
+	{ return m_dev; }
 private:
     String m_dev;
     unsigned int m_rate;
@@ -180,6 +183,7 @@ public:
 };
 
 OssChan *s_chan = 0;
+OssDevice* s_dev = 0;
 
 
 bool OssSource::init()
@@ -386,15 +390,24 @@ OssDevice::OssDevice(const String& dev, unsigned int rate)
     setPcmFormat();
     if (!m_fullDuplex)
 	setInputMode(true);
+    if (!s_dev)
+	s_dev = this;
 }
 
 OssDevice::~OssDevice()
 {
     Debug(DebugAll,"OssDevice::~OssDevice [%p]",this);
+    close();
+}
+
+void OssDevice::close()
+{
     if (m_fd >= 0) {
 	::close(m_fd);
 	m_fd = -1;
     }
+    if (s_dev == this)
+	s_dev = 0;
 }
 
 // Check if we should force a mode change
@@ -649,10 +662,25 @@ bool AttachHandler::received(Message &msg)
 	return false;
     }
 
-    OssDevice* dev = new OssDevice(src ? src : cons,msg.getIntValue("rate",8000));
+    const String& name = src ? src : cons;
+    int rate = msg.getIntValue("rate",8000);
+    OssDevice* dev = new OssDevice(name,rate);
     if (dev->closed()) {
 	dev->deref();
-	return false;
+	dev = s_dev;
+	if (dev && msg.getBoolValue("force")) {
+	    Debug(DebugInfo,"OSS forcibly closing device '%s'",dev->device().c_str());
+	    dev->close();
+	    for (int i = 0; s_dev && (i < 10); i++)
+		Thread::idle();
+	    dev = new OssDevice(name,rate);
+	    if (dev->closed()) {
+		dev->deref();
+		return false;
+	    }
+	}
+	else
+	    return false;
     }
 
     if (src) {

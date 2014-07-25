@@ -80,13 +80,16 @@ public:
     AlsaDevice(const String& dev, unsigned int rate = 8000);
     ~AlsaDevice();
     bool timePassed(void);
-	bool open();
+    bool open();
+    void close();
     int write(void *buffer, int frames);
     int read(void *buffer, int frames);
     inline bool closed() const
 	{ return m_closed; }
     inline unsigned int rate() const
 	{ return m_rate; }
+    inline const String& device() const
+	{ return m_dev; }
 private:
     int m_fd;
     String m_dev;
@@ -329,8 +332,6 @@ AlsaDevice::AlsaDevice(const String& dev, unsigned int rate)
       m_handle_in(0), m_handle_out(0)
 {
     Debug(DebugNote,"AlsaDevice::AlsaDevice('%s',%u) [%p]",m_dev.c_str(),rate,this);
-    if (!s_dev)
-	s_dev = this;
     int p = dev.find('/');
     if (p>0) {
         m_dev_in = dev.substr(0,p);
@@ -409,12 +410,13 @@ bool AlsaDevice::open()
     Debug(DebugNote, "Alsa(%s/%s) %u/%u %u/%u %u/%u", m_dev_in.c_str(),m_dev_out.c_str(),rate_in,rate_out,(unsigned int)period_size_in,(unsigned int)period_size_out,(unsigned int)buffer_size_in,(unsigned int)buffer_size_out);
     m_closed = false;
     m_lastTime = Time::now() + MIN_SWITCH_TIME;
+    if (!s_dev)
+	s_dev = this;
     return true;
 }
 
-AlsaDevice::~AlsaDevice()
+void AlsaDevice::close()
 {
-    Debug(DebugNote,"AlsaDevice::~AlsaDevice [%p]",this);
     m_closed = true;
     if (m_handle_in) {
 	snd_pcm_drop (m_handle_in);
@@ -428,6 +430,12 @@ AlsaDevice::~AlsaDevice()
     }
     if (s_dev == this)
 	s_dev = 0;
+}
+
+AlsaDevice::~AlsaDevice()
+{
+    Debug(DebugNote,"AlsaDevice::~AlsaDevice [%p]",this);
+    close();
 }
 
 int AlsaDevice::read(void *buffer, int frames)
@@ -627,7 +635,7 @@ bool MasqHandler::received(Message &msg)
 
 bool AttachHandler::received(Message &msg)
 {
-    if (s_dev)
+    if (s_dev && !msg.getBoolValue("force"))
 	return false;
     int more = 2;
     String src(msg.getValue("source"));
@@ -665,10 +673,25 @@ bool AttachHandler::received(Message &msg)
 	return false;
     }
 
-    AlsaDevice* dev = new AlsaDevice(src ? src : cons,msg.getIntValue("rate",8000));
+    const String& name = src ? src : cons;
+    int rate = msg.getIntValue("rate",8000);
+    AlsaDevice* dev = new AlsaDevice(name,rate);
     if (dev->closed()) {
 	dev->deref();
-	return false;
+	dev = s_dev;
+	if (dev) {
+	    Debug(DebugInfo,"Alsa forcibly closing device '%s'",dev->device().c_str());
+	    dev->close();
+	    for (int i = 0; s_dev && (i < 10); i++)
+		Thread::idle();
+	    dev = new AlsaDevice(name,rate);
+	    if (dev->closed()) {
+		dev->deref();
+		return false;
+	    }
+	}
+	else
+	    return false;
     }
 
     if (src) {

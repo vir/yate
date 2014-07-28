@@ -1585,7 +1585,7 @@ AC_SUBST(INSTALL_L)
 
 
 INSTALL_D="install -D"
-CFLAGS=`echo "$CFLAGS" | sed 's/\(^\| *\)-g[[0-9]]*//' | sed 's/[[[:space:]]]\{2,\}/ /g'`
+CFLAGS=`echo "$CFLAGS" | sed 's/\(^\| \+\)-g[[0-9]]* *//' | sed 's/[[[:space:]]]\{2,\}/ /g'`
 MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK $HAVE_BLOCK_RETURN"
 MODULE_CPPFLAGS="-fno-check-new $RTTI_OPT $MODULE_CFLAGS"
 MODULE_LDRELAX="-export-dynamic -shared"

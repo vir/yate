@@ -1,4 +1,4 @@
-yate (5.4.0~svn5881) UNRELEASED; urgency=low
+yate (5.4.1~svn5886) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1220,8 +1220,14 @@ yate (5.4.0~svn5881) UNRELEASED; urgency=low
     calls on Linux.  + Allow forcibly closing existing audio device to
     allow opening a new one.  + Fixes bug #367.  + Accept SDP crypto
     with tag 0.  + Bumped version to 5.4.0 release.
+  * Updated to SVN revision 5886: + Bumped version to 5.4.1 devel.  +
+    Fixed removing of -g from CFLAGS, was messing other options
+    containing "-g".  + Do not suppress spaces both before and after -g.
+    + Do detection for flag that disables warnings of overloading
+    virtual functions.  + Removed -fno-check-new. Replace -export-
+    dynamic with -rdynamic.  + Added build support for clang also.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 26 Jul 2014 02:19:23 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 29 Jul 2014 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -89,6 +89,19 @@ if [[ "x$ac_cv_format_checks" = "xyes" ]]; then
 fi
 AC_MSG_RESULT([$ac_cv_format_checks])
 
+# Check if disabling warnings for overloaded virtual functions is available
+HAVE_NO_OVERLOAD_VIRT_WARN=""
+AC_MSG_CHECKING([for -Wno-overloaded-virtual flag])
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="-Wno-overloaded-virtual -Werror"
+AC_TRY_COMPILE([],[],
+[ac_cv_no_overload_virt=yes],[ac_cv_no_overload_virt=no])
+CFLAGS="$SAVE_CFLAGS"
+if [[ "x$ac_cv_no_overload_virt" = "xyes" ]]; then
+    HAVE_NO_OVERLOAD_VIRT_WARN="-Wno-overloaded-virtual"
+fi
+AC_MSG_RESULT([$ac_cv_no_overload_virt])
+
 GCC_UNRESOLVED_SYMBOLS="-Wl,--unresolved-symbols=ignore-in-shared-libs"
 ld_unresolved_symbols=no
 AC_MSG_CHECKING([if ld supports reporting unresolved symbols])
@@ -1587,8 +1600,8 @@ AC_SUBST(INSTALL_L)
 INSTALL_D="install -D"
 CFLAGS=`echo "$CFLAGS" | sed 's/\(^\| \+\)-g[[0-9]]*//' | sed 's/[[[:space:]]]\{2,\}/ /g'`
 MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK $HAVE_BLOCK_RETURN"
-MODULE_CPPFLAGS="-fno-check-new $RTTI_OPT $MODULE_CFLAGS"
-MODULE_LDRELAX="-export-dynamic -shared"
+MODULE_CPPFLAGS="$HAVE_NO_OVERLOAD_VIRT_WARN $RTTI_OPT $MODULE_CFLAGS"
+MODULE_LDRELAX="-rdynamic -shared"
 MODULE_SYMBOLS="-Wl,--retain-symbols-file,/dev/null"
 SONAME_OPT="-shared -Wl,-soname="
 case "x$uname_os" in

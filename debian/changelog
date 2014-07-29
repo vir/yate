@@ -1,4 +1,4 @@
-yate (5.4.1~svn5886) UNRELEASED; urgency=low
+yate (5.4.1~svn5887) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1226,8 +1226,12 @@ yate (5.4.1~svn5886) UNRELEASED; urgency=low
     + Do detection for flag that disables warnings of overloading
     virtual functions.  + Removed -fno-check-new. Replace -export-
     dynamic with -rdynamic.  + Added build support for clang also.
+  * Updated to SVN revision 5887: + Removed -fno-check-new. Replace -
+    export-dynamic with -rdynamic.  + Added build support for clang
+    also.  + Cast away type in some switch instructions to avoid
+    compiler warnings.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 29 Jul 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 30 Jul 2014 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

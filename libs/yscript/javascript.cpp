@@ -971,14 +971,14 @@ bool JsCode::link()
 	    if (!jmp || jmp->number() != lbl)
 		continue;
 	    Opcode op = OpcNone;
-	    switch (jmp->opcode()) {
-		case (Opcode)OpcJump:
+	    switch ((int)jmp->opcode()) {
+		case OpcJump:
 		    op = (Opcode)OpcJRel;
 		    break;
-		case (Opcode)OpcJumpTrue:
+		case OpcJumpTrue:
 		    op = (Opcode)OpcJRelTrue;
 		    break;
-		case (Opcode)OpcJumpFalse:
+		case OpcJumpFalse:
 		    op = (Opcode)OpcJRelFalse;
 		    break;
 		default:
@@ -1363,8 +1363,8 @@ bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
     expr.m_foundSep = 0;
     ParsePoint saved = expr;
     Opcode op = ExpEvaluator::getOperator(expr,s_instr);
-    switch ((JsOpcode)op) {
-	case (JsOpcode)OpcNone:
+    switch ((int)op) {
+	case OpcNone:
 	    return false;
 	case OpcThrow:
 	    if (!runCompile(expr))
@@ -1439,8 +1439,6 @@ bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
 	    return parseTry(expr,nested);
 	case OpcFuncDef:
 	    return parseFuncDef(expr,!nested);
-	default:
-	    break;
     }
     return true;
 }
@@ -1877,7 +1875,7 @@ const char* JsCode::getOperator(Opcode oper) const
 
 int JsCode::getPrecedence(ExpEvaluator::Opcode oper) const
 {
-    switch (oper) {
+    switch ((int)oper) {
 	case OpcEqIdentity:
 	case OpcNeIdentity:
 	    return 40;
@@ -2069,7 +2067,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
     JsRunner* sr = static_cast<JsRunner*>(context);
     if (sr && sr->tracing())
 	sr->tracePrep(oper);
-    switch ((JsOpcode)oper.opcode()) {
+    switch ((int)oper.opcode()) {
 	case OpcEqIdentity:
 	case OpcNeIdentity:
 	    {

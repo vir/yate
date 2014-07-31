@@ -1083,12 +1083,7 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 		u_int16_t dlen = (buf[2] << 8) | buf[3];
 		if ((unsigned int)(dlen + 4) > len)
 		    break;
-		scn = (buf[0] << 8) | buf[1];
-		bool retrans = false;
-		if (scn & 0x8000) {
-		    retrans = true;
-		    scn &= 0x7fff;
-		}
+		scn = 0x7fff & ((buf[0] << 8) | buf[1]);
 		IAXTrunkFrameTrans* t = IAXTrunkFrameTrans::get(list,scn);
 		t->m_blocks.append(new DataBlock((void*)(buf+4),dlen));
 		dlen += 4;

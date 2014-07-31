@@ -309,7 +309,7 @@ unsigned long OssConsumer::Consume(const DataBlock &data, unsigned long tStamp, 
 {
     if (m_device->closed() || data.null())
 	return 0;
-    ::write(m_device->fd(),data.data(),data.length());
+    YIGNORE(::write(m_device->fd(),data.data(),data.length()));
     m_total += data.length();
     return invalidStamp();
 }

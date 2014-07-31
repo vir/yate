@@ -221,6 +221,8 @@ namespace TelEngine {
 #define FORMAT_CHECK(f)
 #endif
 
+#define YIGNORE(v) while (v) { break; }
+
 #ifdef HAVE_BLOCK_RETURN
 #define YSTRING(s) (*({static const String str(s);&str;}))
 #define YATOM(s) (*({static const String* str(0);str ? str : String::atom(str,s);}))
@@ -671,6 +673,12 @@ class ObjList;
 class NamedCounter;
 
 #if 0 /* for documentation generator */
+/**
+ * Macro to ignore the result of a function
+ * @param value Returned value to be ignored, must be interpretable as boolean
+ */
+void YIGNORE(primitive value);
+
 /**
  * Macro to create a local static String if supported by compiler, use with caution
  * @param string Literal constant string

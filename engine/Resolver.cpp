@@ -496,6 +496,7 @@ int Resolver::srvQuery(const char* dname, ObjList& result, String* error)
 	if ((n <= 0) || (n > NS_MAXLABEL))
 	    break;
 	insertRecord(result,new SrvRecord(prio,weight,name,port),false,"srvQuery");
+	YIGNORE(rrClass);
     }
 #endif
     return printResult(Srv,code,dname,result,error);
@@ -611,6 +612,7 @@ int Resolver::naptrQuery(const char* dname, ObjList& result, String* error)
 	n = dn_expand(buf,e,l,rep,sizeof(rep));
 	l += n;
 	insertRecord(result,new NaptrRecord(ord,pr,fla,ser,reg,rep),true,"naptrQuery");
+	YIGNORE(cl);
     }
 #endif
     return printResult(Naptr,code,dname,result,error);
@@ -684,6 +686,7 @@ int Resolver::a4Query(const char* dname, ObjList& result, String* error)
 	// Now get record address
 	SocketAddr addr(SocketAddr::IPv4,l);
 	result.append(new TxtRecord(addr.host()));
+	YIGNORE(rrClass);
     }
 #endif
     return printResult(A4,code,dname,result,error);
@@ -759,6 +762,7 @@ int Resolver::a6Query(const char* dname, ObjList& result, String* error)
 	// Now get record address
 	SocketAddr addr(SocketAddr::IPv6,l);
 	result.append(new TxtRecord(addr.host()));
+	YIGNORE(rrClass);
     }
 #endif
     return printResult(A6,code,dname,result,error);
@@ -834,6 +838,7 @@ int Resolver::txtQuery(const char* dname, ObjList& result, String* error)
 	char txt[NS_MAXSTRING+1];
 	dn_string(e,l,txt,sizeof(txt));
 	result.append(new TxtRecord(txt));
+	YIGNORE(rrClass);
     }
 #endif
     return printResult(Txt,code,dname,result,error);

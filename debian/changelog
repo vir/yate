@@ -1,4 +1,4 @@
-yate (5.4.1~svn5887) UNRELEASED; urgency=low
+yate (5.4.1~svn5891) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1230,8 +1230,14 @@ yate (5.4.1~svn5887) UNRELEASED; urgency=low
     export-dynamic with -rdynamic.  + Added build support for clang
     also.  + Cast away type in some switch instructions to avoid
     compiler warnings.
+  * Updated to SVN revision 5891: + Cleaned up a number of compiler
+    warnings.  + Added YIGNORE macro to silence compiler warnings about
+    unused values.  + Add ttl, order and preference to JS returned NAPTR
+    and SRV records.  + Store TTL in retrieved DNS records.  + Fixed a
+    number of unused member variables.  + Resolved or silenced a number
+    of compile warnings.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 30 Jul 2014 02:19:21 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 01 Aug 2014 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

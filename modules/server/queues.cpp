@@ -86,7 +86,6 @@ private:
     CallsQueue(const NamedList& params, const char* name);
     void init();
     const char* m_notify;
-    int m_maxCalls;
     bool m_single;
     bool m_detail;
 };

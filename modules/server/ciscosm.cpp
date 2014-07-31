@@ -92,7 +92,6 @@ public:
     virtual void run();
 private:
     RudpSocket* m_rudp;                                    // The rudp socket that holds this thread
-    bool m_stop;
 };
 
 class RudpSocket : public GenObject, public Mutex
@@ -469,7 +468,7 @@ YSIGFACTORY2(SLT);
 
 RudpThread::RudpThread(RudpSocket* rudp, Priority prio)
     : Thread("RUDP Runner",prio),
-    m_rudp(rudp), m_stop(false)
+    m_rudp(rudp)
 {
 }
 
@@ -912,7 +911,8 @@ bool RudpSocket::readData()
     if (m_state == RudpDown && !haveSyn((u_int8_t)packet.at(0)))
 	return false;
     if (m_haveChecksum && !checkChecksum(packet)) {
-	DDebug(m_sm,DebugMild,"Wrong checksum received");
+	m_wrongChecksum++;
+	DDebug(m_sm,DebugMild,"Wrong checksums received: %u",m_wrongChecksum);
 	return false;
     }
     recvMsg(packet);

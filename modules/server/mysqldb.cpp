@@ -65,7 +65,7 @@ public:
     inline MyConn(const String& name, MyAcct* conn)
 	: String(name),
 	  m_conn(0), m_owner(conn),
-	  m_thread(0), m_init(false)
+	  m_thread(0)
 	{}
     ~MyConn();
 
@@ -78,7 +78,6 @@ private:
     MyAcct* m_owner;
     DbThread* m_thread;
     bool testDb();
-    bool m_init;
 };
 
 /**

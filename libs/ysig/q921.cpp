@@ -1479,7 +1479,6 @@ ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
       m_idleTimer(0),
       m_lastFrame(255),
       m_rxFrames(0),
-      m_rxRejectedFrames(0),
       m_rxDroppedFrames(0),
       m_hwErrors(0),
       m_printFrames(true),
@@ -1516,9 +1515,8 @@ ISDNQ921Passive::~ISDNQ921Passive()
     TelEngine::destruct(SignallingReceiver::attach(0));
     cleanup();
     DDebug(this,DebugAll,
-	"ISDN Passive Data Link destroyed. Frames: recv=%u rejected=%u dropped=%u. HW errors=%u [%p]",
-	(unsigned int)m_rxFrames,(unsigned int)m_rxRejectedFrames,
-	(unsigned int)m_rxDroppedFrames,(unsigned int)m_hwErrors,this);
+	"ISDN Passive Data Link destroyed. Frames: recv=%u dropped=%u. HW errors=%u [%p]",
+	(unsigned int)m_rxFrames,(unsigned int)m_rxDroppedFrames,(unsigned int)m_hwErrors,this);
 }
 
 bool ISDNQ921Passive::initialize(const NamedList* config)

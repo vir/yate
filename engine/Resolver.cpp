@@ -234,8 +234,11 @@ static int dn_string(const unsigned char* end, const unsigned char* src, char* d
 // Dump a record for debug purposes
 void DnsRecord::dump(String& buf, const char* sep)
 {
-    buf.append("order=",sep) << m_order;
-    buf << sep << "pref=" << m_pref;
+    buf.append("ttl=",sep) << m_ttl;
+    if (m_order >= 0)
+	buf << sep << "order=" << m_order;
+    if (m_pref >= 0)
+	buf << sep << "pref=" << m_pref;
 }
 
 // Insert a record into a list in the proper location
@@ -245,7 +248,8 @@ bool DnsRecord::insert(ObjList& list, DnsRecord* rec, bool ascPref)
 {
     if (!rec || list.find(rec))
 	return false;
-    XDebug(DebugAll,"DnsRecord::insert(%p) order=%d pref=%d",rec,rec->order(),rec->pref());
+    XDebug(DebugAll,"DnsRecord::insert(%p) ttl=%d order=%d pref=%d",
+	rec,rec->ttl(),rec->order(),rec->pref());
     ObjList* a = &list;
     ObjList* o = list.skipNull();
     for (; o; o = o->skipNext()) {
@@ -287,7 +291,7 @@ void TxtRecord::copy(ObjList& dest, const ObjList& src)
     dest.clear();
     for (ObjList* o = src.skipNull(); o; o = o->skipNext()) {
 	TxtRecord* rec = static_cast<TxtRecord*>(o->get());
-	dest.append(new TxtRecord(rec->text()));
+	dest.append(new TxtRecord(rec->ttl(),rec->text()));
     }
 }
 
@@ -306,14 +310,14 @@ void SrvRecord::copy(ObjList& dest, const ObjList& src)
     dest.clear();
     for (ObjList* o = src.skipNull(); o; o = o->skipNext()) {
 	SrvRecord* rec = static_cast<SrvRecord*>(o->get());
-	dest.append(new SrvRecord(rec->order(),rec->pref(),rec->address(),rec->port()));
+	dest.append(new SrvRecord(rec->ttl(),rec->order(),rec->pref(),rec->address(),rec->port()));
     }
 }
 
 
-NaptrRecord::NaptrRecord(int ord, int pref, const char* flags, const char* serv,
+NaptrRecord::NaptrRecord(int ttl, int ord, int pref, const char* flags, const char* serv,
     const char* regexp, const char* next)
-    : DnsRecord(ord,pref),
+    : DnsRecord(ttl,ord,pref),
     m_flags(flags), m_service(serv), m_next(next)
 {
     // use case-sensitive extended regular expressions
@@ -434,7 +438,7 @@ int Resolver::srvQuery(const char* dname, ObjList& result, String* error)
 	    if (dr->wType != DNS_TYPE_SRV || dr->wDataLength != sizeof(DNS_SRV_DATA))
 		continue;
 	    DNS_SRV_DATA& d = dr->Data.SRV;
-	    insertRecord(result,new SrvRecord(d.wPriority,d.wWeight,
+	    insertRecord(result,new SrvRecord(dr->dwTtl,d.wPriority,d.wWeight,
 		d.pNameTarget,d.wPort),false,"srvQuery");
 	}
     }
@@ -495,7 +499,7 @@ int Resolver::srvQuery(const char* dname, ObjList& result, String* error)
 	n = dn_expand(buf,e,l,name,sizeof(name));
 	if ((n <= 0) || (n > NS_MAXLABEL))
 	    break;
-	insertRecord(result,new SrvRecord(prio,weight,name,port),false,"srvQuery");
+	insertRecord(result,new SrvRecord(rrTtl,prio,weight,name,port),false,"srvQuery");
 	YIGNORE(rrClass);
     }
 #endif
@@ -522,7 +526,7 @@ int Resolver::naptrQuery(const char* dname, ObjList& result, String* error)
 		if (dr->wDataLength != sizeof(DNS_NAPTR_DATA))
 		    continue;
 		DNS_NAPTR_DATA& d = dr->Data.NAPTR;
-		insertRecord(result,new NaptrRecord(d.wOrder,d.wPreference,d.pFlags,
+		insertRecord(result,new NaptrRecord(dr->dwTtl,d.wOrder,d.wPreference,d.pFlags,
 		    d.pService,d.pRegularExpression,d.pReplacement),true,"naptrQuery");
 #endif
 		continue;
@@ -546,7 +550,7 @@ int Resolver::naptrQuery(const char* dname, ObjList& result, String* error)
 	    buf += dn_string(end,buf,fla,sizeof(fla));;
 	    buf += dn_string(end,buf,ser,sizeof(ser));
 	    buf += dn_string(end,buf,reg,sizeof(reg));
-	    insertRecord(result,new NaptrRecord(ord,pr,fla,ser,reg,0),true,"naptrQuery");
+	    insertRecord(result,new NaptrRecord(dr->dwTtl,ord,pr,fla,ser,reg,0),true,"naptrQuery");
 	}
     }
     else if (error)
@@ -611,7 +615,7 @@ int Resolver::naptrQuery(const char* dname, ObjList& result, String* error)
 	l += n;
 	n = dn_expand(buf,e,l,rep,sizeof(rep));
 	l += n;
-	insertRecord(result,new NaptrRecord(ord,pr,fla,ser,reg,rep),true,"naptrQuery");
+	insertRecord(result,new NaptrRecord(tt,ord,pr,fla,ser,reg,rep),true,"naptrQuery");
 	YIGNORE(cl);
     }
 #endif
@@ -631,7 +635,7 @@ int Resolver::a4Query(const char* dname, ObjList& result, String* error)
 	    if (dr->wType != DNS_TYPE_A || dr->wDataLength != sizeof(DNS_A_DATA))
 		continue;
 	    SocketAddr addr(SocketAddr::IPv4,&dr->Data.A.IpAddress);
-	    result.append(new TxtRecord(addr.host()));
+	    result.append(new TxtRecord(dr->dwTtl,addr.host()));
 	}
     }
     else if (error)
@@ -685,7 +689,7 @@ int Resolver::a4Query(const char* dname, ObjList& result, String* error)
 	    continue;
 	// Now get record address
 	SocketAddr addr(SocketAddr::IPv4,l);
-	result.append(new TxtRecord(addr.host()));
+	result.append(new TxtRecord(rrTtl,addr.host()));
 	YIGNORE(rrClass);
     }
 #endif
@@ -707,7 +711,7 @@ int Resolver::a6Query(const char* dname, ObjList& result, String* error)
 	    if (dr->wType != DNS_TYPE_AAAA || dr->wDataLength != sizeof(DNS_AAAA_DATA))
 		continue;
 	    SocketAddr addr(SocketAddr::IPv6,&dr->Data.AAAA.Ip6Address);
-	    result.append(new TxtRecord(addr.host()));
+	    result.append(new TxtRecord(dr->dwTtl,addr.host()));
 	}
     }
     else if (error)
@@ -761,7 +765,7 @@ int Resolver::a6Query(const char* dname, ObjList& result, String* error)
 	    continue;
 	// Now get record address
 	SocketAddr addr(SocketAddr::IPv6,l);
-	result.append(new TxtRecord(addr.host()));
+	result.append(new TxtRecord(rrTtl,addr.host()));
 	YIGNORE(rrClass);
     }
 #endif
@@ -782,7 +786,7 @@ int Resolver::txtQuery(const char* dname, ObjList& result, String* error)
 		continue;
 	    DNS_TXT_DATA& d = dr->Data.TXT;
 	    for (DWORD i = 0; i < d.dwStringCount; i++)
-		result.append(new TxtRecord(d.pStringArray[i]));
+		result.append(new TxtRecord(dr->dwTtl,d.pStringArray[i]));
 	}
     }
     else if (error)
@@ -837,7 +841,7 @@ int Resolver::txtQuery(const char* dname, ObjList& result, String* error)
 	// Now get record address
 	char txt[NS_MAXSTRING+1];
 	dn_string(e,l,txt,sizeof(txt));
-	result.append(new TxtRecord(txt));
+	result.append(new TxtRecord(rrTtl,txt));
 	YIGNORE(rrClass);
     }
 #endif

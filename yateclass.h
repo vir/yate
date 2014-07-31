@@ -7282,11 +7282,12 @@ class YATE_API DnsRecord : public GenObject
 public:
     /**
      * Build a DNS record
+     * @param ttl Record Time To Live
      * @param order Record order (priority)
      * @param pref Record preference
      */
-    inline DnsRecord(int order, int pref)
-	: m_order(order), m_pref(pref)
+    inline DnsRecord(int ttl, int order, int pref)
+	: m_ttl(ttl), m_order(order), m_pref(pref)
 	{}
 
     /**
@@ -7295,6 +7296,13 @@ public:
     inline DnsRecord()
 	: m_order(0), m_pref(0)
 	{}
+
+    /**
+     * Retrieve the Time To Live
+     * @return Record TTL
+     */
+    inline int ttl() const
+	{ return m_ttl; }
 
     /**
      * Retrieve the record order
@@ -7327,6 +7335,7 @@ public:
     static bool insert(ObjList& list, DnsRecord* rec, bool ascPref);
 
 protected:
+    int m_ttl;
     int m_order;
     int m_pref;
 };
@@ -7342,10 +7351,11 @@ class YATE_API TxtRecord : public DnsRecord
 public:
     /**
      * Build a TXT record
+     * @param ttl Record Time To Live
      * @param text Text content of the record
      */
-    inline TxtRecord(const char* text)
-	: DnsRecord(-1,-1), m_text(text)
+    inline TxtRecord(int ttl, const char* text)
+	: DnsRecord(ttl,-1,-1), m_text(text)
 	{}
 
     /**
@@ -7387,13 +7397,14 @@ class YATE_API SrvRecord : public DnsRecord
 public:
     /**
      * Build a SRV record
+     * @param ttl Record Time To Live
      * @param prio Record priority (order)
      * @param weight Record weight (preference)
      * @param addr Record address
      * @param port Record port
      */
-    inline SrvRecord(int prio, int weight, const char* addr, int port)
-	: DnsRecord(prio,weight), m_address(addr), m_port(port)
+    inline SrvRecord(int ttl, int prio, int weight, const char* addr, int port)
+	: DnsRecord(ttl,prio,weight), m_address(addr), m_port(port)
 	{}
 
     /**
@@ -7443,6 +7454,7 @@ class YATE_API NaptrRecord : public DnsRecord
 public:
     /**
      * Build a NAPTR record
+     * @param ttl Record Time To Live
      * @param ord Record order
      * @param pref Record preference
      * @param flags Interpretation flags
@@ -7450,7 +7462,7 @@ public:
      * @param regexp Substitution expression
      * @param next Next name to query
      */
-    NaptrRecord(int ord, int pref, const char* flags, const char* serv,
+    NaptrRecord(int ttl, int ord, int pref, const char* flags, const char* serv,
 	const char* regexp, const char* next);
 
     /**

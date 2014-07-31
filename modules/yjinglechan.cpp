@@ -3530,7 +3530,7 @@ bool YJGConnection::checkMedia(const JGEvent& event, JGSessionContent& c)
 		}
 		for (ObjList* o = codecs.skipNull(); o; o = o->skipNext(), found = 0) {
 		    found = static_cast<JGRtpMedia*>(o->get());
-		    if (found->m_name |= recv->m_name)
+		    if ((found->m_name |= recv->m_name))
 			continue;
 		    if (recv->m_clockrate && recv->m_clockrate != found->m_clockrate)
 			continue;

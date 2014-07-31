@@ -91,7 +91,6 @@ public:
     inline const String& device() const
 	{ return m_dev; }
 private:
-    int m_fd;
     String m_dev;
     String m_dev_in;
     String m_dev_out;

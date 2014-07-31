@@ -301,7 +301,7 @@ public:
 	  m_seq(0)
 	{ }
     virtual bool received(Message &msg)
-	{ ::write(s_super_handle,&m_seq,1); m_seq++; return false; }
+	{ YIGNORE(::write(s_super_handle,&m_seq,1)); m_seq++; return false; }
     char m_seq;
 };
 
@@ -1014,7 +1014,7 @@ static void copystream(int dest, int src)
 	int rd = ::read(src,buf,sizeof(buf));
 	if (rd <= 0)
 	    break;
-	::write(dest,buf,rd);
+	YIGNORE(::write(dest,buf,rd));
     }
     rotatelogs();
 }
@@ -2512,7 +2512,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 	if (fd >= 0) {
 	    char pid[32];
 	    ::snprintf(pid,sizeof(pid),"%u\n",::getpid());
-	    ::write(fd,pid,::strlen(pid));
+	    YIGNORE(::write(fd,pid,::strlen(pid)));
 	    ::close(fd);
 	}
     }

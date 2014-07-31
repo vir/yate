@@ -157,16 +157,16 @@ static const char* dbg_level(int& level)
 
 static void dbg_stderr_func(const char* buf, int level)
 {
-    ::write(2,buf,::strlen(buf));
+    YIGNORE(::write(2,buf,::strlen(buf)));
 }
 
 static void dbg_colorize_func(const char* buf, int level)
 {
     const char* col = debugColor(level);
-    ::write(2,col,::strlen(col));
-    ::write(2,buf,::strlen(buf));
+    YIGNORE(::write(2,col,::strlen(col)));
+    YIGNORE(::write(2,buf,::strlen(buf)));
     col = debugColor(-2);
-    ::write(2,col,::strlen(col));
+    YIGNORE(::write(2,col,::strlen(col)));
 }
 
 static void (*s_output)(const char*,int) = dbg_stderr_func;

@@ -401,7 +401,6 @@ protected:
     virtual void statusDetail(String& str);
     unsigned int applicationCount();
 private:
-    bool m_init;
     Mutex m_usersMtx;
     ObjList m_users;
     bool m_showMissing;

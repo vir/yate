@@ -127,7 +127,7 @@ bool CdrFileHandler::received(Message &msg)
 	String str = m_format;
 	str += EOLN;
 	msg.replaceParams(str);
-	::write(m_file,str.c_str(),str.length());
+	YIGNORE(::write(m_file,str.c_str(),str.length()));
     }
     return false;
 };

@@ -528,7 +528,7 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy, Gen
 	// remember this line for foreign authentication
 	if (!authLine)
 	    authLine = t;
-	if (*t |= "Digest")
+	if ((*t |= "Digest"))
 	    continue;
 	String nonce(t->getParam(YSTRING("nonce")));
 	MimeHeaderLine::delQuotes(nonce);

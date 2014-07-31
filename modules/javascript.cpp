@@ -2908,6 +2908,9 @@ void JsDNS::runQuery(ObjList& stack, const String& name, Resolver::Type type, Ge
 		    jso->params().setParam(new ExpOperation(r->regexp(),"regexp"));
 		    jso->params().setParam(new ExpOperation(r->repTemplate(),"replacement"));
 		    jso->params().setParam(new ExpOperation(r->nextName(),"name"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->ttl(),"ttl"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->order(),"order"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->pref(),"preference"));
 		    jsa->push(new ExpWrapper(jso));
 		}
 		break;
@@ -2917,6 +2920,9 @@ void JsDNS::runQuery(ObjList& stack, const String& name, Resolver::Type type, Ge
 		    JsObject* jso = new JsObject(context,mutex());
 		    jso->params().setParam(new ExpOperation((int64_t)r->port(),"port"));
 		    jso->params().setParam(new ExpOperation(r->address(),"name"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->ttl(),"ttl"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->order(),"order"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->pref(),"preference"));
 		    jsa->push(new ExpWrapper(jso));
 		}
 		break;

@@ -13406,7 +13406,6 @@ private:
     SignallingTimer m_idleTimer;         // Channel idle interval
     u_int8_t m_lastFrame;                // Transmitter send number of the last received frame
     u_int32_t m_rxFrames;                // The number of successfully parsed frames
-    u_int32_t m_rxRejectedFrames;        // The number of rejected frames. Doesn't include dropped frames
     u_int32_t m_rxDroppedFrames;         // The number of dropped frames. Doesn't include rejected frames
     u_int32_t m_hwErrors;                // The number of hardware notifications
     bool m_printFrames;                  // Print frames to output

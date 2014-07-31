@@ -56,7 +56,6 @@ protected:
     String m_targetid;                   // The target for chan.notify
 private:
     bool m_terminated;                   // Stop processing data
-    UART* m_uart;                        // UART descendant class
 };
 
 // Data consumer for call setup info (bit collector)

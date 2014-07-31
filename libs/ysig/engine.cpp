@@ -512,7 +512,7 @@ unsigned long SignallingEngine::timerTick(const Time& when)
     lock();
     m_tickSleep = m_usecSleep;
     ListIterator iter(m_components);
-    while (c = static_cast<SignallingComponent*>(iter.get())) {
+    while ((c = static_cast<SignallingComponent*>(iter.get()))) {
 	unlock();
 	c->timerTick(when);
 	c = 0;

@@ -1164,9 +1164,9 @@ bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
 	m_epId.user().c_str(),m_epId.host().c_str(),m_epId.port());
     if (ep.port() && (ep.port() != m_epId.port()))
 	return mismatch("Port differs");
-    if (ep.host() |= m_epId.host())
+    if ((ep.host() |= m_epId.host()))
 	return mismatch("Host differs");
-    if (ep.user() &= m_epId.user())
+    if ((ep.user() &= m_epId.user()))
 	return true;
     if (ep.user() == "*")
 	return true;

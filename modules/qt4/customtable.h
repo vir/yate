@@ -378,8 +378,6 @@ private:
     bool m_horzHeader;                   // Show/hide the horizontal header
     bool m_notifyItemChanged;            // Notify 'listitemchanged' action
     bool m_notifySelChgOnRClick;         // Notify selection changed on mouse right button click
-    ObjList* m_uiActions;                // The list of actions for which the table
-                                         // should enqueue an ui.action message
     QMenu* m_contextMenu;
     QString m_enterKeyActionName;        // The name of the Enter key pressed action
     // Filter

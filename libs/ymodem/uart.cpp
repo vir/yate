@@ -135,6 +135,7 @@ static TokenDict s_dict_ffwdReason[] = {
 /**
  * ETSIModem
  */
+#ifdef DEBUG
 static TokenDict s_etsiState[] = {
     {"Error",    ETSIModem::StateError},
     {"FSKStart", ETSIModem::WaitFSKStart},
@@ -147,6 +148,7 @@ static TokenDict s_etsiState[] = {
     {"Chksum",   ETSIModem::WaitChksum},
     {0,0}
 };
+#endif
 
 TokenDict ETSIModem::s_msg[] = {
     {"CallSetup", ETSIModem::MsgCallSetup},
@@ -219,8 +221,10 @@ void ETSIModem::reset()
 // 3. Message transmission: START bit / DATA bits / STOP bit
 int ETSIModem::idleRecvByte(unsigned char data)
 {
+#ifdef XDEBUG
     XDebug(this,DebugAll,"idleRecvByte(%u,0x%02x,'%c') ETSI state=%s [%p]",
 	data,data,(data>=32)?(char)data:' ',lookup(m_state,s_etsiState),this);
+#endif
 
     switch (m_state) {
 	case WaitFSKStart:
@@ -249,8 +253,10 @@ int ETSIModem::idleRecvByte(unsigned char data)
 // Return false to stop feeding data
 bool ETSIModem::recvByte(unsigned char data)
 {
+#ifdef XDEBUG
     XDebug(this,DebugAll,"recvByte(%u,0x%02x,'%c') ETSI state=%s [%p]",
 	data,data,(data>=32)?(char)data:' ',lookup(m_state,s_etsiState),this);
+#endif
 
     switch (m_state) {
 	case WaitData:
@@ -318,8 +324,10 @@ bool ETSIModem::recvByte(unsigned char data)
 	case StateError:
 	    return false;
 	default:
+#ifdef DEBUG
 	    DDebug(this,DebugNote,"Can't process data in state %s [%p]",
 		lookup(m_state,s_etsiState),this);
+#endif
 	    return true;
     }
     changeState(StateError);
@@ -636,8 +644,10 @@ void ETSIModem::changeState(State newState)
 {
     if (m_state == newState)
 	return;
+#ifdef XDEBUG
     XDebug(this,DebugInfo,"ETSI changed state from %s to %s [%p]",
 	lookup(m_state,s_etsiState),lookup(newState,s_etsiState),this);
+#endif
     m_state = newState;
 }
 

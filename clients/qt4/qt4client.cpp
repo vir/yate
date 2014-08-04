@@ -3713,6 +3713,7 @@ bool QtClient::setProperty(QObject* obj, const char* name, const String& value)
 	default:
 	    err = "unsupported type";
     }
+    YIGNORE(err);
     if (ok)
 	DDebug(ClientDriver::self(),DebugAll,"Set property %s=%s for object '%s'",
 	    name,value.c_str(),YQT_OBJECT_NAME(obj));

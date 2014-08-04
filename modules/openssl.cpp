@@ -243,6 +243,7 @@ void infoCallback(const SSL* ssl, int where, int retVal)
     }
 }
 
+#ifdef DEBUG
 // Callback function called from OpenSSL for protocol messages
 void msgCallback(int write, int version, int content_type, const void* buf,
     size_t len, SSL* ssl, void* arg)
@@ -258,6 +259,7 @@ void msgCallback(int write, int version, int content_type, const void* buf,
     else
 	Debug(&__plugin,DebugFail,"msgCallback: Mismatched session %p [%p]",ssl,sock);
 }
+#endif
 
 
 SslContext::SslContext(const char* name)

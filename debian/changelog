@@ -1,4 +1,4 @@
-yate (5.4.1~svn5891) UNRELEASED; urgency=low
+yate (5.4.1~svn5896) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1236,8 +1236,13 @@ yate (5.4.1~svn5891) UNRELEASED; urgency=low
     and SRV records.  + Store TTL in retrieved DNS records.  + Fixed a
     number of unused member variables.  + Resolved or silenced a number
     of compile warnings.
+  * Updated to SVN revision 5896: + Removed unused data member.  +
+    Silenced unused variable compiler warning.  + Silenced unused
+    variable compiler warning.  + Silenced unused function warning for
+    non-debug builds.  + Fixed bug: avoid infinite loop when adding
+    items at ComboBox start.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 01 Aug 2014 02:19:21 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 05 Aug 2014 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -1,4 +1,4 @@
-yate (5.4.1~svn5896) UNRELEASED; urgency=low
+yate (5.4.1~svn5901) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1241,8 +1241,15 @@ yate (5.4.1~svn5896) UNRELEASED; urgency=low
     variable compiler warning.  + Silenced unused function warning for
     non-debug builds.  + Fixed bug: avoid infinite loop when adding
     items at ComboBox start.
+  * Updated to SVN revision 5901: + Removed unused functions. Silenced
+    unused variable warning.  + Fixed line numbers for parts of
+    expressions spanning multiple lines.  + Fixed line numbers of
+    function calls to match the function identifier.  + Fixed script
+    line counting when an identifier is last item on a line.  + Removed
+    unused function.  + Removed unused function.  + Place the configured
+    account "description" in the From header of SIP REGISTER too.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 05 Aug 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 06 Aug 2014 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

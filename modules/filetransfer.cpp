@@ -512,6 +512,7 @@ void FileSource::run()
 	break;
     }
 
+    YIGNORE(start);
     if (error.null())
 	DDebug(&__plugin,DebugAll,
 	    "FileSource(%s) terminated. Transferred " FMT64 " bytes in " FMT64 "ms [%p]",

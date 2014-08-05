@@ -1024,14 +1024,6 @@ static inline void setImageParam(NamedList& p, const char* param,
 	p.setParam(s_prefix + param,Client::s_skinPath + image);
 }
 
-// Set a list parameter and it's image
-static inline void setImageParam(NamedList& p, const char* param,
-    const char* value, const char* image)
-{
-    p.setParam(param,value);
-    setImageParam(p,param,image);
-}
-
 // Dump a list of parameters to output if XDEBUG is defined
 static inline void dumpList(const NamedList& p, const char* text, Window* w = 0)
 {
@@ -2808,13 +2800,6 @@ static ClientContact* selectedChatContact(ClientAccountList& accounts,
     if (!c)
 	return 0;
     return rooms ? accounts.findAnyContact(c) : accounts.findContact(c);
-}
-
-// Build account action item from account id
-static inline String& buildAccAction(String& buf, const String& action, ClientAccount* acc)
-{
-    buf = action + ":" + acc->toString();
-    return buf;
 }
 
 // Fill acc_login/logout active parameters

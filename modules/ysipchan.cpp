@@ -8105,6 +8105,14 @@ SIPMessage* YateSIPLine::buildRegister(int expires)
     }
     m->setSequence(m_seq);
     m->complete(plugin.ep()->engine(),m_username,domain(),0,m_flags);
+    if (m_display) {
+	MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(m->getHeader("From"));
+	if (hl) {
+	    String display = m_display;
+	    MimeHeaderLine::addQuotes(display);
+	    *hl = display + " " + *hl;
+	}
+    }
     return m;
 }
 

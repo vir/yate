@@ -133,14 +133,6 @@ static inline bool addDec(DataBlock& dest, unsigned int& idx,
     return false;
 }
 
-// Add a padding char to dest and increase index
-static inline void addPadding(String& dest, unsigned int& idx,
-	unsigned int& lines, unsigned int& crtLine, unsigned int lineLen)
-{
-    ((char*)dest.c_str())[idx++] = PADDING_CHAR;
-    addEoln(dest,idx,lines,crtLine,lineLen);
-}
-
 // Encode this buffer to a destination string
 void Base64::encode(String& dest, unsigned int lineLen, bool lineAtEnd)
 {

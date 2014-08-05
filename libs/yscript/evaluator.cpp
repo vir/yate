@@ -23,6 +23,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 using namespace TelEngine;
 
@@ -147,9 +148,14 @@ ParsePoint& ParsePoint::operator=(ParsePoint& parsePoint)
     m_count = parsePoint.m_count;
     m_searchedSeps = parsePoint.m_searchedSeps;
     m_fileName = parsePoint.m_fileName;
-    m_lineNo = parsePoint.m_lineNo;
+    return operator=(parsePoint.m_lineNo);
+}
+
+ParsePoint& ParsePoint::operator=(unsigned int line)
+{
+    m_lineNo = line;
     if (m_eval)
-	m_eval->m_lineNo = m_lineNo;
+	m_eval->m_lineNo = line;
     return *this;
 }
 
@@ -317,7 +323,7 @@ bool ExpEvaluator::getOperand(ParsePoint& expr, bool endOk, int precedence)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"getOperand '%.30s'",(const char*)expr);
+    XDebug(this,DebugAll,"getOperand line=0x%X '%.30s'",lineNumber(),(const char*)expr);
     if (!getOperandInternal(expr, endOk, precedence))
 	return false;
     Opcode oper;
@@ -364,7 +370,7 @@ bool ExpEvaluator::getNumber(ParsePoint& expr)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"getNumber '%.30s'",(const char*)expr);
+    XDebug(this,DebugAll,"getNumber line=0x%X '%.30s'",lineNumber(),(const char*)expr);
     char* endp = 0;
     int64_t val = ::strtoll(expr,&endp,0);
     if (!endp || (endp == expr))
@@ -379,7 +385,7 @@ bool ExpEvaluator::getString(ParsePoint& expr)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"getString '%.30s'",(const char*)expr);
+    XDebug(this,DebugAll,"getString line=0x%X '%.30s'",lineNumber(),(const char*)expr);
     char c = skipComments(expr);
     if (c == '"' || c == '\'') {
 	String str;
@@ -458,14 +464,13 @@ bool ExpEvaluator::getFunction(ParsePoint& expr)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"getFunction '%.30s'",(const char*)expr);
+    XDebug(this,DebugAll,"getFunction line=0x%X '%.30s'",lineNumber(),(const char*)expr);
     skipComments(expr);
     int len = getKeyword(expr);
     ParsePoint s = expr;
     s.m_expr = s.m_expr+len;
-    skipComments(expr);
     if ((len <= 0) || (skipComments(s) != '(')) {
-	expr.m_lineNo = s.m_lineNo;
+	m_lineNo = expr.lineNumber();
 	return false;
     }
     s++;
@@ -475,17 +480,19 @@ bool ExpEvaluator::getFunction(ParsePoint& expr)
 	if (!runCompile(s,')')) {
 	    if (!argc && (skipComments(s) == ')'))
 		break;
-	    expr.m_lineNo = s.m_lineNo;
+	    m_lineNo = expr.lineNumber();
 	    return false;
 	}
 	argc++;
     } while (getSeparator(s,true));
     if (skipComments(s) != ')')
 	return gotError("Expecting ')' after function",s);
+    unsigned int line = expr.lineNumber();
     String str(expr,len);
     expr.m_expr = s.m_expr+1;
+    expr.m_lineNo = lineNumber();
     DDebug(this,DebugAll,"Found %s()",str.safe());
-    addOpcode(OpcFunc,str,argc);
+    addOpcode(OpcFunc,str,argc,false,line);
     return true;
 }
 
@@ -493,7 +500,7 @@ bool ExpEvaluator::getField(ParsePoint& expr)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"getField '%.30s'",(const char*)expr);
+    XDebug(this,DebugAll,"getField line=0x%X '%.30s'",lineNumber(),(const char*)expr);
     skipComments(expr);
     int len = getKeyword(expr);
     if (len <= 0)
@@ -619,6 +626,7 @@ bool ExpEvaluator::runCompile(ParsePoint& expr, const char* stop, GenObject* nes
     typedef struct {
 	Opcode code;
 	int prec;
+	unsigned int line;
     } StackedOpcode;
     StackedOpcode stack[10];
     unsigned int stackPos = 0;
@@ -654,8 +662,10 @@ bool ExpEvaluator::runCompile(ParsePoint& expr, const char* stop, GenObject* nes
 	    return false;
 	c = skipComments(expr);
 	if (!c || (stop && ::strchr(stop,c)) || getSeparator(expr,false)) {
-	    while (stackPos)
-		addOpcode(stack[--stackPos].code);
+	    while (stackPos) {
+		stackPos--;
+		addOpcode(stack[stackPos].code,false,stack[stackPos].line);
+	    }
 	    return true;
 	}
 	if (inError())
@@ -669,12 +679,15 @@ bool ExpEvaluator::runCompile(ParsePoint& expr, const char* stop, GenObject* nes
 	// precedence being equal favor right associative operators
 	if (getRightAssoc(oper))
 	    precAdj++;
-	while (stackPos && stack[stackPos-1].prec >= precAdj)
-	    addOpcode(stack[--stackPos].code);
+	while (stackPos && stack[stackPos-1].prec >= precAdj) {
+	    stackPos--;
+	    addOpcode(stack[stackPos].code,false,stack[stackPos].line);
+	}
 	if (stackPos >= (sizeof(stack)/sizeof(StackedOpcode)))
 	    return gotError("Compiler stack overflow");
 	stack[stackPos].code = oper;
 	stack[stackPos].prec = precedence;
+	stack[stackPos].line = lineNumber();
 	stackPos++;
     }
 }
@@ -803,16 +816,20 @@ void ExpEvaluator::addOpcode(ExpOperation* oper, unsigned int line)
 {
     if (!oper)
 	return;
-    DDebug(this,DebugAll,"addOpcode %u (%s), %u",oper->opcode(),getOperator(oper->opcode()),line);
     if (!line)
 	line = lineNumber();
+    DDebug(this,DebugAll,"addOpcode %u (%s) line=0x%X",
+	oper->opcode(),getOperator(oper->opcode()),line);
     oper->lineNumber(line);
     m_lastOpcode = m_lastOpcode->append(oper);
 }
 
-ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
+ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier, unsigned int line)
 {
-    DDebug(this,DebugAll,"addOpcode %u (%s)",oper,getOperator(oper));
+    if (!line)
+	line = lineNumber();
+    DDebug(this,DebugAll,"addOpcode %u (%s) line=0x%X",
+	oper,getOperator(oper),line);
     if (oper == OpcAs) {
 	// the second operand is used just for the field name
 	ExpOperation* o = 0;
@@ -824,32 +841,37 @@ ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
 	}
     }
     ExpOperation* op = new ExpOperation(oper,0,ExpOperation::nonInteger(),barrier);
-    op->lineNumber(lineNumber());
+    op->lineNumber(line);
     m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
 ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, int64_t value, bool barrier)
 {
-    DDebug(this,DebugAll,"addOpcode %u (%s) " FMT64,oper,getOperator(oper),value);
+    DDebug(this,DebugAll,"addOpcode %u (%s) " FMT64 " line=0x%X",
+	oper,getOperator(oper),value,lineNumber());
     ExpOperation* op = new ExpOperation(oper,0,value,barrier);
     op->lineNumber(lineNumber());
     m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
-ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, const String& name, int64_t value, bool barrier)
+ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, const String& name,
+    int64_t value, bool barrier, unsigned int line)
 {
-    DDebug(this,DebugAll,"addOpcode %u (%s) '%s' " FMT64,oper,getOperator(oper),name.c_str(),value);
+    if (!line)
+	line = lineNumber();
+    DDebug(this,DebugAll,"addOpcode %u (%s) '%s' " FMT64 " line=0x%X",
+	oper,getOperator(oper),name.c_str(),value,line);
     ExpOperation* op = new ExpOperation(oper,name,value,barrier);
-    op->lineNumber(lineNumber());
+    op->lineNumber(line);
     m_lastOpcode = m_lastOpcode->append(op);
     return op;
 }
 
 ExpOperation* ExpEvaluator::addOpcode(const String& value)
 {
-    DDebug(this,DebugAll,"addOpcode ='%s'",value.c_str());
+    DDebug(this,DebugAll,"addOpcode ='%s' line=0x%X",value.c_str(),lineNumber());
     ExpOperation* op = new ExpOperation(value);
     op->lineNumber(lineNumber());
     m_lastOpcode = m_lastOpcode->append(op);
@@ -858,7 +880,7 @@ ExpOperation* ExpEvaluator::addOpcode(const String& value)
 
 ExpOperation* ExpEvaluator::addOpcode(int64_t value)
 {
-    DDebug(this,DebugAll,"addOpcode =" FMT64,value);
+    DDebug(this,DebugAll,"addOpcode =" FMT64 " line=0x%X",value,lineNumber());
     ExpOperation* op = new ExpOperation(value);
     op->lineNumber(lineNumber());
     m_lastOpcode = m_lastOpcode->append(op);
@@ -867,7 +889,7 @@ ExpOperation* ExpEvaluator::addOpcode(int64_t value)
 
 ExpOperation* ExpEvaluator::addOpcode(bool value)
 {
-    DDebug(this,DebugAll,"addOpcode =%s",String::boolText(value));
+    DDebug(this,DebugAll,"addOpcode =%s line=0x%X",String::boolText(value),lineNumber());
     ExpOperation* op = new ExpOperation(value);
     op->lineNumber(lineNumber());
     m_lastOpcode = m_lastOpcode->append(op);
@@ -1466,7 +1488,7 @@ int ExpEvaluator::evaluate(Array& results, unsigned int index, GenObject* contex
     return -1;
 }
 
-void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
+void ExpEvaluator::dump(const ExpOperation& oper, String& res, bool lineNo) const
 {
     switch (oper.opcode()) {
 	case OpcPush:
@@ -1493,21 +1515,26 @@ void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
 	    if (oper.number() && oper.isInteger())
 		res << "(" << oper.number() << ")";
     }
+    if (lineNo && oper.lineNumber()) {
+	char buf[24];
+	::sprintf(buf," (@0x%X)",oper.lineNumber());
+	res << buf;
+    }
 }
 
-void ExpEvaluator::dump(const ObjList& codes, String& res) const
+void ExpEvaluator::dump(const ObjList& codes, String& res, bool lineNo) const
 {
     for (const ObjList* l = codes.skipNull(); l; l = l->skipNext()) {
 	if (res)
 	    res << " ";
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
-	dump(*o,res);
+	dump(*o,res,lineNo);
     }
 }
 
-void ExpEvaluator::dump(String& res) const
+void ExpEvaluator::dump(String& res, bool lineNo) const
 {
-    return dump(m_opcodes,res);
+    return dump(m_opcodes,res,lineNo);
 }
 
 int64_t ExpOperation::valInteger() const

@@ -15,7 +15,7 @@ MODFLAGS:= @MODULE_LDFLAGS@
 MODSTRIP:= @MODULE_SYMBOLS@
 
 MKDEPS  := ../../config.status
-PROGS = randcall.yate msgdelay.yate
+PROGS = randcall.yate msgdelay.yate jsext.yate
 LIBS =
 OBJS =
 
@@ -63,3 +63,6 @@ lib%.so: %.o
 
 %.yate: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
+
+jsext.yate: LOCALFLAGS = -I../../libs/yscript
+jsext.yate: LOCALLIBS = -lyatescript

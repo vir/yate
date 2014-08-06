@@ -242,6 +242,8 @@ public:
 	    params().addParam(new ExpFunction("clearInterval"));
 	    params().addParam(new ExpFunction("setTimeout"));
 	    params().addParam(new ExpFunction("clearTimeout"));
+	    params().addParam(new ExpFunction("loadLibrary"));
+	    params().addParam(new ExpFunction("loadObject"));
 	    params().addParam(new ExpFunction("atob"));
 	    params().addParam(new ExpFunction("btoa"));
 	    params().addParam(new ExpFunction("atoh"));
@@ -706,6 +708,7 @@ static bool s_engineStop = false;
 static bool s_allowAbort = false;
 static bool s_allowTrace = false;
 static bool s_allowLink = true;
+static bool s_autoExt = true;
 
 UNLOAD_PLUGIN(unloadNow)
 {
@@ -715,6 +718,55 @@ UNLOAD_PLUGIN(unloadNow)
 	return __plugin.unload();
     }
     return true;
+}
+
+// Load extensions in a script context
+static bool contextLoad(ScriptContext* ctx, const char* name, const char* libs = 0, const char* objs = 0)
+{
+    if (!ctx)
+	return false;
+    bool start = !(libs || objs);
+    Message msg("script.init",0,start);
+    msg.userData(ctx);
+    msg.addParam("module",__plugin.name());
+    msg.addParam("language","javascript");
+    msg.addParam("startup",String::boolText(start));
+    if (name)
+	msg.addParam("instance",name);
+    if (libs)
+	msg.addParam("libraries",libs);
+    if (objs)
+	msg.addParam("objects",objs);
+    return Engine::dispatch(msg);
+}
+
+// Load extensions in a script runner context
+static bool contextLoad(ScriptRun* runner, const char* name, const char* libs = 0, const char* objs = 0)
+{
+    return runner && contextLoad(runner->context(),name,libs,objs);
+}
+
+// Initialize a script context, populate global objects
+static void contextInit(ScriptRun* runner, const char* name = 0, JsAssist* assist = 0)
+{
+    if (!runner)
+	return;
+    ScriptContext* ctx = runner->context();
+    if (!ctx)
+	return;
+    JsObject::initialize(ctx);
+    JsEngine::initialize(ctx);
+    if (assist)
+	JsChannel::initialize(ctx,assist);
+    JsMessage::initialize(ctx);
+    JsFile::initialize(ctx);
+    JsConfigFile::initialize(ctx);
+    JsXML::initialize(ctx);
+    JsHasher::initialize(ctx);
+    JsJSON::initialize(ctx);
+    JsDNS::initialize(ctx);
+    if (s_autoExt)
+	contextLoad(ctx,name);
 }
 
 // Extract arguments from stack
@@ -1074,6 +1126,26 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpOperation* id = static_cast<ExpOperation*>(args[0]);
 	bool ret = m_worker->removeEvent((unsigned int)id->valInteger(),oper.name() == YSTRING("clearInterval"));
 	ExpEvaluator::pushOne(stack,new ExpOperation(ret));
+    }
+    else if (oper.name() == YSTRING("loadLibrary") || oper.name() == YSTRING("loadObject")) {
+	bool obj = oper.name() == YSTRING("loadObject");
+	bool ok = false;
+	ObjList args;
+	ScriptRun* runner = YOBJECT(ScriptRun,context);
+	int argc = extractArgs(stack,oper,context,args);
+	if (runner && argc) {
+	    ok = true;
+	    for (int i = 0; i < argc; i++) {
+		ExpOperation* op = static_cast<ExpOperation*>(args[i]);
+		if (!op || op->isBoolean() || op->isNumber() || YOBJECT(ExpWrapper,op))
+		    ok = false;
+		else if (obj)
+		    ok = contextLoad(runner,0,0,*op) && ok;
+		else
+		    ok = contextLoad(runner,0,*op) && ok;
+	    }
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
     else if (oper.name() == YSTRING("atob")) {
 	// str = Engine.atob(b64_str)
@@ -3349,19 +3421,10 @@ bool JsAssist::init()
 {
     if (!m_runner)
 	return false;
-    ScriptContext* ctx = m_runner->context();
-    JsObject::initialize(ctx);
-    JsEngine::initialize(ctx);
-    JsChannel::initialize(ctx,this);
-    JsMessage::initialize(ctx);
-    JsFile::initialize(ctx);
-    JsConfigFile::initialize(ctx);
-    JsXML::initialize(ctx);
-    JsHasher::initialize(ctx);
-    JsJSON::initialize(ctx);
-    JsDNS::initialize(ctx);
+    contextInit(m_runner,id(),this);
     if (ScriptRun::Invalid == m_runner->reset(true))
 	return false;
+    ScriptContext* ctx = m_runner->context();
     ScriptContext* chan = YOBJECT(ScriptContext,ctx->getField(m_runner->stack(),YSTRING("Channel"),m_runner));
     if (chan) {
 	JsMessage* jsm = YOBJECT(JsMessage,chan->getField(m_runner->stack(),YSTRING("message"),m_runner));
@@ -3685,15 +3748,7 @@ bool JsGlobal::runMain()
 	return false;
     if (!m_context)
 	m_context = runner->context();
-    JsObject::initialize(runner->context());
-    JsEngine::initialize(runner->context());
-    JsMessage::initialize(runner->context());
-    JsFile::initialize(runner->context());
-    JsConfigFile::initialize(runner->context());
-    JsXML::initialize(runner->context());
-    JsHasher::initialize(runner->context());
-    JsJSON::initialize(runner->context());
-    JsDNS::initialize(runner->context());
+    contextInit(runner,name());
     ScriptRun::Status st = runner->run();
     TelEngine::destruct(runner);
     return (ScriptRun::Succeeded == st);
@@ -3790,17 +3845,8 @@ bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* con
 	return true;
     }
     ScriptRun* runner = parser.createRunner(context,"[command line]");
-    if (!context) {
-	JsObject::initialize(runner->context());
-	JsEngine::initialize(runner->context());
-	JsMessage::initialize(runner->context());
-	JsFile::initialize(runner->context());
-	JsConfigFile::initialize(runner->context());
-	JsXML::initialize(runner->context());
-	JsHasher::initialize(runner->context());
-	JsJSON::initialize(runner->context());
-	JsDNS::initialize(runner->context());
-    }
+    if (!context)
+	contextInit(runner);
     ScriptRun::Status st = runner->run();
     if (st == ScriptRun::Succeeded) {
 	while (ExpOperation* op = ExpEvaluator::popOne(runner->stack())) {
@@ -3976,6 +4022,7 @@ void JsModule::initialize()
     if (tmp && !tmp.endsWith(Engine::pathSeparator()))
 	tmp += Engine::pathSeparator();
     s_libsPath = tmp;
+    s_autoExt = cfg.getBoolValue("general","auto_extensions",true);
     s_allowAbort = cfg.getBoolValue("general","allow_abort");
     bool changed = false;
     if (cfg.getBoolValue("general","allow_trace") != s_allowTrace) {

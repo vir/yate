@@ -230,6 +230,8 @@ public:
 	    params().addParam(new ExpFunction("idle"));
 	    params().addParam(new ExpFunction("dump_r"));
 	    params().addParam(new ExpFunction("print_r"));
+	    params().addParam(new ExpFunction("dump_t"));
+	    params().addParam(new ExpFunction("print_t"));
 	    params().addParam(new ExpFunction("debugName"));
 	    params().addParam(new ExpFunction("debugLevel"));
 	    params().addParam(new ExpFunction("debugEnabled"));
@@ -769,6 +771,126 @@ static void contextInit(ScriptRun* runner, const char* name = 0, JsAssist* assis
 	contextLoad(ctx,name);
 }
 
+// Build a tabular dump of an Object or Array
+static void dumpTable(const ExpOperation& oper, String& str, const char* eol)
+{
+    class Header : public ObjList
+    {
+    public:
+	Header(const char* name)
+	    : m_name(name), m_rows(0)
+	    { m_width = m_name.length(); }
+	virtual const String& toString() const
+	    { return m_name; }
+	inline unsigned int width() const
+	    { return m_width; }
+	inline unsigned int rows() const
+	    { return m_rows; }
+	inline void setWidth(unsigned int w)
+	    { if (m_width < w) m_width = w; }
+	inline void addString(const String& val, unsigned int row)
+	    {
+		while (++m_rows < row)
+		    append(0,false);
+		append(new String(val));
+	    }
+	inline const String* getString(unsigned int row) const
+	    { return (row < m_rows) ? static_cast<const String*>(at(row)) : 0; }
+    private:
+	String m_name;
+	unsigned int m_width;
+	unsigned int m_rows;
+    };
+
+    const JsObject* jso = YOBJECT(JsObject,&oper);
+    if (!jso || JsParser::isNull(oper)) {
+	if (JsParser::isUndefined(oper))
+	    str = "undefined";
+	else
+	    str = oper;
+	return;
+    }
+    ObjList header;
+    const JsArray* jsa = YOBJECT(JsArray,jso);
+    if (jsa) {
+	// Array of Objects
+	// [ { name1: "val11", name2: "val12" }, { name1: "val21", name3: "val23" } ]
+	unsigned int row = 0;
+	for (int i = 0; i < jsa->length(); i++) {
+	    jso = YOBJECT(JsObject,jsa->params().getParam(String(i)));
+	    if (!jso)
+		continue;
+	    bool newRow = true;
+	    for (ObjList* l = jso->params().paramList()->skipNull(); l; l = l->skipNext()) {
+		const NamedString* ns = static_cast<const NamedString*>(l->get());
+		if (ns->name() == JsObject::protoName())
+		    continue;
+		Header* h = static_cast<Header*>(header[ns->name()]);
+		if (!h) {
+		    h = new Header(ns->name());
+		    header.append(h);
+		}
+		h->setWidth(ns->length());
+		if (newRow) {
+		    newRow = false;
+		    row++;
+		}
+		h->addString(*ns,row);
+	    }
+	}
+    }
+    else {
+	// Object containing Arrays
+	// { name1: [ "val11", "val21" ], name2: [ "val12" ], name3: [ undefined, "val23" ] }
+	for (ObjList* l = jso->params().paramList()->skipNull(); l; l = l->skipNext()) {
+	    const NamedString* ns = static_cast<const NamedString*>(l->get());
+	    jsa = YOBJECT(JsArray,ns);
+	    if (!jsa)
+		continue;
+	    Header* h = new Header(ns->name());
+	    header.append(h);
+	    for (int r = 0; r < jsa->length(); r++) {
+		ns = jsa->params().getParam(String(r));
+		if (ns) {
+		    h->setWidth(ns->length());
+		    h->addString(*ns,r + 1);
+		}
+	    }
+	}
+    }
+    str.clear();
+    String tmp;
+    unsigned int rows = 0;
+    for (ObjList* l = header.skipNull(); l; l = l->skipNext()) {
+	Header* h = static_cast<Header*>(l->get());
+	if (rows < h->rows())
+	    rows = h->rows();
+	str.append(h->toString()," ",true);
+	unsigned int sp = h->width() - h->toString().length();
+	if (sp)
+	    str << String(' ',sp);
+	tmp.append(String('-',h->width())," ",true);
+    }
+    if (!rows)
+	return;
+    str << eol << tmp << eol;
+    for (unsigned int r = 0; r < rows; r++) {
+	tmp.clear();
+	// add each row data
+	for (ObjList* l = header.skipNull(); l; l = l->skipNext()) {
+	    Header* h = static_cast<Header*>(l->get());
+	    const String* s = h->getString(r);
+	    if (!s)
+		s = &String::empty();
+	    tmp.append(*s," ",true);
+	    unsigned int sp = h->width() - s->length();
+	    if (sp)
+		tmp << String(' ',sp);
+	}
+	str << tmp << eol;
+    }
+}
+
 // Extract arguments from stack
 // Maximum allowed number of arguments is given by arguments to extract
 // Return false if the number of arguments is not the expected one
@@ -984,6 +1106,28 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	}
 	else
 	    return false;
+    }
+    else if (oper.name() == YSTRING("dump_t")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	String buf;
+	dumpTable(*op,buf,"\r\n");
+	TelEngine::destruct(op);
+	ExpEvaluator::pushOne(stack,new ExpOperation(buf));
+    }
+    else if (oper.name() == YSTRING("print_t")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	String buf;
+	dumpTable(*op,buf,"\r\n");
+	TelEngine::destruct(op);
+	Output("%s",buf.safe());
     }
     else if (oper.name() == YSTRING("debugName")) {
 	if (oper.number() == 0)

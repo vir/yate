@@ -1,4 +1,4 @@
-yate (5.4.1~svn5901) UNRELEASED; urgency=low
+yate (5.4.1~svn5904) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1248,8 +1248,12 @@ yate (5.4.1~svn5901) UNRELEASED; urgency=low
     line counting when an identifier is last item on a line.  + Removed
     unused function.  + Removed unused function.  + Place the configured
     account "description" in the From header of SIP REGISTER too.
+  * Updated to SVN revision 5904: + Added support for creating scripting
+    extensions in other modules.  + Added the crypto test module to the
+    build / clean list.  + Added JS methods to build or print a table
+    from Array of Object or Object of Array.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 06 Aug 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 07 Aug 2014 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

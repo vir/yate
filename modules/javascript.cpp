@@ -230,6 +230,8 @@ public:
 	    params().addParam(new ExpFunction("idle"));
 	    params().addParam(new ExpFunction("dump_r"));
 	    params().addParam(new ExpFunction("print_r"));
+	    params().addParam(new ExpFunction("dump_t"));
+	    params().addParam(new ExpFunction("print_t"));
 	    params().addParam(new ExpFunction("debugName"));
 	    params().addParam(new ExpFunction("debugLevel"));
 	    params().addParam(new ExpFunction("debugEnabled"));
@@ -242,6 +244,8 @@ public:
 	    params().addParam(new ExpFunction("clearInterval"));
 	    params().addParam(new ExpFunction("setTimeout"));
 	    params().addParam(new ExpFunction("clearTimeout"));
+	    params().addParam(new ExpFunction("loadLibrary"));
+	    params().addParam(new ExpFunction("loadObject"));
 	    params().addParam(new ExpFunction("atob"));
 	    params().addParam(new ExpFunction("btoa"));
 	    params().addParam(new ExpFunction("atoh"));
@@ -706,6 +710,7 @@ static bool s_engineStop = false;
 static bool s_allowAbort = false;
 static bool s_allowTrace = false;
 static bool s_allowLink = true;
+static bool s_autoExt = true;
 
 UNLOAD_PLUGIN(unloadNow)
 {
@@ -715,6 +720,175 @@ UNLOAD_PLUGIN(unloadNow)
 	return __plugin.unload();
     }
     return true;
+}
+
+// Load extensions in a script context
+static bool contextLoad(ScriptContext* ctx, const char* name, const char* libs = 0, const char* objs = 0)
+{
+    if (!ctx)
+	return false;
+    bool start = !(libs || objs);
+    Message msg("script.init",0,start);
+    msg.userData(ctx);
+    msg.addParam("module",__plugin.name());
+    msg.addParam("language","javascript");
+    msg.addParam("startup",String::boolText(start));
+    if (name)
+	msg.addParam("instance",name);
+    if (libs)
+	msg.addParam("libraries",libs);
+    if (objs)
+	msg.addParam("objects",objs);
+    return Engine::dispatch(msg);
+}
+
+// Load extensions in a script runner context
+static bool contextLoad(ScriptRun* runner, const char* name, const char* libs = 0, const char* objs = 0)
+{
+    return runner && contextLoad(runner->context(),name,libs,objs);
+}
+
+// Initialize a script context, populate global objects
+static void contextInit(ScriptRun* runner, const char* name = 0, JsAssist* assist = 0)
+{
+    if (!runner)
+	return;
+    ScriptContext* ctx = runner->context();
+    if (!ctx)
+	return;
+    JsObject::initialize(ctx);
+    JsEngine::initialize(ctx);
+    if (assist)
+	JsChannel::initialize(ctx,assist);
+    JsMessage::initialize(ctx);
+    JsFile::initialize(ctx);
+    JsConfigFile::initialize(ctx);
+    JsXML::initialize(ctx);
+    JsHasher::initialize(ctx);
+    JsJSON::initialize(ctx);
+    JsDNS::initialize(ctx);
+    if (s_autoExt)
+	contextLoad(ctx,name);
+}
+
+// Build a tabular dump of an Object or Array
+static void dumpTable(const ExpOperation& oper, String& str, const char* eol)
+{
+    class Header : public ObjList
+    {
+    public:
+	Header(const char* name)
+	    : m_name(name), m_rows(0)
+	    { m_width = m_name.length(); }
+	virtual const String& toString() const
+	    { return m_name; }
+	inline unsigned int width() const
+	    { return m_width; }
+	inline unsigned int rows() const
+	    { return m_rows; }
+	inline void setWidth(unsigned int w)
+	    { if (m_width < w) m_width = w; }
+	inline void addString(const String& val, unsigned int row)
+	    {
+		while (++m_rows < row)
+		    append(0,false);
+		append(new String(val));
+	    }
+	inline const String* getString(unsigned int row) const
+	    { return (row < m_rows) ? static_cast<const String*>(at(row)) : 0; }
+    private:
+	String m_name;
+	unsigned int m_width;
+	unsigned int m_rows;
+    };
+
+    const JsObject* jso = YOBJECT(JsObject,&oper);
+    if (!jso || JsParser::isNull(oper)) {
+	if (JsParser::isUndefined(oper))
+	    str = "undefined";
+	else
+	    str = oper;
+	return;
+    }
+    ObjList header;
+    const JsArray* jsa = YOBJECT(JsArray,jso);
+    if (jsa) {
+	// Array of Objects
+	// [ { name1: "val11", name2: "val12" }, { name1: "val21", name3: "val23" } ]
+	unsigned int row = 0;
+	for (int i = 0; i < jsa->length(); i++) {
+	    jso = YOBJECT(JsObject,jsa->params().getParam(String(i)));
+	    if (!jso)
+		continue;
+	    bool newRow = true;
+	    for (ObjList* l = jso->params().paramList()->skipNull(); l; l = l->skipNext()) {
+		const NamedString* ns = static_cast<const NamedString*>(l->get());
+		if (ns->name() == JsObject::protoName())
+		    continue;
+		Header* h = static_cast<Header*>(header[ns->name()]);
+		if (!h) {
+		    h = new Header(ns->name());
+		    header.append(h);
+		}
+		h->setWidth(ns->length());
+		if (newRow) {
+		    newRow = false;
+		    row++;
+		}
+		h->addString(*ns,row);
+	    }
+	}
+    }
+    else {
+	// Object containing Arrays
+	// { name1: [ "val11", "val21" ], name2: [ "val12" ], name3: [ undefined, "val23" ] }
+	for (ObjList* l = jso->params().paramList()->skipNull(); l; l = l->skipNext()) {
+	    const NamedString* ns = static_cast<const NamedString*>(l->get());
+	    jsa = YOBJECT(JsArray,ns);
+	    if (!jsa)
+		continue;
+	    Header* h = new Header(ns->name());
+	    header.append(h);
+	    for (int r = 0; r < jsa->length(); r++) {
+		ns = jsa->params().getParam(String(r));
+		if (ns) {
+		    h->setWidth(ns->length());
+		    h->addString(*ns,r + 1);
+		}
+	    }
+	}
+    }
+    str.clear();
+    String tmp;
+    unsigned int rows = 0;
+    for (ObjList* l = header.skipNull(); l; l = l->skipNext()) {
+	Header* h = static_cast<Header*>(l->get());
+	if (rows < h->rows())
+	    rows = h->rows();
+	str.append(h->toString()," ",true);
+	unsigned int sp = h->width() - h->toString().length();
+	if (sp)
+	    str << String(' ',sp);
+	tmp.append(String('-',h->width())," ",true);
+    }
+    if (!rows)
+	return;
+    str << eol << tmp << eol;
+    for (unsigned int r = 0; r < rows; r++) {
+	tmp.clear();
+	// add each row data
+	for (ObjList* l = header.skipNull(); l; l = l->skipNext()) {
+	    Header* h = static_cast<Header*>(l->get());
+	    const String* s = h->getString(r);
+	    if (!s)
+		s = &String::empty();
+	    tmp.append(*s," ",true);
+	    unsigned int sp = h->width() - s->length();
+	    if (sp)
+		tmp << String(' ',sp);
+	}
+	str << tmp << eol;
+    }
 }
 
 // Extract arguments from stack
@@ -933,6 +1107,28 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	else
 	    return false;
     }
+    else if (oper.name() == YSTRING("dump_t")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	String buf;
+	dumpTable(*op,buf,"\r\n");
+	TelEngine::destruct(op);
+	ExpEvaluator::pushOne(stack,new ExpOperation(buf));
+    }
+    else if (oper.name() == YSTRING("print_t")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	String buf;
+	dumpTable(*op,buf,"\r\n");
+	TelEngine::destruct(op);
+	Output("%s",buf.safe());
+    }
     else if (oper.name() == YSTRING("debugName")) {
 	if (oper.number() == 0)
 	    ExpEvaluator::pushOne(stack,new ExpOperation(m_debugName));
@@ -1074,6 +1270,26 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpOperation* id = static_cast<ExpOperation*>(args[0]);
 	bool ret = m_worker->removeEvent((unsigned int)id->valInteger(),oper.name() == YSTRING("clearInterval"));
 	ExpEvaluator::pushOne(stack,new ExpOperation(ret));
+    }
+    else if (oper.name() == YSTRING("loadLibrary") || oper.name() == YSTRING("loadObject")) {
+	bool obj = oper.name() == YSTRING("loadObject");
+	bool ok = false;
+	ObjList args;
+	ScriptRun* runner = YOBJECT(ScriptRun,context);
+	int argc = extractArgs(stack,oper,context,args);
+	if (runner && argc) {
+	    ok = true;
+	    for (int i = 0; i < argc; i++) {
+		ExpOperation* op = static_cast<ExpOperation*>(args[i]);
+		if (!op || op->isBoolean() || op->isNumber() || YOBJECT(ExpWrapper,op))
+		    ok = false;
+		else if (obj)
+		    ok = contextLoad(runner,0,0,*op) && ok;
+		else
+		    ok = contextLoad(runner,0,*op) && ok;
+	    }
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
     else if (oper.name() == YSTRING("atob")) {
 	// str = Engine.atob(b64_str)
@@ -3349,19 +3565,10 @@ bool JsAssist::init()
 {
     if (!m_runner)
 	return false;
-    ScriptContext* ctx = m_runner->context();
-    JsObject::initialize(ctx);
-    JsEngine::initialize(ctx);
-    JsChannel::initialize(ctx,this);
-    JsMessage::initialize(ctx);
-    JsFile::initialize(ctx);
-    JsConfigFile::initialize(ctx);
-    JsXML::initialize(ctx);
-    JsHasher::initialize(ctx);
-    JsJSON::initialize(ctx);
-    JsDNS::initialize(ctx);
+    contextInit(m_runner,id(),this);
     if (ScriptRun::Invalid == m_runner->reset(true))
 	return false;
+    ScriptContext* ctx = m_runner->context();
     ScriptContext* chan = YOBJECT(ScriptContext,ctx->getField(m_runner->stack(),YSTRING("Channel"),m_runner));
     if (chan) {
 	JsMessage* jsm = YOBJECT(JsMessage,chan->getField(m_runner->stack(),YSTRING("message"),m_runner));
@@ -3685,15 +3892,7 @@ bool JsGlobal::runMain()
 	return false;
     if (!m_context)
 	m_context = runner->context();
-    JsObject::initialize(runner->context());
-    JsEngine::initialize(runner->context());
-    JsMessage::initialize(runner->context());
-    JsFile::initialize(runner->context());
-    JsConfigFile::initialize(runner->context());
-    JsXML::initialize(runner->context());
-    JsHasher::initialize(runner->context());
-    JsJSON::initialize(runner->context());
-    JsDNS::initialize(runner->context());
+    contextInit(runner,name());
     ScriptRun::Status st = runner->run();
     TelEngine::destruct(runner);
     return (ScriptRun::Succeeded == st);
@@ -3790,17 +3989,8 @@ bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* con
 	return true;
     }
     ScriptRun* runner = parser.createRunner(context,"[command line]");
-    if (!context) {
-	JsObject::initialize(runner->context());
-	JsEngine::initialize(runner->context());
-	JsMessage::initialize(runner->context());
-	JsFile::initialize(runner->context());
-	JsConfigFile::initialize(runner->context());
-	JsXML::initialize(runner->context());
-	JsHasher::initialize(runner->context());
-	JsJSON::initialize(runner->context());
-	JsDNS::initialize(runner->context());
-    }
+    if (!context)
+	contextInit(runner);
     ScriptRun::Status st = runner->run();
     if (st == ScriptRun::Succeeded) {
 	while (ExpOperation* op = ExpEvaluator::popOne(runner->stack())) {
@@ -3976,6 +4166,7 @@ void JsModule::initialize()
     if (tmp && !tmp.endsWith(Engine::pathSeparator()))
 	tmp += Engine::pathSeparator();
     s_libsPath = tmp;
+    s_autoExt = cfg.getBoolValue("general","auto_extensions",true);
     s_allowAbort = cfg.getBoolValue("general","allow_abort");
     bool changed = false;
     if (cfg.getBoolValue("general","allow_trace") != s_allowTrace) {

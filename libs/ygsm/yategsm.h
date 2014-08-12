@@ -269,6 +269,11 @@ public:
      */
     static const TokenDict s_errorsDict[];
 
+    /**
+     * Mobility Management reject causes dictionary
+     */
+    static const TokenDict s_mmRejectCause[];
+
 private:
 
     unsigned int decodeXml(XmlElement* xml, const NamedList& params, const String& pduTag);

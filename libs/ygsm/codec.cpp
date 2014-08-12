@@ -1650,7 +1650,7 @@ static const TokenDict s_pTMSIType[] = {
     {0, 0},
 };
 
-static const TokenDict s_mmRejectCause[] = {
+const TokenDict GSML3Codec::s_mmRejectCause[] = {
     {"IMSI-unknown-in-HLR",                                 0x02},
     {"illegal-MS",                                          0x03},
     {"IMSI-unknown-in-VLR",                                 0x04},
@@ -3064,7 +3064,7 @@ MAKE_IE_TYPE(Undef,0,0,0)
 MAKE_IE_TYPE(Hex,0,0,0) // Use it to distinguish octet string types from undefined types
 MAKE_IE_TYPE(MobileIdent,decodeMobileIdent, encodeMobileIdent,0)
 MAKE_IE_TYPE(LAI,decodeLAI,encodeLAI,0)
-MAKE_IE_TYPE(MMRejectCause,decodeEnum,encodeEnum,s_mmRejectCause)
+MAKE_IE_TYPE(MMRejectCause,decodeEnum,encodeEnum,GSML3Codec::s_mmRejectCause)
 MAKE_IE_TYPE(LocUpdType,decodeLocUpdType,encodeLocUpdType,0)
 MAKE_IE_TYPE(CiphKeySN,decodeEnum,encodeEnum,s_ciphKeySN)
 MAKE_IE_TYPE(MSNetFeatSupp,decodeEnum,encodeEnum,s_msNetworkFeatSupport)

@@ -597,7 +597,7 @@ void ForkMaster::clear(bool softly)
     RefPointer<ForkSlave> slave;
     CallEndpoint::commonMutex().lock();
     ListIterator iter(m_slaves);
-    while (slave = static_cast<ForkSlave*>(iter.get())) {
+    while ((slave = static_cast<ForkSlave*>(iter.get()))) {
 	if (softly && (slave->type() == ForkSlave::Persistent))
 	    continue;
 	clearRinging(slave->id());

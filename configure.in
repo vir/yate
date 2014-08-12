@@ -1,5 +1,5 @@
 # Process this file with autoconf to produce a configure script.
-AC_INIT(Yate, 5.3.1)
+AC_INIT(Yate, 5.4.1)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
 
@@ -8,7 +8,7 @@ if echo "$ac_confdir/$ac_pwd" | grep -q '[[[:space:]\\\$\"'\'']]'; then
 fi
 
 PACKAGE_RELEASE="1"
-PACKAGE_STATUS="alpha"
+PACKAGE_STATUS="devel"
 PACKAGE_REVISION=`svn info 2>/dev/null | sed -n 's,^Revision: *,,p'`
 test -z "$PACKAGE_REVISION" && PACKAGE_REVISION=`cat "$srcdir/packing/revision.txt" 2>/dev/null`
 
@@ -88,6 +88,19 @@ if [[ "x$ac_cv_format_checks" = "xyes" ]]; then
     HAVE_GCC_FORMAT_CHECK="-DHAVE_GCC_FORMAT_CHECK"
 fi
 AC_MSG_RESULT([$ac_cv_format_checks])
+
+# Check if disabling warnings for overloaded virtual functions is available
+HAVE_NO_OVERLOAD_VIRT_WARN=""
+AC_MSG_CHECKING([for -Wno-overloaded-virtual flag])
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="-Wno-overloaded-virtual -Werror"
+AC_TRY_COMPILE([],[],
+[ac_cv_no_overload_virt=yes],[ac_cv_no_overload_virt=no])
+CFLAGS="$SAVE_CFLAGS"
+if [[ "x$ac_cv_no_overload_virt" = "xyes" ]]; then
+    HAVE_NO_OVERLOAD_VIRT_WARN="-Wno-overloaded-virtual"
+fi
+AC_MSG_RESULT([$ac_cv_no_overload_virt])
 
 GCC_UNRESOLVED_SYMBOLS="-Wl,--unresolved-symbols=ignore-in-shared-libs"
 ld_unresolved_symbols=no
@@ -1585,10 +1598,10 @@ AC_SUBST(INSTALL_L)
 
 
 INSTALL_D="install -D"
-CFLAGS=`echo "$CFLAGS" | sed 's/\(^\| *\)-g[[0-9]]*//' | sed 's/[[[:space:]]]\{2,\}/ /g'`
+CFLAGS=`echo "$CFLAGS" | sed 's/\(^\| \+\)-g[[0-9]]*//' | sed 's/[[[:space:]]]\{2,\}/ /g'`
 MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK $HAVE_BLOCK_RETURN"
-MODULE_CPPFLAGS="-fno-check-new $RTTI_OPT $MODULE_CFLAGS"
-MODULE_LDRELAX="-export-dynamic -shared"
+MODULE_CPPFLAGS="$HAVE_NO_OVERLOAD_VIRT_WARN $RTTI_OPT $MODULE_CFLAGS"
+MODULE_LDRELAX="-rdynamic -shared"
 MODULE_SYMBOLS="-Wl,--retain-symbols-file,/dev/null"
 SONAME_OPT="-shared -Wl,-soname="
 case "x$uname_os" in

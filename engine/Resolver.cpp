@@ -43,6 +43,9 @@ using namespace TelEngine;
 const TokenDict Resolver::s_types[] = {
     { "SRV", Srv },
     { "NAPTR", Naptr },
+    { "A", A4 },
+    { "AAAA", A6 },
+    { "TXT", Txt },
     { 0, 0 },
 };
 
@@ -231,8 +234,11 @@ static int dn_string(const unsigned char* end, const unsigned char* src, char* d
 // Dump a record for debug purposes
 void DnsRecord::dump(String& buf, const char* sep)
 {
-    buf.append("order=",sep) << m_order;
-    buf << sep << "pref=" << m_pref;
+    buf.append("ttl=",sep) << m_ttl;
+    if (m_order >= 0)
+	buf << sep << "order=" << m_order;
+    if (m_pref >= 0)
+	buf << sep << "pref=" << m_pref;
 }
 
 // Insert a record into a list in the proper location
@@ -242,9 +248,12 @@ bool DnsRecord::insert(ObjList& list, DnsRecord* rec, bool ascPref)
 {
     if (!rec || list.find(rec))
 	return false;
-    XDebug(DebugAll,"DnsRecord::insert(%p) order=%d pref=%d",rec,rec->order(),rec->pref());
+    XDebug(DebugAll,"DnsRecord::insert(%p) ttl=%d order=%d pref=%d",
+	rec,rec->ttl(),rec->order(),rec->pref());
+    ObjList* a = &list;
     ObjList* o = list.skipNull();
     for (; o; o = o->skipNext()) {
+	a = o;
 	DnsRecord* crt = static_cast<DnsRecord*>(o->get());
 	if (rec->order() > crt->order())
 	    continue;
@@ -264,8 +273,26 @@ bool DnsRecord::insert(ObjList& list, DnsRecord* rec, bool ascPref)
     if (o)
 	o->insert(rec);
     else
-	list.append(rec);
+	a->append(rec);
     return true;
+}
+
+
+// Dump a record for debug purposes
+void TxtRecord::dump(String& buf, const char* sep)
+{
+    DnsRecord::dump(buf,sep);
+    buf.append("text=",sep) << "'" << m_text << "'";
+}
+
+// Copy a TxtRecord list into another one
+void TxtRecord::copy(ObjList& dest, const ObjList& src)
+{
+    dest.clear();
+    for (ObjList* o = src.skipNull(); o; o = o->skipNext()) {
+	TxtRecord* rec = static_cast<TxtRecord*>(o->get());
+	dest.append(new TxtRecord(rec->ttl(),rec->text()));
+    }
 }
 
 
@@ -283,14 +310,14 @@ void SrvRecord::copy(ObjList& dest, const ObjList& src)
     dest.clear();
     for (ObjList* o = src.skipNull(); o; o = o->skipNext()) {
 	SrvRecord* rec = static_cast<SrvRecord*>(o->get());
-	dest.append(new SrvRecord(rec->order(),rec->pref(),rec->address(),rec->port()));
+	dest.append(new SrvRecord(rec->ttl(),rec->order(),rec->pref(),rec->address(),rec->port()));
     }
 }
 
 
-NaptrRecord::NaptrRecord(int ord, int pref, const char* flags, const char* serv,
+NaptrRecord::NaptrRecord(int ttl, int ord, int pref, const char* flags, const char* serv,
     const char* regexp, const char* next)
-    : DnsRecord(ord,pref),
+    : DnsRecord(ttl,ord,pref),
     m_flags(flags), m_service(serv), m_next(next)
 {
     // use case-sensitive extended regular expressions
@@ -312,7 +339,7 @@ NaptrRecord::NaptrRecord(int ord, int pref, const char* flags, const char* serv,
 }
 
 // Perform the Regexp replacement, return true if succeeded
-bool NaptrRecord::replace(String& str)
+bool NaptrRecord::replace(String& str) const
 {
     if (m_regmatch && str.matches(m_regmatch)) {
 	str = str.replaceMatches(m_template);
@@ -336,6 +363,8 @@ void NaptrRecord::dump(String& buf, const char* sep)
 // Runtime check for resolver availability
 bool Resolver::available(Type t)
 {
+    if (t == A6)
+	return SocketAddr::IPv6 < SocketAddr::AfUnsupported;
 #ifdef _WINDOWS
     if (t == Naptr) {
 	if (!s_winVer.major())
@@ -379,11 +408,20 @@ bool Resolver::init(int timeout, int retries)
 // Make a query
 int Resolver::query(Type type, const char* dname, ObjList& result, String* error)
 {
-    if (type == Srv)
-	return srvQuery(dname,result,error);
-    if (type == Naptr)
-	return naptrQuery(dname,result,error);
-    Debug(DebugStub,"Resolver query not implemented for type %d",type);
+    switch (type) {
+	case Srv:
+	    return srvQuery(dname,result,error);
+	case Naptr:
+	    return naptrQuery(dname,result,error);
+	case A4:
+	    return a4Query(dname,result,error);
+	case A6:
+	    return a6Query(dname,result,error);
+	case Txt:
+	    return txtQuery(dname,result,error);
+	default:
+	    Debug(DebugStub,"Resolver query not implemented for type %d",type);
+    }
     return 0;
 }
 
@@ -400,7 +438,7 @@ int Resolver::srvQuery(const char* dname, ObjList& result, String* error)
 	    if (dr->wType != DNS_TYPE_SRV || dr->wDataLength != sizeof(DNS_SRV_DATA))
 		continue;
 	    DNS_SRV_DATA& d = dr->Data.SRV;
-	    insertRecord(result,new SrvRecord(d.wPriority,d.wWeight,
+	    insertRecord(result,new SrvRecord(dr->dwTtl,d.wPriority,d.wWeight,
 		d.pNameTarget,d.wPort),false,"srvQuery");
 	}
     }
@@ -461,7 +499,8 @@ int Resolver::srvQuery(const char* dname, ObjList& result, String* error)
 	n = dn_expand(buf,e,l,name,sizeof(name));
 	if ((n <= 0) || (n > NS_MAXLABEL))
 	    break;
-	insertRecord(result,new SrvRecord(prio,weight,name,port),false,"srvQuery");
+	insertRecord(result,new SrvRecord(rrTtl,prio,weight,name,port),false,"srvQuery");
+	YIGNORE(rrClass);
     }
 #endif
     return printResult(Srv,code,dname,result,error);
@@ -487,7 +526,7 @@ int Resolver::naptrQuery(const char* dname, ObjList& result, String* error)
 		if (dr->wDataLength != sizeof(DNS_NAPTR_DATA))
 		    continue;
 		DNS_NAPTR_DATA& d = dr->Data.NAPTR;
-		insertRecord(result,new NaptrRecord(d.wOrder,d.wPreference,d.pFlags,
+		insertRecord(result,new NaptrRecord(dr->dwTtl,d.wOrder,d.wPreference,d.pFlags,
 		    d.pService,d.pRegularExpression,d.pReplacement),true,"naptrQuery");
 #endif
 		continue;
@@ -511,7 +550,7 @@ int Resolver::naptrQuery(const char* dname, ObjList& result, String* error)
 	    buf += dn_string(end,buf,fla,sizeof(fla));;
 	    buf += dn_string(end,buf,ser,sizeof(ser));
 	    buf += dn_string(end,buf,reg,sizeof(reg));
-	    insertRecord(result,new NaptrRecord(ord,pr,fla,ser,reg,0),true,"naptrQuery");
+	    insertRecord(result,new NaptrRecord(dr->dwTtl,ord,pr,fla,ser,reg,0),true,"naptrQuery");
 	}
     }
     else if (error)
@@ -576,10 +615,237 @@ int Resolver::naptrQuery(const char* dname, ObjList& result, String* error)
 	l += n;
 	n = dn_expand(buf,e,l,rep,sizeof(rep));
 	l += n;
-	insertRecord(result,new NaptrRecord(ord,pr,fla,ser,reg,rep),true,"naptrQuery");
+	insertRecord(result,new NaptrRecord(tt,ord,pr,fla,ser,reg,rep),true,"naptrQuery");
+	YIGNORE(cl);
     }
 #endif
     return printResult(Naptr,code,dname,result,error);
+}
+
+// Make an A query
+int Resolver::a4Query(const char* dname, ObjList& result, String* error)
+{
+    int code = 0;
+    XDebug(DebugAll,"Starting %s query for '%s'",lookup(A4,s_types),dname);
+#ifdef _WINDOWS
+    DNS_RECORD* adr = 0;
+    code = (int)::DnsQuery_UTF8(dname,DNS_TYPE_A,DNS_QUERY_STANDARD,NULL,&adr,NULL);
+    if (code == ERROR_SUCCESS) {
+    	for (DNS_RECORD* dr = adr; dr; dr = dr->pNext) {
+	    if (dr->wType != DNS_TYPE_A || dr->wDataLength != sizeof(DNS_A_DATA))
+		continue;
+	    SocketAddr addr(SocketAddr::IPv4,&dr->Data.A.IpAddress);
+	    result.append(new TxtRecord(dr->dwTtl,addr.host()));
+	}
+    }
+    else if (error)
+	Thread::errorString(*error,code);
+    if (adr)
+	::DnsRecordListFree(adr,DnsFreeRecordList);
+#elif defined(__NAMESER)
+    unsigned char buf[512];
+    int r = res_query(dname,ns_c_in,ns_t_a,buf,sizeof(buf));
+    if (r <= 0 || r > (int)sizeof(buf)) {
+	if (r) {
+	    code = h_errno;
+	    if (error)
+		*error = hstrerror(code);
+	}
+	return printResult(A4,code,dname,result,error);
+    }
+    int queryCount = 0;
+    int answerCount = 0;
+    unsigned char* p = buf + NS_QFIXEDSZ;
+    unsigned char* e = buf + r;
+    NS_GET16(queryCount,p);
+    NS_GET16(answerCount,p);
+    p = buf + NS_HFIXEDSZ;
+    // Skip queries
+    for (; queryCount > 0; queryCount--) {
+	int n = dn_skipname(p,e);
+	if (n < 0)
+	    break;
+	p += (n + NS_QFIXEDSZ);
+    }
+    for (int i = 0; i < answerCount; i++) {
+	char name[NS_MAXLABEL + 1];
+	// Skip this answer's query
+	int n = dn_expand(buf,e,p,name,sizeof(name));
+	if ((n <= 0) || (n > NS_MAXLABEL))
+	    break;
+	buf[n] = 0;
+	p += n;
+	// Get record type, class, ttl, length
+	int rrType, rrClass, rrTtl, rrLen;
+	NS_GET16(rrType,p);
+	NS_GET16(rrClass,p);
+	NS_GET32(rrTtl,p);
+	NS_GET16(rrLen,p);
+	// Remember current pointer and skip to next answer
+	unsigned char* l = p;
+	p += rrLen;
+	// Skip non A answers
+	if (rrType != (int)ns_t_a)
+	    continue;
+	// Now get record address
+	SocketAddr addr(SocketAddr::IPv4,l);
+	result.append(new TxtRecord(rrTtl,addr.host()));
+	YIGNORE(rrClass);
+    }
+#endif
+    return printResult(A4,code,dname,result,error);
+}
+
+// Make an AAAA query
+int Resolver::a6Query(const char* dname, ObjList& result, String* error)
+{
+    int code = 0;
+    XDebug(DebugAll,"Starting %s query for '%s'",lookup(A6,s_types),dname);
+    if (!available(A6))
+	return printResult(A6,code,dname,result,error);
+#ifdef _WINDOWS
+    DNS_RECORD* adr = 0;
+    code = (int)::DnsQuery_UTF8(dname,DNS_TYPE_AAAA,DNS_QUERY_STANDARD,NULL,&adr,NULL);
+    if (code == ERROR_SUCCESS) {
+    	for (DNS_RECORD* dr = adr; dr; dr = dr->pNext) {
+	    if (dr->wType != DNS_TYPE_AAAA || dr->wDataLength != sizeof(DNS_AAAA_DATA))
+		continue;
+	    SocketAddr addr(SocketAddr::IPv6,&dr->Data.AAAA.Ip6Address);
+	    result.append(new TxtRecord(dr->dwTtl,addr.host()));
+	}
+    }
+    else if (error)
+	Thread::errorString(*error,code);
+    if (adr)
+	::DnsRecordListFree(adr,DnsFreeRecordList);
+#elif defined(__NAMESER)
+    unsigned char buf[512];
+    int r = res_query(dname,ns_c_in,ns_t_aaaa,buf,sizeof(buf));
+    if (r <= 0 || r > (int)sizeof(buf)) {
+	if (r) {
+	    code = h_errno;
+	    if (error)
+		*error = hstrerror(code);
+	}
+	return printResult(A6,code,dname,result,error);
+    }
+    int queryCount = 0;
+    int answerCount = 0;
+    unsigned char* p = buf + NS_QFIXEDSZ;
+    unsigned char* e = buf + r;
+    NS_GET16(queryCount,p);
+    NS_GET16(answerCount,p);
+    p = buf + NS_HFIXEDSZ;
+    // Skip queries
+    for (; queryCount > 0; queryCount--) {
+	int n = dn_skipname(p,e);
+	if (n < 0)
+	    break;
+	p += (n + NS_QFIXEDSZ);
+    }
+    for (int i = 0; i < answerCount; i++) {
+	char name[NS_MAXLABEL + 1];
+	// Skip this answer's query
+	int n = dn_expand(buf,e,p,name,sizeof(name));
+	if ((n <= 0) || (n > NS_MAXLABEL))
+	    break;
+	buf[n] = 0;
+	p += n;
+	// Get record type, class, ttl, length
+	int rrType, rrClass, rrTtl, rrLen;
+	NS_GET16(rrType,p);
+	NS_GET16(rrClass,p);
+	NS_GET32(rrTtl,p);
+	NS_GET16(rrLen,p);
+	// Remember current pointer and skip to next answer
+	unsigned char* l = p;
+	p += rrLen;
+	// Skip non AAAA answers
+	if (rrType != (int)ns_t_aaaa)
+	    continue;
+	// Now get record address
+	SocketAddr addr(SocketAddr::IPv6,l);
+	result.append(new TxtRecord(rrTtl,addr.host()));
+	YIGNORE(rrClass);
+    }
+#endif
+    return printResult(A6,code,dname,result,error);
+}
+
+// Make a TXT query
+int Resolver::txtQuery(const char* dname, ObjList& result, String* error)
+{
+    int code = 0;
+    XDebug(DebugAll,"Starting %s query for '%s'",lookup(Txt,s_types),dname);
+#ifdef _WINDOWS
+    DNS_RECORD* adr = 0;
+    code = (int)::DnsQuery_UTF8(dname,DNS_TYPE_TEXT,DNS_QUERY_STANDARD,NULL,&adr,NULL);
+    if (code == ERROR_SUCCESS) {
+    	for (DNS_RECORD* dr = adr; dr; dr = dr->pNext) {
+	    if (dr->wType != DNS_TYPE_TEXT || dr->wDataLength < sizeof(DNS_TXT_DATA))
+		continue;
+	    DNS_TXT_DATA& d = dr->Data.TXT;
+	    for (DWORD i = 0; i < d.dwStringCount; i++)
+		result.append(new TxtRecord(dr->dwTtl,d.pStringArray[i]));
+	}
+    }
+    else if (error)
+	Thread::errorString(*error,code);
+    if (adr)
+	::DnsRecordListFree(adr,DnsFreeRecordList);
+#elif defined(__NAMESER)
+    unsigned char buf[512];
+    int r = res_query(dname,ns_c_in,ns_t_txt,buf,sizeof(buf));
+    if (r <= 0 || r > (int)sizeof(buf)) {
+	if (r) {
+	    code = h_errno;
+	    if (error)
+		*error = hstrerror(code);
+	}
+	return printResult(Txt,code,dname,result,error);
+    }
+    int queryCount = 0;
+    int answerCount = 0;
+    unsigned char* p = buf + NS_QFIXEDSZ;
+    unsigned char* e = buf + r;
+    NS_GET16(queryCount,p);
+    NS_GET16(answerCount,p);
+    p = buf + NS_HFIXEDSZ;
+    // Skip queries
+    for (; queryCount > 0; queryCount--) {
+	int n = dn_skipname(p,e);
+	if (n < 0)
+	    break;
+	p += (n + NS_QFIXEDSZ);
+    }
+    for (int i = 0; i < answerCount; i++) {
+	char name[NS_MAXLABEL + 1];
+	// Skip this answer's query
+	int n = dn_expand(buf,e,p,name,sizeof(name));
+	if ((n <= 0) || (n > NS_MAXLABEL))
+	    break;
+	buf[n] = 0;
+	p += n;
+	// Get record type, class, ttl, length
+	int rrType, rrClass, rrTtl, rrLen;
+	NS_GET16(rrType,p);
+	NS_GET16(rrClass,p);
+	NS_GET32(rrTtl,p);
+	NS_GET16(rrLen,p);
+	// Remember current pointer and skip to next answer
+	unsigned char* l = p;
+	p += rrLen;
+	// Skip non TXT answers
+	if (rrType != (int)ns_t_txt)
+	    continue;
+	// Now get record address
+	char txt[NS_MAXSTRING+1];
+	dn_string(e,l,txt,sizeof(txt));
+	result.append(new TxtRecord(rrTtl,txt));
+	YIGNORE(rrClass);
+    }
+#endif
+    return printResult(Txt,code,dname,result,error);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

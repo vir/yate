@@ -221,6 +221,8 @@ namespace TelEngine {
 #define FORMAT_CHECK(f)
 #endif
 
+#define YIGNORE(v) while (v) { break; }
+
 #ifdef HAVE_BLOCK_RETURN
 #define YSTRING(s) (*({static const String str(s);&str;}))
 #define YATOM(s) (*({static const String* str(0);str ? str : String::atom(str,s);}))
@@ -671,6 +673,12 @@ class ObjList;
 class NamedCounter;
 
 #if 0 /* for documentation generator */
+/**
+ * Macro to ignore the result of a function
+ * @param value Returned value to be ignored, must be interpretable as boolean
+ */
+void YIGNORE(primitive value);
+
 /**
  * Macro to create a local static String if supported by compiler, use with caution
  * @param string Literal constant string
@@ -5705,8 +5713,9 @@ public:
     /**
      * Constructor of a null address
      * @param family Family of the address to create
+     * @param raw Raw address data
      */
-    explicit SocketAddr(int family);
+    explicit SocketAddr(int family, const void* raw = 0);
 
     /**
      * Constructor that stores a copy of an address
@@ -7279,11 +7288,12 @@ class YATE_API DnsRecord : public GenObject
 public:
     /**
      * Build a DNS record
+     * @param ttl Record Time To Live
      * @param order Record order (priority)
      * @param pref Record preference
      */
-    inline DnsRecord(int order, int pref)
-	: m_order(order), m_pref(pref)
+    inline DnsRecord(int ttl, int order, int pref)
+	: m_ttl(ttl), m_order(order), m_pref(pref)
 	{}
 
     /**
@@ -7292,6 +7302,13 @@ public:
     inline DnsRecord()
 	: m_order(0), m_pref(0)
 	{}
+
+    /**
+     * Retrieve the Time To Live
+     * @return Record TTL
+     */
+    inline int ttl() const
+	{ return m_ttl; }
 
     /**
      * Retrieve the record order
@@ -7324,8 +7341,55 @@ public:
     static bool insert(ObjList& list, DnsRecord* rec, bool ascPref);
 
 protected:
+    int m_ttl;
     int m_order;
     int m_pref;
+};
+
+/**
+ * This class holds a A, AAAA or TXT record from DNS
+ * @short A text based DNS record
+ */
+class YATE_API TxtRecord : public DnsRecord
+{
+    YCLASS(TxtRecord,DnsRecord)
+    YNOCOPY(TxtRecord);
+public:
+    /**
+     * Build a TXT record
+     * @param ttl Record Time To Live
+     * @param text Text content of the record
+     */
+    inline TxtRecord(int ttl, const char* text)
+	: DnsRecord(ttl,-1,-1), m_text(text)
+	{}
+
+    /**
+     * Retrieve the record text
+     * @return Record text
+     */
+    inline const String& text() const
+	{ return m_text; }
+
+    /**
+     * Dump this record for debug purposes
+     * @param buf Destination buffer
+     * @param sep Fields separator
+     */
+    virtual void dump(String& buf, const char* sep = " ");
+
+    /**
+     * Copy a TxtRecord list into another one
+     * @param dest Destination list
+     * @param src Source list
+     */
+    static void copy(ObjList& dest, const ObjList& src);
+
+protected:
+    String m_text;
+
+private:
+    TxtRecord() {}                       // No default contructor
 };
 
 /**
@@ -7339,13 +7403,14 @@ class YATE_API SrvRecord : public DnsRecord
 public:
     /**
      * Build a SRV record
+     * @param ttl Record Time To Live
      * @param prio Record priority (order)
      * @param weight Record weight (preference)
      * @param addr Record address
      * @param port Record port
      */
-    inline SrvRecord(int prio, int weight, const char* addr, int port)
-	: DnsRecord(prio,weight), m_address(addr), m_port(port)
+    inline SrvRecord(int ttl, int prio, int weight, const char* addr, int port)
+	: DnsRecord(ttl,prio,weight), m_address(addr), m_port(port)
 	{}
 
     /**
@@ -7395,6 +7460,7 @@ class YATE_API NaptrRecord : public DnsRecord
 public:
     /**
      * Build a NAPTR record
+     * @param ttl Record Time To Live
      * @param ord Record order
      * @param pref Record preference
      * @param flags Interpretation flags
@@ -7402,7 +7468,7 @@ public:
      * @param regexp Substitution expression
      * @param next Next name to query
      */
-    NaptrRecord(int ord, int pref, const char* flags, const char* serv,
+    NaptrRecord(int ttl, int ord, int pref, const char* flags, const char* serv,
 	const char* regexp, const char* next);
 
     /**
@@ -7411,7 +7477,7 @@ public:
      * @param str String to replace
      * @return True on success
      */
-    bool replace(String& str);
+    bool replace(String& str) const;
 
     /**
      * Dump this record for debug purposes
@@ -7433,6 +7499,20 @@ public:
      */
     inline const String& serv() const
 	{ return m_service; }
+
+    /**
+     * Retrieve the regular expression match
+     * @return Regular expression used in match
+     */
+    inline const Regexp& regexp() const
+	{ return m_regmatch; }
+
+    /**
+     * Retrieve the template for replacing
+     * @return Template used to replace the match
+     */
+    inline const String& repTemplate() const
+	{ return m_template; }
 
     /**
      * Retrieve the next domain name to query
@@ -7466,6 +7546,9 @@ public:
 	Unknown,
 	Srv,                             // SRV (Service Location)
 	Naptr,                           // NAPTR (Naming Authority Pointer)
+	A4,                              // A (Address)
+	A6,                              // AAAA (IPv6 Address)
+	Txt,                             // TXT (Text)
     };
 
     /**
@@ -7511,6 +7594,33 @@ public:
      * @return 0 on success, error code otherwise (h_errno value on Linux)
      */
     static int naptrQuery(const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Make an A (IPv4 Address) query
+     * @param dname Domain to query
+     * @param result List of resulting TxtRecord items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int a4Query(const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Make an AAAA (IPv6 Address) query
+     * @param dname Domain to query
+     * @param result List of resulting TxtRecord items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int a6Query(const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Make a TXT (Text) query
+     * @param dname Domain to query
+     * @param result List of resulting TxtRecord items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int txtQuery(const char* dname, ObjList& result, String* error = 0);
 
     /**
      * Resolver type names

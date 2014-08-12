@@ -230,6 +230,8 @@ public:
 	    params().addParam(new ExpFunction("idle"));
 	    params().addParam(new ExpFunction("dump_r"));
 	    params().addParam(new ExpFunction("print_r"));
+	    params().addParam(new ExpFunction("dump_t"));
+	    params().addParam(new ExpFunction("print_t"));
 	    params().addParam(new ExpFunction("debugName"));
 	    params().addParam(new ExpFunction("debugLevel"));
 	    params().addParam(new ExpFunction("debugEnabled"));
@@ -242,6 +244,8 @@ public:
 	    params().addParam(new ExpFunction("clearInterval"));
 	    params().addParam(new ExpFunction("setTimeout"));
 	    params().addParam(new ExpFunction("clearTimeout"));
+	    params().addParam(new ExpFunction("loadLibrary"));
+	    params().addParam(new ExpFunction("loadObject"));
 	    params().addParam(new ExpFunction("atob"));
 	    params().addParam(new ExpFunction("btoa"));
 	    params().addParam(new ExpFunction("atoh"));
@@ -310,6 +314,7 @@ public:
 	{
 	    construct->params().addParam(new ExpFunction("install"));
 	    construct->params().addParam(new ExpFunction("uninstall"));
+	    construct->params().addParam(new ExpFunction("handlers"));
 	    construct->params().addParam(new ExpFunction("uninstallHook"));
 	    construct->params().addParam(new ExpFunction("installHook"));
 	    construct->params().addParam(new ExpFunction("trackName"));
@@ -355,6 +360,8 @@ public:
 	    XDebug(&__plugin,DebugAll,"JsHandler::~JsHandler() '%s' [%p]",c_str(),this);
 	}
     virtual bool received(Message& msg);
+    inline const ExpFunction& function() const
+	{ return m_function; }
 private:
     ExpFunction m_function;
     RefPointer<ScriptContext> m_context;
@@ -595,6 +602,26 @@ protected:
     static String strEscape(const char* str);
 };
 
+class JsDNS : public JsObject
+{
+    YCLASS(JsDNS,JsObject)
+public:
+    inline JsDNS(Mutex* mtx)
+	: JsObject("DNS",mtx,true)
+	{
+	    params().addParam(new ExpFunction("query"));
+	    params().addParam(new ExpFunction("queryA"));
+	    params().addParam(new ExpFunction("queryAaaa"));
+	    params().addParam(new ExpFunction("queryNaptr"));
+	    params().addParam(new ExpFunction("querySrv"));
+	    params().addParam(new ExpFunction("queryTxt"));
+	}
+    static void initialize(ScriptContext* context);
+    void runQuery(ObjList& stack, const String& name, Resolver::Type type, GenObject* context);
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+};
+
 class JsChannel : public JsObject
 {
     YCLASS(JsChannel,JsObject)
@@ -658,12 +685,32 @@ private:
     Message* m_message;
 };
 
+class JsDnsAsync : public ScriptAsync
+{
+    YCLASS(JsDnsAsync,ScriptAsync)
+public:
+    inline JsDnsAsync(ScriptRun* runner, JsDNS* jsDns, ObjList* stack,
+	const String& name, Resolver::Type type, GenObject* context)
+	: ScriptAsync(runner),
+	  m_stack(stack), m_name(name), m_type(type), m_context(context), m_dns(jsDns)
+	{ XDebug(DebugAll,"JsDnsAsync"); }
+    virtual bool run()
+	{ m_dns->runQuery(*m_stack,m_name,m_type,m_context); return true; }
+private:
+    ObjList* m_stack;
+    String m_name;
+    Resolver::Type m_type;
+    GenObject* m_context;
+    RefPointer<JsDNS> m_dns;
+};
+
 static String s_basePath;
 static String s_libsPath;
 static bool s_engineStop = false;
 static bool s_allowAbort = false;
 static bool s_allowTrace = false;
 static bool s_allowLink = true;
+static bool s_autoExt = true;
 
 UNLOAD_PLUGIN(unloadNow)
 {
@@ -673,6 +720,175 @@ UNLOAD_PLUGIN(unloadNow)
 	return __plugin.unload();
     }
     return true;
+}
+
+// Load extensions in a script context
+static bool contextLoad(ScriptContext* ctx, const char* name, const char* libs = 0, const char* objs = 0)
+{
+    if (!ctx)
+	return false;
+    bool start = !(libs || objs);
+    Message msg("script.init",0,start);
+    msg.userData(ctx);
+    msg.addParam("module",__plugin.name());
+    msg.addParam("language","javascript");
+    msg.addParam("startup",String::boolText(start));
+    if (name)
+	msg.addParam("instance",name);
+    if (libs)
+	msg.addParam("libraries",libs);
+    if (objs)
+	msg.addParam("objects",objs);
+    return Engine::dispatch(msg);
+}
+
+// Load extensions in a script runner context
+static bool contextLoad(ScriptRun* runner, const char* name, const char* libs = 0, const char* objs = 0)
+{
+    return runner && contextLoad(runner->context(),name,libs,objs);
+}
+
+// Initialize a script context, populate global objects
+static void contextInit(ScriptRun* runner, const char* name = 0, JsAssist* assist = 0)
+{
+    if (!runner)
+	return;
+    ScriptContext* ctx = runner->context();
+    if (!ctx)
+	return;
+    JsObject::initialize(ctx);
+    JsEngine::initialize(ctx);
+    if (assist)
+	JsChannel::initialize(ctx,assist);
+    JsMessage::initialize(ctx);
+    JsFile::initialize(ctx);
+    JsConfigFile::initialize(ctx);
+    JsXML::initialize(ctx);
+    JsHasher::initialize(ctx);
+    JsJSON::initialize(ctx);
+    JsDNS::initialize(ctx);
+    if (s_autoExt)
+	contextLoad(ctx,name);
+}
+
+// Build a tabular dump of an Object or Array
+static void dumpTable(const ExpOperation& oper, String& str, const char* eol)
+{
+    class Header : public ObjList
+    {
+    public:
+	Header(const char* name)
+	    : m_name(name), m_rows(0)
+	    { m_width = m_name.length(); }
+	virtual const String& toString() const
+	    { return m_name; }
+	inline unsigned int width() const
+	    { return m_width; }
+	inline unsigned int rows() const
+	    { return m_rows; }
+	inline void setWidth(unsigned int w)
+	    { if (m_width < w) m_width = w; }
+	inline void addString(const String& val, unsigned int row)
+	    {
+		while (++m_rows < row)
+		    append(0,false);
+		append(new String(val));
+	    }
+	inline const String* getString(unsigned int row) const
+	    { return (row < m_rows) ? static_cast<const String*>(at(row)) : 0; }
+    private:
+	String m_name;
+	unsigned int m_width;
+	unsigned int m_rows;
+    };
+
+    const JsObject* jso = YOBJECT(JsObject,&oper);
+    if (!jso || JsParser::isNull(oper)) {
+	if (JsParser::isUndefined(oper))
+	    str = "undefined";
+	else
+	    str = oper;
+	return;
+    }
+    ObjList header;
+    const JsArray* jsa = YOBJECT(JsArray,jso);
+    if (jsa) {
+	// Array of Objects
+	// [ { name1: "val11", name2: "val12" }, { name1: "val21", name3: "val23" } ]
+	unsigned int row = 0;
+	for (int i = 0; i < jsa->length(); i++) {
+	    jso = YOBJECT(JsObject,jsa->params().getParam(String(i)));
+	    if (!jso)
+		continue;
+	    bool newRow = true;
+	    for (ObjList* l = jso->params().paramList()->skipNull(); l; l = l->skipNext()) {
+		const NamedString* ns = static_cast<const NamedString*>(l->get());
+		if (ns->name() == JsObject::protoName())
+		    continue;
+		Header* h = static_cast<Header*>(header[ns->name()]);
+		if (!h) {
+		    h = new Header(ns->name());
+		    header.append(h);
+		}
+		h->setWidth(ns->length());
+		if (newRow) {
+		    newRow = false;
+		    row++;
+		}
+		h->addString(*ns,row);
+	    }
+	}
+    }
+    else {
+	// Object containing Arrays
+	// { name1: [ "val11", "val21" ], name2: [ "val12" ], name3: [ undefined, "val23" ] }
+	for (ObjList* l = jso->params().paramList()->skipNull(); l; l = l->skipNext()) {
+	    const NamedString* ns = static_cast<const NamedString*>(l->get());
+	    jsa = YOBJECT(JsArray,ns);
+	    if (!jsa)
+		continue;
+	    Header* h = new Header(ns->name());
+	    header.append(h);
+	    for (int r = 0; r < jsa->length(); r++) {
+		ns = jsa->params().getParam(String(r));
+		if (ns) {
+		    h->setWidth(ns->length());
+		    h->addString(*ns,r + 1);
+		}
+	    }
+	}
+    }
+    str.clear();
+    String tmp;
+    unsigned int rows = 0;
+    for (ObjList* l = header.skipNull(); l; l = l->skipNext()) {
+	Header* h = static_cast<Header*>(l->get());
+	if (rows < h->rows())
+	    rows = h->rows();
+	str.append(h->toString()," ",true);
+	unsigned int sp = h->width() - h->toString().length();
+	if (sp)
+	    str << String(' ',sp);
+	tmp.append(String('-',h->width())," ",true);
+    }
+    if (!rows)
+	return;
+    str << eol << tmp << eol;
+    for (unsigned int r = 0; r < rows; r++) {
+	tmp.clear();
+	// add each row data
+	for (ObjList* l = header.skipNull(); l; l = l->skipNext()) {
+	    Header* h = static_cast<Header*>(l->get());
+	    const String* s = h->getString(r);
+	    if (!s)
+		s = &String::empty();
+	    tmp.append(*s," ",true);
+	    unsigned int sp = h->width() - s->length();
+	    if (sp)
+		tmp << String(' ',sp);
+	}
+	str << tmp << eol;
+    }
 }
 
 // Extract arguments from stack
@@ -891,6 +1107,28 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	else
 	    return false;
     }
+    else if (oper.name() == YSTRING("dump_t")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	String buf;
+	dumpTable(*op,buf,"\r\n");
+	TelEngine::destruct(op);
+	ExpEvaluator::pushOne(stack,new ExpOperation(buf));
+    }
+    else if (oper.name() == YSTRING("print_t")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	String buf;
+	dumpTable(*op,buf,"\r\n");
+	TelEngine::destruct(op);
+	Output("%s",buf.safe());
+    }
     else if (oper.name() == YSTRING("debugName")) {
 	if (oper.number() == 0)
 	    ExpEvaluator::pushOne(stack,new ExpOperation(m_debugName));
@@ -967,7 +1205,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
     }
     else if (oper.name() == YSTRING("runParams")) {
 	if (oper.number() == 0) {
-	    JsObject* jso = new JsObject("Object",mutex());
+	    JsObject* jso = new JsObject(context,mutex());
 	    jso->params().copyParams(Engine::runParams());
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(jso,oper.name()));
 	}
@@ -1032,6 +1270,26 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpOperation* id = static_cast<ExpOperation*>(args[0]);
 	bool ret = m_worker->removeEvent((unsigned int)id->valInteger(),oper.name() == YSTRING("clearInterval"));
 	ExpEvaluator::pushOne(stack,new ExpOperation(ret));
+    }
+    else if (oper.name() == YSTRING("loadLibrary") || oper.name() == YSTRING("loadObject")) {
+	bool obj = oper.name() == YSTRING("loadObject");
+	bool ok = false;
+	ObjList args;
+	ScriptRun* runner = YOBJECT(ScriptRun,context);
+	int argc = extractArgs(stack,oper,context,args);
+	if (runner && argc) {
+	    ok = true;
+	    for (int i = 0; i < argc; i++) {
+		ExpOperation* op = static_cast<ExpOperation*>(args[i]);
+		if (!op || op->isBoolean() || op->isNumber() || YOBJECT(ExpWrapper,op))
+		    ok = false;
+		else if (obj)
+		    ok = contextLoad(runner,0,0,*op) && ok;
+		else
+		    ok = contextLoad(runner,0,*op) && ok;
+	    }
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
     else if (oper.name() == YSTRING("atob")) {
 	// str = Engine.atob(b64_str)
@@ -1447,6 +1705,46 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    return false;
 	m_handlers.remove(*name);
     }
+    else if (oper.name() == YSTRING("handlers")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 0:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
+	JsRegExp* rexp = YOBJECT(JsRegExp,name);
+	JsArray* jsa = 0;
+	for (ObjList* l = m_handlers.skipNull(); l; l = l->skipNext()) {
+	    const JsHandler* h = static_cast<JsHandler*>(l->get());
+	    if (rexp) {
+		if (!rexp->regexp().matches(*h))
+		    continue;
+	    }
+	    else if (name && (*h != *name))
+		continue;
+	    if (!jsa)
+		jsa = new JsArray(context,mutex());
+	    JsObject* jso = new JsObject(context,mutex());
+	    jso->params().setParam(new ExpOperation(*h,"name"));
+	    jso->params().setParam(new ExpOperation((int64_t)h->priority(),"priority"));
+	    jso->params().setParam(new ExpOperation(h->function().name(),"handler"));
+	    const NamedString* f = h->filter();
+	    if (f) {
+		jso->params().setParam(new ExpOperation(f->name(),"filterName"));
+		jso->params().setParam(new ExpOperation(*f,"filterValue"));
+	    }
+	    if (h->trackName())
+		jso->params().setParam(new ExpOperation(h->trackName(),"trackName"));
+	    jsa->push(new ExpWrapper(jso));
+	}
+	if (jsa)
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,"handlers"));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+    }
     else if (oper.name() == YSTRING("installHook"))
 	return installHook(stack,oper,context);
     else if (oper.name() == YSTRING("uninstallHook")) {
@@ -1608,7 +1906,7 @@ void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* co
 	}
 	else {
 	    // { col1: [ val11, val12, val13], col2: [ val21, val22, val23 ] }
-	    JsObject* jso = new JsObject("Object",mutex());
+	    JsObject* jso = new JsObject(context,mutex());
 	    for (int c = 0; c < cols; c++) {
 		const String* name = YOBJECT(String,arr->get(c,0));
 		if (TelEngine::null(name))
@@ -1641,7 +1939,7 @@ void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* conte
 	    if (row->isInteger()) {
 		int idx = (int)row->number() + 1;
 		if (idx > 0 && idx <= rows) {
-		    JsObject* jso = new JsObject("Object",mutex());
+		    JsObject* jso = new JsObject(context,mutex());
 		    for (int c = 0; c < cols; c++) {
 			const String* name = YOBJECT(String,arr->get(c,0));
 			if (TelEngine::null(name))
@@ -1661,7 +1959,7 @@ void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* conte
 	    // [ { col1: val11, col2: val12 }, { col1: val21, col2: val22 } ]
 	    JsArray* jsa = new JsArray(context,mutex());
 	    for (int r = 1; r <= rows; r++) {
-		JsObject* jso = new JsObject("Object",mutex());
+		JsObject* jso = new JsObject(context,mutex());
 		for (int c = 0; c < cols; c++) {
 		    const String* name = YOBJECT(String,arr->get(c,0));
 		    if (TelEngine::null(name))
@@ -2710,11 +3008,13 @@ void JsJSON::stringify(const NamedString* ns, String& buf, int spaces, int inden
 		continue;
 	    buf << ci << strEscape(p->name()) << sep;
 	    stringify(p,buf,spaces,indent + spaces);
-	    p = static_cast<const NamedString*>(l->get());
-	    if (p->name() == protoName())
-		l = l->skipNext();
-	    if (l)
-		buf << ",";
+	    if (l) {
+		p = static_cast<const NamedString*>(l->get());
+		if (p->name() == protoName())
+		    l = l->skipNext();
+		if (l)
+		    buf << ",";
+	    }
 	    buf << nl;
 	}
 	buf << li << "}";
@@ -2756,6 +3056,108 @@ void JsJSON::initialize(ScriptContext* context)
     NamedList& params = context->params();
     if (!params.getParam(YSTRING("JSON")))
 	addObject(params,"JSON",new JsJSON(mtx));
+}
+
+
+bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    if (oper.name().startsWith("query")) {
+	String type = oper.name().substr(5);
+	ObjList args;
+	ExpOperation* arg = 0;
+	ExpOperation* async = 0;
+	int argc = extractArgs(stack,oper,context,args);
+	if (type.null() && (argc >= 2)) {
+	    type = static_cast<ExpOperation*>(args[0]);
+	    arg = static_cast<ExpOperation*>(args[1]);
+	    async = static_cast<ExpOperation*>(args[2]);
+	}
+	else if (type && (argc >= 1)) {
+	    arg = static_cast<ExpOperation*>(args[0]);
+	    async = static_cast<ExpOperation*>(args[1]);
+	}
+	else
+	    return false;
+	type.toUpper();
+	int qType = lookup(type,Resolver::s_types,-1);
+	if ((qType < 0) || TelEngine::null(arg))
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,"DNS"));
+	else {
+	    if (async && async->valBoolean()) {
+		ScriptRun* runner = YOBJECT(ScriptRun,context);
+		if (!runner)
+		    return false;
+		runner->insertAsync(new JsDnsAsync(runner,this,&stack,*arg,(Resolver::Type)qType,context));
+		runner->pause();
+		return true;
+	    }
+	    runQuery(stack,*arg,(Resolver::Type)qType,context);
+	}
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+void JsDNS::runQuery(ObjList& stack, const String& name, Resolver::Type type, GenObject* context)
+{
+    JsArray* jsa = 0;
+    ObjList res;
+    if (Resolver::query(type,name,res) == 0) {
+	jsa = new JsArray(context,mutex());
+	switch (type) {
+	    case Resolver::A4:
+	    case Resolver::A6:
+	    case Resolver::Txt:
+		for (ObjList* l = res.skipNull(); l; l = l->skipNext()) {
+		    TxtRecord* r = static_cast<TxtRecord*>(l->get());
+		    jsa->push(new ExpOperation(r->text()));
+		}
+		break;
+	    case Resolver::Naptr:
+		for (ObjList* l = res.skipNull(); l; l = l->skipNext()) {
+		    NaptrRecord* r = static_cast<NaptrRecord*>(l->get());
+		    JsObject* jso = new JsObject(context,mutex());
+		    jso->params().setParam(new ExpOperation(r->flags(),"flags"));
+		    jso->params().setParam(new ExpOperation(r->serv(),"service"));
+		    // Would be nice to create a RegExp here but does not stringify properly
+		    jso->params().setParam(new ExpOperation(r->regexp(),"regexp"));
+		    jso->params().setParam(new ExpOperation(r->repTemplate(),"replacement"));
+		    jso->params().setParam(new ExpOperation(r->nextName(),"name"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->ttl(),"ttl"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->order(),"order"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->pref(),"preference"));
+		    jsa->push(new ExpWrapper(jso));
+		}
+		break;
+	    case Resolver::Srv:
+		for (ObjList* l = res.skipNull(); l; l = l->skipNext()) {
+		    SrvRecord* r = static_cast<SrvRecord*>(l->get());
+		    JsObject* jso = new JsObject(context,mutex());
+		    jso->params().setParam(new ExpOperation((int64_t)r->port(),"port"));
+		    jso->params().setParam(new ExpOperation(r->address(),"name"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->ttl(),"ttl"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->order(),"order"));
+		    jso->params().setParam(new ExpOperation((int64_t)r->pref(),"preference"));
+		    jsa->push(new ExpWrapper(jso));
+		}
+		break;
+	    default:
+		break;
+	}
+    }
+    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,lookup(type,Resolver::s_types)));
+}
+
+void JsDNS::initialize(ScriptContext* context)
+{
+    if (!context)
+	return;
+    Mutex* mtx = context->mutex();
+    Lock mylock(mtx);
+    NamedList& params = context->params();
+    if (!params.getParam(YSTRING("DNS")))
+	addObject(params,"DNS",new JsDNS(mtx));
 }
 
 
@@ -3163,18 +3565,10 @@ bool JsAssist::init()
 {
     if (!m_runner)
 	return false;
-    ScriptContext* ctx = m_runner->context();
-    JsObject::initialize(ctx);
-    JsEngine::initialize(ctx);
-    JsChannel::initialize(ctx,this);
-    JsMessage::initialize(ctx);
-    JsFile::initialize(ctx);
-    JsConfigFile::initialize(ctx);
-    JsXML::initialize(ctx);
-    JsHasher::initialize(ctx);
-    JsJSON::initialize(ctx);
+    contextInit(m_runner,id(),this);
     if (ScriptRun::Invalid == m_runner->reset(true))
 	return false;
+    ScriptContext* ctx = m_runner->context();
     ScriptContext* chan = YOBJECT(ScriptContext,ctx->getField(m_runner->stack(),YSTRING("Channel"),m_runner));
     if (chan) {
 	JsMessage* jsm = YOBJECT(JsMessage,chan->getField(m_runner->stack(),YSTRING("message"),m_runner));
@@ -3498,14 +3892,7 @@ bool JsGlobal::runMain()
 	return false;
     if (!m_context)
 	m_context = runner->context();
-    JsObject::initialize(runner->context());
-    JsEngine::initialize(runner->context());
-    JsMessage::initialize(runner->context());
-    JsFile::initialize(runner->context());
-    JsConfigFile::initialize(runner->context());
-    JsXML::initialize(runner->context());
-    JsHasher::initialize(runner->context());
-    JsJSON::initialize(runner->context());
+    contextInit(runner,name());
     ScriptRun::Status st = runner->run();
     TelEngine::destruct(runner);
     return (ScriptRun::Succeeded == st);
@@ -3602,16 +3989,8 @@ bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* con
 	return true;
     }
     ScriptRun* runner = parser.createRunner(context,"[command line]");
-    if (!context) {
-	JsObject::initialize(runner->context());
-	JsEngine::initialize(runner->context());
-	JsMessage::initialize(runner->context());
-	JsFile::initialize(runner->context());
-	JsConfigFile::initialize(runner->context());
-	JsXML::initialize(runner->context());
-	JsHasher::initialize(runner->context());
-	JsJSON::initialize(runner->context());
-    }
+    if (!context)
+	contextInit(runner);
     ScriptRun::Status st = runner->run();
     if (st == ScriptRun::Succeeded) {
 	while (ExpOperation* op = ExpEvaluator::popOne(runner->stack())) {
@@ -3787,6 +4166,7 @@ void JsModule::initialize()
     if (tmp && !tmp.endsWith(Engine::pathSeparator()))
 	tmp += Engine::pathSeparator();
     s_libsPath = tmp;
+    s_autoExt = cfg.getBoolValue("general","auto_extensions",true);
     s_allowAbort = cfg.getBoolValue("general","allow_abort");
     bool changed = false;
     if (cfg.getBoolValue("general","allow_trace") != s_allowTrace) {

@@ -414,8 +414,6 @@ public:
 	    ObjList* obj = m_recorders.find(name);
 	    return obj ? static_cast<AnalogCallRec*>(obj->get()) : 0;
 	}
-    // Additional driver commands
-    static String s_cmd[CmdCount];
     // Additional driver status commands
     static String s_statusCmd[StatusCmdCount];
 protected:

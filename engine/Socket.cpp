@@ -237,10 +237,23 @@ SocketAddr::SocketAddr(const struct sockaddr* addr, socklen_t len)
     assign(addr,len);
 }
 
-SocketAddr::SocketAddr(int family)
+SocketAddr::SocketAddr(int family, const void* raw)
     : m_address(0), m_length(0)
 {
     assign(family);
+    if (raw && m_address) {
+	switch (family) {
+	    case AF_INET:
+		::memcpy(&((struct sockaddr_in*)m_address)->sin_addr,raw,4);
+		break;
+#ifdef AF_INET6
+	    case AF_INET6:
+		::memcpy(&((struct sockaddr_in6*)m_address)->sin6_addr,raw,16);
+		break;
+#endif
+	}
+	SocketAddr::stringify();
+    }
 }
 
 SocketAddr::~SocketAddr()

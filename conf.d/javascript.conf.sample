@@ -25,6 +25,10 @@
 ; allow_link: boolean: Allow linking of Javascript code (jump resolving)
 ;allow_link=yes
 
+; auto_extensions: boolean: Automatically load scripting extensions in new scripts
+; This does not prevent script code from explicitly loading extensions
+;auto_extensions=yes
+
 
 [scripts]
 ; Add one entry in this section for each script that is to be loaded on Yate startup

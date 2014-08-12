@@ -328,14 +328,6 @@ static inline void appendQDirective(String& buf, const String& name,
     buf.append(name + "=\"" + tmp + "\"",",");
 }
 
-// Build a SASL nonce count string
-static inline void buildNc(String& buf, int nc)
-{
-    char tmp[9];
-    ::sprintf(tmp,"%08x",nc);
-    buf = tmp;
-}
-
 // Constructor
 SASL::SASL(bool plain, const char* realm)
     : m_plain(plain), m_params(0), m_realm(realm), m_nonceCount(0)

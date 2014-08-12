@@ -208,6 +208,13 @@ JsObject::JsObject(Mutex* mtx, const char* name, bool frozen)
 	mtx,name,String::boolText(frozen),this);
 }
 
+JsObject::JsObject(GenObject* context, Mutex* mtx, bool frozen)
+    : ScriptContext("[object Object]"),
+      m_frozen(frozen), m_mutex(mtx)
+{
+    setPrototype(context,YSTRING("Object"));
+}
+
 JsObject::~JsObject()
 {
     XDebug(DebugAll,"JsObject::~JsObject '%s' [%p]",toString().c_str(),this);
@@ -570,6 +577,11 @@ bool JsArray::runField(ObjList& stack, const ExpOperation& oper, GenObject* cont
     return JsObject::runField(stack,oper,context);
 }
 
+void JsArray::initConstructor(JsFunction* construct)
+{
+    construct->params().addParam(new ExpFunction("isArray"));
+}
+
 JsObject* JsArray::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     if (!ref())
@@ -595,7 +607,13 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 {
     XDebug(DebugAll,"JsArray::runNative() '%s' in '%s' [%p]",
 	oper.name().c_str(),toString().c_str(),this);
-    if (oper.name() == YSTRING("push")) {
+    if (oper.name() == YSTRING("isArray")) {
+	// Static function that checks if the argument is an Array
+	ObjList args;
+	extractArgs(this,stack,oper,context,args);
+	ExpEvaluator::pushOne(stack,new ExpOperation(YOBJECT(JsArray,args[0])));
+    }
+    else if (oper.name() == YSTRING("push")) {
 	// Adds one or more elements to the end of an array and returns the new length of the array.
 	ObjList args;
 	if (!extractArgs(this,stack,oper,context,args))
@@ -1064,6 +1082,15 @@ JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool insensit
     params().addParam(new ExpFunction("test"));
     params().addParam("ignoreCase",String::boolText(insensitive));
     params().addParam("basicPosix",String::boolText(!extended));
+}
+
+JsRegExp::JsRegExp(Mutex* mtx, const Regexp& rexp, bool frozen)
+    : JsObject("RegExp",mtx),
+      m_regexp(rexp)
+{
+    params().addParam(new ExpFunction("test"));
+    params().addParam("ignoreCase",String::boolText(rexp.isCaseInsensitive()));
+    params().addParam("basicPosix",String::boolText(!rexp.isExtended()));
 }
 
 bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)

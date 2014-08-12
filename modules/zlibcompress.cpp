@@ -221,6 +221,8 @@ ZLibStream::~ZLibStream()
 	code = inflateEnd(&m_zlib);
 #ifdef DEBUG
     checkError(code,"release failure");
+#else
+    YIGNORE(code);
 #endif
 }
 

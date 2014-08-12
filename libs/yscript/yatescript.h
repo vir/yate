@@ -140,6 +140,12 @@ public:
     ParsePoint& operator=(ParsePoint& parsePoint);
 
     /**
+     * Line number assignment
+     * @param line New line number
+     */
+    ParsePoint& operator=(unsigned int line);
+
+    /**
      * Cast operator to const char*&
      */
     inline operator const char*&()
@@ -178,6 +184,13 @@ public:
      */
     inline char firstChar()
 	{ return *m_expr; }
+
+    /**
+     * Get line number of the parsed expression
+     * @return Line number stored in parse point
+     */
+    inline unsigned lineNumber() const
+	{ return m_lineNo; }
 
     /**
      * Expression to be parsed
@@ -402,29 +415,33 @@ public:
      * Dump a list of operations according to current operators dictionary
      * @param codes List of operation codes
      * @param res Result string representation of operations
+     * @param lineNo True to include line numbers
      */
-    void dump(const ObjList& codes, String& res) const;
+    void dump(const ObjList& codes, String& res, bool lineNo = false) const;
 
     /**
      * Dump the postfix expression according to current operators dictionary
      * @param res Result string representation of operations
+     * @param lineNo True to include line numbers
      */
-    virtual void dump(String& res) const;
+    virtual void dump(String& res, bool lineNo = false) const;
 
     /**
      * Dump a list of operations according to current operators dictionary
      * @param codes List of operation codes
+     * @param lineNo True to include line numbers
      * @return String representation of operations
      */
-    inline String dump(const ObjList& codes) const
-	{ String s; dump(codes,s); return s; }
+    inline String dump(const ObjList& codes, bool lineNo = false) const
+	{ String s; dump(codes,s,lineNo); return s; }
 
     /**
      * Dump the postfix expression according to current operators dictionary
+     * @param lineNo True to include line numbers
      * @return String representation of operations
      */
-    inline String dump() const
-	{ String s; dump(s); return s; }
+    inline String dump(bool lineNo = false) const
+	{ String s; dump(s,lineNo); return s; }
 
     /**
      * Retrieve the internally used operator dictionary
@@ -773,9 +790,10 @@ protected:
      * Add a simple operator to the expression
      * @param oper Operator code to add
      * @param barrier True to create an evaluator stack barrier
+     * @param line Line number where operation was compiled, zero to used parsing point
      * @return Newly added operation
      */
-    ExpOperation* addOpcode(Opcode oper, bool barrier = false);
+    ExpOperation* addOpcode(Opcode oper, bool barrier = false, unsigned int line = 0);
 
     /**
      * Add a simple operator to the expression
@@ -813,9 +831,11 @@ protected:
      * @param name Name of the field or function, case sensitive
      * @param value Numerical value used as parameter count to functions
      * @param barrier True to create an exavuator stack barrier
+     * @param line Line number where operation was compiled, zero to used parsing point
      * @return Newly added operation
      */
-    ExpOperation* addOpcode(Opcode oper, const String& name, int64_t value = 0, bool barrier = false);
+    ExpOperation* addOpcode(Opcode oper, const String& name, int64_t value = 0,
+	bool barrier = false, unsigned int line = 0);
 
     /**
      * Remove from the code and return the last operation
@@ -888,8 +908,9 @@ protected:
      * Dump a single operation according to current operators dictionary
      * @param oper Operation to dump
      * @param res Result string representation of operations
+     * @param lineNo True to include line numbers
      */
-    virtual void dump(const ExpOperation& oper, String& res) const;
+    virtual void dump(const ExpOperation& oper, String& res, bool lineNo = false) const;
 
     /**
      * Internally used operator dictionary
@@ -1886,6 +1907,14 @@ public:
     JsObject(Mutex* mtx, const char* name, bool frozen = false);
 
     /**
+     * Constructor for an empty object with prototype
+     * @param context Script context from which Object prototype is obtainend
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param frozen True if the object is to be frozen from creation
+     */
+    JsObject(GenObject* context, Mutex* mtx = 0, bool frozen = false);
+
+    /**
      * Destructor
      */
     virtual ~JsObject();
@@ -2293,6 +2322,12 @@ public:
     virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
     /**
+     * Array constructor initialization
+     * @param construct The Array function
+     */
+    virtual void initConstructor(JsFunction* construct);
+
+    /**
      * Array object constructor, it's run on the prototype
      * @param stack Evaluation stack in use
      * @param oper Constructor function to evaluate
@@ -2360,6 +2395,14 @@ public:
      */
     JsRegExp(Mutex* mtx, const char* name, const char* rexp = 0, bool insensitive = false,
 	bool extended = true, bool frozen = false);
+
+    /**
+     * Constructor from existing Regexp
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param rexp Regular expression to copy
+     * @param frozen True to create an initially frozen object
+     */
+    JsRegExp(Mutex* mtx, const Regexp& rexp, bool frozen = false);
 
     /**
      * Access the internal Regexp object that does the matching

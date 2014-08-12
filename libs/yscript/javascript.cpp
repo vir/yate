@@ -170,7 +170,7 @@ public:
     virtual bool evaluate(ScriptRun& runner, ObjList& results) const;
     virtual ScriptRun* createRunner(ScriptContext* context, const char* title);
     virtual bool null() const;
-    virtual void dump(String& res) const;
+    virtual void dump(String& res, bool loneNo = false) const;
     bool link();
     inline bool traceable() const
 	{ return m_traceable; }
@@ -971,14 +971,14 @@ bool JsCode::link()
 	    if (!jmp || jmp->number() != lbl)
 		continue;
 	    Opcode op = OpcNone;
-	    switch (jmp->opcode()) {
-		case (Opcode)OpcJump:
+	    switch ((int)jmp->opcode()) {
+		case OpcJump:
 		    op = (Opcode)OpcJRel;
 		    break;
-		case (Opcode)OpcJumpTrue:
+		case OpcJumpTrue:
 		    op = (Opcode)OpcJRelTrue;
 		    break;
-		case (Opcode)OpcJumpFalse:
+		case OpcJumpFalse:
 		    op = (Opcode)OpcJRelFalse;
 		    break;
 		default:
@@ -1363,8 +1363,8 @@ bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
     expr.m_foundSep = 0;
     ParsePoint saved = expr;
     Opcode op = ExpEvaluator::getOperator(expr,s_instr);
-    switch ((JsOpcode)op) {
-	case (JsOpcode)OpcNone:
+    switch ((int)op) {
+	case OpcNone:
 	    return false;
 	case OpcThrow:
 	    if (!runCompile(expr))
@@ -1439,8 +1439,6 @@ bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
 	    return parseTry(expr,nested);
 	case OpcFuncDef:
 	    return parseFuncDef(expr,!nested);
-	default:
-	    break;
     }
     return true;
 }
@@ -1804,7 +1802,7 @@ ExpEvaluator::Opcode JsCode::getOperator(ParsePoint& expr)
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getOperator '%.30s'",(const char*)expr);
+    XDebug(this,DebugAll,"JsCode::getOperator line=0x%X '%.30s'",lineNumber(),(const char*)expr);
     skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_operators);
     if (OpcNone != op)
@@ -1816,7 +1814,7 @@ ExpEvaluator::Opcode JsCode::getUnaryOperator(ParsePoint& expr)
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getUnaryOperator '%.30s'",(const char*)expr);
+    XDebug(this,DebugAll,"JsCode::getUnaryOperator line=0x%X '%.30s'",lineNumber(),(const char*)expr);
     skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_unaryOps);
     if (OpcNone != op)
@@ -1828,7 +1826,7 @@ ExpEvaluator::Opcode JsCode::getPostfixOperator(ParsePoint& expr, int precedence
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getPostfixOperator '%.30s'",(const char*)expr);
+    XDebug(this,DebugAll,"JsCode::getPostfixOperator line=0x%X '%.30s'",lineNumber(),(const char*)expr);
     if (skipComments(expr) == '[') {
 	// The Indexing operator has maximum priority!
 	// No need to check it.
@@ -1877,7 +1875,7 @@ const char* JsCode::getOperator(Opcode oper) const
 
 int JsCode::getPrecedence(ExpEvaluator::Opcode oper) const
 {
-    switch (oper) {
+    switch ((int)oper) {
 	case OpcEqIdentity:
 	case OpcNeIdentity:
 	    return 40;
@@ -2069,7 +2067,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
     JsRunner* sr = static_cast<JsRunner*>(context);
     if (sr && sr->tracing())
 	sr->tracePrep(oper);
-    switch ((JsOpcode)oper.opcode()) {
+    switch ((int)oper.opcode()) {
 	case OpcEqIdentity:
 	case OpcNeIdentity:
 	    {
@@ -2812,17 +2810,17 @@ bool JsCode::null() const
     return m_linked.null() && !m_opcodes.skipNull();
 }
 
-void JsCode::dump(String& res) const
+void JsCode::dump(String& res, bool lineNo) const
 {
     if (m_linked.null())
-	return ExpEvaluator::dump(res);
+	return ExpEvaluator::dump(res,lineNo);
     for (unsigned int i = 0; i < m_linked.length(); i++) {
 	const ExpOperation* o = static_cast<const ExpOperation*>(m_linked[i]);
 	if (!o)
 	    continue;
 	if (res)
 	    res << " ";
-	ExpEvaluator::dump(*o,res);
+	ExpEvaluator::dump(*o,res,lineNo);
     }
 }
 
@@ -3475,7 +3473,13 @@ bool JsParser::parse(const char* text, bool fragment, const char* file, int len)
     DDebug(DebugAll,"Simplified: %s",jsc->ExpEvaluator::dump().c_str());
     if (m_allowLink) {
 	jsc->link();
-	DDebug(DebugAll,"Linked: %s",jsc->ExpEvaluator::dump().c_str());
+#ifdef DEBUG
+#ifdef XDEBUG
+	Debug(DebugAll,"Linked: %s",jsc->ExpEvaluator::dump(true).c_str());
+#else
+	Debug(DebugAll,"Linked: %s",jsc->ExpEvaluator::dump(false).c_str());
+#endif
+#endif
     }
     jsc->trace(m_allowTrace);
     return true;

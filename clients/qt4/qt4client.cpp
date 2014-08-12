@@ -1605,8 +1605,8 @@ bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int
 	    break;
 	case QtWidget::ComboBox:
 	    if (atStart) {
-		for (unsigned int i = count; i >= 0; i--) {
-		    NamedString* ns = lines->getParam(i);
+		for (; count; count--) {
+		    NamedString* ns = lines->getParam(count - 1);
 		    if (ns)
 			w.combo()->insertItem(0,QtClient::setUtf8(ns->name()));
 		}
@@ -3713,6 +3713,7 @@ bool QtClient::setProperty(QObject* obj, const char* name, const String& value)
 	default:
 	    err = "unsupported type";
     }
+    YIGNORE(err);
     if (ok)
 	DDebug(ClientDriver::self(),DebugAll,"Set property %s=%s for object '%s'",
 	    name,value.c_str(),YQT_OBJECT_NAME(obj));

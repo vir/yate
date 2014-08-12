@@ -158,7 +158,6 @@ public:
 	{ return m_password; }
 
 private:
-    bool m_local;
     bool m_proxy;
     String m_name;
     String m_address;

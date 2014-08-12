@@ -394,7 +394,7 @@ void WaveSource::run()
 	    m_time = tpos = Time::now();
 	if (!r) {
 	    if (m_repeatPos >= 0) {
-		DDebug(&__plugin,DebugAll,"Autorepeating from offset %ld [%p]",
+		DDebug(&__plugin,DebugAll,"Autorepeating from offset " FMT64 " [%p]",
 		    m_repeatPos,this);
 		m_stream->seek(m_repeatPos);
 		m_data.assign(0,blen);

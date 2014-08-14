@@ -213,25 +213,6 @@ void SDPMedia::fmtp(NamedString* parameter)
     m_modified = true;
 }
 
-// Set or reset format parameter
-void SDPMedia::fmtp(const char* format, const char* parameter)
-{
-    if(parameter)
-	m_fmtps.setParam(format, parameter);
-    else
-	m_fmtps.clearParam(format);
-    m_modified = true;
-}
-
-// Set format parameter
-void SDPMedia::fmtp(NamedString* parameter)
-{
-    if(! parameter)
-	return;
-    m_fmtps.setParam(parameter);
-    m_modified = true;
-}
-
 void SDPMedia::crypto(const char* desc, bool remote)
 {
     String& sdes = remote ? m_rCrypto : m_lCrypto;

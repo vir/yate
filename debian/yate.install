@@ -2,18 +2,11 @@ debian/tmp/usr/bin/yate
 debian/tmp/usr/share/man/man8/yate.8
 
 ## scripts ##
-debian/tmp/usr/share/yate/scripts/banbrutes.php
-debian/tmp/usr/share/yate/scripts/libyate.php
-debian/tmp/usr/share/yate/scripts/libyateivr.php
-debian/tmp/usr/share/yate/scripts/libyatechan.php
-debian/tmp/usr/share/yate/scripts/libvoicemail.php
-debian/tmp/usr/share/yate/scripts/libyate.py
 debian/tmp/usr/share/yate/scripts/Yate.pm
-debian/tmp/usr/share/yate/scripts/leavemail.php
-debian/tmp/usr/share/yate/scripts/voicemail.php
-debian/tmp/usr/share/yate/scripts/route.php
-debian/tmp/usr/share/yate/scripts/queue_in.php
-debian/tmp/usr/share/yate/scripts/queue_out.php
+debian/tmp/usr/share/yate/scripts/*.php
+debian/tmp/usr/share/yate/scripts/*.py
+debian/tmp/usr/share/yate/scripts/*.js
+debian/tmp/usr/share/yate/scripts/*.sh
 
 ## server-only conf files ##
 debian/tmp/etc/yate/pbxassist.conf
@@ -67,6 +60,7 @@ debian/tmp/etc/yate/jbfeatures.conf
 debian/tmp/usr/lib/yate/jabber/jbfeatures.yate
 
 debian/tmp/etc/yate/ysnmpagent.conf
+debian/tmp/etc/yate/snmp_data.conf
 debian/tmp/usr/lib/yate/server/ysnmpagent.yate
 debian/tmp/usr/share/yate/data/snmp_mib.conf
 debian/tmp/usr/share/yate/data/NULL-TEAM-MIB.txt
@@ -91,4 +85,6 @@ debian/tmp/usr/lib/yate/server/eventlogs.yate
 
 debian/tmp/etc/yate/lksctp.conf
 debian/tmp/usr/lib/yate/server/lksctp.yate
+
+debian/tmp/usr/lib/libyategsm.so.*
 

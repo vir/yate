@@ -3,11 +3,5 @@ debian/tmp/usr/lib/libyatejabber.so
 debian/tmp/usr/lib/pkgconfig/yate.pc
 debian/tmp/usr/bin/yate-config
 debian/tmp/usr/share/man/man8/yate-config.8
-debian/tmp/usr/include/yate/yateclass.h
-debian/tmp/usr/include/yate/yatemime.h
-debian/tmp/usr/include/yate/yatengine.h
-debian/tmp/usr/include/yate/yatephone.h
-debian/tmp/usr/include/yate/yatecbase.h
-debian/tmp/usr/include/yate/yateversn.h
-debian/tmp/usr/include/yate/qt4client.h
+debian/tmp/usr/include/yate/*.h
 

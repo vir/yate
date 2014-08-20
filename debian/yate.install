@@ -60,7 +60,6 @@ debian/tmp/etc/yate/jbfeatures.conf
 debian/tmp/usr/lib/yate/jabber/jbfeatures.yate
 
 debian/tmp/etc/yate/ysnmpagent.conf
-debian/tmp/etc/yate/snmp_data.conf
 debian/tmp/usr/lib/yate/server/ysnmpagent.yate
 debian/tmp/usr/share/yate/data/snmp_mib.conf
 debian/tmp/usr/share/yate/data/NULL-TEAM-MIB.txt

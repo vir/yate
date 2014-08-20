@@ -1,3 +1,9 @@
+yate (5.4.1~vir2014082001) UNRELEASED; urgency=low
+
+  * Deps fixed
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Wed, 20 Aug 2014 13:04:40 +0400
+
 yate (5.4.1~vir2014081801) UNRELEASED; urgency=low
 
   * Fixed new files packaging (most notably, javascripts

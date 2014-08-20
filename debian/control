@@ -12,7 +12,8 @@ Homepage: http://yate.null.ro/
 Package: yate
 Architecture: any
 Suggests: yate-telhw, yate-pgsql 
-Depends: libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Depends: libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends},
+ libsctp1
 Description: The YATE project aims to be a fully featured software PBX.
  .
  This is version 3 or YATE.
@@ -33,7 +34,7 @@ Conflicts: yate (<< 3.0.0)
 Replaces: libyate (<< 3.0.0)
 Breaks: libyate (<< 3.0.0)
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, libspeex1, libgsm1
 Description: YATE shared library
 
 Package: yate-dev
@@ -52,7 +53,7 @@ Description: Qt4 software VoIP client, based on YATE
 Package: yate-alsa
 Architecture: any
 Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version})
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, libasound2
 Description: ALSA channel driver for YATE
 
 Package: yate-h323
@@ -68,12 +69,15 @@ Description: MySQL support for yate
 
 Package: yate-pgsql
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: yate (= ${binary:Version})
+Depends: libyate(= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends},
+ libpq5
 Description: Postgres support for yate
 
 Package: yate-telhw
 Architecture: any
-Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version})
+Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version}),
+ dahdi | zaptel
 Depends: libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: Telephony hardware support for yate server
  Also MGCP CA module.

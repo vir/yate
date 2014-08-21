@@ -62,6 +62,7 @@ static TokenDict dict_payloads[] = {
     { "mjpeg",        26 },
     { "h261",         31 },
     { "h263",         34 },
+    { "h263p",       107 },
     { "h264",         97 },
     { "vp8",         108 },
     { "vp9",         109 },

@@ -792,7 +792,7 @@ static void dumpTable(const ExpOperation& oper, String& str, const char* eol)
 	    {
 		while (++m_rows < row)
 		    append(0,false);
-		append(new String(val),false);
+		append(new String(val),(row <= 1));
 	    }
 	inline const String* getString(unsigned int row) const
 	    { return (row < m_rows) ? static_cast<const String*>(at(row)) : 0; }

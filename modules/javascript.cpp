@@ -615,6 +615,8 @@ public:
 	    params().addParam(new ExpFunction("queryNaptr"));
 	    params().addParam(new ExpFunction("querySrv"));
 	    params().addParam(new ExpFunction("queryTxt"));
+	    params().addParam(new ExpFunction("resolve"));
+	    params().addParam(new ExpFunction("local"));
 	}
     static void initialize(ScriptContext* context);
     void runQuery(ObjList& stack, const String& name, Resolver::Type type, GenObject* context);
@@ -3061,9 +3063,9 @@ void JsJSON::initialize(ScriptContext* context)
 
 bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
+    ObjList args;
     if (oper.name().startsWith("query")) {
 	String type = oper.name().substr(5);
-	ObjList args;
 	ExpOperation* arg = 0;
 	ExpOperation* async = 0;
 	int argc = extractArgs(stack,oper,context,args);
@@ -3093,6 +3095,27 @@ bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    }
 	    runQuery(stack,*arg,(Resolver::Type)qType,context);
 	}
+    }
+    else if ((oper.name() == YSTRING("resolve")) || (oper.name() == YSTRING("local"))) {
+	if (extractArgs(stack,oper,context,args) != 1)
+	    return false;
+	String tmp = static_cast<ExpOperation*>(args[0]);
+	if ((tmp[0] == '[') && (tmp[tmp.length() - 1] == ']'))
+	    tmp = tmp.substr(1,tmp.length() - 2);
+	SocketAddr rAddr;
+	ExpOperation* op = 0;
+	if (rAddr.host(tmp)) {
+	    if (oper.name() == YSTRING("resolve"))
+		op = new ExpOperation(rAddr.host(),"IP");
+	    else {
+		SocketAddr lAddr;
+		if (lAddr.local(rAddr))
+		    op = new ExpOperation(lAddr.host(),"IP");
+	    }
+	}
+	if (!op)
+	    op = new ExpWrapper(0,"IP");
+	ExpEvaluator::pushOne(stack,op);
     }
     else
 	return JsObject::runNative(stack,oper,context);

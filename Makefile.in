@@ -36,6 +36,8 @@ GENS := yateversn.h
 LIBS :=
 MAN8 := yate.8 yate-config.8
 DOCS := README COPYING ChangeLog
+DOCS_ILBC := LICENSE.txt
+DOCS_WEBRTC := LICENSE LICENSE_THIRD_PARTY PATENTS
 OBJS := main.o
 
 CLEANS = $(PROGS) $(SLIBS) $(LIBS) $(OBJS) yatepaths.h core
@@ -244,6 +246,12 @@ install-noconf: all
 	@mkdir -p "$(DESTDIR)$(docdir)/api/" && \
 	for i in $(DOCS) ; do \
 	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(docdir)/" ; \
+	done; \
+	for i in $(DOCS_ILBC) ; do \
+	    install -m 0644 @srcdir@/libs/ilbc/$$i "$(DESTDIR)$(docdir)/iLBC-$$i" ; \
+	done; \
+	for i in $(DOCS_WEBRTC) ; do \
+	    install -m 0644 @srcdir@/libs/miniwebrtc/$$i "$(DESTDIR)$(docdir)/WebRTC-$$i" ; \
 	done
 
 install-api: $(APIDOCS)

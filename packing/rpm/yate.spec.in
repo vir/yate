@@ -86,6 +86,10 @@ for small to large scale projects.
 %doc %{_defaultdocdir}/yate-%{version}/README
 %doc %{_defaultdocdir}/yate-%{version}/COPYING
 %doc %{_defaultdocdir}/yate-%{version}/ChangeLog
+%doc %{_defaultdocdir}/yate-%{version}/iLBC-LICENSE.txt
+%doc %{_defaultdocdir}/yate-%{version}/WebRTC-LICENSE
+%doc %{_defaultdocdir}/yate-%{version}/WebRTC-LICENSE_THIRD_PARTY
+%doc %{_defaultdocdir}/yate-%{version}/WebRTC-PATENTS
 %{_libdir}/libyate.so.*
 %{_libdir}/libyatescript.so.*
 %{_libdir}/libyatejabber.so.*

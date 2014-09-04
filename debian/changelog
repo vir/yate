@@ -1,4 +1,4 @@
-yate (5.4.1~svn5910) UNRELEASED; urgency=low
+yate (5.4.1~svn5911) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1264,8 +1264,10 @@ yate (5.4.1~svn5910) UNRELEASED; urgency=low
     methods in Javascript.
   * Updated to SVN revision 5910: + Allow substitutions in extmodule
     [general] scripts_dir, [scripts] and [execute].
+  * Updated to SVN revision 5911: + Install and package licenses for
+    iLBC and WebRTC code.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 29 Aug 2014 02:19:21 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 05 Sep 2014 02:19:20 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

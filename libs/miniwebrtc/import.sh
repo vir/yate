@@ -30,6 +30,9 @@ while IFS='	' read orig dest; do
     fi
 done
 )<<EOF
+LICENSE
+LICENSE_THIRD_PARTY
+PATENTS
 common_types.h
 typedefs.h
 modules/interface/

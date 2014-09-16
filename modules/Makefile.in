@@ -25,6 +25,9 @@ PGSQL_LIB := -lpq
 HAVE_MYSQL := @HAVE_MYSQL@
 MYSQL_INC := @MYSQL_INC@
 MYSQL_LIB := @MYSQL_LIB@
+HAVE_SQLITE := @HAVE_SQLITE@
+SQLITE_INC := @SQLITE_INC@
+SQLITE_LIB := @SQLITE_LIB@
 HAVE_SPANDSP := @HAVE_SPANDSP@
 SPANDSP_INC := @SPANDSP_INC@
 SPANDSP_LIB := @SPANDSP_LIB@
@@ -95,6 +98,10 @@ endif
 
 ifneq ($(HAVE_MYSQL),no)
 PROGS := $(PROGS) server/mysqldb.yate
+endif
+
+ifneq ($(HAVE_SQLITE),no)
+PROGS := $(PROGS) server/sqlitedb.yate
 endif
 
 ifneq (@HAVE_RESOLV@,no)
@@ -324,6 +331,9 @@ server/pgsqldb.yate: EXTERNLIBS = $(PGSQL_LIB)
 
 server/mysqldb.yate: EXTERNFLAGS = $(MYSQL_INC)
 server/mysqldb.yate: EXTERNLIBS = $(MYSQL_LIB)
+
+server/sqlitedb.yate: EXTERNFLAGS = $(SQLITE_INC)
+server/sqlitedb.yate: EXTERNLIBS = $(SQLITE_LIB)
 
 client/alsachan.yate: EXTERNLIBS = -lasound
 

@@ -428,6 +428,21 @@ that support database access will be able to use MySQL.
 %config(noreplace) %{_sysconfdir}/yate/mysqldb.conf
 
 
+%package sqlite
+Summary:	SQLite database driver for Yate
+Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
+Provides:	%{name}-database
+
+%description sqlite
+This package allows Yate to use SQLite database files. All modules
+that support database access will be able to use SQLite.
+
+%files sqlite
+%{_libdir}/yate/server/sqlitedb.yate
+%config(noreplace) %{_sysconfdir}/yate/sqlitedb.conf
+
+
 %if "%{no_gui}" != "1"
 
 %package client-common
@@ -622,6 +637,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Tue Apr 29 2014 Paul Chitescu <paulc@voip.null.ro>
+- Added SQLite module and subpackage
+
 * Mon Apr 23 2012 Paul Chitescu <paulc@voip.null.ro>
 - Added new support module gvoice
 

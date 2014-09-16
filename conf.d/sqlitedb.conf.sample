@@ -1,0 +1,87 @@
+[general]
+; This section is special - holds settings common to all connections
+
+; priority: int: Handler priority for the "database" message
+;priority=100
+
+; shared_cache: bool: Use the SQLite shared cache by default
+; Cache sharing can be enabled or disabled per database
+;shared_cache=no
+
+
+; Each other section in this file describes a database connection
+
+;[default]
+; The section name is used as the database connection name
+
+; autostart: bool: Automatically initiate the connection on startup
+;autostart=yes
+
+; timeout: int: Query timeout in milliseconds
+; Minimum value for timeout is 100
+;timeout=2000
+
+; retry: int: How many times to retry operations in case of contention
+; Valid values are 0..100
+;retry=5
+
+; database: string: SQLite database filename or descriptor
+; It can be a file name, a file: URI or a special value
+; An empty string creates a non-sharable temporary file database
+; The special value :memory: creates an in-memory non-sharable database
+; Engine runtime parameters like ${configpath} will be substituted
+;database=:memory:
+
+; initialize: string: Semicolon separated SQLite queries to run after opening the database
+; This can be used to apply various behavior changing PRAGMA or to populate a memory or
+;  temporary database (which is initially empty)
+; If the first character is a @ then this setting indicates the name of a file holding the
+;  SQLite queries. Engine runtime parameters will be substituted in the file name.
+;initialize=
+
+; poolsize: int: Number of connections to establish for this account
+; Pooling can be enabled only for shared cache databases
+; Minimum number of connections is 1
+;poolsize=1
+[general]
+; This section is special - holds settings common to all connections
+
+; priority: int: Handler priority for the "database" message
+;priority=100
+
+; shared_cache: bool: Use the SQLite shared cache by default
+; Cache sharing can be enabled or disabled per database
+;shared_cache=no
+
+
+; Each other section in this file describes a database connection
+
+;[default]
+; The section name is used as the database connection name
+
+; autostart: bool: Automatically initiate the connection on startup
+;autostart=yes
+
+; timeout: int: Query timeout in milliseconds
+; Minimum value for timeout is 100
+;timeout=2000
+
+; retry: int: How many times to retry operations in case of contention
+; Valid values are 0..100
+;retry=5
+
+; database: string: SQLite database filename or descriptor
+; It can be a file name, a file: URI or a special value
+; An empty string creates a non-sharable temporary file database
+; The special value :memory: creates an in-memory non-sharable database
+;database=:memory:
+
+; initialize: string: Semicolon separated SQLite queries to run after opening the database
+; This can be used to apply various behavior changing PRAGMA or to populate a memory or
+;  temporary database (which is initially empty)
+;initialize=
+
+; poolsize: int: Number of connections to establish for this account
+; Pooling can be enabled only for shared cache databases
+; Minimum number of connections is 1
+;poolsize=1

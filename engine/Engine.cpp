@@ -2107,6 +2107,7 @@ static void usage(bool client, FILE* f)
 "     o            Colorize output using ANSI codes\n"
 "     s            Abort on bugs even during shutdown\n"
 "     O            Attempt to debug object allocations\n"
+"     n            Do not timestamp debugging messages\n"
 "     t            Timestamp debugging messages relative to program start\n"
 "     e            Timestamp debugging messages based on EPOCH (1-1-1970 GMT)\n"
 "     f            Timestamp debugging in GMT format YYYYMMDDhhmmss.uuuuuu\n"
@@ -2156,7 +2157,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
     bool supervised = false;
 #endif
     bool client = (mode == Client);
-    Debugger::Formatting tstamp = Debugger::None;
+    Debugger::Formatting tstamp = Debugger::TextLSep;
     bool colorize = false;
     const char* pidfile = 0;
     const char* workdir = 0;
@@ -2355,6 +2356,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 				    break;
 				case 'O':
 				    GenObject::setObjCounting(true);
+				    break;
+				case 'n':
+				    tstamp = Debugger::None;
 				    break;
 				case 'e':
 				    tstamp = Debugger::Absolute;

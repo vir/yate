@@ -1,4 +1,4 @@
-yate (5.4.1~svn5911) UNRELEASED; urgency=low
+yate (5.4.1~svn5913) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1266,8 +1266,11 @@ yate (5.4.1~svn5911) UNRELEASED; urgency=low
     [general] scripts_dir, [scripts] and [execute].
   * Updated to SVN revision 5911: + Install and package licenses for
     iLBC and WebRTC code.
+  * Updated to SVN revision 5913: + Made -DZ the default log
+    timestamping, added -Dn to disable timestamps.  + Added SQLite
+    database support.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 05 Sep 2014 02:19:20 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 17 Sep 2014 02:19:21 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

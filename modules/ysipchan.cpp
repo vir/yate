@@ -1000,6 +1000,8 @@ private:
     void emitUpdate();
     bool emitPRACK(const SIPMessage* msg);
     bool startClientReInvite(NamedList& msg, bool rtpForward);
+    bool reInviteForward(SIPTransaction* t, MimeSdpBody* sdp, int invite);
+    bool reInviteProxy(SIPTransaction* t, MimeSdpBody* sdp, int invite);
     // Build the 'call.route' and NOTIFY messages needed by the transfer thread
     bool initTransfer(Message*& msg, SIPMessage*& sipNotify, const SIPMessage* sipRefer,
 	const MimeHeaderLine* refHdr, const URI& uri, const MimeHeaderLine* replaces);
@@ -1212,6 +1214,7 @@ static bool s_gen_async = true;
 static bool s_multi_ringing = false;
 static bool s_refresh_nosdp = true;
 static bool s_update_target = false;
+static bool s_update_verify = false;
 static bool s_preventive_bye = true;
 static bool s_ignoreVia = true;          // Ignore Via headers and send answer back to the source
 static bool s_sipt_isup = false;         // Control the application/isup body processing
@@ -6822,10 +6825,6 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
     if (!checkUser(t))
 	return;
     DDebug(this,DebugAll,"YateSIPConnection::reInvite(%p) [%p]",t,this);
-    m_dialog.adjustCSeq(t->initialMessage());
-    // Change party
-    if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
-	setPartyChanged(t->initialMessage()->getParty(),this);
     Lock mylock(driver());
     int invite = m_reInviting;
     if (m_tr || m_tr2 || (invite == ReinviteRequest) || (invite == ReinviteReceived)) {
@@ -6839,145 +6838,15 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
     }
     m_reInviting = ReinviteReceived;
     mylock.drop();
+    m_dialog.adjustCSeq(t->initialMessage());
+    // Change party
+    if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
+	setPartyChanged(t->initialMessage()->getParty(),this);
 
-    // hack: use a while instead of if so we can return or break out of it
     MimeSdpBody* sdp = getSdpBody(t->initialMessage()->body);
-    while (sdp) {
-	// for pass-trough RTP we need support from our peer
-	if (m_rtpForward) {
-	    String addr;
-	    String natAddr;
-	    ObjList* lst = plugin.parser().parse(sdp,addr,0,String::empty(),true);
-	    if (!lst)
-		break;
-	    // guess if the call comes from behind a NAT
-	    if (s_auto_nat && isNatBetween(addr,m_host)) {
-		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
-		    addr.c_str(),m_host.c_str());
-		natAddr = addr;
-		addr = m_host;
-	    }
-	    Debug(this,DebugAll,"reINVITE RTP addr '%s'",addr.c_str());
-
-	    Message msg("call.update");
-	    complete(msg);
-	    if (s_update_target) {
-		bool addrChg = false;
-		SIPParty* party = t->initialMessage()->getParty();
-		if (party) {
-		    String addr;
-		    party->appendAddr(addr,false);
-		    if (addr != m_address) {
-			msg.setParam("address",addr);
-			msg.addParam("address_old",m_address);
-			addrChg = true;
-		    }
-		}
-		msg.addParam("address_changed",String::boolText(addrChg));
-		bool contactChg = false;
-		const MimeHeaderLine* co = t->initialMessage()->getHeader("Contact");
-		if (co) {
-		    URI uri(*co);
-		    uri.parse();
-		    if (uri != m_uri) {
-			msg.addParam("contact",uri);
-			msg.addParam("contact_old",m_uri);
-			contactChg = true;
-		    }
-		}
-		msg.addParam("contact_changed",String::boolText(contactChg));
-	    }
-	    msg.addParam("operation","request");
-	    copySipHeaders(msg,*t->initialMessage());
-	    msg.addParam("rtp_forward","yes");
-	    msg.addParam("rtp_addr",addr);
-	    if (natAddr)
-		msg.addParam("rtp_nat_addr",natAddr);
-	    putMedia(msg,lst);
-	    TelEngine::destruct(lst);
-	    addSdpParams(msg,sdp);
-	    bool ok = Engine::dispatch(msg);
-	    Lock mylock2(driver());
-	    // if peer doesn't support updates fail the reINVITE
-	    if (!ok) {
-		t->setResponse(msg.getIntValue(YSTRING("error"),dict_errors,488),msg.getValue(YSTRING("reason")));
-		m_reInviting = invite;
-	    }
-	    else if (m_tr2) {
-		// ouch! this shouldn't have happened!
-		t->setResponse(491);
-		// media is uncertain now so drop the call
-		setReason("Internal Server Error",500);
-		mylock2.drop();
-		hangup();
-	    }
-	    else {
-		// we remember the request and leave it pending
-		t->ref();
-		t->setUserData(this);
-		m_tr2 = t;
-	    }
+    if (sdp) {
+	if (m_rtpForward ? reInviteForward(t,sdp,invite) : reInviteProxy(t,sdp,invite))
 	    return;
-	}
-	// refuse request if we had no media at all before
-	if (m_mediaStatus == MediaMissing)
-	    break;
-	String addr;
-	ObjList* lst = plugin.parser().parse(sdp,addr);
-	if (!lst)
-	    break;
-	// guess if the call comes from behind a NAT
-	if (s_auto_nat && isNatBetween(addr,m_host)) {
-	    Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
-		addr.c_str(),m_host.c_str());
-	    addr = m_host;
-	}
-
-	// TODO: check if we should accept the new media
-	// many implementation don't handle well failure so we should drop
-
-	bool audioChg = (getMedia(YSTRING("audio")) != 0);
-	if (m_rtpAddr != addr) {
-	    m_rtpAddr = addr;
-	    Debug(this,DebugAll,"New RTP addr '%s'",m_rtpAddr.c_str());
-	    // clear all data endpoints - createRtpSDP will build new ones
-	    if (!s_rtp_preserve)
-		setMedia(0);
-	}
-	setMedia(lst);
-	audioChg ^= (getMedia(YSTRING("audio")) != 0);
-
-	m_mediaStatus = MediaMissing;
-	// let RTP guess again the local interface or use the enforced address
-	setRtpLocalAddr(m_rtpLocalAddr);
-	addr = m_address;
-	String uri = m_uri;
-	updateTarget(t->initialMessage());
-	bool addrChg = (addr != m_address);
-	bool contactChg = (uri != m_uri);
-
-	SIPMessage* m = new SIPMessage(t->initialMessage(), 200);
-	MimeSdpBody* sdpNew = createRtpSDP(true);
-	m->setBody(sdpNew);
-	t->setResponse(m);
-	m->deref();
-	Message* msg = message("call.update");
-	msg->addParam("operation","notify");
-	msg->addParam("mandatory","false");
-	if (addrChg)
-	    msg->addParam("address_old",addr);
-	msg->addParam("address_changed",String::boolText(addrChg));
-	if (contactChg) {
-	    msg->addParam("contact",m_uri);
-	    msg->addParam("contact_old",uri);
-	}
-	msg->addParam("contact_changed",String::boolText(contactChg));
-	msg->addParam("audio_changed",String::boolText(audioChg));
-	msg->addParam("mute",String::boolText(MediaStarted != m_mediaStatus));
-	putMedia(*msg);
-	Engine::enqueue(msg);
-	m_reInviting = invite;
-	return;
     }
     m_reInviting = invite;
     if (s_refresh_nosdp && !sdp) {
@@ -6992,6 +6861,174 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	return;
     }
     t->setResponse(488);
+}
+
+bool YateSIPConnection::reInviteForward(SIPTransaction* t, MimeSdpBody* sdp, int invite)
+{
+    String addr;
+    String natAddr;
+    ObjList* lst = plugin.parser().parse(sdp,addr,0,String::empty(),true);
+    if (!lst)
+	return false;
+    // guess if the call comes from behind a NAT
+    if (s_auto_nat && isNatBetween(addr,m_host)) {
+	Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
+	    addr.c_str(),m_host.c_str());
+	natAddr = addr;
+	addr = m_host;
+    }
+    Debug(this,DebugAll,"reINVITE RTP addr '%s'",addr.c_str());
+
+    // for pass-trough RTP we need support from our peer
+    Message msg("call.update");
+    complete(msg);
+    if (s_update_target) {
+	bool addrChg = false;
+	SIPParty* party = t->initialMessage()->getParty();
+	if (party) {
+	    String addr;
+	    party->appendAddr(addr,false);
+	    if (addr != m_address) {
+		msg.setParam("address",addr);
+		msg.addParam("address_old",m_address);
+		addrChg = true;
+	    }
+	}
+	msg.addParam("address_changed",String::boolText(addrChg));
+	bool contactChg = false;
+	const MimeHeaderLine* co = t->initialMessage()->getHeader("Contact");
+	if (co) {
+	    URI uri(*co);
+	    uri.parse();
+	    if (uri != m_uri) {
+		msg.addParam("contact",uri);
+		msg.addParam("contact_old",m_uri);
+		contactChg = true;
+	    }
+	}
+	msg.addParam("contact_changed",String::boolText(contactChg));
+    }
+    msg.addParam("operation","request");
+    copySipHeaders(msg,*t->initialMessage());
+    msg.addParam("rtp_forward","yes");
+    msg.addParam("rtp_addr",addr);
+    if (natAddr)
+	msg.addParam("rtp_nat_addr",natAddr);
+    putMedia(msg,lst);
+    TelEngine::destruct(lst);
+    addSdpParams(msg,sdp);
+    bool ok = Engine::dispatch(msg);
+    Lock mylock(driver());
+    // if peer doesn't support updates fail the reINVITE
+    if (!ok) {
+	t->setResponse(msg.getIntValue(YSTRING("error"),dict_errors,488),msg.getValue(YSTRING("reason")));
+	m_reInviting = invite;
+    }
+    else if (m_tr2) {
+	// ouch! this shouldn't have happened!
+	t->setResponse(491);
+	// media is uncertain now so drop the call
+	setReason("Internal Server Error",500);
+	mylock.drop();
+	hangup();
+    }
+    else {
+	// we remember the request and leave it pending
+	t->ref();
+	t->setUserData(this);
+	m_tr2 = t;
+    }
+    return true;
+}
+
+bool YateSIPConnection::reInviteProxy(SIPTransaction* t, MimeSdpBody* sdp, int invite)
+{
+    // refuse request if we had no media at all before
+    if (m_mediaStatus == MediaMissing)
+	return false;
+    String addr;
+    String natAddr;
+    ObjList* lst = plugin.parser().parse(sdp,addr);
+    if (!lst)
+	return false;
+    // guess if the call comes from behind a NAT
+    if (s_auto_nat && isNatBetween(addr,m_host)) {
+	Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
+	    addr.c_str(),m_host.c_str());
+	natAddr = addr;
+	addr = m_host;
+    }
+    bool audioChg = (getMedia(YSTRING("audio")) != 0);
+    audioChg ^= ((*lst)[YSTRING("audio")] != 0);
+
+    Message ver("call.update");
+    if (s_update_verify) {
+	complete(ver);
+	ver.addParam("operation","verify");
+	ver.addParam("method",t->initialMessage()->method);
+	copySipHeaders(ver,*t->initialMessage());
+	ver.addParam("rtp_addr",addr);
+	if (natAddr)
+	    ver.addParam("rtp_nat_addr",natAddr);
+	ver.addParam("audio_changed",String::boolText(audioChg));
+	putMedia(ver,lst);
+	addSdpParams(ver,sdp);
+	if (!Engine::dispatch(ver) || (ver.retValue() == YSTRING("error")) || (ver.retValue() == "-")) {
+	    TelEngine::destruct(lst);
+
+	    SIPMessage* m = new SIPMessage(t->initialMessage(),
+		ver.getIntValue(YSTRING("error"),dict_errors,488),ver.getValue(YSTRING("reason")));
+	    copySipHeaders(*m,ver);
+	    t->setResponse(m);
+	    m->deref();
+	    m_reInviting = invite;
+	    return true;
+	}
+    }
+
+    if (m_rtpAddr != addr) {
+	m_rtpAddr = addr;
+	Debug(this,DebugAll,"New RTP addr '%s'",m_rtpAddr.c_str());
+	// clear all data endpoints - createRtpSDP will build new ones
+	if (!s_rtp_preserve)
+	    setMedia(0);
+    }
+    setMedia(lst);
+
+    m_mediaStatus = MediaMissing;
+    // let RTP guess again the local interface or use the enforced address
+    setRtpLocalAddr(m_rtpLocalAddr);
+    addr = m_address;
+    String uri = m_uri;
+    updateTarget(t->initialMessage());
+    bool addrChg = (addr != m_address);
+    bool contactChg = (uri != m_uri);
+
+    SIPMessage* m = new SIPMessage(t->initialMessage(), 200);
+    copySipHeaders(*m,ver);
+    MimeSdpBody* sdpNew = createRtpSDP(true);
+    m->setBody(sdpNew);
+    t->setResponse(m);
+    m->deref();
+
+    // notify peer about the changes
+    Message* msg = message("call.update");
+    msg->addParam("operation","notify");
+    msg->addParam("mandatory","false");
+    if (addrChg)
+	msg->addParam("address_old",addr);
+    msg->addParam("address_changed",String::boolText(addrChg));
+    if (contactChg) {
+	msg->addParam("contact",m_uri);
+	msg->addParam("contact_old",uri);
+    }
+    msg->addParam("contact_changed",String::boolText(contactChg));
+    msg->addParam("audio_changed",String::boolText(audioChg));
+    msg->addParam("mute",String::boolText(MediaStarted != m_mediaStatus));
+    putMedia(*msg);
+    Engine::enqueue(msg);
+    m_reInviting = invite;
+    return true;
 }
 
 bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
@@ -8799,6 +8836,7 @@ void SIPDriver::initialize()
     s_multi_ringing = s_cfg.getBoolValue("general","multi_ringing",false);
     s_refresh_nosdp = s_cfg.getBoolValue("general","refresh_nosdp",true);
     s_update_target = s_cfg.getBoolValue("general","update_target",false);
+    s_update_verify = s_cfg.getBoolValue("general","update_verify",false);
     s_preventive_bye = s_cfg.getBoolValue("general","preventive_bye",true);
     s_ignoreVia = s_cfg.getBoolValue("general","ignorevia",true);
     s_ipv6 = s_cfg.getBoolValue("general","ipv6_support",false);

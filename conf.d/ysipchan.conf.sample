@@ -247,6 +247,9 @@
 ; update_target: bool: Update dialog target from Contact in reINVITE
 ;update_target=disable
 
+; update_verify: bool: Use a message to verify if we should accept a reINVITE when proxying media
+;update_verify=disable
+
 ; preventive_bye: bool: If possible send a BYE besides CANCEL for unanswered calls
 ;preventive_bye=enable
 

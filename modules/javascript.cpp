@@ -115,7 +115,7 @@ private:
 class JsGlobal : public NamedString
 {
 public:
-    JsGlobal(const char* scriptName, const char* fileName, bool relPath = true);
+    JsGlobal(const char* scriptName, const char* fileName, bool relPath = true, bool fromCfg = true);
     virtual ~JsGlobal();
     bool fileChanged(const char* fileName) const;
     inline JsParser& parser()
@@ -125,7 +125,8 @@ public:
     bool runMain();
     static void markUnused();
     static void freeUnused();
-    static void initScript(const String& scriptName, const String& fileName);
+    static void reloadDynamic();
+    static bool initScript(const String& scriptName, const String& fileName, bool fromCfg = true);
     static bool reloadScript(const String& scriptName);
     inline static ObjList& globals()
 	{ return s_globals; }
@@ -135,6 +136,7 @@ private:
     JsParser m_jsCode;
     RefPointer<ScriptContext> m_context;
     bool m_inUse;
+    bool m_confLoaded;
     static ObjList s_globals;
 };
 
@@ -3807,9 +3809,9 @@ bool JsAssist::msgDisconnect(Message& msg, const String& reason)
 
 ObjList JsGlobal::s_globals;
 
-JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath)
+JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath, bool fromCfg)
     : NamedString(scriptName,fileName),
-      m_inUse(true)
+      m_inUse(true), m_confLoaded(fromCfg)
 {
     m_jsCode.basePath(s_basePath,s_libsPath);
     if (relPath)
@@ -3847,7 +3849,7 @@ void JsGlobal::markUnused()
 {
     ListIterator iter(s_globals);
     while (JsGlobal* script = static_cast<JsGlobal*>(iter.get()))
-	script->m_inUse = false;
+	script->m_inUse = !script->m_confLoaded;
 }
 
 void JsGlobal::freeUnused()
@@ -3863,13 +3865,33 @@ void JsGlobal::freeUnused()
 	}
 }
 
-void JsGlobal::initScript(const String& scriptName, const String& fileName)
+void JsGlobal::reloadDynamic()
+{
+    Lock mylock(__plugin);
+    ListIterator iter(s_globals);
+    while (JsGlobal* script = static_cast<JsGlobal*>(iter.get()))
+	if (!script->m_confLoaded) {
+	    String filename = *script;
+	    String name = script->name();
+	    mylock.drop();
+	    JsGlobal::initScript(name,filename,false);
+	    mylock.acquire(__plugin);
+	}
+}
+
+bool JsGlobal::initScript(const String& scriptName, const String& fileName, bool fromCfg)
 {
     if (fileName.null())
-	return;
+	return false;
     Lock mylock(__plugin);
     JsGlobal* script = static_cast<JsGlobal*>(s_globals[scriptName]);
     if (script) {
+	if (script->m_confLoaded != fromCfg) {
+	    Debug(&__plugin,DebugWarn,"Trying to load script '%s' %s, but it was already loaded %s",
+		    scriptName.c_str(),fromCfg ? "from configuration file" : "dynamically",
+		    fromCfg ? "dynamically" : "from configuration file");
+	    return false;
+	}
 	if (script->fileChanged(fileName)) {
 	    s_globals.remove(script,false);
 	    mylock.drop();
@@ -3878,13 +3900,14 @@ void JsGlobal::initScript(const String& scriptName, const String& fileName)
 	}
 	else {
 	    script->m_inUse = true;
-	    return;
+	    script->m_confLoaded = fromCfg;
+	    return true;
 	}
     }
-    script = new JsGlobal(scriptName,fileName);
+    script = new JsGlobal(scriptName,fileName,true,fromCfg);
     s_globals.append(script);
     mylock.drop();
-    script->runMain();
+    return script->runMain();
 }
 
 bool JsGlobal::reloadScript(const String& scriptName)
@@ -3898,11 +3921,12 @@ bool JsGlobal::reloadScript(const String& scriptName)
     String fileName = *script;
     if (fileName.null())
 	return false;
+    bool fromCfg = script->m_confLoaded;
     s_globals.remove(script,false);
     mylock.drop();
     TelEngine::destruct(script);
     mylock.acquire(__plugin);
-    script = new JsGlobal(scriptName,fileName,false);
+    script = new JsGlobal(scriptName,fileName,false,fromCfg);
     s_globals.append(script);
     mylock.drop();
     return script->runMain();
@@ -3926,10 +3950,11 @@ static const char* s_cmds[] = {
     "info",
     "eval",
     "reload",
+    "load",
     0
 };
 
-static const char* s_cmdsLine = "  javascript {info|eval[=context] instructions...|reload script}";
+static const char* s_cmdsLine = "  javascript {info|eval[=context] instructions...|reload script|load [script=]file}";
 
 
 JsModule::JsModule()
@@ -3997,6 +4022,47 @@ bool JsModule::commandExecute(String& retVal, const String& line)
 
     if (cmd.startSkip("eval") && cmd.trimSpaces())
 	return evalContext(retVal,cmd);
+
+    if (cmd.startSkip("load") && cmd.trimSpaces()) {
+	if (!cmd) {
+	    retVal << "Missing mandatory argument specifying which file to load\n\r";
+	    return true;
+	}
+	String name;
+	int pos = cmd.find('=');
+	if (pos > -1) {
+	    name = cmd.substr(0,pos);
+	    cmd = cmd.c_str() + pos + 1;
+	}
+	if (!cmd) {
+	    retVal << "Missing file name argument\n\r";
+	    return true;
+	}
+	if (cmd.endsWith("/")
+#ifdef _WINDOWS
+	    || cmd.endsWith("\\")
+#endif
+	) {
+	    retVal << "Missing file name. Cannot load directory '" << cmd <<"'\n\r";
+	    return true;
+	}
+
+	int extPos = cmd.rfind('.');
+	int sepPos = cmd.rfind('/');
+#ifdef _WINDOWS
+	int backPos = cmd.rfind('\\');
+	sepPos = sepPos > backPos ? sepPos : backPos;
+#endif
+	if (extPos < 0 || sepPos > extPos) { // for "dir.name/filename" cases
+	    extPos = cmd.length();
+	    cmd += ".js";
+	}
+	if (!name)
+	    name = cmd.substr(sepPos + 1,extPos - sepPos - 1);
+	if (!JsGlobal::initScript(name,cmd,false))
+	    retVal << "Failed to load script from file '" << cmd << "'\n\r";
+	return true;
+    }
 
     return false;
 }
@@ -4228,6 +4294,7 @@ void JsModule::initialize()
 	    }
 	}
     }
+    JsGlobal::reloadDynamic();
     JsGlobal::freeUnused();
 }
 

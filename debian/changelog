@@ -1,4 +1,4 @@
-yate (5.4.1~svn5915) UNRELEASED; urgency=low
+yate (5.4.1~svn5917) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1273,8 +1273,11 @@ yate (5.4.1~svn5915) UNRELEASED; urgency=low
     does not get enclosed in square brackets.
   * Updated to SVN revision 5915: + Added optional message to verify
     reINVITE in media proxying mode.
+  * Updated to SVN revision 5917: + Add function to the String API for
+    locating the last instance of a substring in a string.  + Add option
+    to dinamically load JS scripts through engine.command.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 20 Sep 2014 02:19:10 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Oct 2014 02:19:09 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

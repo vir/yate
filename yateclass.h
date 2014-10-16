@@ -2446,6 +2446,13 @@ public:
     int rfind(char what) const;
 
     /**
+     * Locate the last instance of a substring in the string
+     * @param what Substring to search for
+     * @return Offset of substring or -1 if not found
+     */
+    int rfind(const char* what) const;
+
+    /**
      * Checks if the string starts with a substring
      * @param what Substring to search for
      * @param wordBreak Check if a word boundary follows the substring

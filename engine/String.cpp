@@ -1050,6 +1050,14 @@ int String::rfind(char what) const
     return s ? s-m_string : -1;
 }
 
+int String::rfind(const char* what) const
+{
+    int ret = -1;
+    for (int pos = -1; (pos = find(what,pos + 1)) >= 0;)
+	ret = pos;
+    return ret;
+}
+
 bool String::startsWith(const char* what, bool wordBreak, bool caseInsensitive) const
 {
     if (!(m_string && what && *what))

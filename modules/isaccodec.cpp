@@ -80,6 +80,14 @@ extern "C" {
 // Channel adaptive: set it to 0 to use default
 #define ISAC_RATE 32000
 
+// Maximum number of concealed lost frames, can be 1 or 2
+#define ISAC_MAX_PLC 2
+
+#ifdef NO_ISAC_PLC
+#undef ISAC_MAX_PLC
+#define ISAC_MAX_PLC 1
+#endif
+
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -273,11 +281,11 @@ unsigned long iSACCodec::Consume(const DataBlock& data, unsigned long tStamp,
 #ifndef NO_ISAC_PLC
 	if (flags & DataMissed) {
 	    // guess how many frames were lost
-	    int lost = (tStamp - timeStamp()) / 480;
+	    int lost = (tStamp - timeStamp()) / m_encodeChunk;
 	    if (lost <= 0)
 		lost = 1;
-	    else if (lost > 2)
-		lost = 2;
+	    else if (lost > ISAC_MAX_PLC)
+		lost = ISAC_MAX_PLC;
 #ifdef ISAC_FIXED
 	    res = WebRtcIsacfix_DecodePlc(m_isac,out,lost);
 #else
@@ -409,8 +417,9 @@ bool iSACCodec::isacInit()
 	res = WebRtcIsac_DecoderInit(m_isac);
 	WebRtcIsac_SetDecSampRate(m_isac,sampleRate == 16000 ? kIsacWideband : kIsacSuperWideband);
 #endif
-	// Decode may return 480 or 960 samples
-	m_outData.assign(0,1920);
+	m_encodeChunk = (sampleRate == 16000) ? 480 : 960;
+	// Decode may return 480 or 960 samples except when doing PLC
+	m_outData.assign(0,m_encodeChunk * 2 * ISAC_MAX_PLC);
     }
     if (res == 0) {
 	if (m_encoding) {

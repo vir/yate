@@ -1,4 +1,4 @@
-yate (5.4.1~svn5917) UNRELEASED; urgency=low
+yate (5.4.1~svn5918) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1276,8 +1276,10 @@ yate (5.4.1~svn5917) UNRELEASED; urgency=low
   * Updated to SVN revision 5917: + Add function to the String API for
     locating the last instance of a substring in a string.  + Add option
     to dinamically load JS scripts through engine.command.
+  * Updated to SVN revision 5918: + Fixed PLC for the iSAC codec, caused
+    memory corruption and crashes.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Oct 2014 02:19:09 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 22 Oct 2014 02:19:09 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

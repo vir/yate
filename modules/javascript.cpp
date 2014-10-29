@@ -269,7 +269,6 @@ private:
 
 class JsMessage : public JsObject
 {
-    YCLASS(JsMessage,JsObject)
 public:
 
     inline JsMessage(Mutex* mtx)
@@ -306,6 +305,7 @@ public:
 		Engine::uninstallHook(hook);
 	    }
 	}
+    virtual void* getObject(const String& name) const;
     virtual NamedList* nativeParams() const
 	{ return m_message; }
     virtual void fillFieldNames(ObjList& names)
@@ -428,7 +428,6 @@ protected:
 
 class JsConfigFile : public JsObject
 {
-    YCLASS(JsConfigFile,JsObject)
 public:
     inline JsConfigFile(Mutex* mtx)
 	: JsObject("ConfigFile",mtx,true)
@@ -451,6 +450,7 @@ public:
 	    params().addParam(new ExpFunction("clearKey"));
 	    params().addParam(new ExpFunction("keys"));
 	}
+    virtual void* getObject(const String& name) const;
     virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
     static void initialize(ScriptContext* context);
     inline Configuration& config()
@@ -486,7 +486,6 @@ private:
 
 class JsXML : public JsObject
 {
-    YCLASS(JsXML,JsObject)
 public:
     inline JsXML(Mutex* mtx)
 	: JsObject("XML",mtx,true),
@@ -531,6 +530,7 @@ public:
 	    else
 		TelEngine::destruct(m_xml);
 	}
+    virtual void* getObject(const String& name) const;
     virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
     inline JsXML* owner()
 	{ return m_owner ? (JsXML*)m_owner : this; }
@@ -1528,6 +1528,14 @@ bool JsShared::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 }
 
 
+void* JsMessage::getObject(const String& name) const
+{
+    void* obj = (name == YATOM("JsMessage")) ? const_cast<JsMessage*>(this) : JsObject::getObject(name);
+    if (m_message && !obj)
+	obj = m_message->getObject(name);
+    return obj;
+}
+
 bool JsMessage::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(&__plugin,DebugAll,"JsMessage::runAssign '%s'='%s'",oper.name().c_str(),oper.c_str());
@@ -2086,6 +2094,7 @@ bool JsHandler::received(Message& msg)
     return ok;
 }
 
+
 void JsMessageQueue::received(Message& msg)
 {
     if (s_engineStop || !m_code)
@@ -2145,6 +2154,7 @@ bool JsMessageQueue::matchesFilters(const NamedList& filters)
     }
     return true;
 }
+
 
 bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
@@ -2244,6 +2254,14 @@ void JsFile::initialize(ScriptContext* context)
 	addObject(params,"File",new JsFile(mtx));
 }
 
+
+void* JsConfigFile::getObject(const String& name) const
+{
+    void* obj = (name == YATOM("JsConfigFile")) ? const_cast<JsConfigFile*>(this) : JsObject::getObject(name);
+    if (!obj)
+	obj = m_config.getObject(name);
+    return obj;
+}
 
 bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
@@ -2564,6 +2582,14 @@ bool JsHasher::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
     return true;
 }
 
+
+void* JsXML::getObject(const String& name) const
+{
+    void* obj = (name == YATOM("JsXML")) ? const_cast<JsXML*>(this) : JsObject::getObject(name);
+    if (m_xml && !obj)
+	obj = m_xml->getObject(name);
+    return obj;
+}
 
 bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {

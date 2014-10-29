@@ -2773,11 +2773,20 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("xmlText")) {
-	if (extractArgs(stack,oper,context,args))
+	if (extractArgs(stack,oper,context,args) > 1)
 	    return false;
 	if (m_xml) {
+	    int spaces = args[0] ? static_cast<ExpOperation*>(args[0])->number() : 0;
+	    const String* line = &String::empty();
+	    String indent;
+	    if (spaces > 0) {
+		static const String crlf = "\r\n";
+		line = &crlf;
+		indent.assign(' ',spaces);
+	    }
 	    ExpOperation* op = new ExpOperation("",m_xml->unprefixedTag());
-	    m_xml->toString(*op);
+	    m_xml->toString(*op,true,*line,indent);
+	    op->startSkip(*line,false);
 	    ExpEvaluator::pushOne(stack,op);
 	}
 	else

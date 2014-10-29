@@ -3038,7 +3038,6 @@ void JsJSON::stringify(const NamedString* ns, String& buf, int spaces, int inden
 
 String JsJSON::strEscape(const char* str)
 {
-{
     String s("\"");
     char c;
     while (str && (c = *str++)) {
@@ -3048,7 +3047,6 @@ String JsJSON::strEscape(const char* str)
     }
     s += "\"";
     return s;
-}
 }
 
 void JsJSON::initialize(ScriptContext* context)

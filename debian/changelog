@@ -1,4 +1,4 @@
-yate (5.4.1~svn5918) UNRELEASED; urgency=low
+yate (5.4.1~svn5921) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1278,8 +1278,12 @@ yate (5.4.1~svn5918) UNRELEASED; urgency=low
     to dinamically load JS scripts through engine.command.
   * Updated to SVN revision 5918: + Fixed PLC for the iSAC codec, caused
     memory corruption and crashes.
+  * Updated to SVN revision 5921: + Removed a harmless extra pair of
+    brackets.  + Added optional parameter to XML.xmlText() to indent
+    with spaces.  + Allow retrieving a pointer to native objects in JS
+    Message, ConfigFile and XML.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 22 Oct 2014 02:19:09 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 30 Oct 2014 01:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

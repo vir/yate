@@ -4532,11 +4532,13 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
 	    m.addParam("address",SocketAddr::appendTo(raddr,rport));
 	// a dialogless INVITE could create a new call
 	m.addParam("newcall",String::boolText((message->method == YSTRING("INVITE")) && !message->getParam("To","tag")));
+	URI domain;
 	const MimeHeaderLine* hl = message->getHeader("From");
-	if (hl) {
-	    URI from(*hl);
-	    m.addParam("domain",from.getHost());
-	}
+	if (hl)
+	    domain = *hl;
+	if (!domain.getHost())
+	    domain = uri;
+	m.addParam("domain",domain.getHost(),false);
 	hl = message->getHeader("User-Agent");
 	if (hl)
 	    m.addParam("device",*hl);
@@ -5241,8 +5243,16 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     }
 
     URI addr(*hl);
+    String num = addr.getUser();
+    if (!num) {
+	const MimeHeaderLine* to = message->getHeader("To");
+	if (to) {
+	    URI toUri(*to);
+	    num = toUri.getUser();
+	}
+    }
     Message msg("user.register");
-    msg.addParam("number",addr.getUser());
+    msg.addParam("number",num,false);
     msg.addParam("sip_uri",t->getURI());
     msg.addParam("sip_callid",t->getCallID());
     String tmp(message->getHeader("Expires"));
@@ -5270,7 +5280,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     }
 
     if (user.null())
-	user = addr.getUser();
+	user = num;
     msg.setParam(s_username,user);
     msg.setParam("driver","sip");
     String data(addr);

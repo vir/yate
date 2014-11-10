@@ -998,6 +998,19 @@ public:
     XmlElement* root(bool completed = false) const;
 
     /**
+     * Take the root element from the document
+     * @param completed True to retrieve the root element if is not completed
+     * @return Root pointer or 0 if not found or is not completed
+     */
+    inline XmlElement* takeRoot(bool completed = false)
+    {
+	XmlElement* r = root(completed);
+	if (r)
+	    m_root = 0;
+	return r;
+    }
+
+    /**
      * Reset this Xml Document
      */
     virtual void reset();

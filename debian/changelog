@@ -1,3 +1,12 @@
+yate (5.4.1~vir2014111101) UNRELEASED; urgency=low
+
+  * Merged upstream updates (SVN r5923):
+  * Better javascript
+  * SQLite database support
+  * iSAC codec fix
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Tue, 11 Nov 2014 13:45:09 +0300
+
 yate (5.4.1~vir2014082101) UNRELEASED; urgency=low
 
   * More video codecs support (VP8, VP9)

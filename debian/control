@@ -5,7 +5,8 @@ Maintainer: Vasily i. Redkin <vir@ctm.ru>
 Build-Depends: build-essential, debhelper (>= 7), pkg-config,
  libasound2-dev, libqt4-dev, libh323plus-dev|libopenh323-dev, libpt-dev,
  libpq-dev, libmysqlclient-dev, libssl-dev, zaptel-source|dahdi-source,
- libgsm1-dev, libspeex-dev, libspandsp-dev, doxygen, autoconf, libsctp-dev
+ libgsm1-dev, libspeex-dev, libspandsp-dev, doxygen, autoconf, libsctp-dev,
+ libsqlite3-dev
 Standards-Version: 3.7.3
 Homepage: http://yate.null.ro/
 
@@ -72,14 +73,22 @@ Package: yate-mysql
 Architecture: any
 Recommends: yate (= ${binary:Version})
 Depends: libyate(= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
-Description: MySQL support for yate
+Description: MySQL database support for yate
 
 Package: yate-pgsql
 Architecture: any
 Recommends: yate (= ${binary:Version})
 Depends: libyate(= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends},
  libpq5
-Description: Postgres support for yate
+Description: Postgres database support for yate
+
+Package: yate-sqlite
+Architecture: any
+Recommends: yate (= ${binary:Version})
+Depends: libyate(= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends},
+ libsqlite3-0
+Suggests: sqlite3
+Description: SQLite database support for yate
 
 Package: yate-telhw
 Architecture: any

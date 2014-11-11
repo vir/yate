@@ -23,6 +23,7 @@ using namespace TelEngine;
 
 static const String s_jabber("jabber");
 static const String s_xmpp("xmpp");
+static const String s_tel("tel");
 
 URI::URI()
     : m_parsed(false)
@@ -61,13 +62,17 @@ URI::URI(const char* proto, const char* user, const char* host, int port, const 
     }
     *this << m_proto << ":";
     if (user)
-	*this << m_user << "@";
-    if (m_host.find(':') >= 0)
-	*this << "[" << m_host << "]";
-    else
-	*this << m_host;
-    if (m_port > 0)
-	*this << ":" << m_port;
+	*this << m_user;
+    if (m_host) {
+	if (user)
+	    *this << "@";
+	if (m_host.find(':') >= 0)
+	    *this << "[" << m_host << "]";
+	else
+	    *this << m_host;
+	if (m_port > 0)
+	    *this << ":" << m_port;
+    }
     if (desc)
 	*this << ">";
     m_parsed = true;
@@ -116,7 +121,7 @@ void URI::parse() const
     // We parse:
     // [proto:][//][user@]hostname[:port][/path][;params][?params][&params]
 
-    static const Regexp r4("^\\([[:alpha:]][[:alnum:]]\\+:\\)\\?/\\?/\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\|[[][[:xdigit:].:]\\+[]]\\)\\(:[0-9]\\+\\)\\?");
+    static const Regexp r4("^\\([[:alpha:]][[:alnum:]]\\+:\\)\\?/\\?/\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._+-]\\+\\|[[][[:xdigit:].:]\\+[]]\\)\\(:[0-9]\\+\\)\\?");
     // hack: use while only so we could break out of it
     while (tmp.matches(r4)) {
 	int errptr = -1;
@@ -132,6 +137,10 @@ void URI::parse() const
 	m_host = tmp.matchString(3).uriUnescape(&errptr).toLower();
 	if (errptr >= 0)
 	    break;
+	if (m_user.null() && (s_tel == m_proto)) {
+	    m_user = m_host;
+	    m_host.clear();
+	}
 	if (m_host[0] == '[')
 	    m_host = m_host.substr(1,m_host.length()-2);
 	String p = tmp.matchString(4);

@@ -408,6 +408,7 @@ static void adjustPath(String& script)
     String tmp = Engine::sharedPath();
     tmp << Engine::pathSeparator() << "scripts";
     tmp = s_cfg.getValue("general","scripts_dir",tmp);
+    Engine::runParams().replaceParams(tmp);
     if (!tmp.endsWith(Engine::pathSeparator()))
 	tmp += Engine::pathSeparator();
     script = tmp + script;
@@ -2018,8 +2019,11 @@ void ExtModulePlugin::initialize()
 	    unsigned int len = sect->length();
 	    for (unsigned int i=0; i<len; i++) {
 		NamedString *n = sect->getParam(i);
-		if (n)
-		    ExtModReceiver::build(n->name(),*n);
+		if (n) {
+		    String arg = *n;
+		    Engine::runParams().replaceParams(arg);
+		    ExtModReceiver::build(n->name(),arg);
+		}
 	    }
 	}
 	// and now start additional programs
@@ -2028,8 +2032,14 @@ void ExtModulePlugin::initialize()
 	    unsigned int len = sect->length();
 	    for (unsigned int i=0; i<len; i++) {
 		NamedString *n = sect->getParam(i);
-		if (n)
-		    runProgram(n->name(),*n);
+		if (n) {
+		    String tmp = n->name();
+		    String arg = *n;
+		    adjustPath(tmp);
+		    Engine::runParams().replaceParams(arg);
+		    if (tmp)
+			runProgram(tmp,arg);
+		}
 	    }
 	}
     }

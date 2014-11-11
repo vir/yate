@@ -550,8 +550,15 @@ String& SocketAddr::appendAddr(String& buf, const String& addr, int family)
 	buf << addr;
 	return buf;
     }
-    if (family == Unknown && addr.find(':') >= 0)
-	family = IPv6;
+    if (family == Unknown) {
+	// Match ip::v6 or ::ffff:ip.v4 but not ip.v4:port
+	int col = addr.rfind(':');
+	if (col >= 0) {
+	    int dot = addr.find('.');
+	    if ((dot < 0) || (dot > col))
+		family = IPv6;
+	}
+    }
     if (family != IPv6)
 	buf << addr;
     else

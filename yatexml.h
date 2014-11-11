@@ -998,6 +998,19 @@ public:
     XmlElement* root(bool completed = false) const;
 
     /**
+     * Take the root element from the document
+     * @param completed True to retrieve the root element if is not completed
+     * @return Root pointer or 0 if not found or is not completed
+     */
+    inline XmlElement* takeRoot(bool completed = false)
+    {
+	XmlElement* r = root(completed);
+	if (r)
+	    m_root = 0;
+	return r;
+    }
+
+    /**
      * Reset this Xml Document
      */
     virtual void reset();
@@ -1317,6 +1330,19 @@ public:
 	{ return XmlFragment::findElement(getChildren().skipNull(),name,ns,noPrefix); }
 
     /**
+     * Find the first XmlElement child of this XmlElement
+     * @param name Name of the child
+     * @param ns Optional child namespace
+     * @param noPrefix True to compare the tag without namespace prefix, false to
+     *  include namespace prefix when comparing the given tag.
+     *  This parameter is ignored if name is 0 or ns is not 0
+     * @return The first child element meeting the requested conditions
+     */
+    inline XmlElement* findFirstChild(const String& name, const String* ns = 0,
+	bool noPrefix = true) const
+	{ return XmlFragment::findElement(getChildren().skipNull(),&name,ns,noPrefix); }
+
+    /**
      * Finds next XmlElement child of this XmlElement
      * @param prev Previous child
      * @param name Optional name of the child
@@ -1326,7 +1352,7 @@ public:
      *  This parameter is ignored if name is 0 or ns is not 0
      * @return The next found child if prev exists else the first
      */
-    inline XmlElement* findNextChild(XmlElement* prev = 0, const String* name = 0,
+    inline XmlElement* findNextChild(const XmlElement* prev = 0, const String* name = 0,
 	const String* ns = 0, bool noPrefix = true) const {
 	    if (!prev)
 		return findFirstChild(name,ns,noPrefix);

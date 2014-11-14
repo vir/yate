@@ -560,7 +560,7 @@ bool CdrHandler::received(Message &msg)
     if (!b) {
 	switch (type) {
 	    case CdrStart:
-		if(s_deferIncoming && msg.getValue(YSTRING("direction")) == YSTRING("incoming"))
+		if(s_deferIncoming && YSTRING("incoming") == msg.getValue(YSTRING("direction")))
 		    break;
 		/* else fall thrugh and create cdr */
 	    case CdrCall:

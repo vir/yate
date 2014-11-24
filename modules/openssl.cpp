@@ -152,7 +152,12 @@ public:
 class DesCtrCipher : public Cipher
 {
 public:
-    DesCtrCipher();
+    enum {
+	Des,
+	Des3_2,
+	Des3_3
+    };
+    DesCtrCipher(const char* type);
     virtual ~DesCtrCipher();
     virtual unsigned int blockSize() const
 	{ return DES_KEY_SZ; }
@@ -162,9 +167,15 @@ public:
     virtual bool initVector(const void* vect, unsigned int len, Direction dir);
     virtual bool encrypt(void* outData, unsigned int len, const void* inpData);
     virtual bool decrypt(void* outData, unsigned int len, const void* inpData);
+    static bool initKey(const void* key,DES_key_schedule& k);
 private:
-    DES_key_schedule m_key;
+    DES_key_schedule m_key1;
+    DES_key_schedule m_key2;
+    DES_key_schedule m_key3;
     unsigned char m_initVector[DES_KEY_SZ];
+    int m_type;
+    bool m_keysSet;
+    static const TokenDict s_des[];
 };
 #endif
 
@@ -205,6 +216,15 @@ protected:
 static int s_index = -1;
 static SSL_CTX* s_context = 0;
 static OpenSSL __plugin;
+
+#ifndef OPENSSL_NO_DES
+const TokenDict DesCtrCipher::s_des[] = {
+    { "des",    Des },
+    { "des3_2", Des3_2 },
+    { "des3_3", Des3_3 },
+    { 0, 0 }
+};
+#endif
 
 class SslHandler : public MessageHandler
 {
@@ -690,29 +710,66 @@ bool AesCfbCipher::decrypt(void* outData, unsigned int len, const void* inpData)
 #endif
 
 #ifndef OPENSSL_NO_DES
-DesCtrCipher::DesCtrCipher()
+DesCtrCipher::DesCtrCipher(const char* type)
+    : m_keysSet(false)
 {
-    DES_cblock nativeDESKey;
-    DES_random_key(&nativeDESKey);
-    DES_set_key_checked(&nativeDESKey,&m_key);
-    DDebug(&__plugin,DebugAll,"DesCtrCipher::DesCtrCipher() key=%p [%p]",&m_key,this);
+    m_type = lookup(type,s_des,Des);
+    DDebug(&__plugin,DebugAll,"DesCtrCipher::DesCtrCipher() key=%p [%p]",&m_key1,this);
 }
 
 DesCtrCipher::~DesCtrCipher()
 {
-    DDebug(&__plugin,DebugAll,"DesCtrCipher::~DesCtrCipher() key=%p [%p]",&m_key,this);
+    DDebug(&__plugin,DebugAll,"DesCtrCipher::~DesCtrCipher() key=%p [%p]",&m_key1,this);
+}
+
+bool DesCtrCipher::initKey(const void* key,DES_key_schedule& k)
+{
+    DES_cblock nativeKey;
+    ::memcpy(nativeKey,key,8);
+
+    DES_set_odd_parity(&nativeKey);
+    return 0 == DES_set_key_checked(&nativeKey,&k);
 }
 
 bool DesCtrCipher::setKey(const void* key, unsigned int len, Direction dir)
 {
+    m_keysSet = false;
     if (!(key && len))
 	return false;
-    DES_cblock nativeKey;
-    ::memcpy(nativeKey,key,len);
+    bool lenOk = false;
+    uint8_t* buf = (uint8_t*)key;
 
-    DES_set_odd_parity(&nativeKey);
-    int r = DES_set_key_checked(&nativeKey,&m_key);
-    return r== 0;
+    switch (m_type) {
+	case Des:
+	    if ((lenOk = (len == 8)))
+		m_keysSet = initKey(buf,m_key1);
+	    break;
+	case Des3_2:
+	    if ((lenOk = (len == 16)))
+		m_keysSet = initKey(buf,m_key1) && initKey(buf + 8,m_key2);
+	    break;
+	case Des3_3:
+	    if (len == 16) {
+		Debug(&__plugin,DebugAll,"Key length=%u too short for 3-key DES cipher, switching to 2-key DES cipher [%p]",
+			len,this);
+		m_keysSet = initKey(buf,m_key3);
+	    } else if (len == 24) {
+		m_keysSet = initKey(buf + 16,m_key3);
+	    } else // lenOk = false
+		break;
+	    lenOk = true;
+	    m_keysSet = m_keysSet && initKey(buf,m_key1) && initKey(buf + 8,m_key2);
+	    break;
+	default:
+	    Debug(&__plugin,DebugStub,"DesCtrCipher::setKey() Unknown cipher type '%s'",lookup(m_type,s_des));
+	    return m_keysSet;
+    }
+    if (!lenOk) {
+	Debug(&__plugin,DebugMild,"Invalid key length %u for cipher type %s",
+		len,lookup(m_type,s_des));
+	return false;
+    }
+    return m_keysSet;
 }
 
 bool DesCtrCipher::initVector(const void* vect, unsigned int len, Direction dir)
@@ -730,6 +787,10 @@ bool DesCtrCipher::initVector(const void* vect, unsigned int len, Direction dir)
 
 bool DesCtrCipher::encrypt(void* outData, unsigned int len, const void* inpData)
 {
+    if (!m_keysSet) {
+	Debug(&__plugin,DebugNote,"DesCtrCipher::encrypt() Please set the keys first! [%p]",this);
+	return false;
+    }
     DDebug(&__plugin,DebugAll,"DesCtrCipher::encrypt(%p, %d. %p) [%p]",outData,len,inpData,this);
     if (!(outData && len))
 	return false;
@@ -739,12 +800,30 @@ bool DesCtrCipher::encrypt(void* outData, unsigned int len, const void* inpData)
     }
     if (!inpData)
 	inpData = outData;
-    DES_ncbc_encrypt((const unsigned char*)inpData,(unsigned char*)outData,len,&m_key,(DES_cblock *)m_initVector,DES_ENCRYPT);
+
+    switch (m_type) {
+	case Des:
+	    DES_ncbc_encrypt((const unsigned char*)inpData,(unsigned char*)outData,len,&m_key1,(DES_cblock *)m_initVector,DES_ENCRYPT);
+	    break;
+	case Des3_2:
+	    DES_ede2_cbc_encrypt((const unsigned char*)inpData,(unsigned char*)outData,len,&m_key1,&m_key2,(DES_cblock *)m_initVector,DES_ENCRYPT);
+	    break;
+	case Des3_3:
+	    DES_ede3_cbc_encrypt((const unsigned char*)inpData,(unsigned char*)outData,len,&m_key1,&m_key2,&m_key3,(DES_cblock *)m_initVector,DES_ENCRYPT);
+	    break;
+	default:
+	    return false;
+    }
     return true;
 }
 
 bool DesCtrCipher::decrypt(void* outData, unsigned int len, const void* inpData)
 {
+    if (!m_keysSet) {
+	Debug(&__plugin,DebugNote,"DesCtrCipher::dencrypt() Please set the keys first! [%p]",this);
+	return false;
+    }
+
     DDebug(&__plugin,DebugAll,"DesCtrCipher::decrypt(%p, %d. %p) [%p]",outData,len,inpData,this);
     if (!(outData && len))
 	return false;
@@ -754,7 +833,19 @@ bool DesCtrCipher::decrypt(void* outData, unsigned int len, const void* inpData)
     }
     if (!inpData)
 	inpData = outData;
-    DES_ncbc_encrypt((const unsigned char*)inpData,(unsigned char*)outData,len,&m_key,(DES_cblock *)m_initVector,DES_DECRYPT);
+    switch (m_type) {
+	case Des:
+	    DES_ncbc_encrypt((const unsigned char*)inpData,(unsigned char*)outData,len,&m_key1,(DES_cblock *)m_initVector,DES_DECRYPT);
+	    break;
+	case Des3_2:
+	    DES_ede2_cbc_encrypt((const unsigned char*)inpData,(unsigned char*)outData,len,&m_key1,&m_key2,(DES_cblock *)m_initVector,DES_DECRYPT);
+	    break;
+	case Des3_3:
+	    DES_ede3_cbc_encrypt((const unsigned char*)inpData,(unsigned char*)outData,len,&m_key1,&m_key2,&m_key3,(DES_cblock *)m_initVector,DES_DECRYPT);
+	    break;
+	default:
+	    return false;
+    }
     return true;
 }
 #endif
@@ -782,7 +873,7 @@ bool CipherHandler::received(Message& msg)
 #ifndef OPENSSL_NO_DES
     if (*name == "des_cbc") {
 	if (ppCipher)
-	    *ppCipher = new DesCtrCipher();
+	    *ppCipher = new DesCtrCipher(msg.getValue(YSTRING("type"),"des"));
 	return true;
     }
 #endif

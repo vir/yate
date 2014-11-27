@@ -393,6 +393,7 @@ public:
     void processSltMessage(u_int16_t msgType, DataBlock& data);
     void buildHeader(DataBlock& data, bool management = false);
     void sendConnect(unsigned int status);
+    void sendAutoConnect();
     void sendControllerR(unsigned int linkState);
     void sendManagement(unsigned int message);
     void sendDisconnect();
@@ -1888,10 +1889,7 @@ void SLT::processSltMessage(u_int16_t msgType, DataBlock& data)
 	case Disconnect_C:
 	case Disconnect_I:
 	    setRemoteStatus(OutOfService);
-	    if (!m_autostart)
-		break;
-	    if (m_reqStatus == EmergencyAlignment || m_reqStatus == NormalAlignment)
-		sendConnect(m_reqStatus == NormalAlignment ? Normal : Emergency);
+	    sendAutoConnect();
 	    break;
 	case Link_State_Controller_C:
 	    setRemoteStatus(m_reqStatus);
@@ -1945,6 +1943,17 @@ void SLT::sendConnect(unsigned int status)
 	Debug(this,DebugInfo,"Sending %s",tmp.c_str());
     }
     m_session->sendData(data,true);
+}
+
+void SLT::sendAutoConnect()
+{
+    if (!m_autostart)
+	return;
+    if (m_reqStatus != EmergencyAlignment && m_reqStatus != NormalAlignment)
+	return;
+    if (m_autoEmergency)
+	setReqStatus(getEmergency() ? EmergencyAlignment : NormalAlignment);
+    sendConnect(m_reqStatus == EmergencyAlignment ? Emergency : Normal);
 }
 
 void SLT::sendControllerR(unsigned int linkState)
@@ -2073,10 +2082,7 @@ void SLT::configure(bool start)
     setStatus(Configured);
     SS7Layer2::notify();
     DDebug(this,DebugInfo,"requested status = %s",statusName(m_reqStatus,false));
-    if (!m_autostart)
-	return;
-    if (m_reqStatus == NormalAlignment || m_reqStatus == EmergencyAlignment)
-	sendConnect(m_reqStatus == NormalAlignment ? Normal : Emergency);
+    sendAutoConnect();
 }
 
 SignallingComponent* SLT::create(const String& type, NamedList& name)

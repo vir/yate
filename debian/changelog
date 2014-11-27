@@ -1,4 +1,4 @@
-yate (5.4.1~svn5924) UNRELEASED; urgency=low
+yate (5.4.1~svn5925) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1289,8 +1289,10 @@ yate (5.4.1~svn5924) UNRELEASED; urgency=low
     the document's ownership.
   * Updated to SVN revision 5924: + Added SQLite database module
     packaging  + Added support for 3des with two and three keys.
+  * Updated to SVN revision 5925: + Properly check normal/emergency
+    alignment when trying to align.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 25 Nov 2014 02:19:09 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 28 Nov 2014 02:19:09 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

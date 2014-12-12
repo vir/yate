@@ -1,3 +1,10 @@
+yate (5.4.1~vir2014121201) UNRELEASED; urgency=low
+
+  * Upstream fixes, crypto-related improvements.
+  * Multiple params setting for queued calls.
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Fri, 12 Dec 2014 10:06:50 +0300
+
 yate (5.4.1~vir2014111601) UNRELEASED; urgency=low
 
   * Fix for defer_incoming option :)

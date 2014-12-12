@@ -126,7 +126,7 @@ public:
     static void markUnused();
     static void freeUnused();
     static void reloadDynamic();
-    static bool initScript(const String& scriptName, const String& fileName, bool fromCfg = true);
+    static bool initScript(const String& scriptName, const String& fileName, bool relPath = true, bool fromCfg = true);
     static bool reloadScript(const String& scriptName);
     inline static ObjList& globals()
 	{ return s_globals; }
@@ -3907,12 +3907,12 @@ void JsGlobal::reloadDynamic()
 	    String filename = *script;
 	    String name = script->name();
 	    mylock.drop();
-	    JsGlobal::initScript(name,filename,false);
+	    JsGlobal::initScript(name,filename,false,false);
 	    mylock.acquire(__plugin);
 	}
 }
 
-bool JsGlobal::initScript(const String& scriptName, const String& fileName, bool fromCfg)
+bool JsGlobal::initScript(const String& scriptName, const String& fileName, bool relPath, bool fromCfg)
 {
     if (fileName.null())
 	return false;
@@ -3937,7 +3937,7 @@ bool JsGlobal::initScript(const String& scriptName, const String& fileName, bool
 	    return true;
 	}
     }
-    script = new JsGlobal(scriptName,fileName,true,fromCfg);
+    script = new JsGlobal(scriptName,fileName,relPath,fromCfg);
     s_globals.append(script);
     mylock.drop();
     return script->runMain();
@@ -4092,7 +4092,7 @@ bool JsModule::commandExecute(String& retVal, const String& line)
 	}
 	if (!name)
 	    name = cmd.substr(sepPos + 1,extPos - sepPos - 1);
-	if (!JsGlobal::initScript(name,cmd,false))
+	if (!JsGlobal::initScript(name,cmd,true,false))
 	    retVal << "Failed to load script from file '" << cmd << "'\n\r";
 	return true;
     }

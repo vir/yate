@@ -1,3 +1,9 @@
+yate (5.4.1~vir2014121401) UNRELEASED; urgency=low
+
+  * Added non-blocking mode for external scripts
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Sun, 14 Dec 2014 00:05:58 +0300
+
 yate (5.4.1~vir2014121201) UNRELEASED; urgency=low
 
   * Upstream fixes, crypto-related improvements.

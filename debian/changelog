@@ -1,4 +1,4 @@
-yate (5.4.1~svn5926) UNRELEASED; urgency=low
+yate (5.4.1~svn5928) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1293,8 +1293,11 @@ yate (5.4.1~svn5926) UNRELEASED; urgency=low
     alignment when trying to align.
   * Updated to SVN revision 5926: + Preserve correct path when reloading
     JS scripts that were loaded on demand.
+  * Updated to SVN revision 5928: + Make sure backslash is not used as
+    escape in shell reads.  + Fix bashish (automatic use of REPLY in
+    read) in shell scripts.  + Changed EPS PDN types to lowercase.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 10 Dec 2014 02:19:10 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 17 Dec 2014 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

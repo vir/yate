@@ -22,7 +22,7 @@
 # Generates 2 seconds of white noise
 # To test add a route to: external/play/noise.sh
 
-read
+read -r REPLY
 echo "$REPLY" | sed 's/^[^:]*:\([^:]*\):.*$/%%<message:\1:true:/;'
 
 echo "=================== noise ===================" >&2

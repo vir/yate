@@ -2959,9 +2959,9 @@ static const TokenDict s_epsReqType[] = {
 
 // reference: ETSI TS 124 301 V11.8.0, section 9.9.4.10 PDN type
 static const TokenDict s_epsPdnType[] = {
-    {"IPv4",    1},
-    {"IPv6",    2},
-    {"IPv4v6",  3},
+    {"ipv4",    1},
+    {"ipv6",    2},
+    {"ipv4v6",  3},
     {"unused",  4},
     {0, 0},
 };

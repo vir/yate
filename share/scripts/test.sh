@@ -51,7 +51,7 @@ echo "=============================================" >&2
 $0 --generator &
 
 echo "================= reporter ==================" >&2
-while read; do
+while read -r REPLY; do
     echo "Reporter: $REPLY" >&2
     case "$REPLY" in
 	%%\>message:*)

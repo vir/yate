@@ -26,7 +26,7 @@ prompt=""
 # put here a proper wave/play file to play before starting echoing
 # prompt="share/sounds/tone.wav"
 
-read
+read -r REPLY
 echo "$REPLY" | sed 's/^[^:]*:\([^:]*\):.*$/%%<message:\1:true:/;'
 
 if [ -n "$prompt" -a -f "$prompt" ]; then

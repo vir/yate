@@ -619,6 +619,8 @@ public:
 	    params().addParam(new ExpFunction("queryTxt"));
 	    params().addParam(new ExpFunction("resolve"));
 	    params().addParam(new ExpFunction("local"));
+	    params().addParam(new ExpFunction("pack"));
+	    params().addParam(new ExpFunction("unpack"));
 	}
     static void initialize(ScriptContext* context);
     void runQuery(ObjList& stack, const String& name, Resolver::Type type, GenObject* context);
@@ -3147,6 +3149,55 @@ bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 		if (lAddr.local(rAddr))
 		    op = new ExpOperation(lAddr.host(),"IP");
 	    }
+	}
+	if (!op)
+	    op = new ExpWrapper(0,"IP");
+	ExpEvaluator::pushOne(stack,op);
+    }
+    else if (oper.name().startsWith("pack")) {
+	char sep = '\0';
+	ExpOperation* op;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+		op = static_cast<ExpOperation*>(args[1]);
+		if (op->isBoolean())
+		    sep = op->valBoolean() ? ' ' : '\0';
+		else if ((op->length() == 1) && !op->isNumber())
+		    sep = op->at(0);
+		// fall through
+	    case 1:
+		op = 0;
+		{
+		    String tmp = static_cast<ExpOperation*>(args[0]);
+		    if ((tmp[0] == '[') && (tmp[tmp.length() - 1] == ']'))
+			tmp = tmp.substr(1,tmp.length() - 2);
+		    SocketAddr addr;
+		    if (addr.host(tmp)) {
+			DataBlock d;
+			addr.copyAddr(d);
+			if (d.length()) {
+			    tmp.hexify(d.data(),d.length(),sep);
+			    op = new ExpOperation(tmp,"IP");
+			}
+		    }
+		}
+		if (!op)
+		    op = new ExpWrapper(0,"IP");
+		ExpEvaluator::pushOne(stack,op);
+		break;
+	    default:
+		return false;
+	}
+    }
+    else if (oper.name().startsWith("unpack")) {
+	if (extractArgs(stack,oper,context,args) != 1)
+	    return false;
+	ExpOperation* op = 0;
+	DataBlock d;
+	if (d.unHexify(*static_cast<ExpOperation*>(args[0]))) {
+	    SocketAddr addr;
+	    if (addr.assign(d))
+		op = new ExpOperation(addr.host(),"IP");
 	}
 	if (!op)
 	    op = new ExpWrapper(0,"IP");

@@ -5772,6 +5772,13 @@ public:
     void assign(const struct sockaddr* addr, socklen_t len = 0);
 
     /**
+     * Assigns a new address
+     * @param addr Packed binary address to store
+     * @return True if the address family is supported
+     */
+    bool assign(const DataBlock& addr);
+
+    /**
      * Attempt to guess a local address that will be used to reach a remote one
      * @param remote Remote address to reach
      * @return True if guessed an address, false if failed
@@ -5879,6 +5886,13 @@ public:
      */
     inline bool isNullAddr() const
 	{ return isNullAddr(m_host,family()); }
+
+    /**
+     * Copy the host address to a buffer
+     * @param addr Buffer to put the packed address into
+     * @return Address family, Unknown on failure
+     */
+    int copyAddr(DataBlock& addr) const;
 
     /**
      * Check if an address family is supported by the library

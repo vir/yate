@@ -339,6 +339,48 @@ void SocketAddr::assign(const struct sockaddr* addr, socklen_t len)
     }
 }
 
+bool SocketAddr::assign(const DataBlock& addr)
+{
+    clear();
+    switch (addr.length()) {
+	case 4:
+	    if (assign(AF_INET)) {
+		::memcpy(&((struct sockaddr_in*)m_address)->sin_addr,addr.data(),addr.length());
+		stringify();
+		return true;
+	    }
+	    break;
+#ifdef AF_INET6
+	case 8: // IPv6 /64 prefix
+	case 16:
+	    if (assign(AF_INET6)) {
+		::memcpy(&((struct sockaddr_in6*)m_address)->sin6_addr,addr.data(),addr.length());
+		stringify();
+		return true;
+	    }
+	    break;
+#endif
+    }
+    return false;
+}
+
+int SocketAddr::copyAddr(DataBlock& addr) const
+{
+    if (!m_address)
+	return false;
+    switch (family()) {
+	case AF_INET:
+	    addr.assign(&((struct sockaddr_in*)m_address)->sin_addr,4);
+	    return IPv4;
+#ifdef AF_INET6
+	case AF_INET6:
+	    addr.assign(&((struct sockaddr_in6*)m_address)->sin6_addr,16);
+	    return IPv6;
+#endif
+    }
+    return Unknown;
+}
+
 bool SocketAddr::local(const SocketAddr& remote)
 {
     if (!remote.valid())

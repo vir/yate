@@ -87,6 +87,13 @@ int Configuration::getIntValue(const String& sect, const String& key, const Toke
     return s ? s->toInteger(tokens,defvalue) : defvalue;
 }
 
+int64_t Configuration::getInt64Value(const String& sect, const String& key, int64_t defvalue,
+    int64_t minvalue, int64_t maxvalue, bool clamp) const
+{
+    const NamedString *s = getKey(sect,key);
+    return s ? s->toInt64(defvalue,0,minvalue,maxvalue,clamp) : defvalue;
+}
+
 double Configuration::getDoubleValue(const String& sect, const String& key, double defvalue) const
 {
     const NamedString *s = getKey(sect,key);

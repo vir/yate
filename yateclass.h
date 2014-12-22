@@ -4626,6 +4626,19 @@ public:
     int getIntValue(const String& name, const TokenDict* tokens, int defvalue = 0) const;
 
     /**
+     * Retrieve the 64-bit numeric value of a parameter.
+     * @param name Name of parameter to locate
+     * @param defvalue Default value to return if not found
+     * @param minvalue Minimum value allowed for the parameter
+     * @param maxvalue Maximum value allowed for the parameter
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
+     * @return The number contained in the named parameter or the default
+     */
+    int64_t getInt64Value(const String& name, int64_t defvalue = 0, int64_t minvalue = LLONG_MIN,
+	int64_t maxvalue = LLONG_MAX, bool clamp = true) const;
+
+    /**
      * Retrieve the floating point value of a parameter.
      * @param name Name of parameter to locate
      * @param defvalue Default value to return if not found

@@ -313,6 +313,13 @@ int NamedList::getIntValue(const String& name, const TokenDict* tokens, int defv
     return s ? s->toInteger(tokens,defvalue) : defvalue;
 }
 
+int64_t NamedList::getInt64Value(const String& name, int64_t defvalue, int64_t minvalue,
+    int64_t maxvalue, bool clamp) const
+{
+    const NamedString *s = getParam(name);
+    return s ? s->toInt64(defvalue,0,minvalue,maxvalue,clamp) : defvalue;
+}
+
 double NamedList::getDoubleValue(const String& name, double defvalue) const
 {
     const NamedString *s = getParam(name);

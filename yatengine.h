@@ -129,6 +129,20 @@ public:
     int getIntValue(const String& sect, const String& key, const TokenDict* tokens, int defvalue = 0) const;
 
     /**
+     * Retrieve the 64-bit numeric value of a key in a section.
+     * @param sect Name of the section
+     * @param key Name of the key in section
+     * @param defvalue Default value to return if not found
+     * @param minvalue Minimum value allowed for the parameter
+     * @param maxvalue Maximum value allowed for the parameter
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
+     * @return The number contained in the key or the default
+     */
+    int64_t getInt64Value(const String& sect, const String& key, int64_t defvalue = 0,
+	int64_t minvalue = LLONG_MIN, int64_t maxvalue = LLONG_MAX, bool clamp = true) const;
+
+    /**
      * Retrieve the floating point value of a key in a section.
      * @param sect Name of the section
      * @param key Name of the key in section

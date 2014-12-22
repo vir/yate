@@ -1,4 +1,4 @@
-yate (5.4.1~svn5929) UNRELEASED; urgency=low
+yate (5.4.1~svn5930) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1298,8 +1298,11 @@ yate (5.4.1~svn5929) UNRELEASED; urgency=low
     read) in shell scripts.  + Changed EPS PDN types to lowercase.
   * Updated to SVN revision 5929: + Added engine and Javascript methods
     for packing and unpacking IP addresses.
+  * Updated to SVN revision 5930: + Added getIntValue and getBoolValue
+    to Javascript ConfigFile and ConfigSection.  + Added getInt64Value
+    to NamedList and Configuration classes.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 19 Dec 2014 02:19:11 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 23 Dec 2014 02:19:10 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

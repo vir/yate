@@ -446,6 +446,8 @@ public:
 	    params().addParam(new ExpFunction("sections"));
 	    params().addParam(new ExpFunction("getSection"));
 	    params().addParam(new ExpFunction("getValue"));
+	    params().addParam(new ExpFunction("getIntValue"));
+	    params().addParam(new ExpFunction("getBoolValue"));
 	    params().addParam(new ExpFunction("setValue"));
 	    params().addParam(new ExpFunction("clearKey"));
 	    params().addParam(new ExpFunction("keys"));
@@ -475,6 +477,8 @@ protected:
 	    XDebug(DebugAll,"JsConfigSection::JsConfigSection(%p,'%s') [%p]",owner,name,this);
 	    params().addParam(new ExpFunction("configFile"));
 	    params().addParam(new ExpFunction("getValue"));
+	    params().addParam(new ExpFunction("getIntValue"));
+	    params().addParam(new ExpFunction("getBoolValue"));
 	    params().addParam(new ExpFunction("setValue"));
 	    params().addParam(new ExpFunction("clearKey"));
 	    params().addParam(new ExpFunction("keys"));
@@ -2351,6 +2355,36 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 	else
 	    ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
     }
+    else if (oper.name() == YSTRING("getIntValue")) {
+	int64_t defVal = 0;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 3:
+		defVal = static_cast<ExpOperation*>(args[2])->valInteger();
+		// fall through
+	    case 2:
+		break;
+	    default:
+		return false;
+	}
+	const String& sect = *static_cast<ExpOperation*>(args[0]);
+	const String& name = *static_cast<ExpOperation*>(args[1]);
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.getInt64Value(sect,name,defVal),name));
+    }
+    else if (oper.name() == YSTRING("getBoolValue")) {
+	bool defVal = false;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 3:
+		defVal = static_cast<ExpOperation*>(args[2])->valBoolean();
+		// fall through
+	    case 2:
+		break;
+	    default:
+		return false;
+	}
+	const String& sect = *static_cast<ExpOperation*>(args[0]);
+	const String& name = *static_cast<ExpOperation*>(args[1]);
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.getBoolValue(sect,name,defVal),name));
+    }
     else if (oper.name() == YSTRING("setValue")) {
 	if (extractArgs(stack,oper,context,args) != 3)
 	    return false;
@@ -2445,6 +2479,40 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
 	}
 	else
 	    ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
+    }
+    else if (oper.name() == YSTRING("getIntValue")) {
+	int64_t val = 0;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+		val = static_cast<ExpOperation*>(args[1])->valInteger();
+		// fall through
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	NamedList* sect = m_owner->config().getSection(toString());
+	if (sect)
+	    val = sect->getInt64Value(name,val);
+	ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
+    }
+    else if (oper.name() == YSTRING("getBoolValue")) {
+	bool val = false;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+		val = static_cast<ExpOperation*>(args[1])->valBoolean();
+		// fall through
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	NamedList* sect = m_owner->config().getSection(toString());
+	if (sect)
+	    val = sect->getBoolValue(name,val);
+	ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
     }
     else if (oper.name() == YSTRING("setValue")) {
 	if (extractArgs(stack,oper,context,args) != 2)

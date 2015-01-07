@@ -1,4 +1,4 @@
-yate (5.4.1~svn5930) UNRELEASED; urgency=low
+yate (5.4.1~svn5931) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1301,8 +1301,12 @@ yate (5.4.1~svn5930) UNRELEASED; urgency=low
   * Updated to SVN revision 5930: + Added getIntValue and getBoolValue
     to Javascript ConfigFile and ConfigSection.  + Added getInt64Value
     to NamedList and Configuration classes.
+  * Updated to SVN revision 5931: + Added getInt64Value to NamedList and
+    Configuration classes.  + Limit the result of regexroute function
+    $(variables,list) so it doesn't crash when there is a very large
+    number of variables.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 23 Dec 2014 02:19:10 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 08 Jan 2015 02:19:10 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

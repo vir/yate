@@ -37,7 +37,7 @@ struct IEType {
 struct IEParam {
     GSML3Codec::Type type;
     GSML3Codec::XmlType xmlType;
-    uint16_t iei;
+    uint8_t iei;
     const String name;
     bool isOptional;
     uint16_t length; // in bits
@@ -4553,8 +4553,6 @@ static unsigned int decodeT(const GSML3Codec* codec, uint8_t proto, const uint8_
     if (!(codec && in && len && param))
 	return CONDITIONAL_ERROR(param,NoError,ParserErr);
     DDebug(codec->dbg(),DebugAll,"decodeT(in=%p,len=%u,out=%p,param=%s[%p]) [%p]",in,len,out,param->name.c_str(),param,codec->ptr());
-    if (param->length && (len * 8 < param->length))
-	return (param->isOptional ? GSML3Codec::IncorrectOptionalIE : GSML3Codec::IncorrectMandatoryIE);
     if (param->iei != *in)
 	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
 
@@ -4612,14 +4610,14 @@ static unsigned int decodeTV(const GSML3Codec* codec, uint8_t proto, const uint8
     if (!(codec && in && len && param))
 	return CONDITIONAL_ERROR(param,NoError,ParserErr);
     DDebug(codec->dbg(),DebugAll,"decodeTV(in=%p,len=%u,out=%p,param=%s[%p]) [%p]",in,len,out,param->name.c_str(),param,codec->ptr());
-    if (param->length && (len * 8 < param->length))
-	return (param->isOptional ? GSML3Codec::IncorrectOptionalIE : GSML3Codec::IncorrectMandatoryIE);
     if (param->type == GSML3Codec::TV && param->length == 8) {
 	if ((*in & 0xf0) != param->iei)
 	    return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
     }
     else if (param->iei != *in)
 	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
+    if (param->length && (len * 8 < param->length))
+	return (param->isOptional ? GSML3Codec::IncorrectOptionalIE : GSML3Codec::IncorrectMandatoryIE);
 
     switch (param->xmlType) {
 	case GSML3Codec::Skip:
@@ -4733,11 +4731,11 @@ static unsigned int decodeTLV_TLVE(const GSML3Codec* codec, uint8_t proto, const
     if (!(codec && in && len && param))
 	return CONDITIONAL_ERROR(param,NoError,ParserErr);
     DDebug(codec->dbg(),DebugAll,"decodeTLV_TLVE(in=%p,len=%u,out=%p,param=%s[%p]) [%p]",in,len,out,param->name.c_str(),param,codec->ptr());
+    if (param->iei != *in)
+	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
     bool ext = (param->type == GSML3Codec::TLVE);
     if (len < (ext ? 3 : 2))
 	return GSML3Codec::MsgTooShort;
-    if (param->iei != *in)
-	return CONDITIONAL_ERROR(param,NoError,MissingMandatoryIE);
 
     switch (param->xmlType) {
 	case GSML3Codec::Skip:

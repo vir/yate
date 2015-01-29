@@ -538,6 +538,7 @@ T38Terminal::T38Terminal(const char *file, const char *ident, bool sender, bool 
 T38Terminal::~T38Terminal()
 {
     Debug(this,DebugAll,"T38Terminal::~T38Terminal() [%p]",this);
+    t38_terminal_release(&m_t38);
 }
 
 // Run the terminal

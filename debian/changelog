@@ -1,4 +1,4 @@
-yate (5.4.1~svn5933) UNRELEASED; urgency=low
+yate (5.4.1~svn5934) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1313,8 +1313,13 @@ yate (5.4.1~svn5933) UNRELEASED; urgency=low
     + Make sure the spandsp API supports t38_terminal_release().  +
     Properly release the file resources at the end of a T.38 fax
     transfer.
+  * Updated to SVN revision 5934: + Properly release the file resources
+    at the end of a T.38 fax transfer.  + Avoids unloading and reloading
+    of the script at YATE reinit/javascript reload even if the script
+    didn't change.  + Do not keep reajusting the relative path of a
+    dinamically loaded script.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 30 Jan 2015 02:19:10 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 31 Jan 2015 02:19:10 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

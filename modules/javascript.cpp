@@ -122,6 +122,8 @@ public:
 	{ return m_jsCode; }
     inline ScriptContext* context()
 	{ return m_context; }
+    inline const String& fileName()
+	{ return m_file; }
     bool runMain();
     static void markUnused();
     static void freeUnused();
@@ -137,6 +139,7 @@ private:
     RefPointer<ScriptContext> m_context;
     bool m_inUse;
     bool m_confLoaded;
+    String m_file;
     static ObjList s_globals;
 };
 
@@ -3963,7 +3966,7 @@ ObjList JsGlobal::s_globals;
 
 JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath, bool fromCfg)
     : NamedString(scriptName,fileName),
-      m_inUse(true), m_confLoaded(fromCfg)
+      m_inUse(true), m_confLoaded(fromCfg), m_file(fileName)
 {
     m_jsCode.basePath(s_basePath,s_libsPath);
     if (relPath)
@@ -4023,10 +4026,10 @@ void JsGlobal::reloadDynamic()
     ListIterator iter(s_globals);
     while (JsGlobal* script = static_cast<JsGlobal*>(iter.get()))
 	if (!script->m_confLoaded) {
-	    String filename = *script;
+	    String filename = script->fileName();
 	    String name = script->name();
 	    mylock.drop();
-	    JsGlobal::initScript(name,filename,false,false);
+	    JsGlobal::initScript(name,filename,true,false);
 	    mylock.acquire(__plugin);
 	}
 }
@@ -4035,6 +4038,8 @@ bool JsGlobal::initScript(const String& scriptName, const String& fileName, bool
 {
     if (fileName.null())
 	return false;
+    DDebug(&__plugin,DebugInfo,"Initialize %s script '%s' from %s file '%s'",(fromCfg ? "configured" : "dynamically loaded"),
+               scriptName.c_str(),(relPath ? "relative" : "absolute"),fileName.c_str());
     Lock mylock(__plugin);
     JsGlobal* script = static_cast<JsGlobal*>(s_globals[scriptName]);
     if (script) {

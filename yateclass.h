@@ -4230,6 +4230,16 @@ public:
     virtual unsigned int hashLength() const
 	{ return 20; }
 
+    /**
+     * NIST FIPS 186-2 change notice 1 Pseudo Random Function.
+     * Uses a b=160 bits SHA1 based G(t,c) function with no XSEEDj
+     * @param out Block to fill with pseudo-random data
+     * @param seed Data to use as RNG seed, must be 1 to 64 octets long
+     * @param len Desired output length in octets, must be 1 to 512
+     * @return True on success, false on invalid lengths
+     */
+    static bool fips186prf(DataBlock& out, const DataBlock& seed, unsigned int len);
+
 protected:
     bool updateInternal(const void* buf, unsigned int len);
 

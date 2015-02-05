@@ -30,6 +30,7 @@
 
 #if (defined(WORDS_BIGENDIAN) || defined(BIGENDIAN))
 #define be32_to_cpu(x) (x) /* Nothing */
+#define cpu_to_be32(x) (x)
 #else
 
 static inline u_int32_t be32_to_cpu(u_int32_t x)
@@ -37,6 +38,7 @@ static inline u_int32_t be32_to_cpu(u_int32_t x)
     return ((x & 0xff000000) >> 24) | ((x & 0xff0000) >> 8) | ((x & 0xff00) << 8) | ((x & 0xff) << 24);
 }
 
+#define cpu_to_be32(x) be32_to_cpu(x)
 #endif
 
 #define SHA1_DIGEST_SIZE	20
@@ -285,6 +287,46 @@ const unsigned char* SHA1::rawDigest()
 {
     finalize();
     return m_bin;
+}
+
+// NIST FIPS 186-2 change notice 1 PRF with 160 bit SHA1 function G(t,c)
+bool SHA1::fips186prf(DataBlock& out, const DataBlock& seed, unsigned int len)
+{
+    unsigned int l = seed.length();
+    out.clear();
+    if ((len == 0) || (len > 512) || (l == 0) || (l > 64))
+	return false;
+    sha1_ctx ctx;
+    sha1_init(&ctx);
+    memcpy(ctx.buffer,seed.data(),l);
+    if (l < 64)
+	memset(ctx.buffer + l, 0, 64 - l);
+    out.assign(0,len);
+    uint8_t* ptr = (uint8_t*)out.data();
+    while (len) {
+	u_int32_t w[5];
+	memcpy(w,ctx.state,20);
+	sha1_transform(w,ctx.buffer);
+	w[0] = cpu_to_be32(w[0]);
+	w[1] = cpu_to_be32(w[1]);
+	w[2] = cpu_to_be32(w[2]);
+	w[3] = cpu_to_be32(w[3]);
+	w[4] = cpu_to_be32(w[4]);
+	if (len <= 20) {
+	    memcpy(ptr,w,len);
+	    break;
+	}
+	memcpy(ptr,&w,20);
+	unsigned int cy = 1;
+	for (int i = 19; i >= 0; i--) {
+	    cy += ctx.buffer[i] + (unsigned int)ptr[i];
+	    ctx.buffer[i] = (uint8_t)cy;
+	    cy >>= 8;
+	}
+	ptr += 20;
+	len -= 20;
+    }
+    return true;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

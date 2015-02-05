@@ -583,6 +583,10 @@ public:
 		m_hasher = 0;
 	    }
 	}
+    virtual void initConstructor(JsFunction* construct)
+	{
+	    construct->params().addParam(new ExpFunction("fips186prf"));
+	}
     virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
     static void initialize(ScriptContext* context);
 protected:
@@ -2649,6 +2653,27 @@ bool JsHasher::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	if (!m_hasher || oper.number())
 	    return false;
 	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_hasher->hmacBlockSize()));
+    }
+    else if (oper.name() == YSTRING("fips186prf")) {
+	ObjList args;
+	ExpOperation* opSeed = 0;
+	ExpOperation* opLen = 0;
+	ExpOperation* opSep = 0;
+	if (!extractStackArgs(2,this,stack,oper,context,args,&opSeed,&opLen,&opSep))
+	    return false;
+	DataBlock seed, out;
+	seed.unHexify(*opSeed);
+	SHA1::fips186prf(out,seed,opLen->valInteger());
+	if (out.data()) {
+	    String tmp;
+	    char sep = '\0';
+	    if (opSep && !(JsParser::isNull(*opSep) || opSep->isBoolean() || opSep->isNumber()))
+		sep = opSep->at(0);
+	    tmp.hexify(out.data(),out.length(),sep);
+	    ExpEvaluator::pushOne(stack,new ExpOperation(tmp,"hex"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else
 	return JsObject::runNative(stack,oper,context);

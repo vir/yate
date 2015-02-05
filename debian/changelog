@@ -1,4 +1,4 @@
-yate (5.4.1~svn5935) UNRELEASED; urgency=low
+yate (5.4.1~svn5936) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1321,8 +1321,10 @@ yate (5.4.1~svn5935) UNRELEASED; urgency=low
   * Updated to SVN revision 5935: + Do not keep reajusting the relative
     path of a dinamically loaded script.  + Fixed typo in encoder input
     saturation.
+  * Updated to SVN revision 5936: + Added NIST FIPS 186-2 change notice
+    1 Pseudo Random Function with 160 bits SHA-1.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 03 Feb 2015 02:19:10 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 06 Feb 2015 02:19:11 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

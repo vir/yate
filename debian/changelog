@@ -1,3 +1,10 @@
+yate (5.4.1~vir2015020901) UNRELEASED; urgency=medium
+
+  * Merged upstream updates (SVN r5936)
+  * Fixed libyatescript.so symlink in yate-dev package
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Mon, 09 Feb 2015 23:29:50 +0300
+
 yate (5.4.1~vir2014121401) UNRELEASED; urgency=low
 
   * Added non-blocking mode for external scripts

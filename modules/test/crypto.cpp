@@ -99,6 +99,13 @@ void TestCrypto::initialize()
     sha256.update(" the lazy dog");
     sha256.hmacFinal(pad);
     report("sha256-hmac-5",sha256.hexDigest(),"adea30df7e096340a0532da97d7cd62919cbfb41075d3597fd61b78f679c2a40");
+
+    DataBlock seed, out;
+    seed.unHexify("bd029bbe7f51960bcf9edb2b61f06f0feb5a38b6");
+    SHA1::fips186prf(out,seed,40);
+    String str;
+    str.hexify(out.data(),out.length());
+    report("fips-186-prf",str,"2070b3223dba372fde1c0ffc7b2e3b498b2606143c6c18bacb0f6c55babb13788e20d737a3275116");
 }
 
 INIT_PLUGIN(TestCrypto);

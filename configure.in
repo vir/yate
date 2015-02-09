@@ -1144,6 +1144,7 @@ t30_set_tx_ident(fax_get_t30_state(&fax_state),"xyz");
 fax_set_transmit_on_idle(&fax_state,1);
 t38_terminal_init(&t38_t_state,TRUE,NULL,NULL);
 t38_gateway_init(&t38_g_state,NULL,NULL);
+t38_terminal_release(&t38_t_state);
 ],
 HAVE_SPANDSP="yes"
 )
@@ -1170,6 +1171,7 @@ t30_set_tx_ident(fax_get_t30_state(&fax_state),"xyz");
 fax_set_transmit_on_idle(&fax_state,1);
 t38_terminal_init(&t38_t_state,TRUE,NULL,NULL);
 t38_gateway_init(&t38_g_state,NULL,NULL);
+t38_terminal_release(&t38_t_state);
 ],
 HAVE_SPANDSP="yes"
 )
@@ -1197,6 +1199,7 @@ t30_set_tx_ident(fax_get_t30_state(&fax_state),"xyz");
 fax_set_transmit_on_idle(&fax_state,1);
 t38_terminal_init(&t38_t_state,TRUE,NULL,NULL);
 t38_gateway_init(&t38_g_state,NULL,NULL);
+t38_terminal_release(&t38_t_state);
 ],
 HAVE_SPANDSP="yes"
 )

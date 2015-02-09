@@ -22,7 +22,7 @@
 # Plays sound using the "play" program (from the sox package)
 # To test add a route to: external/record/play.sh
 
-read
+read -r REPLY
 echo "$REPLY" | sed 's/^[^:]*:\([^:]*\):.*$/%%<message:\1:true:/;'
 
 echo "=================== play ====================" >&2

@@ -29,6 +29,7 @@ namespace { // anonymous
 
 #define DEFAULT_RULE "^\\(false\\|no\\|off\\|disable\\|f\\|0*\\)$^"
 #define BLOCK_STACK 10
+#define MAX_VAR_LEN 8100
 
 static Configuration s_cfg;
 static const char* s_trackName = 0;
@@ -407,8 +408,14 @@ static void evalFunc(String& str, Message& msg)
 		if (par.null())
 		    par = ",";
 		str.clear();
-		for (const ObjList* l = s_vars.paramList()->skipNull(); l; l = l->skipNext())
+		for (const ObjList* l = s_vars.paramList()->skipNull(); l; l = l->skipNext()) {
+		    if (str.length() > MAX_VAR_LEN) {
+			Debug("RegexRoute",DebugWarn,"Truncating output of $(variables,list)");
+			str.append("...",par);
+			break;
+		    }
 		    str.append(static_cast<const NamedString*>(l->get())->name(),par);
+		}
 	    }
 	    else
 		str = !!s_vars.getParam(par);

@@ -122,6 +122,8 @@ public:
 	{ return m_jsCode; }
     inline ScriptContext* context()
 	{ return m_context; }
+    inline const String& fileName()
+	{ return m_file; }
     bool runMain();
     static void markUnused();
     static void freeUnused();
@@ -137,6 +139,7 @@ private:
     RefPointer<ScriptContext> m_context;
     bool m_inUse;
     bool m_confLoaded;
+    String m_file;
     static ObjList s_globals;
 };
 
@@ -446,6 +449,8 @@ public:
 	    params().addParam(new ExpFunction("sections"));
 	    params().addParam(new ExpFunction("getSection"));
 	    params().addParam(new ExpFunction("getValue"));
+	    params().addParam(new ExpFunction("getIntValue"));
+	    params().addParam(new ExpFunction("getBoolValue"));
 	    params().addParam(new ExpFunction("setValue"));
 	    params().addParam(new ExpFunction("clearKey"));
 	    params().addParam(new ExpFunction("keys"));
@@ -475,6 +480,8 @@ protected:
 	    XDebug(DebugAll,"JsConfigSection::JsConfigSection(%p,'%s') [%p]",owner,name,this);
 	    params().addParam(new ExpFunction("configFile"));
 	    params().addParam(new ExpFunction("getValue"));
+	    params().addParam(new ExpFunction("getIntValue"));
+	    params().addParam(new ExpFunction("getBoolValue"));
 	    params().addParam(new ExpFunction("setValue"));
 	    params().addParam(new ExpFunction("clearKey"));
 	    params().addParam(new ExpFunction("keys"));
@@ -576,6 +583,10 @@ public:
 		m_hasher = 0;
 	    }
 	}
+    virtual void initConstructor(JsFunction* construct)
+	{
+	    construct->params().addParam(new ExpFunction("fips186prf"));
+	}
     virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
     static void initialize(ScriptContext* context);
 protected:
@@ -619,6 +630,8 @@ public:
 	    params().addParam(new ExpFunction("queryTxt"));
 	    params().addParam(new ExpFunction("resolve"));
 	    params().addParam(new ExpFunction("local"));
+	    params().addParam(new ExpFunction("pack"));
+	    params().addParam(new ExpFunction("unpack"));
 	}
     static void initialize(ScriptContext* context);
     void runQuery(ObjList& stack, const String& name, Resolver::Type type, GenObject* context);
@@ -2349,6 +2362,36 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 	else
 	    ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
     }
+    else if (oper.name() == YSTRING("getIntValue")) {
+	int64_t defVal = 0;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 3:
+		defVal = static_cast<ExpOperation*>(args[2])->valInteger();
+		// fall through
+	    case 2:
+		break;
+	    default:
+		return false;
+	}
+	const String& sect = *static_cast<ExpOperation*>(args[0]);
+	const String& name = *static_cast<ExpOperation*>(args[1]);
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.getInt64Value(sect,name,defVal),name));
+    }
+    else if (oper.name() == YSTRING("getBoolValue")) {
+	bool defVal = false;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 3:
+		defVal = static_cast<ExpOperation*>(args[2])->valBoolean();
+		// fall through
+	    case 2:
+		break;
+	    default:
+		return false;
+	}
+	const String& sect = *static_cast<ExpOperation*>(args[0]);
+	const String& name = *static_cast<ExpOperation*>(args[1]);
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.getBoolValue(sect,name,defVal),name));
+    }
     else if (oper.name() == YSTRING("setValue")) {
 	if (extractArgs(stack,oper,context,args) != 3)
 	    return false;
@@ -2443,6 +2486,40 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
 	}
 	else
 	    ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
+    }
+    else if (oper.name() == YSTRING("getIntValue")) {
+	int64_t val = 0;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+		val = static_cast<ExpOperation*>(args[1])->valInteger();
+		// fall through
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	NamedList* sect = m_owner->config().getSection(toString());
+	if (sect)
+	    val = sect->getInt64Value(name,val);
+	ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
+    }
+    else if (oper.name() == YSTRING("getBoolValue")) {
+	bool val = false;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+		val = static_cast<ExpOperation*>(args[1])->valBoolean();
+		// fall through
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	NamedList* sect = m_owner->config().getSection(toString());
+	if (sect)
+	    val = sect->getBoolValue(name,val);
+	ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
     }
     else if (oper.name() == YSTRING("setValue")) {
 	if (extractArgs(stack,oper,context,args) != 2)
@@ -2576,6 +2653,27 @@ bool JsHasher::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	if (!m_hasher || oper.number())
 	    return false;
 	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_hasher->hmacBlockSize()));
+    }
+    else if (oper.name() == YSTRING("fips186prf")) {
+	ObjList args;
+	ExpOperation* opSeed = 0;
+	ExpOperation* opLen = 0;
+	ExpOperation* opSep = 0;
+	if (!extractStackArgs(2,this,stack,oper,context,args,&opSeed,&opLen,&opSep))
+	    return false;
+	DataBlock seed, out;
+	seed.unHexify(*opSeed);
+	SHA1::fips186prf(out,seed,opLen->valInteger());
+	if (out.data()) {
+	    String tmp;
+	    char sep = '\0';
+	    if (opSep && !(JsParser::isNull(*opSep) || opSep->isBoolean() || opSep->isNumber()))
+		sep = opSep->at(0);
+	    tmp.hexify(out.data(),out.length(),sep);
+	    ExpEvaluator::pushOne(stack,new ExpOperation(tmp,"hex"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else
 	return JsObject::runNative(stack,oper,context);
@@ -3147,6 +3245,55 @@ bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 		if (lAddr.local(rAddr))
 		    op = new ExpOperation(lAddr.host(),"IP");
 	    }
+	}
+	if (!op)
+	    op = new ExpWrapper(0,"IP");
+	ExpEvaluator::pushOne(stack,op);
+    }
+    else if (oper.name().startsWith("pack")) {
+	char sep = '\0';
+	ExpOperation* op;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+		op = static_cast<ExpOperation*>(args[1]);
+		if (op->isBoolean())
+		    sep = op->valBoolean() ? ' ' : '\0';
+		else if ((op->length() == 1) && !op->isNumber())
+		    sep = op->at(0);
+		// fall through
+	    case 1:
+		op = 0;
+		{
+		    String tmp = static_cast<ExpOperation*>(args[0]);
+		    if ((tmp[0] == '[') && (tmp[tmp.length() - 1] == ']'))
+			tmp = tmp.substr(1,tmp.length() - 2);
+		    SocketAddr addr;
+		    if (addr.host(tmp)) {
+			DataBlock d;
+			addr.copyAddr(d);
+			if (d.length()) {
+			    tmp.hexify(d.data(),d.length(),sep);
+			    op = new ExpOperation(tmp,"IP");
+			}
+		    }
+		}
+		if (!op)
+		    op = new ExpWrapper(0,"IP");
+		ExpEvaluator::pushOne(stack,op);
+		break;
+	    default:
+		return false;
+	}
+    }
+    else if (oper.name().startsWith("unpack")) {
+	if (extractArgs(stack,oper,context,args) != 1)
+	    return false;
+	ExpOperation* op = 0;
+	DataBlock d;
+	if (d.unHexify(*static_cast<ExpOperation*>(args[0]))) {
+	    SocketAddr addr;
+	    if (addr.assign(d))
+		op = new ExpOperation(addr.host(),"IP");
 	}
 	if (!op)
 	    op = new ExpWrapper(0,"IP");
@@ -3844,7 +3991,7 @@ ObjList JsGlobal::s_globals;
 
 JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath, bool fromCfg)
     : NamedString(scriptName,fileName),
-      m_inUse(true), m_confLoaded(fromCfg)
+      m_inUse(true), m_confLoaded(fromCfg), m_file(fileName)
 {
     m_jsCode.basePath(s_basePath,s_libsPath);
     if (relPath)
@@ -3904,10 +4051,10 @@ void JsGlobal::reloadDynamic()
     ListIterator iter(s_globals);
     while (JsGlobal* script = static_cast<JsGlobal*>(iter.get()))
 	if (!script->m_confLoaded) {
-	    String filename = *script;
+	    String filename = script->fileName();
 	    String name = script->name();
 	    mylock.drop();
-	    JsGlobal::initScript(name,filename,false,false);
+	    JsGlobal::initScript(name,filename,true,false);
 	    mylock.acquire(__plugin);
 	}
 }
@@ -3916,6 +4063,8 @@ bool JsGlobal::initScript(const String& scriptName, const String& fileName, bool
 {
     if (fileName.null())
 	return false;
+    DDebug(&__plugin,DebugInfo,"Initialize %s script '%s' from %s file '%s'",(fromCfg ? "configured" : "dynamically loaded"),
+               scriptName.c_str(),(relPath ? "relative" : "absolute"),fileName.c_str());
     Lock mylock(__plugin);
     JsGlobal* script = static_cast<JsGlobal*>(s_globals[scriptName]);
     if (script) {

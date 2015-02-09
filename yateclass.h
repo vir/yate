@@ -4230,6 +4230,16 @@ public:
     virtual unsigned int hashLength() const
 	{ return 20; }
 
+    /**
+     * NIST FIPS 186-2 change notice 1 Pseudo Random Function.
+     * Uses a b=160 bits SHA1 based G(t,c) function with no XSEEDj
+     * @param out Block to fill with pseudo-random data
+     * @param seed Data to use as RNG seed, must be 1 to 64 octets long
+     * @param len Desired output length in octets, must be 1 to 512
+     * @return True on success, false on invalid lengths
+     */
+    static bool fips186prf(DataBlock& out, const DataBlock& seed, unsigned int len);
+
 protected:
     bool updateInternal(const void* buf, unsigned int len);
 
@@ -4624,6 +4634,19 @@ public:
      * @return The number contained in the named parameter or the default
      */
     int getIntValue(const String& name, const TokenDict* tokens, int defvalue = 0) const;
+
+    /**
+     * Retrieve the 64-bit numeric value of a parameter.
+     * @param name Name of parameter to locate
+     * @param defvalue Default value to return if not found
+     * @param minvalue Minimum value allowed for the parameter
+     * @param maxvalue Maximum value allowed for the parameter
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
+     * @return The number contained in the named parameter or the default
+     */
+    int64_t getInt64Value(const String& name, int64_t defvalue = 0, int64_t minvalue = LLONG_MIN,
+	int64_t maxvalue = LLONG_MAX, bool clamp = true) const;
 
     /**
      * Retrieve the floating point value of a parameter.
@@ -5778,6 +5801,13 @@ public:
     void assign(const struct sockaddr* addr, socklen_t len = 0);
 
     /**
+     * Assigns a new address
+     * @param addr Packed binary address to store
+     * @return True if the address family is supported
+     */
+    bool assign(const DataBlock& addr);
+
+    /**
      * Attempt to guess a local address that will be used to reach a remote one
      * @param remote Remote address to reach
      * @return True if guessed an address, false if failed
@@ -5885,6 +5915,13 @@ public:
      */
     inline bool isNullAddr() const
 	{ return isNullAddr(m_host,family()); }
+
+    /**
+     * Copy the host address to a buffer
+     * @param addr Buffer to put the packed address into
+     * @return Address family, Unknown on failure
+     */
+    int copyAddr(DataBlock& addr) const;
 
     /**
      * Check if an address family is supported by the library

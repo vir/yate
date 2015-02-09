@@ -231,7 +231,7 @@ void AmrTrans::filterBias(short* buf, unsigned int len)
 	// substract the averaged bias and saturate
 	val -= m_bias / 16;
 	if (val > 32767)
-	    val = 32676;
+	    val = 32767;
 	else if (val < -32767)
 	    val = -32767;
 	*buf++ = val;

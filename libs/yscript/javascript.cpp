@@ -3363,14 +3363,47 @@ bool JsFunction::runNative(ObjList& stack, const ExpOperation& oper, GenObject* 
     XDebug(DebugAll,"JsFunction::runNative() '%s' in '%s' [%p]",
 	oper.name().c_str(),toString().c_str(),this);
     if (oper.name() == YSTRING("apply")) {
+	// func.apply(new_this)
 	// func.apply(new_this,["array","of","params",...])
-	if (oper.number() != 2)
-	    return false;
+	switch (oper.number()) {
+	    case 1:
+	    case 2:
+		break;
+	    default:
+		return false;
+	}
+	ObjList args;
+	extractArgs(this,stack,oper,context,args);
+	JsObject* thisObj = YOBJECT(JsObject,args[0]);
+	JsArray* callArgs = YOBJECT(JsArray,args[1]);
+	int argc = 0;
+	if (callArgs) {
+	    int32_t len = callArgs->length();
+	    for (int32_t i = 0; i < len; i++)
+		if (callArgs->runField(stack,ExpOperation((int64_t)i,String(i)),context))
+		    argc++;
+	}
+	ExpFunction func(toString(),argc);
+	return runDefined(stack,func,context,thisObj);
     }
     else if (oper.name() == YSTRING("call")) {
+	// func.call(new_this)
 	// func.call(new_this,param1,param2,...)
 	if (!oper.number())
 	    return false;
+	ObjList args;
+	extractArgs(this,stack,oper,context,args);
+	JsObject* thisObj = YOBJECT(JsObject,args[0]);
+	int argc = 0;
+	ObjList* l = args.next();
+	if (l) {
+	    while (ExpOperation* op = static_cast<ExpOperation*>(l->remove(false))) {
+		ExpEvaluator::pushOne(stack,op);
+		argc++;
+	    }
+	}
+	ExpFunction func(toString(),argc);
+	return runDefined(stack,func,context,thisObj);
     }
     else {
 	JsObject* obj = YOBJECT(JsObject,params().getParam(YSTRING("prototype")));

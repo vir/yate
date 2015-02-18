@@ -5136,8 +5136,10 @@ public:
      * Construct a new unlocked semaphore
      * @param maxcount Maximum unlock count, must be strictly positive
      * @param name Static name of the semaphore (for debugging purpose only)
+     * @param initialCount Initial semaphore count, must not be greater than maxcount
      */
-    explicit Semaphore(unsigned int maxcount = 1, const char* name = 0);
+    explicit Semaphore(unsigned int maxcount = 1, const char* name = 0,
+	unsigned int initialCount = 1);
 
     /**
      * Copy constructor, creates a shared semaphore

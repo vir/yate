@@ -530,6 +530,11 @@ void Lockable::enableSafety(bool safe)
     s_safety = safe;
 }
 
+bool Lockable::safety()
+{
+    return s_safety;
+}
+
 void Lockable::wait(unsigned long maxwait)
 {
     s_maxwait = maxwait;

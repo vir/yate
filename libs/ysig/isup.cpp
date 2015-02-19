@@ -2211,6 +2211,16 @@ static void getMsgCompat(SS7MsgISUP* msg, bool& release, bool& cnf)
 	cnf = true;
 }
 
+static void setCallsTerminate(ObjList& lst, bool gracefully, const char* reason = 0,
+    const char* diagnostic = 0, const char* location = 0)
+{
+    for (ObjList* o = lst.skipNull(); o; o = o->skipNext()) {
+	SS7ISUPCall* call = static_cast<SS7ISUPCall*>(o->get());
+	call->setTerminate(gracefully,reason,diagnostic,location);
+    }
+}
+
+
 /**
  * SS7ISUPCall
  */
@@ -3788,14 +3798,17 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
 
 void SS7ISUP::cleanup(const char* reason)
 {
+    ObjList terminate;
     lock();
     for (ObjList* o = m_calls.skipNull(); o; o = o->skipNext()) {
 	SS7ISUPCall* call = static_cast<SS7ISUPCall*>(o->get());
-	call->setTerminate(true,reason);
+	if (call->ref())
+	    terminate.append(call);
     }
     releaseCircuit(m_rscCic);
     m_rscTimer.stop();
     unlock();
+    setCallsTerminate(terminate,true,reason);
     clearCalls();
 }
 
@@ -4672,8 +4685,10 @@ bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* 
 	    call,cic,relCall.c_str(),this);
 	String diagnostic;
 	hexifyIsupParams(diagnostic,relCall);
-	if (call)
+	if (call) {
+	    lock.drop();
 	    call->setTerminate(true,"unknown-ie",diagnostic,m_location);
+	}
 	else if (m_remotePoint) {
 	    // No call: make sure the circuit is released at remote party
 	    SS7Label label(m_type,*m_remotePoint,*m_defPoint,
@@ -6140,12 +6155,9 @@ void SS7ISUP::replaceCircuit(unsigned int cic, const String& map, bool rel)
 	    continue;
         // Replace circuit for call (Q.764 2.8.2.1)
 	SS7ISUPCall* call = findCall(cic + i);
-        if (call && call->outgoing() && call->state() == SS7ISUPCall::Setup) {
-	    if (call->ref())
-		calls.append(call);
-	    else
-		call->setTerminate(true,"normal",0,m_location);
-	}
+	if (call && call->outgoing() && call->state() == SS7ISUPCall::Setup &&
+	    call->ref())
+	    calls.append(call);
     }
     unlock();
     for (ObjList* o = calls.skipNull(); o; o = o->skipNext()) {
@@ -6195,16 +6207,19 @@ void SS7ISUP::cicHwBlocked(unsigned int cic, const String& map)
 {
     Debug(this,DebugNote,"Circuit(s) in HW failure cic=%u map=%s",cic,map.c_str());
     replaceCircuit(cic,map,true);
-    Lock lock(this);
+    ObjList terminate;
+    lock();
     for (unsigned int i = 0; i < map.length(); i++) {
 	if (map[i] != '1')
 	    continue;
 	SS7ISUPCall* call = findCall(cic + i);
 	// We've made retransmit attempt for outgoing
 	bool processed = !call || (call->outgoing() && call->state() == SS7ISUPCall::Setup);
-        if (!processed)
-	    call->setTerminate(true,"normal",0,m_location);
+	if (!processed && call->ref())
+	    terminate.append(call);
     }
+    unlock();
+    setCallsTerminate(terminate,true,"normal",0,m_location);
 }
 
 

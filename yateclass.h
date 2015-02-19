@@ -4974,6 +4974,12 @@ public:
      * @param safe True to enable locking safety measures, false to disable
      */
     static void enableSafety(bool safe = true);
+
+    /**
+     * Retrieve safety and sanity check features flag value
+     * @return Locking safety measures flag value
+     */
+    static bool safety();
 };
 
 /**

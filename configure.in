@@ -191,6 +191,20 @@ HAVE_GMTOFF="-DHAVE_GMTOFF"
 fi
 AC_SUBST(HAVE_GMTOFF)
 
+HAVE_INT_TZ=""
+AC_MSG_CHECKING([for integer timezone variable])
+have_tzint="no"
+AC_TRY_COMPILE([
+#include <time.h>
+],[
+long tz = -timezone;
+],have_tzint="yes")
+AC_MSG_RESULT([$have_tzint])
+if [[ "$have_tzint" = "yes" ]]; then
+HAVE_INT_TZ="-DHAVE_INT_TZ"
+fi
+AC_SUBST(HAVE_INT_TZ)
+
 HAVE_POLL=no
 AC_ARG_ENABLE(poll,AC_HELP_STRING([--enable-poll],[Use poll() on sockets (default: yes)]),want_poll=$enableval,want_poll=yes)
 if [[ "x$want_poll" = "xyes" ]]; then

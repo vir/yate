@@ -847,7 +847,11 @@ int Time::timeZone()
     if (localtime_r(&time,&t))
 	return t.tm_gmtoff;
 #endif
+#ifdef HAVE_INT_TZ
     return -timezone;
+#else
+    return 0;
+#endif
 #endif
 }
 

@@ -4,7 +4,7 @@
 	Version="8.00"
 	Name="_eventlogs"
 	ProjectGUID="{AA54CD22-E1E1-4A00-1374-EE6959D85DBE}"
-	RootNamespace="_accfile"
+	RootNamespace="_eventlogs"
 	>
 	<Platforms>
 		<Platform

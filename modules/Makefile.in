@@ -176,6 +176,7 @@ endif
 
 ifneq (@HAVE_AMRNB@,no)
 PROGS := $(PROGS) amrnbcodec.yate
+PROGS := $(PROGS) efrcodec.yate
 endif
 
 ifneq ($(HAVE_OPENSSL),no)
@@ -380,8 +381,8 @@ gsmcodec.yate: EXTERNLIBS = @GSM_LIB@
 speexcodec.yate: EXTERNFLAGS = @SPEEX_INC@
 speexcodec.yate: EXTERNLIBS = @SPEEX_LIB@
 
-amrnbcodec.yate: EXTERNFLAGS = @AMRNB_INC@
-amrnbcodec.yate: EXTERNLIBS = @AMRNB_LIB@
+amrnbcodec.yate efrcodec.yate: EXTERNFLAGS = @AMRNB_INC@
+amrnbcodec.yate efrcodec.yate: EXTERNLIBS = @AMRNB_LIB@
 
 faxchan.yate: EXTERNFLAGS = $(SPANDSP_INC)
 faxchan.yate: EXTERNLIBS = $(SPANDSP_LIB)

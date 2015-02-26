@@ -613,6 +613,7 @@ AC_SUBST(OBJCFLAGS)
 
 HAVE_PGSQL=no
 PGSQL_INC=""
+PGSQL_LIB=""
 AC_ARG_WITH(libpq,AC_HELP_STRING([--with-libpq=DIR],[use Postgress SQL from DIR (default /usr)]),[ac_cv_use_libpq=$withval],[ac_cv_use_libpq=/usr])
 if [[ "x$ac_cv_use_libpq" != "xno" ]]; then
 AC_MSG_CHECKING([for Postgress SQL in $ac_cv_use_libpq])
@@ -621,6 +622,11 @@ libpq="$ac_cv_use_libpq/$local_lib/libpq.so"
 if [[ "x$local_lib" != "xlib" -a ! -f "$libpq" ]]; then
     local_lib="lib"
     libpq="$ac_cv_use_libpq/$local_lib/libpq.so"
+fi
+if [[ "x$ac_cv_use_libpq" != "x/usr" ]]; then
+    PGSQL_LIB="-L$ac_cv_use_libpq/$local_lib -lpq"
+else
+    PGSQL_LIB="-lpq"
 fi
 for i in include include/pgsql pgsql/include include/postgresql; do
     incpq="$ac_cv_use_libpq/$i"
@@ -649,6 +655,7 @@ AC_MSG_RESULT([$HAVE_PGSQL])
 fi
 AC_SUBST(HAVE_PGSQL)
 AC_SUBST(PGSQL_INC)
+AC_SUBST(PGSQL_LIB)
 
 HAVE_MYSQL=no
 MYSQL_INC=""

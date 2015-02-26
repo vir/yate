@@ -43,7 +43,7 @@ case "x$archname" in
     x*-*-*)
 	ARCHLIB="lib/$archname"
 	;;
-    x*x86_64*)
+    x*x86_64*|xppc64*|xaarch64)
 	ARCHLIB=lib64
 	;;
 esac

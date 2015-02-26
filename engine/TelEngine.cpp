@@ -172,6 +172,7 @@ static void dbg_colorize_func(const char* buf, int level)
 static void (*s_output)(const char*,int) = dbg_stderr_func;
 static void (*s_intout)(const char*,int) = 0;
 static void (*s_alarms)(const char*,int,const char*,const char*) = 0;
+static void (*s_relay)(int,const char*,const char*,const char*) = 0;
 
 static Mutex out_mux(false,"DebugOutput");
 static Mutex ind_mux(false,"DebugIndent");
@@ -221,8 +222,10 @@ static void common_output(int level,char* buf)
 static void dbg_output(int level,const char* prefix, const char* format, va_list ap,
     const char* alarmComp = 0, const char* alarmInfo = 0)
 {
-    bool out = (s_output || s_intout) && (prefix || format);
-    bool alarm = alarmComp && format && s_alarms;
+    void (*relay)(int,const char*,const char*,const char*) = s_relay;
+    void (*alarms)(const char*,int,const char*,const char*) = s_alarms;
+    bool out = (s_output || s_intout || relay) && (prefix || format);
+    bool alarm = alarmComp && format && (alarms || relay);
     if (!(out || alarm))
 	return;
     char buf[OUT_BUFFER_SIZE];
@@ -243,20 +246,21 @@ static void dbg_output(int level,const char* prefix, const char* format, va_list
 	::vsnprintf(msg,l,format,ap);
 	buf[OUT_BUFFER_SIZE - 2] = 0;
     }
+    if (relay) {
+	relay(level,buf,alarmComp,alarmInfo);
+	return;
+    }
     if (out)
 	common_output(level,buf);
-    if (alarm) {
-	out_mux.lock();
-	if (s_alarms)
-	    s_alarms(msg,level,alarmComp,alarmInfo);
-	out_mux.unlock();
-    }
+    if (alarm)
+	alarms(msg,level,alarmComp,alarmInfo);
 }
 
 void Output(const char* format, ...)
 {
     char buf[OUT_BUFFER_SIZE];
-    if (!((s_output || s_intout) && format && *format))
+    void (*relay)(int,const char*,const char*,const char*) = s_relay;
+    if (!((s_output || s_intout || relay) && format && *format))
 	return;
     if (reentered())
 	return;
@@ -264,7 +268,10 @@ void Output(const char* format, ...)
     va_start(va,format);
     ::vsnprintf(buf,sizeof(buf)-2,format,va);
     va_end(va);
-    common_output(-1,buf);
+    if (relay)
+	relay(-1,buf,0,0);
+    else
+	common_output(-1,buf);
 }
 
 void Debug(int level, const char* format, ...)
@@ -579,9 +586,12 @@ void Debugger::setIntOut(void (*outFunc)(const char*,int))
 
 void Debugger::setAlarmHook(void (*alarmFunc)(const char*,int,const char*,const char*))
 {
-    out_mux.lock();
     s_alarms = alarmFunc;
-    out_mux.unlock();
+}
+
+void Debugger::setRelayHook(void (*relayFunc)(int,const char*,const char*,const char*))
+{
+    s_relay = relayFunc;
 }
 
 void Debugger::enableOutput(bool enable, bool colorize)
@@ -591,15 +601,25 @@ void Debugger::enableOutput(bool enable, bool colorize)
 	setOutput(dbg_colorize_func);
 }
 
+uint32_t Debugger::getStartTimeSec()
+{
+    return (uint32_t)(s_timestamp / 1000000);
+}
+
 Debugger::Formatting Debugger::getFormatting()
 {
     return s_fmtstamp;
 }
 
-void Debugger::setFormatting(Formatting format)
+void Debugger::setFormatting(Formatting format, uint32_t startTimeSec)
 {
     // start stamp will be rounded to full second
-    s_timestamp = (Time::now() / 1000000) * 1000000;
+    if (!s_timestamp) {
+	uint64_t sec = Time::now() / 1000000;
+	if (startTimeSec && startTimeSec < sec)
+	    sec = startTimeSec;
+	s_timestamp = sec * 1000000;
+    }
     s_fmtstamp = format;
 }
 
@@ -650,6 +670,30 @@ unsigned int Debugger::formatTime(char* buf, Formatting format)
     }
     buf[0] = '\0';
     return 0;
+}
+
+void Debugger::relayOutput(int level, char* buffer, const char* component, const char* info)
+{
+    if (TelEngine::null(buffer))
+	return;
+    void (*alarms)(const char*,int,const char*,const char*) = s_alarms;
+    bool out = s_output || s_intout;
+    bool alarm = (level >= 0) && alarms && !TelEngine::null(component);
+    if (!(out || alarm))
+	return;
+    if (reentered())
+	return;
+    if (out)
+	common_output(level,buffer);
+    if (alarm) {
+	const char* msg = ::strstr(buffer,"> ");
+	if (msg && msg != buffer)
+	    msg += 2;
+	else
+	    msg = buffer;
+	if (*msg)
+	    alarms(msg,level,component,info);
+    }
 }
 
 

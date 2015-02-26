@@ -398,6 +398,20 @@ static void initUsrPath(String& path, const char* newPath = 0)
 	path = path.substr(0,path.length()-1);
 }
 
+// Utility: init or decrease Lockable wait value by half
+static inline void setLockableWait()
+{
+    unsigned long lockWait = Lockable::wait();
+    if (lockWait) {
+	lockWait /= 2;
+	if (lockWait < Thread::idleUsec())
+	    lockWait = Thread::idleUsec();
+    }
+    else
+	lockWait = 10000000;
+    Lockable::wait(lockWait);
+}
+
 // helper function to set up the config file name
 static void initCfgFile(const char* name)
 {
@@ -2065,6 +2079,165 @@ SharedVars& Engine::sharedVars()
     return s_vars;
 }
 
+// Append command line arguments form current config.
+void Engine::buildCmdLine(String& line)
+{
+    String D;
+    switch (Debugger::getFormatting()) {
+	case Debugger::None:      D << 'n'; break;
+	case Debugger::Absolute:  D << 'e'; break;
+	case Debugger::Relative:  D << 't'; break;
+	case Debugger::Textual:   D << 'f'; break;
+	case Debugger::TextLocal: D << 'z'; break;
+	case Debugger::TextSep:   D << 'F'; break;
+	case Debugger::TextLSep:  D << 'Z'; break;
+	default:
+	    Debug(DebugStub,"buildCmdLine() unhandled debugger formatting %d",
+		Debugger::getFormatting());
+    }
+    if (s_sigabrt)
+	D << 'a';
+    if (s_lateabrt)
+	D << 's';
+    if (Lockable::safety())
+	D << 'd';
+    if (D)
+	line.append("-D" + D," ");
+    int level = TelEngine::debugLevel();
+    if (level > DebugWarn)
+	line.append("-" + String('v',level - DebugWarn)," ");
+    else if (level < DebugWarn)
+	line.append("-" + String('q',DebugWarn - level)," ");
+    line.append("--starttime " + String(Debugger::getStartTimeSec())," ");
+}
+
+// Utility: retrieve next String in list, adjust the ObjList parameter
+static inline bool nextString(String*& tmp, ObjList*& crt, String* add = 0,
+    const String& param = String::empty())
+{
+    ObjList* next = crt->skipNext();
+    if (next) {
+	crt = next;
+	tmp = static_cast<String*>(crt->get());
+	return true;
+    }
+    if (add)
+	add->append(param," ");
+    return false;
+}
+
+// Initialize library from from command line arguments.
+// Enable debugger output
+void Engine::initLibrary(const String& line, String* output)
+{
+    bool colorize = false;
+    Debugger::Formatting fmtTime = Debugger::TextLSep;
+    uint32_t ts = 0;
+    int level = TelEngine::debugLevel();
+    Lockable::startUsingNow();
+    // Check for options
+    ObjList* lst = line.split(' ',false);
+    String unkArgs;
+    String missingParams;
+    String* tmp = 0;
+    bool inopt = true;
+    for (ObjList* o = lst->skipNull(); o; o = o->skipNext()) {
+#define ENGINE_SET_VAL_BREAK(check,dest,src) case check: dest = src; break
+#define ENGINE_INSTR_BREAK(check,instr) case check: instr; break
+	String& param = *static_cast<String*>(o->get());
+	const char* pc = param;
+	if (!(inopt && (pc[0] == '-') && pc[1])) {
+	    unkArgs.append(param," ");
+	    continue;
+	}
+	while (pc && *++pc) {
+	    switch (*pc) {
+		case '-':
+		    if (!*++pc)
+			inopt = false;
+		    else if (!::strcmp(pc,"starttime")) {
+			if (nextString(tmp,o,&missingParams,param))
+			    ts = (uint32_t)tmp->toLong(0,0,0);
+		    }
+		    else
+			unkArgs.append(param," ");
+		    pc = 0;
+		    continue;
+		ENGINE_INSTR_BREAK('v',++level);
+		ENGINE_INSTR_BREAK('q',--level);
+		case 'D':
+		    while (*++pc) {
+			switch (*pc) {
+			    ENGINE_SET_VAL_BREAK('n',fmtTime,Debugger::None);
+			    ENGINE_SET_VAL_BREAK('e',fmtTime,Debugger::Absolute);
+			    ENGINE_SET_VAL_BREAK('t',fmtTime,Debugger::Relative);
+			    ENGINE_SET_VAL_BREAK('f',fmtTime,Debugger::Textual);
+			    ENGINE_SET_VAL_BREAK('z',fmtTime,Debugger::TextLocal);
+			    ENGINE_SET_VAL_BREAK('F',fmtTime,Debugger::TextSep);
+			    ENGINE_SET_VAL_BREAK('Z',fmtTime,Debugger::TextLSep);
+			    ENGINE_SET_VAL_BREAK('o',colorize,true);
+			    ENGINE_SET_VAL_BREAK('a',s_sigabrt,true);
+			    ENGINE_SET_VAL_BREAK('s',s_lateabrt,true);
+			    ENGINE_INSTR_BREAK('m',setLockableWait());
+			    ENGINE_INSTR_BREAK('d',Lockable::enableSafety());
+			    default:
+				unkArgs.append("-D" + String(*pc)," ");
+			}
+		    }
+		    pc = 0;
+		    break;
+		default:
+		    unkArgs.append(param," ");
+		    pc = 0;
+	    }
+	}
+#undef ENGINE_SET_VAL_BREAK
+#undef ENGINE_INSTR_BREAK
+    }
+    TelEngine::destruct(lst);
+    Thread::idleMsec(0);
+    abortOnBug(s_sigabrt);
+    TelEngine::debugLevel(level);
+    Debugger::setFormatting(fmtTime,ts);
+    Debugger::enableOutput(true,colorize);
+    if (output) {
+	if (unkArgs)
+	    *output << "\r\nUnknown argument(s): " << unkArgs;
+	if (missingParams)
+	    *output << "\r\nMissing parameter for argument(s): " << missingParams;
+#ifdef DEBUG
+	*output << "\r\ncmdline=" << line;
+	*output << "\r\ndebuglevel=" << level;
+	*output << "\r\nfmtTime=" << fmtTime;
+	*output << "\r\nstart-time=" << ts;
+	*output << "\r\ncolorize=" << String::boolText(colorize);
+	*output << "\r\nsigabort=" << String::boolText(s_sigabrt);
+	*output << "\r\nlateabort=" << String::boolText(s_lateabrt);
+	*output << "\r\nlockable-wait=" << Lockable::wait();
+	*output << "\r\nlockable-safety=" << String::boolText(Lockable::safety());
+#endif
+    }
+}
+
+// Cleanup library. Set late abort, kill all threads
+int Engine::cleanupLibrary()
+{
+    // We are occasionally doing things that can cause crashes so don't abort
+    abortOnBug(s_sigabrt && s_lateabrt);
+    Thread::killall();
+    int mux = Mutex::locks();
+    if (mux < 0)
+	mux = 0;
+    if (mux)
+	Debug(DebugGoOn,"Exiting with %d locked mutexes!",mux);
+    if (GenObject::getObjCounting()) {
+	String str;
+	int obj = EngineStatusHandler::objects(str);
+	if (str)
+	    Debug(DebugNote,"Exiting with %d allocated objects: %s",obj,str.c_str());
+    }
+    return s_haltcode & 0xff;
+}
 
 static void usage(bool client, FILE* f)
 {
@@ -2316,17 +2489,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 				    s_lateabrt = true;
 				    break;
 				case 'm':
-				    {
-					unsigned long lockWait = Lockable::wait();
-					if (lockWait) {
-					    lockWait /= 2;
-					    if (lockWait < Thread::idleUsec())
-						lockWait = Thread::idleUsec();
-					}
-					else
-					    lockWait = 10000000;
-					Lockable::wait(lockWait);
-				    }
+				    setLockableWait();
 				    break;
 				case 'd':
 				    Lockable::enableSafety();

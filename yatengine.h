@@ -1498,6 +1498,31 @@ public:
      */
     static SharedVars& sharedVars();
 
+    /**
+     * Append command line arguments form current config.
+     * The following parameters are added: -Dads, -v, -q, Debugger timestamp.
+     * This method should be used when starting another libyate based application
+     * @param line Destination string
+     */
+    static void buildCmdLine(String& line);
+
+    /**
+     * Initialize library from command line arguments.
+     * Enable debugger output.
+     * This method should be used in initialization stage of libyate based applications
+     * @param line Command line arguments string
+     * @param output Optional string to be filled with invalid argument errors
+     *  or any output to be displyed later
+     */
+    static void initLibrary(const String& line, String* output = 0);
+
+    /**
+     * Cleanup library. Set late abort, kill all threads.
+     * This method should be used in cleanup stage of libyate based applications
+     * @return Halt code
+     */
+    static int cleanupLibrary();
+
 protected:
     /**
      * Destroys the engine and everything. You must not call it directly,

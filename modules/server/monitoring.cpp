@@ -3542,7 +3542,7 @@ bool Monitor::unload()
 
     if (m_callMonitor) {
 	Engine::uninstall(m_callMonitor);
-	delete m_callMonitor;
+	m_callMonitor->cancel();
 	m_callMonitor = 0;
     }
 

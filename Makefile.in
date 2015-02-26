@@ -335,7 +335,7 @@ revision: check-topdir
 %.o: @srcdir@/%.cpp $(MKDEPS) @srcdir@/yatengine.h
 	$(COMPILE) -c $<
 
-@srcdir@/configure: @srcdir@/configure.in
+@srcdir@/configure: @srcdir@/configure.ac
 	cd @srcdir@ && ./autogen.sh --silent
 
 config.status: @srcdir@/configure

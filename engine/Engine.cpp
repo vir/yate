@@ -2213,7 +2213,7 @@ void Engine::initLibrary(const String& line, String* output)
 	*output << "\r\ncolorize=" << String::boolText(colorize);
 	*output << "\r\nsigabort=" << String::boolText(s_sigabrt);
 	*output << "\r\nlateabort=" << String::boolText(s_lateabrt);
-	*output << "\r\nlockable-wait=" << Lockable::wait();
+	*output << "\r\nlockable-wait=" << (uint64_t)Lockable::wait();
 	*output << "\r\nlockable-safety=" << String::boolText(Lockable::safety());
 #endif
     }

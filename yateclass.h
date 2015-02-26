@@ -620,11 +620,23 @@ public:
     static void setAlarmHook(void (*alarmFunc)(const char*,int,const char*,const char*) = 0);
 
     /**
+     * Set the relay hook callback that will process all Output, Debug and Alarm
+     * @param relayFunc Pointer to the relay callback function, NULL to disable
+     */
+    static void setRelayHook(void (*relayFunc)(int,const char*,const char*,const char*) = 0);
+
+    /**
      * Enable or disable the debug output
      * @param enable Set to true to globally enable output
      * @param colorize Enable ANSI colorization of output
      */
     static void enableOutput(bool enable = true, bool colorize = false);
+
+    /**
+     * Retrieve the start timestamp
+     * @return Start timestamp value in seconds
+     */
+    static uint32_t getStartTimeSec();
 
     /**
      * Retrieve the format of timestamps
@@ -635,8 +647,9 @@ public:
     /**
      * Set the format of timestamps on output messages and set the time start reference
      * @param format Desired timestamp formatting
+     * @param startTimeSec Optional start timestamp (in seconds)
      */
-    static void setFormatting(Formatting format);
+    static void setFormatting(Formatting format, uint32_t startTimeSec = 0);
 
     /**
      * Fill a buffer with a current timestamp prefix
@@ -645,6 +658,16 @@ public:
      * @return Length of the prefix written in buffer excluding final NUL
      */
     static unsigned int formatTime(char* buf, Formatting format = getFormatting());
+
+    /**
+     * Processes a preformatted string as Output, Debug or Alarm.
+     * This method is intended to relay messages from other processes, DO NOT USE!
+     * @param level The level of the debug or alarm, negative for an output
+     * @param buffer Preformatted text buffer, MUST HAVE SPACE for at least strlen + 2
+     * @param component Component that emits the alarm if applicable
+     * @param info Extra alarm information if applicable
+     */
+    static void relayOutput(int level, char* buffer, const char* component = 0, const char* info = 0);
 
 private:
     const char* m_name;

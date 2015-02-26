@@ -49,6 +49,7 @@ Name: "database\my"; Description: "MySQL database driver"; Types: full server
 Name: "database\my\run"; Description: "MySQL client libraries"; Types: full server
 Name: "database\pg"; Description: "PostgreSQL database driver"; Types: full server
 Name: "database\pg\run"; Description: "PostgreSQL client libraries"; Types: full server
+Name: "database\sqlite"; Description: "SQLite database driver"; Types: full server
 Name: "codecs"; Description: "Audio codecs"; Types: full client server
 Name: "codecs\gsm"; Description: "GSM codec"; Types: full client server
 Name: "codecs\ilbc"; Description: "iLBC codec"; Types: full client server
@@ -168,6 +169,7 @@ Source: "Release\zlibcompress.yate"; DestDir: "{app}\modules"; Flags: replacesam
 
 Source: "Release\server\mysqldb.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: database\my
 Source: "Release\server\pgsqldb.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: database\pg
+Source: "Release\server\sqlitedb.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: database\sqlite
 
 Source: "Runtimes\libmysql.dll"; DestDir: "{app}"; Components: database\my\run
 Source: "Runtimes\libpq.dll"; DestDir: "{app}"; Components: database\pg\run

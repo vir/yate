@@ -135,6 +135,7 @@ Source: "Release\qt4\customtree.yate"; DestDir: "{app}\modules\qt4"; Flags: repl
 Source: "Release\qt4\customtext.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client\qt
 Source: "Release\qt4\widgetlist.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client\qt
 Source: "Release\javascript.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: client server
+Source: "Release\server\eventlogs.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 
 Source: "Release\server\heartbeat.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster
 Source: "Release\server\clustering.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster

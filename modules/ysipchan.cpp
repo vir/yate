@@ -707,6 +707,8 @@ public:
 	}
     virtual const String& toString() const
 	{ return listenerName(); }
+    void shutdown()
+	{ cleanup(false); }
 public: // MessageHandler
     virtual bool received(Message& msg);
 private:
@@ -5896,16 +5898,30 @@ void YateSIPEndPoint::cancelListener(const String& name, const char* reason)
     m_mutex.lock();
     bool wait = false;
     for (ObjList* o = m_listeners.skipNull(); o; o = o->skipNext()) {
+	YateSIPWSListener* wsl = static_cast<YateSIPWSListener*>(o->get()->getObject("YateSIPWSListener"));
 	YateSIPTCPListener* l = static_cast<YateSIPTCPListener*>(o->get());
-	if (name && name != l->toString())
-	    continue;
-	wait = true;
-	Debug(&plugin,DebugAll,"Stopping listener (%p,'%s') reason=%s",
-	    l,l->toString().c_str(),reason);
-	l->setReason(reason);
-	l->cancel();
-	if (name)
-	    break;
+	if (wsl) {
+	    if (name && name != wsl->toString())
+		continue;
+	    wait = true;
+	    Debug(&plugin,DebugAll,"Stopping listener (%p,'%s') reason=%s",
+		wsl,wsl->toString().c_str(),reason);
+	    wsl->setReason(reason);
+	    wsl->shutdown();
+	    if (name)
+		break;
+	}
+	else {
+	    if (name && name != l->toString())
+		continue;
+	    wait = true;
+	    Debug(&plugin,DebugAll,"Stopping listener (%p,'%s') reason=%s",
+		l,l->toString().c_str(),reason);
+	    l->setReason(reason);
+	    l->cancel();
+	    if (name)
+		break;
+	}
     }
     m_mutex.unlock();
     if (!wait)

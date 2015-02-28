@@ -34,8 +34,10 @@ class YateSIPPartyHolder;                // A SIPParty holder
 class YateSIPTransport;                  // SIP transport: keeps a socket, read/send data
 class YateSIPUDPTransport;               // UDP transport
 class YateSIPTCPTransport;               // TCP/TLS transport
+class YateSIPWSTransport;                // WebSocket transport
 class YateSIPTransportWorker;            // A transport worker
 class YateSIPTCPListener;                // A TCP listener
+class YateSIPWSListener;                 // A WebSocket listener
 class YateUDPParty;                      // A SIP UDP party
 class YateTCPParty;                      // A SIP TCP/TLS party
 class YateSIPEngine;                     // The SIP engine
@@ -117,7 +119,9 @@ public:
 	Unknown = 0,
 	Udp,
 	Tcp,
-	Tls
+	Tls,
+	Ws,
+	Wss
     };
     inline ProtocolHolder(int p)
 	: m_proto(p)
@@ -530,6 +534,100 @@ protected:
     u_int64_t m_nextConnect;             // Interval to try ro re-connect
 };
 
+class YateSIPWSEndPoint : public DataEndpoint
+{
+    friend class YateSIPWSTransport;
+public:
+    YateSIPWSEndPoint(YateSIPWSTransport* tran)
+	: m_tran(tran)
+	{ }
+    ~YateSIPWSEndPoint()
+	{ }
+private:
+    YateSIPWSTransport* m_tran;
+};
+
+// WebSocket transport
+class YateSIPWSTransport : public YateSIPTransport
+{
+    YCLASS(YateSIPWSTransport,YateSIPTransport);
+///    friend class YateTCPParty;
+public:
+    // Build an outgoing transport
+//    YateSIPWSTransport(bool tls, const String& laddr, const String& raddr, int rport);
+    // Build an incoming transport
+    YateSIPWSTransport(bool tls);
+    inline bool outgoing() const
+	{ return m_outgoing; }
+    inline bool tls() const
+	{ return protocol() == Wss; }
+#if 0
+    inline const String& remoteAddr() const
+	{ return m_remoteAddr; }
+    inline int remotePort() const
+	{ return m_remotePort; }
+    inline const String& localAddr() const
+	{ return m_localAddr; }
+#endif
+    // Safely return a reference to party
+//    YateTCPParty* getParty();
+//    virtual YateSIPTCPTransport* tcpTransport()
+//	{ return this; }
+    // (Re)Initialize the transport
+    bool init(const NamedList& params, bool first, Thread::Priority prio = Thread::Normal);
+    // Set flow timer flag and idle interval (in seconds)
+    // Reset idle timeout
+    void setFlowTimer(bool on, unsigned int interval);
+    // Send an event
+    bool send(SIPEvent* event);
+    // Process data (read/send)
+    virtual int process();
+    // Get associated DataEndpoint object, used for WebSocket communication
+    inline DataEndpoint* getEp()
+	{ if (! m_de) m_de = new YateSIPWSEndPoint(this); return m_de; }
+protected:
+    virtual void destroyed();
+    // Status changed notification
+    virtual void statusChanged();
+    // Reset transport's party
+//    void resetParty(YateTCPParty* party, bool set);
+    // Connect an outgoing transport. Terminate the socket before it
+    // Return: 1: OK, 0: retry connect, -1: stop the transport
+//    int connect(u_int64_t connToutUs = 60000000);
+    // Send pending messages or keepalive, return false on failure
+    bool sendPending(const Time& time, bool& sent);
+    // Read data
+    bool readData(const Time& time, bool& read);
+    // Reset socket and connection related data
+    void resetConnection(Socket* sock = 0);
+    // Set transport idle timeout
+    void setIdleTimeout(u_int64_t time = Time::now());
+
+    bool m_outgoing;                     // Direction
+//    YateTCPParty* m_party;               // Transport party
+    ObjList m_queue;                     // Pending message queue
+    int m_sent;                          // Sent bytes from first message in queue
+                                         // -1 to dequeue a new message and print it
+    unsigned int m_idleInterval;         // Incoming: interval allowed to stay with a reference
+                                         //  counter=1 without receiving any data
+                                         // Outgoing: keep alive interval
+    u_int64_t m_idleTimeout;             // Idle timeout: check state or send keep alive
+    bool m_flowTimer;                    // Flow timer flag (RFC5626)
+    SIPMessage* m_msg;                   // Partially received SIP message (expecting body)
+    DataBlock m_sipBuffer;               // Accumulated read data
+    unsigned int m_sipBufOffs;           // Offset in sip buffer for partial sip message
+    unsigned int m_contentLen;           // Expected content length for partial sip message
+    // Outgoing (re-connect info)
+#if 0
+    String m_remoteAddr;                 // Remote party address
+    int m_remotePort;                    // Remote port
+    String m_localAddr;                  // Optional local address to bind to
+    unsigned int m_connectRetry;         // Number of re-connect
+    u_int64_t m_nextConnect;             // Interval to try ro re-connect
+#endif
+    RefPointer<YateSIPWSEndPoint> m_de;
+};
+
 // Transport worker
 class YateSIPTransportWorker : public Thread
 {
@@ -585,6 +683,43 @@ private:
     String m_sslContext;                 // SSL/TLS context
     NamedList m_transParams;             // Parameters for created transports
     bool m_initialized;                  // Flag reset when initializing by the module and set in init()
+};
+
+class YateSIPWSListener : public MessageHandler, public ProtocolHolder, public YateSIPListener
+{
+    YCLASS(YateSIPWSListener, MessageHandler);
+    friend class SIPDriver;
+    friend class YateSIPEndPoint;
+public:
+    YateSIPWSListener(int proto, const String& name, const NamedList& params);
+    ~YateSIPWSListener();
+    void init(const NamedList& params, bool first);
+    bool startup();
+    inline bool tls() const
+	{ return protocol() == Wss; }
+    inline bool listening() const
+	{ return m_listening; }
+    inline void setReason(const char* reason) {
+	    if (!reason)
+		return;
+	    Lock lck(m_mutex);
+	    m_reason = reason;
+	}
+    virtual const String& toString() const
+	{ return listenerName(); }
+public: // MessageHandler
+    virtual bool received(Message& msg);
+private:
+    // Close the socket. Remove from endpoint list
+    void cleanup(bool final);
+    // Reset socket
+    void stopListening(const char* reason = 0, int level = DebugNote);
+
+    Mutex m_mutex;                       // Mutex protecting transport parameters and bind ip/port
+    String m_reason;                     // Last error (state change) string
+    NamedList m_transParams;             // Parameters for created transports
+    bool m_initialized;                  // Flag reset when initializing by the module and set in init()
+    bool m_listening;
 };
 
 class YateUDPParty : public SIPParty
@@ -766,6 +901,12 @@ public:
 	    Lock lock(m_mutex);
 	    m_transports.append(trans)->setDelete(false);
 	}
+    inline void addWsTransport(YateSIPWSTransport* trans) {
+	    if (!trans)
+		return;
+	    Lock lock(m_mutex);
+	    m_transports.append(trans)->setDelete(false);
+	}
     // Retrieve the default transport. Return a referrenced object
     inline YateSIPUDPTransport* defTransport() {
 	    Lock lock(m_mutex);
@@ -795,7 +936,7 @@ public:
     // Build or delete a TCP listener. Start the thread
     bool setupListener(int proto, const String& name, bool enabled, const NamedList& params);
     // Remove a listener from list without deleting it. Return true if found
-    bool removeListener(YateSIPTCPListener* listener);
+    bool removeListener(GenObject* listener);
     // Remove a listener from list. Remove all if name is empty. Wait for termination
     void cancelListener(const String& name = String::empty(), const char* reason = 0);
     // This method is called by the driver when start/end initializing
@@ -1270,6 +1411,8 @@ const TokenDict ProtocolHolder::s_protoLC[] = {
     { "udp",  Udp},
     { "tcp",  Tcp},
     { "tls",  Tls},
+    { "ws",   Ws},
+    { "wss",  Wss},
     { 0, 0 },
 };
 
@@ -1278,6 +1421,8 @@ const TokenDict ProtocolHolder::s_protoUC[] = {
     { "UDP",  Udp},
     { "TCP",  Tcp},
     { "TLS",  Tls},
+    { "WS",   Ws},
+    { "WSS",  Wss},
     { 0, 0 },
 };
 
@@ -3820,6 +3965,655 @@ bool YateSIPTCPTransport::sendKeepAlive(bool request)
 }
 
 
+
+
+
+
+
+#if 0
+// Outgoing
+YateSIPWSTransport::YateSIPWSTransport(bool tls, const String& laddr, const String& raddr,
+    int rport)
+    : YateSIPTransport(tls ? Tls : Tcp,String::empty(),0,Idle),
+    m_outgoing(true), m_party(0), m_sent(-1),
+    m_idleInterval(TCP_IDLE_DEF), m_idleTimeout(0),
+    m_flowTimer(false), m_keepAlivePending(false),
+    m_msg(0), m_sipBufOffs(0), m_contentLen(0),
+    m_remoteAddr(raddr), m_remotePort(rport), m_localAddr(laddr),
+    m_connectRetry(s_tcpConnectRetry), m_nextConnect(0)
+{
+    m_maxpkt = s_tcpMaxpkt;
+    if (m_remotePort <= 0)
+	m_remotePort = sipPort(protocol() != Tls);
+    m_id << (tls ? "tls:" : "tcp:") << getTransIndex() << "-";
+    SocketAddr::appendTo(m_id,raddr,m_remotePort);
+    Debug(&plugin,DebugAll,"Transport(%s) created [%p]",m_id.c_str(),this);
+    if (plugin.ep())
+	plugin.ep()->addTcpTransport(this);
+}
+#endif
+
+// Incoming
+YateSIPWSTransport::YateSIPWSTransport(bool tls)
+    : YateSIPTransport(tls ? Wss : Ws, String::empty(), NULL, Connected)
+    , m_outgoing(false)
+//    , m_party(0)
+    , m_sent(-1),
+    m_idleInterval(TCP_IDLE_DEF), m_idleTimeout(0),
+    m_flowTimer(false),
+    m_msg(0), m_sipBufOffs(0), m_contentLen(0)
+//    , m_remotePort(0), m_connectRetry(0), m_nextConnect(0)
+{
+    m_maxpkt = s_tcpMaxpkt;
+    m_id << (tls ? "tls:" : "tcp:");
+    if (m_sock) {
+    	m_sock->getSockName(m_local);
+	m_sock->getPeerName(m_remote);
+	m_id << m_local.addr() << "-" << m_remote.addr();
+	setProtoAddr(true);
+    }
+    else
+	m_id << getTransIndex();
+    Debug(&plugin,DebugAll,"Transport(%s) created [%p]",m_id.c_str(),this);
+    if (plugin.ep())
+	plugin.ep()->addWsTransport(this);
+}
+
+#if 0
+YateTCPParty* YateSIPWSTransport::getParty()
+{
+    Lock lock(this);
+    return (m_party && m_party->ref()) ? m_party : 0;
+}
+#endif
+
+// (Re)Initialize the transport
+bool YateSIPWSTransport::init(const NamedList& params, bool first, Thread::Priority prio)
+{
+    bool ok = YateSIPTransport::init(params,NamedList::empty(),first,prio);
+    m_idleInterval = tcpIdleInterval(params.getIntValue(YSTRING("tcp_idle"),s_tcpIdle));
+    setIdleTimeout();
+    Debug(&plugin,DebugAll,
+	"Transport(%s) initialized maxpkt=%u rtp_localip=%s nat_address=%s tcp_idle=%u [%p]",
+	m_id.c_str(),m_maxpkt,m_rtpLocalAddr.c_str(),m_rtpNatAddr.c_str(),m_idleInterval,this);
+    if (ok && first)
+	ok = startWorker(prio);
+    return ok;
+}
+
+// Set flow timer flag and idle interval (in seconds)
+// Reset idle timeout
+void YateSIPWSTransport::setFlowTimer(bool on, unsigned int interval)
+{
+    Lock lock(this);
+    m_flowTimer = on;
+    if (m_flowTimer || m_outgoing || (!m_outgoing && m_idleInterval < interval))
+	m_idleInterval = interval;
+    Debug(&plugin,DebugInfo,"Transport(%s) flow timer is '%s' idle interval is %u seconds [%p]",
+	m_id.c_str(),String::boolText(m_flowTimer),m_idleInterval,this);
+    setIdleTimeout();
+}
+
+// Send data
+bool YateSIPWSTransport::send(SIPEvent* event)
+{
+    SIPMessage* msg = event->getMessage();
+    if (!msg)
+	return true;
+    if (s_engineHalt)
+	return false;
+    Lock lock(this);
+    if (m_status == Terminated)
+	return false;
+    if (m_queue.find(msg))
+	return true;
+    if (!msg->ref())
+	return false;
+    m_queue.append(msg);
+#ifdef XDEBUG
+    String tmp;
+    getMsgLine(tmp,msg);
+    Debug(&plugin,DebugAll,"Transport(%s) enqueued (%p,%s) [%p]",
+	m_id.c_str(),msg,tmp.c_str(),this);
+#endif
+    return true;
+}
+
+// Process data (read/send)
+int YateSIPWSTransport::process()
+{
+#if 0
+    if (s_engineHalt) {
+	// Stop processing
+	Lock lck(this);
+	// Last chance to send pending data
+	ObjList* first = m_queue.skipNull();
+	if (first && m_sock && m_sock->valid()) {
+	    DataBlock buf;
+	    for (ObjList* o = first; o && buf.length() < 4096; o = o->skipNext()) {
+		SIPMessage* msg = static_cast<SIPMessage*>(o->get());
+		if (s_printMsg && (o != first || m_sent < 0))
+		    printSendMsg(msg);
+		if (o != first || m_sent <= 0)
+		    buf += msg->getBuffer();
+		else {
+		    int remaining = msg->getBuffer().length() - m_sent;
+		    if (remaining > 0)
+			buf.assign(((char*)msg->getBuffer().data()) + m_sent,remaining);
+		}
+	    }
+	    if (buf.length()) {
+		DDebug(&plugin,DebugAll,"Transport(%s) sending last %u bytes [%p]",
+		    m_id.c_str(),buf.length(),this);
+		m_sock->writeData(buf.data(),buf.length());
+	    }
+	}
+	m_queue.clear();
+	// Terminate now incoming with no reference
+	// Remember: the worker is referencing us
+	if (!m_outgoing && refcount() == 2)
+	    return -1;
+	return 2000;
+    }
+    if (!(m_sock && m_sock->valid())) {
+	if (!m_outgoing)
+	    return -1;
+	if (tls() && !s_sslClientAvailable) {
+	    Debug(&plugin,DebugNote,"Transport(%s) SSL not available locally [%p]",
+		toString().c_str(),this);
+	    return -1;
+	}
+	if (!m_connectRetry || s_engineStop)
+	    return -1;
+	if (m_nextConnect > Time::now())
+	    return Thread::idleUsec();
+	m_connectRetry--;
+	int conn = connect();
+	if (conn > 0)
+	    setIdleTimeout();
+	else if (conn < 0)
+	    m_connectRetry = 0;
+	if (conn > 0 || m_connectRetry) {
+	    m_nextConnect = Time::now() + s_tcpConnectInterval;
+	    return Thread::idleUsec();
+	}
+	return -1;
+    }
+    Time time;
+    bool sent = false;
+    // Send pending data/keepalive
+    if (!sendPending(time,sent)) {
+	resetConnection();
+	return m_outgoing ? 0 : -1;
+    }
+    // Read data
+    bool read = false;
+    if (!readData(time,read)) {
+	resetConnection();
+	return m_outgoing ? 0 : -1;
+    }
+    // Outgoing received data: reset reconnect
+    if (m_outgoing && read && m_nextConnect) {
+	DDebug(&plugin,DebugAll,"Transport(%s) resetting re-connect [%p]",
+	    m_id.c_str(),this);
+	m_connectRetry = s_tcpConnectRetry;
+	m_nextConnect = 0;
+    }
+    // Idle incoming with refcount=2 (the worker is referencing us): terminate
+    if (!m_outgoing && m_idleTimeout < time) {
+	if (refcount() == 2) {
+	    m_reason = "Connection idle timeout";
+	    Debug(&plugin,DebugInfo,"Transport(%s) idle [%p]",m_id.c_str(),this);
+	    return -1;
+	}
+	setIdleTimeout(time);
+    }
+    return read ? 0 : Thread::idleUsec();
+#endif
+    return 0; // XXX
+}
+
+void YateSIPWSTransport::destroyed()
+{
+    TelEngine::destruct(m_msg);
+    YateSIPTransport::destroyed();
+}
+
+// Status changed notification for descendents
+void YateSIPWSTransport::statusChanged()
+{
+    Lock lock(this);
+    if (m_status == Terminated) {
+	// Remove messages now: they keep a party who is keeping a reference to us
+	m_queue.clear();
+	m_sent = -1;
+    }
+}
+
+#if 0
+// Reset transport's party
+void YateSIPWSTransport::resetParty(YateTCPParty* party, bool set)
+{
+    if (!party)
+	return;
+    Lock lock(this);
+    if (!m_party) {
+	if (!set) {
+	    Debug(&plugin,DebugNote,
+		"Transport(%s) party (%p) trying to reset empty [%p]",
+		m_id.c_str(),party,this);
+	    return;
+	}
+    }
+    else if (set || m_party != party) {
+	int level = DebugNote;
+#ifdef DEBUG
+	if (set && m_party != party)
+	    level = DebugFail;
+#endif
+	Debug(&plugin,level,"Transport(%s) party (%p) trying to %sset (%p) [%p]",
+	    m_id.c_str(),party,set ? "" : "re",m_party,this);
+	return;
+    }
+    m_party = set ? party : 0;
+    DDebug(&plugin,DebugAll,"Transport(%s) party changed to (%p) [%p]",
+	m_id.c_str(),m_party,this);
+}
+
+// Connect an outgoing transport. Terminate the socket before it
+int YateSIPWSTransport::connect(u_int64_t connToutUs)
+{
+    resetConnection();
+    Socket* sock = 0;
+    int retVal = -1;
+    m_reason.clear();
+    // Use a while() to break to the end
+    while (true) {
+	if (!m_remoteAddr) {
+	    m_reason = "Empty remote address";
+	    break;
+	}
+	// Allow connect retry
+	retVal = 0;
+	SocketAddr a(s_ipv6 ? SocketAddr::Unknown : SocketAddr::IPv4);
+	if (!a.host(m_remoteAddr)) {
+	    m_reason << "Failed to resolve '" << m_remoteAddr << "'";
+	    break;
+	}
+	a.port(m_remotePort);
+	sock = new Socket(a.family(),SOCK_STREAM);
+	if (!sock->valid()) {
+	    m_reason << "Failed to create socket";
+	    break;
+	}
+	// Bind to local ip
+	SocketAddr lip(s_ipv6 ? SocketAddr::Unknown : SocketAddr::IPv4);
+	if (m_localAddr) {
+	    if (!lip.host(m_localAddr)) {
+		m_reason << "Invalid local address '" << m_localAddr << "'";
+		// Don't allow connect retry
+		retVal = -1;
+		break;
+	    }
+	    if (!sock->bind(lip)) {
+		m_reason << "Failed to bind on '" << lip.host() << "' (" << m_localAddr << "). ";
+		addSockError(m_reason,*sock);
+		// Don't allow connect retry
+		retVal = -1;
+		break;
+	    }
+	}
+	// Use async connect
+	if (connToutUs && !(sock->canSelect() && sock->setBlocking(false))) {
+	    connToutUs = 0;
+	    if (sock->canSelect()) {
+		String tmp;
+		addSockError(tmp,*sock);
+		Debug(&plugin,DebugInfo,
+		    "Transport(%s) using sync connect (async set failed).%s [%p]",
+		    m_id.c_str(),tmp.c_str(),this);
+	    }
+	    else
+		Debug(&plugin,DebugInfo,
+		    "Transport(%s) using sync connect (select() not available) [%p]",
+		    m_id.c_str(),this);
+	}
+	u_int64_t start = connToutUs ? Time::now() : 0;
+	unsigned int intervals = 0;
+	if (start) {
+	    intervals = (unsigned int)(connToutUs / Thread::idleUsec());
+	    // Make sure we wait for at least 1 timeout interval
+	    if (!intervals)
+		intervals = 1;
+	}
+	if (plugin.debugAt(DebugAll)) {
+	    String s;
+	    s << "'" << a.addr() << "'";
+	    if (a.host() != m_remoteAddr)
+		s << " (" << m_remoteAddr << ")";
+	    if (m_localAddr)
+		s << " localip=" << lip.addr();
+	    Debug(&plugin,DebugAll,"Transport(%s) attempt to connect to %s [%p]",
+		m_id.c_str(),s.safe(),this);
+	}
+	bool ok = sock->connect(a);
+	bool timeout = false;
+	bool stop = false;
+	// Async connect in progress
+	if (!ok && sock->inProgress()) {
+	    bool done = false;
+	    bool event = false;
+	    while (intervals && !(done || event || stop)) {
+		if (!sock->select(0,&done,&event,Thread::idleUsec()))
+		    break;
+	        intervals--;
+		stop = Thread::check(false) || Engine::exiting();
+	    }
+	    timeout = !intervals && !(done || event);
+	    if (!stop && sock && !sock->error() && (done || event) && sock->updateError())
+		ok = !sock->error();
+	}
+	if (ok) {
+	    // TLS?
+	    if (tls() && !plugin.socketSsl(&sock,false)) {
+		m_reason = "SSL not available locally";
+		retVal = -1;
+		ok = false;
+	    }
+	    if (ok) {
+		if (!Thread::check(false))
+		    retVal = 1;
+		else {
+		    m_reason = "Cancelled";
+		    retVal = -1;
+		}
+	    }
+	}
+	else if (!stop) {
+	    m_reason << "Failed to connect to '" << a.addr() << "'";
+	    if (a.host() != m_remoteAddr)
+		m_reason << " (" << m_remoteAddr << ")";
+	    if (timeout)
+		m_reason << " . Connect timeout";
+	    else
+		addSockError(m_reason,*sock);
+	}
+	break;
+    }
+    if (retVal > 0)
+	resetConnection(sock);
+    else {
+	int level = DebugWarn;
+	if (!m_reason) {
+	    if (Thread::check(false) || Engine::exiting()) {
+		level = DebugInfo;
+		m_reason = "Connect cancelled";
+	    }
+	    else
+		m_reason = "Connect failed";
+	}
+	Debug(&plugin,level,"Transport(%s) %s (remaining %u connect attempts) [%p]",
+	    m_id.c_str(),m_reason.c_str(),!retVal ? m_connectRetry : 0,this);
+	resetSocket(sock,0);
+    }
+    return retVal;
+}
+#endif
+
+// Send pending messages, return false on failure
+bool YateSIPWSTransport::sendPending(const Time& time, bool& sent)
+{
+    sent = false;
+#if 0
+    if (!m_sock)
+	return false;
+    int attempts = 3;
+    while (attempts--) {
+	Lock lock(this);
+	ObjList* o = m_queue.skipNull();
+	SIPMessage* msg = o ? static_cast<SIPMessage*>(o->get()) : 0;
+	if (msg && m_sent < 0) {
+	    m_sent = 0;
+	    if (!sendPendingKeepAlive())
+		return false;
+	    XDebug(&plugin,DebugAll,"Transport(%s) dequeued (%p) [%p]",
+		m_id.c_str(),msg,this);
+	    if (s_printMsg)
+		printSendMsg(msg);
+	}
+	else if (!msg) {
+	    m_sent = -1;
+	    if (!sendPendingKeepAlive())
+		return false;
+	    break;
+	}
+	const DataBlock& buf = msg->getBuffer();
+	sent = true;
+	int len = buf.length();
+	if (len > m_sent) {
+	    char* b = (char*)(buf.data());
+	    len -= m_sent;
+	    int wr = m_sock->writeData(b + m_sent,len);
+	    printWriteError(wr,len);
+	    if (wr > 0) {
+		m_sent += wr;
+		// Outgoing: reset keep alive timer
+		if (m_outgoing)
+		    setIdleTimeout(time);
+	    }
+	    else if (wr && !m_sock->canRetry())
+		return false;
+	}
+	if (m_sent >= (int)buf.length()) {
+#ifdef DEBUG
+	    String tmp;
+	    getMsgLine(tmp,msg);
+	    Debug(&plugin,DebugAll,"Transport(%s) sent (%p,%s) [%p]",
+		m_id.c_str(),msg,tmp.c_str(),this);
+#endif
+	    o->remove();
+	    m_sent = -1;
+	    continue;
+	}
+	break;
+    }
+    // Keep alive?
+    if (m_outgoing && !sent && m_idleTimeout <= time) {
+	if (sendKeepAlive(true)) {
+	    sent = true;
+	    setIdleTimeout(time);
+	}
+	else
+	    return false;
+    }
+#endif
+    return true;
+}
+
+// Read data
+bool YateSIPWSTransport::readData(const Time& time, bool& read)
+{
+#if 0
+    read = false;
+    m_buffer.resize(m_maxpkt);
+    int res = m_sock->readData((void*)m_buffer.data(),m_buffer.length() - 1);
+    if (res < 0) {
+	printReadError();
+	return m_sock->canRetry();
+    }
+    if (!res) {
+	m_reason = "Network down";
+	Debug(&plugin,DebugNote,"Transport(%s) %s [%p]",m_id.c_str(),m_reason.c_str(),this);
+	return false;
+    }
+    read = true;
+#ifdef XDEBUG
+#if 0
+    String nb((const char*)m_buffer.data(),res);
+    String ob((const char*)m_sipBuffer.data(),m_sipBuffer.length());
+#else
+    String nb, ob;
+    nb.hexify(m_buffer.data(),res,' ');
+    ob.hexify(m_sipBuffer.data(),m_sipBuffer.length(),' ');
+#endif
+    Debug(&plugin,DebugAll,"%s current buffer %u '%s' read %d '%s' [%p]",
+	m_id.c_str(),m_sipBuffer.length(),ob.safe(),res,nb.safe(),this);
+#endif
+    const char* data = (const char*)m_buffer.data();
+    unsigned int len = res;
+    if (m_sipBuffer.length()) {
+	m_sipBuffer.append(m_buffer.data(),len);
+	len = m_sipBuffer.length();
+	data = (const char*)m_sipBuffer.data();
+    }
+    bool ok = true;
+    unsigned int over = 0;
+    bool respond = false;
+    while (len > 3) {
+	ok = false;
+	if (!m_msg) {
+	    m_sipBufOffs = 0;
+	    m_contentLen = 0;
+	    // Skip spaces, check for keep alive
+	    if (m_outgoing || respond)
+		skipSpaces(data,len);
+	    else
+		respond = skipSpacesCheckKeepAlive(data,len);
+	    if (len < 72) {
+		ok = true;
+		break;
+	    }
+	    // Find an empty line
+	    m_sipBufOffs = getEmptyLine(data,len);
+	    if (m_sipBufOffs > len) {
+		m_sipBufOffs = 0;
+		if (len <= m_maxpkt)
+		    ok = true;
+		else
+		    over = len;
+		break;
+	    }
+	    if (m_sipBufOffs > m_maxpkt) {
+		over = m_sipBufOffs;
+		break;
+	    }
+	    // Parse the message headers
+	    m_msg = SIPMessage::fromParsing(0,data,m_sipBufOffs,&m_contentLen);
+	    if (!m_msg) {
+		m_reason = "Received invalid message";
+		String tmp(data,m_sipBufOffs);
+		Debug(&plugin,DebugNote,
+		    "'%s' got invalid message [%p]\r\n------\r\n%s\r\n------",
+		    m_id.c_str(),this,tmp.c_str());
+		break;
+	    }
+	    // Check now if expected message length exceeds maxpkt
+	    unsigned int expected = m_sipBufOffs + m_contentLen;
+	    if (expected > m_maxpkt) {
+		over = expected;
+		break;
+	    }
+	}
+	ok = true;
+	// Expecting message body ?
+	if (m_contentLen) {
+	    if (m_sipBufOffs + m_contentLen > len)
+		break;
+	    m_msg->buildBody(data + m_sipBufOffs,m_contentLen);
+	    m_sipBufOffs += m_contentLen;
+	    m_contentLen = 0;
+	}
+	if (s_printMsg)
+	    printRecvMsg(data,m_sipBufOffs);
+	SIPMessage* msg = m_msg;
+	m_msg = 0;
+	receiveMsg(msg);
+	data += m_sipBufOffs;
+	len -= m_sipBufOffs;
+	m_sipBufOffs = 0;
+    }
+    if (!len)
+	m_sipBuffer.clear();
+    else
+	m_sipBuffer.assign((void*)data,len);
+    if (!ok) {
+	if (over) {
+	    m_reason = "Buffer overflow (message too long)";
+	    Debug(&plugin,DebugNote,"'%s' %s len=%u maxpkt=%u [%p]",
+		m_id.c_str(),m_reason.c_str(),over,m_maxpkt,this);
+	}
+	return false;
+    }
+    if (respond) {
+	// RFC5626: send CR/LF in response
+	Lock lck(this);
+	m_keepAlivePending = true;
+    }
+    // Got data: reset timeout for incoming and connection check for all
+    if (!m_outgoing)
+	setIdleTimeout(time);
+#endif
+    return true;
+}
+
+// Reset socket and status
+void YateSIPWSTransport::resetConnection(Socket* sock)
+{
+#if 0
+    Lock lck(this);
+    DDebug(&plugin,DebugAll,"Transport(%s) resetting connection sock=%p [%p]",
+	m_id.c_str(),sock,this);
+    // Reset send/recv data
+    TelEngine::destruct(m_msg);
+    m_sent = -1;
+    m_sipBuffer.clear();
+    m_sipBufOffs = 0;
+    m_contentLen = 0;
+    m_flowTimer = false;
+    setProtoAddr(false);
+    // Reset socket and addresses
+    if (m_sock) {
+	resetSocket(m_sock,-1);
+	m_local.clear();
+	m_remote.clear();
+    }
+    m_sock = sock;
+    if (m_sock) {
+	m_sock->getSockName(m_local);
+	m_sock->getPeerName(m_remote);
+	setProtoAddr(true);
+	Debug(&plugin,DebugAll,"Transport(%s) connected local=%s remote=%s [%p]",
+	    m_id.c_str(),m_local.addr().c_str(),m_remote.addr().c_str(),this);
+    }
+    // Update party local/remote ip/port
+    if (m_party)
+	m_party->updateAddrs();
+    lck.drop();
+    changeStatus(m_sock ? Connected : Idle);
+#endif
+}
+
+void YateSIPWSTransport::setIdleTimeout(u_int64_t time)
+{
+    m_idleTimeout = time + (u_int64_t)m_idleInterval * 1000000;
+    XDebug(&plugin,DebugAll,"Transport(%s) set idle timeout to %u [%p]",
+	m_id.c_str(),(unsigned int)(m_idleTimeout / 1000000),this);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 YateSIPTransportWorker::YateSIPTransportWorker(YateSIPTransport* trans,
     Thread::Priority prio)
     : Thread("YSIP Worker",prio), m_transport(trans)
@@ -4123,6 +4917,121 @@ void YateSIPTCPListener::stopListening(const char* reason, int level)
 	protoName(),lName(),reason,this);
     YateSIPTransport::resetSocket(m_socket,0);
 }
+
+
+YateSIPWSListener::YateSIPWSListener(int proto, const String& name, const NamedList& params)
+    : MessageHandler("websocket.init",150,plugin.name())
+    , ProtocolHolder(proto),
+    YateSIPListener(name,proto),
+    m_mutex(true,"YSIPListener"),
+    m_transParams(params), m_initialized(false)
+    , m_listening(false)
+{
+    init(params,true);
+}
+
+YateSIPWSListener::~YateSIPWSListener()
+{
+    cleanup(true);
+}
+
+// Init data
+void YateSIPWSListener::init(const NamedList& params, bool first)
+{
+    m_initialized = true;
+    m_mutex.lock();
+    setAddr("0.0.0.0",0,false);
+    if (first)
+	m_bind = true;
+    String rtp;
+    updateRtpAddr(params,rtp);
+    if (rtp != m_transParams["rtp_localip"])
+	m_transParams.setParam("rtp_localip",rtp);
+    Debug(&plugin,DebugAll,
+	"Listener(%s,'%s') initialized rtp_localip='%s' [%p]",
+	protoName(),lName(),rtp.c_str(),this);
+    m_mutex.unlock();
+}
+
+bool YateSIPWSListener::startup()
+{
+    if (m_listening) {
+	stopListening("Address changed",DebugInfo);
+	Lock lck(m_mutex);
+	m_bindRtpLocalAddr.clear();
+    }
+    Lock lck(m_mutex);
+    return (m_listening = Engine::install(this));
+}
+
+// Close the socket. Remove from endpoint list
+void YateSIPWSListener::cleanup(bool final)
+{
+    if (plugin.ep())
+	plugin.ep()->removeListener(this);
+    if (final) {
+	if (!m_listening)
+	    DDebug(&plugin,DebugInfo,"Listener(%s,'%s') terminated [%p]",
+		protoName(),lName(),this);
+	else
+	    Alarm(&plugin,"system",DebugWarn,"Listener(%s,'%s') abnormally terminated [%p]",
+		protoName(),lName(),this);
+    }
+    m_mutex.lock();
+    const char* reason = 0;
+    if (!m_reason)
+	reason = "Terminated";
+    m_mutex.unlock();
+    stopListening(reason,DebugInfo);
+}
+
+// Reset socket
+void YateSIPWSListener::stopListening(const char* reason, int level)
+{
+    if (!m_listening)
+	return;
+    Lock lck(m_mutex);
+    if (!reason)
+	reason = m_reason;
+    Debug(&plugin,level,"Listener(%s,'%s') stop listening reason='%s' [%p]",
+	protoName(),lName(),reason,this);
+    Engine::uninstall(this);
+    m_listening = false;
+}
+
+bool YateSIPWSListener::received(Message& msg)
+{
+    String protocol = msg.getValue("protocol");
+    if (protocol != YSTRING("sip")) // XXX FIXME check comma-separated list
+	return false;
+
+    Lock lck(m_mutex);
+    if (m_setRtpAddr) { // XXX FIXME check this more carefully
+	// Set RTP addr from bind address
+	String rtp;
+	SocketAddr lAddr;
+	String old = m_transParams["rtp_localip"];
+	if (!lAddr.isNullAddr())
+	    addIfaceAddr(rtp,lAddr.host(),m_cfgAddr);
+	if (rtp)
+	    m_transParams.setParam("rtp_localip",rtp);
+	else
+	    m_transParams.clearParam("rtp_localip");
+	if (rtp != old)
+	    Debug(&plugin,DebugAll,"Listener(%s,'%s') set rtp_localip='%s' [%p]",
+		protoName(),lName(),rtp.c_str(),this);
+	m_bindRtpLocalAddr = rtp;
+    }
+
+    YateSIPWSTransport* trans = new YateSIPWSTransport(tls());
+    if (!trans->init(msg,true))
+	TelEngine::destruct(trans);
+    msg.userData(trans->getEp());
+    msg.retValue() = "sip";
+    return true;
+}
+
+
 
 
 YateUDPParty::YateUDPParty(YateSIPUDPTransport* trans, const SocketAddr& addr,
@@ -4923,10 +5832,16 @@ bool YateSIPEndPoint::setupListener(int proto, const String& name, bool enabled,
     Lock lock(m_mutex);
     ObjList* o = m_listeners.find(name);
     if (o) {
+	YateSIPWSListener* wsl = static_cast<YateSIPWSListener*>(o->get()->getObject("YateSIPWSListener"));
 	YateSIPTCPListener* l = static_cast<YateSIPTCPListener*>(o->get());
+	ProtocolHolder* ph = wsl ? static_cast<ProtocolHolder*>(wsl) : static_cast<ProtocolHolder*>(l);
 	if (enabled) {
-	    if (l->protocol() == proto)
-		l->init(params,false);
+	    if (ph->protocol() == proto) {
+		if (wsl)
+		    wsl->init(params,false);
+		else
+		    l->init(params,false);
+	    }
 	    else {
 		lock.drop();
 		cancelListener(name,"Type changed");
@@ -4942,11 +5857,21 @@ bool YateSIPEndPoint::setupListener(int proto, const String& name, bool enabled,
     if (!enabled)
 	return true;
     // Build it
-    YateSIPTCPListener* listener = new YateSIPTCPListener(proto,name,params);
-    if (listener->startup()) {
-	m_listeners.append(listener);
-	DDebug(&plugin,DebugAll,"Added listener %p '%s'",listener,listener->toString().c_str());
-	return true;
+    if(proto == ProtocolHolder::Ws || proto == ProtocolHolder::Wss) {
+	YateSIPWSListener* listener = new YateSIPWSListener(proto,name,params);
+	if (listener->startup()) {
+	    m_listeners.append(listener);
+	    DDebug(&plugin,DebugAll,"Added listener %p '%s'",listener,listener->toString().c_str());
+	    return true;
+	}
+    }
+    else {
+	YateSIPTCPListener* listener = new YateSIPTCPListener(proto,name,params);
+	if (listener->startup()) {
+	    m_listeners.append(listener);
+	    DDebug(&plugin,DebugAll,"Added listener %p '%s'",listener,listener->toString().c_str());
+	    return true;
+	}
     }
     Alarm(&plugin,"config",DebugWarn,"Failed to start listener thread type=%s name='%s'",
 	ProtocolHolder::lookupProtoName(proto),name.c_str());
@@ -4954,7 +5879,7 @@ bool YateSIPEndPoint::setupListener(int proto, const String& name, bool enabled,
 }
 
 // Remove a listener from list without deleting it. Return true if found
-bool YateSIPEndPoint::removeListener(YateSIPTCPListener* listener)
+bool YateSIPEndPoint::removeListener(GenObject* listener)
 {
     if (!listener)
 	return false;
@@ -8976,6 +9901,8 @@ void SIPDriver::setupListener(const String& name, const NamedList& params,
 	    break;
 	case ProtocolHolder::Tcp:
 	case ProtocolHolder::Tls:
+	case ProtocolHolder::Ws:
+	case ProtocolHolder::Wss:
 	    m_endpoint->setupUdpTransport(name,false,NamedList::empty(),
 		NamedList::empty(),"Type changed");
 	    m_endpoint->setupListener(proto,name,enabled,params);

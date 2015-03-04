@@ -24,6 +24,7 @@
 #include <yatesdp.h>
 
 #include <string.h>
+#include <stdlib.h>
 
 
 using namespace TelEngine;
@@ -39,10 +40,12 @@ class YateSIPTransportWorker;            // A transport worker
 class YateSIPTCPListener;                // A TCP listener
 class YateSIPWSListener;                 // A WebSocket listener
 class YateUDPParty;                      // A SIP UDP party
-class YateTCPParty;                      // A SIP TCP/TLS party
+class YateTCPParty;                      // A SIP TCP/TLS party;
+class YateWSParty;                       // A SIP over WebSocket party;
 class YateSIPEngine;                     // The SIP engine
 class YateSIPLine;                       // A line
 class YateSIPEndPoint;                   // Endpoint processor
+class YateSIPWSDataEndPoint;                 // WebSocket DataEndpoint
 class SIPDriver;
 
 #define EXPIRES_MIN 60
@@ -375,6 +378,8 @@ public:
 	{ return 0; }
     virtual YateSIPTCPTransport* tcpTransport()
 	{ return 0; }
+    virtual YateSIPWSTransport* wsTransport()
+	{ return 0; }
     // Stop the worker. Change status
     void terminate(const char* reason = 0);
     // Process data (read/send).
@@ -534,29 +539,16 @@ protected:
     u_int64_t m_nextConnect;             // Interval to try ro re-connect
 };
 
-class YateSIPWSEndPoint : public DataEndpoint
-{
-    friend class YateSIPWSTransport;
-public:
-    YateSIPWSEndPoint(YateSIPWSTransport* tran)
-	: m_tran(tran)
-	{ }
-    ~YateSIPWSEndPoint()
-	{ }
-private:
-    YateSIPWSTransport* m_tran;
-};
-
 // WebSocket transport
 class YateSIPWSTransport : public YateSIPTransport
 {
     YCLASS(YateSIPWSTransport,YateSIPTransport);
-///    friend class YateTCPParty;
+    friend class YateWSParty;
 public:
     // Build an outgoing transport
 //    YateSIPWSTransport(bool tls, const String& laddr, const String& raddr, int rport);
     // Build an incoming transport
-    YateSIPWSTransport(bool tls);
+    YateSIPWSTransport(bool tls, const NamedList& params);
     inline bool outgoing() const
 	{ return m_outgoing; }
     inline bool tls() const
@@ -570,9 +562,9 @@ public:
 	{ return m_localAddr; }
 #endif
     // Safely return a reference to party
-//    YateTCPParty* getParty();
-//    virtual YateSIPTCPTransport* tcpTransport()
-//	{ return this; }
+    YateWSParty* getParty();
+    virtual YateSIPWSTransport* wsTransport()
+	{ return this; }
     // (Re)Initialize the transport
     bool init(const NamedList& params, bool first, Thread::Priority prio = Thread::Normal);
     // Set flow timer flag and idle interval (in seconds)
@@ -583,28 +575,27 @@ public:
     // Process data (read/send)
     virtual int process();
     // Get associated DataEndpoint object, used for WebSocket communication
-    inline DataEndpoint* getEp()
-	{ if (! m_de) m_de = new YateSIPWSEndPoint(this); return m_de; }
+    inline DataEndpoint* getEp();
+    void disconnected();
+    void received(const DataBlock& data, unsigned long time);
 protected:
     virtual void destroyed();
     // Status changed notification
     virtual void statusChanged();
     // Reset transport's party
-//    void resetParty(YateTCPParty* party, bool set);
+    void resetParty(YateWSParty* party, bool set);
     // Connect an outgoing transport. Terminate the socket before it
     // Return: 1: OK, 0: retry connect, -1: stop the transport
 //    int connect(u_int64_t connToutUs = 60000000);
     // Send pending messages or keepalive, return false on failure
     bool sendPending(const Time& time, bool& sent);
-    // Read data
-    bool readData(const Time& time, bool& read);
     // Reset socket and connection related data
     void resetConnection(Socket* sock = 0);
     // Set transport idle timeout
     void setIdleTimeout(u_int64_t time = Time::now());
 
     bool m_outgoing;                     // Direction
-//    YateTCPParty* m_party;               // Transport party
+    YateWSParty* m_party;                // Transport party
     ObjList m_queue;                     // Pending message queue
     int m_sent;                          // Sent bytes from first message in queue
                                          // -1 to dequeue a new message and print it
@@ -614,18 +605,49 @@ protected:
     u_int64_t m_idleTimeout;             // Idle timeout: check state or send keep alive
     bool m_flowTimer;                    // Flow timer flag (RFC5626)
     SIPMessage* m_msg;                   // Partially received SIP message (expecting body)
+#if 0
     DataBlock m_sipBuffer;               // Accumulated read data
     unsigned int m_sipBufOffs;           // Offset in sip buffer for partial sip message
     unsigned int m_contentLen;           // Expected content length for partial sip message
     // Outgoing (re-connect info)
-#if 0
     String m_remoteAddr;                 // Remote party address
     int m_remotePort;                    // Remote port
     String m_localAddr;                  // Optional local address to bind to
     unsigned int m_connectRetry;         // Number of re-connect
     u_int64_t m_nextConnect;             // Interval to try ro re-connect
 #endif
-    RefPointer<YateSIPWSEndPoint> m_de;
+    YateSIPWSDataEndPoint* m_de; // no reference
+};
+
+class YateSIPWSDataEndPoint : public DataEndpoint
+{
+    class DS: public DataSource
+    {
+    public:
+	DS(): DataSource("data") { }
+    };
+    class DC: public DataConsumer
+    {
+    public:
+	DC(YateSIPWSTransport* tran): DataConsumer("data"), m_tran(tran) { }
+	virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags) { m_tran->received(data, tStamp); return 0; }
+    private:
+	YateSIPWSTransport* m_tran;
+    };
+    friend class YateSIPWSTransport;
+public:
+    YateSIPWSDataEndPoint(YateSIPWSTransport* tran)
+	: m_tran(tran)
+	{
+	setSource(new DS);
+	getSource()->deref();
+	setConsumer(new DC(tran));
+	getConsumer()->deref();
+       	}
+    ~YateSIPWSDataEndPoint()
+	{ m_tran->disconnected(); }
+private:
+    YateSIPWSTransport* m_tran;
 };
 
 // Transport worker
@@ -759,6 +781,24 @@ public:
 protected:
     virtual void destroyed();
     YateSIPTCPTransport* m_transport;
+};
+
+class YateWSParty : public SIPParty
+{
+public:
+    YateWSParty(YateSIPWSTransport* trans);
+    ~YateWSParty();
+    virtual bool transmit(SIPEvent* event);
+    virtual const char* getProtoName() const;
+    virtual bool setParty(const URI& uri);
+    virtual void* getTransport();
+    // Get an object from this one
+    virtual void* getObject(const String& name) const;
+    // Update party local/remote addr/port from transport
+    void updateAddrs();
+protected:
+    virtual void destroyed();
+    YateSIPWSTransport* m_transport;
 };
 
 class SipHandler;
@@ -3088,6 +3128,7 @@ void YateSIPTransport::receiveMsg(SIPMessage*& msg)
 	SIPParty* party = 0;
 	YateSIPUDPTransport* udp = udpTransport();
 	YateSIPTCPTransport* tcp = tcpTransport();
+	YateSIPWSTransport* ws = wsTransport();
 	if (udp) {
 	    URI uri(msg->uri);
 	    YateSIPLine* line = plugin.findLine(m_remote.host(),m_remote.port(),uri.getUser());
@@ -3107,6 +3148,15 @@ void YateSIPTransport::receiveMsg(SIPMessage*& msg)
 	    party = tcp->getParty();
 	    if (!party) {
 		party = new YateTCPParty(tcp);
+		DDebug(&plugin,DebugAll,
+		    "Transport(%s) built tcp party (%p) for received message (%p) [%p]",
+		    m_id.c_str(),party,msg,this);
+	    }
+	}
+	else if (ws) {
+	    party = ws->getParty();
+	    if (!party) {
+		party = new YateWSParty(ws);
 		DDebug(&plugin,DebugAll,
 		    "Transport(%s) built tcp party (%p) for received message (%p) [%p]",
 		    m_id.c_str(),party,msg,this);
@@ -3996,42 +4046,43 @@ YateSIPWSTransport::YateSIPWSTransport(bool tls, const String& laddr, const Stri
 #endif
 
 // Incoming
-YateSIPWSTransport::YateSIPWSTransport(bool tls)
+YateSIPWSTransport::YateSIPWSTransport(bool tls, const NamedList& params)
     : YateSIPTransport(tls ? Wss : Ws, String::empty(), NULL, Connected)
     , m_outgoing(false)
-//    , m_party(0)
+    , m_party(0)
     , m_sent(-1),
     m_idleInterval(TCP_IDLE_DEF), m_idleTimeout(0),
     m_flowTimer(false),
-    m_msg(0), m_sipBufOffs(0), m_contentLen(0)
+    m_msg(0)
+    , m_de(NULL)
 //    , m_remotePort(0), m_connectRetry(0), m_nextConnect(0)
 {
+    Debugger debug(DebugAll,"YateSIPWSTransport::YateSIPWSTransport()", "tls=%s", tls ? "true" : "false");
     m_maxpkt = s_tcpMaxpkt;
-    m_id << (tls ? "tls:" : "tcp:");
-    if (m_sock) {
-    	m_sock->getSockName(m_local);
-	m_sock->getPeerName(m_remote);
-	m_id << m_local.addr() << "-" << m_remote.addr();
-	setProtoAddr(true);
-    }
-    else
-	m_id << getTransIndex();
+    m_id << (tls ? "wss:" : "ws:");
+    m_local.assign(AF_INET);
+    m_local.host(params.getValue("local_host"));
+    m_local.port(atoi(params.getValue("local_port")));
+    m_remote.assign(AF_INET);
+    m_remote.host(params.getValue("ip_host"));
+    m_remote.port(atoi(params.getValue("ip_port")));
+    m_id << m_local.addr() << "-" << m_remote.addr();
+    setProtoAddr(true);
     Debug(&plugin,DebugAll,"Transport(%s) created [%p]",m_id.c_str(),this);
     if (plugin.ep())
 	plugin.ep()->addWsTransport(this);
 }
 
-#if 0
-YateTCPParty* YateSIPWSTransport::getParty()
+YateWSParty* YateSIPWSTransport::getParty()
 {
     Lock lock(this);
     return (m_party && m_party->ref()) ? m_party : 0;
 }
-#endif
 
 // (Re)Initialize the transport
 bool YateSIPWSTransport::init(const NamedList& params, bool first, Thread::Priority prio)
 {
+    Debugger debug(DebugAll,"YateSIPWSTransport::init()", "params=%s, first=%s, prio=%d)", params.c_str(), first ? "true" : "false", prio);
     bool ok = YateSIPTransport::init(params,NamedList::empty(),first,prio);
     m_idleInterval = tcpIdleInterval(params.getIntValue(YSTRING("tcp_idle"),s_tcpIdle));
     setIdleTimeout();
@@ -4059,6 +4110,7 @@ void YateSIPWSTransport::setFlowTimer(bool on, unsigned int interval)
 // Send data
 bool YateSIPWSTransport::send(SIPEvent* event)
 {
+    Debugger debug(DebugAll,"YateSIPWSTransport::send()", "event=%p", event);
     SIPMessage* msg = event->getMessage();
     if (!msg)
 	return true;
@@ -4084,6 +4136,7 @@ bool YateSIPWSTransport::send(SIPEvent* event)
 // Process data (read/send)
 int YateSIPWSTransport::process()
 {
+    Debugger debug(DebugAll,"YateSIPWSTransport::process()");
 #if 0
     if (s_engineHalt) {
 	// Stop processing
@@ -4141,6 +4194,7 @@ int YateSIPWSTransport::process()
 	}
 	return -1;
     }
+#endif
     Time time;
     bool sent = false;
     // Send pending data/keepalive
@@ -4150,6 +4204,7 @@ int YateSIPWSTransport::process()
     }
     // Read data
     bool read = false;
+#if 0
     if (!readData(time,read)) {
 	resetConnection();
 	return m_outgoing ? 0 : -1;
@@ -4161,6 +4216,12 @@ int YateSIPWSTransport::process()
 	m_connectRetry = s_tcpConnectRetry;
 	m_nextConnect = 0;
     }
+#endif
+    if (! m_de)
+	return -1;
+
+    Thread::sleep(2);
+
     // Idle incoming with refcount=2 (the worker is referencing us): terminate
     if (!m_outgoing && m_idleTimeout < time) {
 	if (refcount() == 2) {
@@ -4171,12 +4232,11 @@ int YateSIPWSTransport::process()
 	setIdleTimeout(time);
     }
     return read ? 0 : Thread::idleUsec();
-#endif
-    return 0; // XXX
 }
 
 void YateSIPWSTransport::destroyed()
 {
+    Debugger debug(DebugAll,"YateSIPWSTransport::destroyed()");
     TelEngine::destruct(m_msg);
     YateSIPTransport::destroyed();
 }
@@ -4192,9 +4252,8 @@ void YateSIPWSTransport::statusChanged()
     }
 }
 
-#if 0
 // Reset transport's party
-void YateSIPWSTransport::resetParty(YateTCPParty* party, bool set)
+void YateSIPWSTransport::resetParty(YateWSParty* party, bool set)
 {
     if (!party)
 	return;
@@ -4222,6 +4281,7 @@ void YateSIPWSTransport::resetParty(YateTCPParty* party, bool set)
 	m_id.c_str(),m_party,this);
 }
 
+#if 0
 // Connect an outgoing transport. Terminate the socket before it
 int YateSIPWSTransport::connect(u_int64_t connToutUs)
 {
@@ -4365,9 +4425,9 @@ int YateSIPWSTransport::connect(u_int64_t connToutUs)
 // Send pending messages, return false on failure
 bool YateSIPWSTransport::sendPending(const Time& time, bool& sent)
 {
+    Debugger debug(DebugAll,"YateSIPWSTransport::sendPending()");
     sent = false;
-#if 0
-    if (!m_sock)
+    if (!m_de)
 	return false;
     int attempts = 3;
     while (attempts--) {
@@ -4376,8 +4436,6 @@ bool YateSIPWSTransport::sendPending(const Time& time, bool& sent)
 	SIPMessage* msg = o ? static_cast<SIPMessage*>(o->get()) : 0;
 	if (msg && m_sent < 0) {
 	    m_sent = 0;
-	    if (!sendPendingKeepAlive())
-		return false;
 	    XDebug(&plugin,DebugAll,"Transport(%s) dequeued (%p) [%p]",
 		m_id.c_str(),msg,this);
 	    if (s_printMsg)
@@ -4385,182 +4443,28 @@ bool YateSIPWSTransport::sendPending(const Time& time, bool& sent)
 	}
 	else if (!msg) {
 	    m_sent = -1;
-	    if (!sendPendingKeepAlive())
-		return false;
 	    break;
 	}
 	const DataBlock& buf = msg->getBuffer();
 	sent = true;
-	int len = buf.length();
-	if (len > m_sent) {
-	    char* b = (char*)(buf.data());
-	    len -= m_sent;
-	    int wr = m_sock->writeData(b + m_sent,len);
-	    printWriteError(wr,len);
-	    if (wr > 0) {
-		m_sent += wr;
-		// Outgoing: reset keep alive timer
-		if (m_outgoing)
-		    setIdleTimeout(time);
-	    }
-	    else if (wr && !m_sock->canRetry())
-		return false;
-	}
-	if (m_sent >= (int)buf.length()) {
+	m_de->getSource()->Forward(buf, 0UL, 0UL);
 #ifdef DEBUG
-	    String tmp;
-	    getMsgLine(tmp,msg);
-	    Debug(&plugin,DebugAll,"Transport(%s) sent (%p,%s) [%p]",
-		m_id.c_str(),msg,tmp.c_str(),this);
+	String tmp;
+	getMsgLine(tmp,msg);
+	Debug(&plugin,DebugAll,"Transport(%s) sent (%p,%s) [%p]",
+	    m_id.c_str(),msg,tmp.c_str(),this);
 #endif
-	    o->remove();
-	    m_sent = -1;
-	    continue;
-	}
-	break;
+	o->remove();
+	m_sent = -1;
+	continue;
     }
-    // Keep alive?
-    if (m_outgoing && !sent && m_idleTimeout <= time) {
-	if (sendKeepAlive(true)) {
-	    sent = true;
-	    setIdleTimeout(time);
-	}
-	else
-	    return false;
-    }
-#endif
-    return true;
-}
-
-// Read data
-bool YateSIPWSTransport::readData(const Time& time, bool& read)
-{
-#if 0
-    read = false;
-    m_buffer.resize(m_maxpkt);
-    int res = m_sock->readData((void*)m_buffer.data(),m_buffer.length() - 1);
-    if (res < 0) {
-	printReadError();
-	return m_sock->canRetry();
-    }
-    if (!res) {
-	m_reason = "Network down";
-	Debug(&plugin,DebugNote,"Transport(%s) %s [%p]",m_id.c_str(),m_reason.c_str(),this);
-	return false;
-    }
-    read = true;
-#ifdef XDEBUG
-#if 0
-    String nb((const char*)m_buffer.data(),res);
-    String ob((const char*)m_sipBuffer.data(),m_sipBuffer.length());
-#else
-    String nb, ob;
-    nb.hexify(m_buffer.data(),res,' ');
-    ob.hexify(m_sipBuffer.data(),m_sipBuffer.length(),' ');
-#endif
-    Debug(&plugin,DebugAll,"%s current buffer %u '%s' read %d '%s' [%p]",
-	m_id.c_str(),m_sipBuffer.length(),ob.safe(),res,nb.safe(),this);
-#endif
-    const char* data = (const char*)m_buffer.data();
-    unsigned int len = res;
-    if (m_sipBuffer.length()) {
-	m_sipBuffer.append(m_buffer.data(),len);
-	len = m_sipBuffer.length();
-	data = (const char*)m_sipBuffer.data();
-    }
-    bool ok = true;
-    unsigned int over = 0;
-    bool respond = false;
-    while (len > 3) {
-	ok = false;
-	if (!m_msg) {
-	    m_sipBufOffs = 0;
-	    m_contentLen = 0;
-	    // Skip spaces, check for keep alive
-	    if (m_outgoing || respond)
-		skipSpaces(data,len);
-	    else
-		respond = skipSpacesCheckKeepAlive(data,len);
-	    if (len < 72) {
-		ok = true;
-		break;
-	    }
-	    // Find an empty line
-	    m_sipBufOffs = getEmptyLine(data,len);
-	    if (m_sipBufOffs > len) {
-		m_sipBufOffs = 0;
-		if (len <= m_maxpkt)
-		    ok = true;
-		else
-		    over = len;
-		break;
-	    }
-	    if (m_sipBufOffs > m_maxpkt) {
-		over = m_sipBufOffs;
-		break;
-	    }
-	    // Parse the message headers
-	    m_msg = SIPMessage::fromParsing(0,data,m_sipBufOffs,&m_contentLen);
-	    if (!m_msg) {
-		m_reason = "Received invalid message";
-		String tmp(data,m_sipBufOffs);
-		Debug(&plugin,DebugNote,
-		    "'%s' got invalid message [%p]\r\n------\r\n%s\r\n------",
-		    m_id.c_str(),this,tmp.c_str());
-		break;
-	    }
-	    // Check now if expected message length exceeds maxpkt
-	    unsigned int expected = m_sipBufOffs + m_contentLen;
-	    if (expected > m_maxpkt) {
-		over = expected;
-		break;
-	    }
-	}
-	ok = true;
-	// Expecting message body ?
-	if (m_contentLen) {
-	    if (m_sipBufOffs + m_contentLen > len)
-		break;
-	    m_msg->buildBody(data + m_sipBufOffs,m_contentLen);
-	    m_sipBufOffs += m_contentLen;
-	    m_contentLen = 0;
-	}
-	if (s_printMsg)
-	    printRecvMsg(data,m_sipBufOffs);
-	SIPMessage* msg = m_msg;
-	m_msg = 0;
-	receiveMsg(msg);
-	data += m_sipBufOffs;
-	len -= m_sipBufOffs;
-	m_sipBufOffs = 0;
-    }
-    if (!len)
-	m_sipBuffer.clear();
-    else
-	m_sipBuffer.assign((void*)data,len);
-    if (!ok) {
-	if (over) {
-	    m_reason = "Buffer overflow (message too long)";
-	    Debug(&plugin,DebugNote,"'%s' %s len=%u maxpkt=%u [%p]",
-		m_id.c_str(),m_reason.c_str(),over,m_maxpkt,this);
-	}
-	return false;
-    }
-    if (respond) {
-	// RFC5626: send CR/LF in response
-	Lock lck(this);
-	m_keepAlivePending = true;
-    }
-    // Got data: reset timeout for incoming and connection check for all
-    if (!m_outgoing)
-	setIdleTimeout(time);
-#endif
     return true;
 }
 
 // Reset socket and status
 void YateSIPWSTransport::resetConnection(Socket* sock)
 {
+    Debugger debug(DebugAll,"YateSIPWSTransport::resetConnection()", "sock=%p", sock);
 #if 0
     Lock lck(this);
     DDebug(&plugin,DebugAll,"Transport(%s) resetting connection sock=%p [%p]",
@@ -4602,6 +4506,33 @@ void YateSIPWSTransport::setIdleTimeout(u_int64_t time)
 	m_id.c_str(),(unsigned int)(m_idleTimeout / 1000000),this);
 }
 
+inline DataEndpoint* YateSIPWSTransport::getEp()
+{
+    if (! m_de)
+	m_de = new YateSIPWSDataEndPoint(this);
+    return m_de;
+}
+
+void YateSIPWSTransport::disconnected()
+{
+    Debugger debug(DebugAll,"YateSIPWSTransport::disconnected()", "huh");
+    m_de = NULL;
+}
+
+void YateSIPWSTransport::received(const DataBlock& data, unsigned long time)
+{
+    Debugger debug(DebugAll,"YateSIPWSTransport::received()", "data=%p, length=%d, time=%u", data.data(), data.length(), time);
+    char* b = (char*)data.data();
+    if (s_printMsg)
+	printRecvMsg(b,data.length());
+
+    SIPMessage* msg = SIPMessage::fromParsing(0,b,data.length());
+    receiveMsg(msg);
+
+    // Got data: reset timeout for incoming and connection check for all
+    if (!m_outgoing)
+	setIdleTimeout(time);
+}
 
 
 
@@ -5025,7 +4956,7 @@ bool YateSIPWSListener::received(Message& msg)
 	m_bindRtpLocalAddr = rtp;
     }
 
-    YateSIPWSTransport* trans = new YateSIPWSTransport(tls());
+    YateSIPWSTransport* trans = new YateSIPWSTransport(tls(), msg);
     if (!trans->init(msg,true))
 	TelEngine::destruct(trans);
     msg.userData(trans->getEp());
@@ -5256,6 +5187,133 @@ void YateTCPParty::destroyed()
     }
     SIPParty::destroyed();
 }
+
+
+YateWSParty::YateWSParty(YateSIPWSTransport* trans)
+    : SIPParty(true),
+    m_transport(0)
+{
+    if (plugin.ep())
+	m_mutex = plugin.ep()->m_partyMutexPool.mutex(this);
+    if (trans && trans->ref()) {
+	m_transport = trans;
+	trans->resetParty(this,true);
+    }
+    updateAddrs();
+    DDebug(&plugin,DebugAll,"YateWSParty local %s party %s transport=%p [%p]",
+	SocketAddr::appendTo(m_local,m_localPort).c_str(),
+	SocketAddr::appendTo(m_party,m_partyPort).c_str(),m_transport,this);
+}
+
+YateWSParty::~YateWSParty()
+{
+    XDebug(&plugin,DebugAll,"YateWSParty::~YateWSParty() transport=%p [%p]",
+	m_transport,this);
+    TelEngine::destruct(m_transport);
+}
+
+bool YateWSParty::transmit(SIPEvent* event)
+{
+    const SIPMessage* msg = event->getMessage();
+    if (!msg)
+	return false;
+    if (m_transport)
+	return m_transport->send(event);
+    String tmp;
+    getMsgLine(tmp,msg);
+    Debug(&plugin,DebugWarn,"YateWSParty no transport to send %s [%p]",
+	tmp.c_str(),this);
+    return false;
+}
+
+const char* YateWSParty::getProtoName() const
+{
+    if (m_transport)
+	return m_transport->protoName();
+    return "TCP";
+}
+
+bool YateWSParty::setParty(const URI& uri)
+{
+    Lock lock(m_mutex);
+    if (m_partyPort && m_party && s_ignoreVia)
+	return true;
+    Debug(&plugin,DebugWarn,"YateWSParty::setParty(%s) not implemented [%p]",
+	uri.safe(),this);
+    return false;
+}
+
+void* YateWSParty::getTransport()
+{
+    return m_transport;
+}
+
+// Get an object from this one
+void* YateWSParty::getObject(const String& name) const
+{
+    if (name == YATOM("YateWSParty"))
+	return (void*)this;
+    if (name == YATOM("YateSIPWSTransport") || name == YATOM("YateSIPTransport"))
+	return m_transport;
+    return SIPParty::getObject(name);
+}
+
+void YateWSParty::updateAddrs()
+{
+    if (!m_transport)
+	return;
+    m_transport->lock();
+    String laddr = m_transport->local().host();
+    int lport = m_transport->local().port();
+    String raddr = m_transport->remote().host();
+    int rport = m_transport->remote().port();
+//    String transLocalAddr = m_transport->localAddr();
+    SocketAddr remote;
+    if (raddr)
+	remote = m_transport->remote();
+    else {
+	if (!s_ipv6)
+	    remote.assign(AF_INET);
+#if 0
+	remote.host(m_transport->remoteAddr());
+	remote.port(m_transport->remotePort());
+	raddr = remote.host();
+	rport = remote.port();
+#else
+	Debug(DebugWarn, "XXX");
+#endif
+    }
+    m_transport->unlock();
+    if (!laddr) {
+	SocketAddr addr;
+//	if (transLocalAddr && addr.host(transLocalAddr))
+//	    laddr = addr.host();
+	if (!laddr) {
+	    addr.clear();
+	    if (addr.local(remote))
+		laddr = addr.host();
+	    else
+		laddr = "localhost";
+	}
+    }
+    if (lport <= 0)
+	lport = sipPort(!m_transport->tls());
+    setAddr(laddr,lport,true);
+    setAddr(raddr,rport,false);
+}
+
+void YateWSParty::destroyed()
+{
+    DDebug(&plugin,DebugAll,"YateWSParty::destroyed() transport=%p [%p]",
+	m_transport,this);
+    if (m_transport) {
+	m_transport->resetParty(this,false);
+	TelEngine::destruct(m_transport);
+    }
+    SIPParty::destroyed();
+}
+
+
 
 
 YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)

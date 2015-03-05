@@ -4136,7 +4136,6 @@ bool YateSIPWSTransport::send(SIPEvent* event)
 // Process data (read/send)
 int YateSIPWSTransport::process()
 {
-    Debugger debug(DebugAll,"YateSIPWSTransport::process()");
 #if 0
     if (s_engineHalt) {
 	// Stop processing
@@ -4219,8 +4218,6 @@ int YateSIPWSTransport::process()
 #endif
     if (! m_de)
 	return -1;
-
-    Thread::sleep(2);
 
     // Idle incoming with refcount=2 (the worker is referencing us): terminate
     if (!m_outgoing && m_idleTimeout < time) {
@@ -4425,7 +4422,6 @@ int YateSIPWSTransport::connect(u_int64_t connToutUs)
 // Send pending messages, return false on failure
 bool YateSIPWSTransport::sendPending(const Time& time, bool& sent)
 {
-    Debugger debug(DebugAll,"YateSIPWSTransport::sendPending()");
     sent = false;
     if (!m_de)
 	return false;

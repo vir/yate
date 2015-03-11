@@ -243,7 +243,7 @@ void IAXInfoElement::toString(String& buf)
  */
 void IAXInfoElementString::toBuffer(DataBlock& buf)
 {
-    unsigned char d[2] = {type(),m_strData.length()};
+    unsigned char d[2] = {type(),(unsigned char)m_strData.length()};
     buf.assign(d,sizeof(d));
     buf.append(data());
 }
@@ -302,7 +302,7 @@ void IAXInfoElementNumeric::toString(String& buf)
  */
 void IAXInfoElementBinary::toBuffer(DataBlock& buf)
 {
-    unsigned char d[2] = {type(),m_data.length()};
+    unsigned char d[2] = {type(),(unsigned char)m_data.length()};
     buf.assign(d,sizeof(d));
     buf += m_data;
 }

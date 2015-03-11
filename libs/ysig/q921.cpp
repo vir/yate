@@ -2272,7 +2272,8 @@ u_int16_t ISDNFrame::getRi(const DataBlock& data)
 // Build a TEI management message buffer
 bool ISDNFrame::buildTeiManagement(DataBlock& data, u_int8_t type, u_int16_t ri, u_int8_t ai)
 {
-    u_int8_t d[5] = { Q921_MANAGEMENT_TEI, (ri >> 8) & 0xff, ri & 0xff, type, (ai << 1) | 1 };
+    u_int8_t d[5] = { Q921_MANAGEMENT_TEI, (u_int8_t)(ri >> 8), (u_int8_t)ri,
+	type, (u_int8_t)((ai << 1) | 1) };
     data.assign(d,5);
     return true;
 }

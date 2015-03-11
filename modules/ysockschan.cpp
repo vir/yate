@@ -1774,7 +1774,7 @@ SOCKSPacket* SOCKSPacket::buildSocks(SOCKSConn* conn, bool request,
     }
     else if (addrType == IPv4)
 	packet->m_buffer.append(ip,4);
-    unsigned char p[2] = {port >> 8,port};
+    unsigned char p[2] = {(unsigned char)(port >> 8),(unsigned char)port};
     packet->m_buffer.append(p,2);
     return packet;
 }

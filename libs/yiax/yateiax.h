@@ -1057,7 +1057,8 @@ public:
      */
     static inline void buildMiniFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t ts,
 	void* data, unsigned int len) {
-	    unsigned char header[4] = {sCallNo >> 8,sCallNo & 0xff,ts >> 8,ts & 0xff};
+	    unsigned char header[4] = {(unsigned char)(sCallNo >> 8),
+		(unsigned char)sCallNo,(unsigned char)(ts >> 8),(unsigned char)ts};
 	    dest.assign(header,4);
 	    dest.append(data,len);
 	}

@@ -1045,7 +1045,7 @@ static unsigned char encodeAPT(const SS7ISUP* isup, SS7MSU& msu,
     // WARNING: HACK - ApplicationTransport does not follow naming convention
     String preName(prefix + param->name);
     preName << "." << context;
-    unsigned char hdr[4] = {0,0x80 | context,0x80,0xc0};  // c0: extension bit set, new sequence bit set
+    unsigned char hdr[4] = {0,(unsigned char)(0x80 | context),0x80,0xc0};  // c0: extension bit set, new sequence bit set
     // Retrieve data. Make sure all bytes are correct and final length don't
     // overflow our return value
     DataBlock data;
@@ -1082,7 +1082,7 @@ static unsigned char encodeName(const SS7ISUP* isup, SS7MSU& msu,
     unsigned int len = val->length() + 1;
     if (len >= 127)
 	return 0;
-    unsigned char gn[2] = { len, 3 };
+    unsigned char gn[2] = { (unsigned char)len, 3 };
     if (extra) {
 	String preName;
 	if (val)

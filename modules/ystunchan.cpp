@@ -498,7 +498,7 @@ bool YStunAttributeError::fromBuffer(u_int8_t* buffer, u_int16_t len)
 void YStunAttributeError::toBuffer(DataBlock& buffer)
 {
     u_int8_t header[8] = {0,0,0,0,
-		0,0,m_code / 100,m_code % 100};
+	0,0,(u_int8_t)(m_code / 100),(u_int8_t)(m_code % 100)};
     setHeader(header,type(),4 + m_text.length());
     DataBlock tmp(header,sizeof(header));
     buffer += tmp;
@@ -522,7 +522,8 @@ bool YStunAttributeChangeReq::fromBuffer(u_int8_t* buffer, u_int16_t len)
 void YStunAttributeChangeReq::toBuffer(DataBlock& buffer)
 {
     u_int8_t header[8] = {0,0,0,0,
-		m_flags >> 24,m_flags >> 16,m_flags >> 8,m_flags};
+	(u_int8_t)(m_flags >> 24),(u_int8_t)(m_flags >> 16),
+	(u_int8_t)(m_flags >> 8),(u_int8_t)m_flags};
     setHeader(header,type(),4);
     DataBlock tmp(header,sizeof(header));
     buffer += tmp;
@@ -572,8 +573,8 @@ bool YStunAttributeAddr::fromBuffer(u_int8_t* buffer, u_int16_t len)
 void YStunAttributeAddr::toBuffer(DataBlock& buffer)
 {
     u_int8_t header[12] = {0,0,0,0,
-		0,STUN_ATTR_ADDR_IPV4,m_port >> 8,(u_int8_t)m_port,
-		0,0,0,0};
+	0,STUN_ATTR_ADDR_IPV4,(u_int8_t)(m_port >> 8),(u_int8_t)m_port,
+	0,0,0,0};
     setHeader(header,type(),8);
     for (int start = 0, i = 8; i < 12; i++) {
 	int end = m_addr.find('.',start);

@@ -805,9 +805,12 @@ bool YRTPWrapper::setupSRTP(Message& msg, bool buildMaster)
 	return false;
     }
     m_rtp->security(srtp);
+    m_rtp->rtcpMux(NULL != msg.getParam(YSTRING("sdp_rtcp-mux")));
 
     msg.setParam("ocrypto_suite",suite);
     msg.setParam("ocrypto_key",key);
+    if(m_rtp->rtcpMux())
+	msg.setParam("osdp_rtcp-mux", "");
     return true;
 }
 

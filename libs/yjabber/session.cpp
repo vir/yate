@@ -663,6 +663,13 @@ void JGRtpCandidateP2P::fromXml(XmlElement* xml, const JGRtpCandidates& containe
     m_password = xml->attribute("password");
 }
 
+// Utility function needed for debug: dump a candidate to a string
+void JGRtpCandidateP2P::dump(String& buf, char sep)
+{
+    IceRtpCandidate::dump(buf, sep);
+    buf << sep << "username=" << m_username;
+    buf << sep << "password=" << m_password;
+}
 
 /*
  * JGRtpCandidates
@@ -727,44 +734,6 @@ void JGRtpCandidates::fromXml(XmlElement* element)
 	    append(new JGRtpCandidate(c,*this));
 	else
 	    append(new JGRtpCandidateP2P(c,*this));
-}
-
-// Find a candidate by its component value
-JGRtpCandidate* JGRtpCandidates::findByComponent(unsigned int component)
-{
-    String tmp(component);
-    for (ObjList* o = skipNull(); o; o = o->skipNext()) {
-	JGRtpCandidate* c = static_cast<JGRtpCandidate*>(o->get());
-	if (c->m_component == tmp)
-	    return c;
-    }
-    return 0;
-}
-
-// Generate a random password or username to be used with ICE-UDP transport
-void JGRtpCandidates::generateIceToken(String& dest, bool pwd, unsigned int max)
-{
-    if (pwd) {
-	if (max < 22)
-	    max = 22;
-    }
-    else if (max < 4)
-	max = 4;
-    if (max > 256)
-	max = 256;
-    dest = "";
-    while (dest.length() < max)
- 	dest << (int)Random::random();
-    dest = dest.substr(0,max);
-}
-
-// Generate a random password or username to be used with old ICE-UDP transport
-void JGRtpCandidates::generateOldIceToken(String& dest)
-{
-    dest = "";
-    while (dest.length() < 16)
- 	dest << (int)Random::random();
-    dest = dest.substr(0,16);
 }
 
 

@@ -232,6 +232,9 @@
 ; secure: bool: Generate and accept RFC 4568 security descriptors for SRTP
 ;secure=disable
 
+; ice: bool: ICE-lite support (RFC5245)
+;ice=disable
+
 ; forward_sdp: bool: Include the raw SDP body to be used as-is for forwarding RTP
 ;forward_sdp=disable
 

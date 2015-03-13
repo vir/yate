@@ -636,16 +636,8 @@ class YateSIPWSDataEndPoint : public DataEndpoint
     };
     friend class YateSIPWSTransport;
 public:
-    YateSIPWSDataEndPoint(YateSIPWSTransport* tran)
-	: m_tran(tran)
-	{
-	setSource(new DS);
-	getSource()->deref();
-	setConsumer(new DC(tran));
-	getConsumer()->deref();
-       	}
-    ~YateSIPWSDataEndPoint()
-	{ m_tran->disconnected(); }
+    YateSIPWSDataEndPoint(YateSIPWSTransport* tran);
+    ~YateSIPWSDataEndPoint();
 private:
     YateSIPWSTransport* m_tran;
 };
@@ -739,7 +731,7 @@ private:
     // Reset socket
     void stopListening(const char* reason = 0, int level = DebugNote);
 
-    Mutex m_mutex;                       // Mutex protecting transport parameters and bind ip/port
+    Mutex m_mutex;                       // Mutex protecting transport parameters
     String m_reason;                     // Last error (state change) string
     NamedList m_transParams;             // Parameters for created transports
     bool m_initialized;                  // Flag reset when initializing by the module and set in init()
@@ -3158,7 +3150,7 @@ void YateSIPTransport::receiveMsg(SIPMessage*& msg)
 	    if (!party) {
 		party = new YateWSParty(ws);
 		DDebug(&plugin,DebugAll,
-		    "Transport(%s) built tcp party (%p) for received message (%p) [%p]",
+		    "Transport(%s) built websocket party (%p) for received message (%p) [%p]",
 		    m_id.c_str(),party,msg,this);
 	    }
 	}
@@ -4110,8 +4102,9 @@ void YateSIPWSTransport::setFlowTimer(bool on, unsigned int interval)
 // Send data
 bool YateSIPWSTransport::send(SIPEvent* event)
 {
-    Debugger debug(DebugAll,"YateSIPWSTransport::send()", "event=%p", event);
+    Debugger debug(DebugAll,"YateSIPWSTransport::send()", "m_id = %s, event=%p [%p]", m_id.c_str(), event, this);
     SIPMessage* msg = event->getMessage();
+    XDebug(&plugin,DebugAll,"msg=%p, m_status=%d [%p]", msg, m_status, this);
     if (!msg)
 	return true;
     if (s_engineHalt)
@@ -4136,30 +4129,21 @@ bool YateSIPWSTransport::send(SIPEvent* event)
 // Process data (read/send)
 int YateSIPWSTransport::process()
 {
-#if 0
+    Debugger debug(DebugAll,"YateSIPWSTransport::process()", "m_id=%s, m_de=%p [%p]", m_id.c_str(), m_de, this);
     if (s_engineHalt) {
 	// Stop processing
 	Lock lck(this);
 	// Last chance to send pending data
 	ObjList* first = m_queue.skipNull();
 	if (first && m_sock && m_sock->valid()) {
-	    DataBlock buf;
-	    for (ObjList* o = first; o && buf.length() < 4096; o = o->skipNext()) {
+	    for (ObjList* o = first; o; o = o->skipNext()) {
 		SIPMessage* msg = static_cast<SIPMessage*>(o->get());
 		if (s_printMsg && (o != first || m_sent < 0))
 		    printSendMsg(msg);
-		if (o != first || m_sent <= 0)
-		    buf += msg->getBuffer();
-		else {
-		    int remaining = msg->getBuffer().length() - m_sent;
-		    if (remaining > 0)
-			buf.assign(((char*)msg->getBuffer().data()) + m_sent,remaining);
-		}
-	    }
-	    if (buf.length()) {
+		DataBlock buf = msg->getBuffer();
 		DDebug(&plugin,DebugAll,"Transport(%s) sending last %u bytes [%p]",
 		    m_id.c_str(),buf.length(),this);
-		m_sock->writeData(buf.data(),buf.length());
+		m_de->getSource()->Forward(buf, 0UL, 0UL);
 	    }
 	}
 	m_queue.clear();
@@ -4169,6 +4153,7 @@ int YateSIPWSTransport::process()
 	    return -1;
 	return 2000;
     }
+#if 0
     if (!(m_sock && m_sock->valid())) {
 	if (!m_outgoing)
 	    return -1;
@@ -4201,21 +4186,6 @@ int YateSIPWSTransport::process()
 	resetConnection();
 	return m_outgoing ? 0 : -1;
     }
-    // Read data
-    bool read = false;
-#if 0
-    if (!readData(time,read)) {
-	resetConnection();
-	return m_outgoing ? 0 : -1;
-    }
-    // Outgoing received data: reset reconnect
-    if (m_outgoing && read && m_nextConnect) {
-	DDebug(&plugin,DebugAll,"Transport(%s) resetting re-connect [%p]",
-	    m_id.c_str(),this);
-	m_connectRetry = s_tcpConnectRetry;
-	m_nextConnect = 0;
-    }
-#endif
     if (! m_de)
 	return -1;
 
@@ -4228,7 +4198,7 @@ int YateSIPWSTransport::process()
 	}
 	setIdleTimeout(time);
     }
-    return read ? 0 : Thread::idleUsec();
+    return Thread::idleUsec();
 }
 
 void YateSIPWSTransport::destroyed()
@@ -4242,6 +4212,7 @@ void YateSIPWSTransport::destroyed()
 void YateSIPWSTransport::statusChanged()
 {
     Lock lock(this);
+    Debugger debug(DebugAll,"YateSIPWSTransport::statusChanged()", "m_status=%d", m_status);
     if (m_status == Terminated) {
 	// Remove messages now: they keep a party who is keeping a reference to us
 	m_queue.clear();
@@ -4493,6 +4464,7 @@ void YateSIPWSTransport::resetConnection(Socket* sock)
     lck.drop();
     changeStatus(m_sock ? Connected : Idle);
 #endif
+    changeStatus(Connected);
 }
 
 void YateSIPWSTransport::setIdleTimeout(u_int64_t time)
@@ -4530,6 +4502,25 @@ void YateSIPWSTransport::received(const DataBlock& data, unsigned long time)
 	setIdleTimeout(time);
 }
 
+
+
+
+
+YateSIPWSDataEndPoint::YateSIPWSDataEndPoint(YateSIPWSTransport* tran)
+    : DataEndpoint(NULL, "ws")
+    , m_tran(tran)
+{
+    XDebug(&plugin,DebugAll,"YateSIPWSDataEndPoint(tran=%p) created [%p]", m_tran, this);
+    setSource(new DS);
+    getSource()->deref();
+    setConsumer(new DC(tran));
+    getConsumer()->deref();
+}
+YateSIPWSDataEndPoint::~YateSIPWSDataEndPoint()
+{
+    XDebug(&plugin,DebugAll,"YateSIPWSDataEndPoint(tran=%p) destroyed [%p]", m_tran, this);
+    m_tran->disconnected();
+}
 
 
 
@@ -4890,7 +4881,9 @@ bool YateSIPWSListener::startup()
 	m_bindRtpLocalAddr.clear();
     }
     Lock lck(m_mutex);
-    return (m_listening = Engine::install(this));
+    m_listening = Engine::install(this);
+    XDebug(&plugin,DebugAll,"Listener(%s,'%s') startup, handler %sinstalled [%p]",protoName(),lName(),m_listening?"":"NOT ",this);
+    return m_listening;
 }
 
 // Close the socket. Remove from endpoint list
@@ -4953,9 +4946,10 @@ bool YateSIPWSListener::received(Message& msg)
     }
 
     YateSIPWSTransport* trans = new YateSIPWSTransport(tls(), msg);
+    msg.userData(trans->getEp());
+    trans->getEp()->deref();
     if (!trans->init(msg,true))
 	TelEngine::destruct(trans);
-    msg.userData(trans->getEp());
     msg.retValue() = "sip";
     return true;
 }
@@ -6002,14 +5996,23 @@ void YateSIPEndPoint::initializing(bool start)
     ObjList rmUdpTrans;
     m_mutex.lock();
     for (ObjList* o = m_listeners.skipNull(); o; o = o->skipNext()) {
+	YateSIPWSListener* wsl = static_cast<YateSIPWSListener*>(o->get()->getObject("YateSIPWSListener"));
 	YateSIPTCPListener* l = static_cast<YateSIPTCPListener*>(o->get());
-	if (start)
-	    l->m_initialized = false;
-	else if (!l->m_initialized)
-	    rmListener.append(new String(l->toString()));
+	if (wsl) {
+	    if (start)
+		wsl->m_initialized = false;
+	    else if (!wsl->m_initialized)
+		rmListener.append(new String(wsl->toString()));
+	}
+	else {
+	    if (start)
+		l->m_initialized = false;
+	    else if (!l->m_initialized)
+		rmListener.append(new String(l->toString()));
+	}
     }
     for (ObjList* o = m_transports.skipNull(); o; o = o->skipNext()) {
-	YateSIPTCPTransport* t = static_cast<YateSIPTCPTransport*>(o->get());
+	YateSIPTransport* t = static_cast<YateSIPTransport*>(o->get());
 	if (start)
 	    t->m_initialized = false;
 	else if (!t->m_initialized && t->udpTransport())

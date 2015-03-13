@@ -998,6 +998,77 @@ String& String::append(double value, unsigned int decimals)
     return operator+=(buf);
 }
 
+char* string_printf(unsigned int length, const char* format, va_list& va)
+{
+    if (!format)
+	return 0;
+    char* buf = (char*)::malloc(length + 1);
+    if (!buf) {
+	Debug("String",DebugFail,"malloc(%d) returned NULL!",length);
+	return 0;
+    }
+    int len = ::vsnprintf(buf,length,format,va);
+    buf[len] = 0;
+    return buf;
+}
+
+String& String::printf(unsigned int length, const char* format,  ...)
+{
+    va_list va;
+    va_start(va,format);
+    char* buf = string_printf(length,format,va);
+    va_end(va);
+    if (!buf)
+	return *this;
+    char* old = m_string;
+    m_string = buf;
+    ::free(old);
+    changed();
+    return *this;
+}
+
+String& String::printf(const char* format, ...)
+{
+    va_list va;
+    va_start(va,format);
+    char* buf = string_printf(256,format,va);
+    va_end(va);
+    if (!buf)
+	return *this;
+    char* old = m_string;
+    m_string = buf;
+    ::free(old);
+    changed();
+    return *this;
+}
+
+String& String::appendFixed(unsigned int space, const char* str, unsigned int len, char fill, int align)
+{
+    if (len == (unsigned int)-1)
+	len = ::strlen(str);
+    if (!str || len == 0)
+	return *this;
+    int alignPos = 0;
+    if (len < space) {
+	if (align == Center)
+	    alignPos = space / 2 - len / 2;
+	else if (align == Right)
+	    alignPos = space - len;
+    } else
+	len = space;
+    char* buf = (char*)::malloc(space + 1);
+    if (!buf) {
+	Debug("String",DebugFail,"malloc(%d) returned NULL!",space);
+	return *this;
+    }
+    ::memset(buf,fill,space);
+    ::memcpy(buf + alignPos,str,len);
+    buf[space] = 0;
+    operator+=(buf);
+    ::free(buf);
+    return *this;
+}
+
 bool String::operator==(const char* value) const
 {
     if (!m_string)

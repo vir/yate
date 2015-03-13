@@ -1018,8 +1018,10 @@ String& String::printf(unsigned int length, const char* format,  ...)
     va_start(va,format);
     char* buf = string_printf(length,format,va);
     va_end(va);
-    if (!buf)
+    if (!buf) {
+	clear();
 	return *this;
+    }
     char* old = m_string;
     m_string = buf;
     ::free(old);
@@ -1042,28 +1044,28 @@ String& String::printf(const char* format, ...)
     return *this;
 }
 
-String& String::appendFixed(unsigned int space, const char* str, unsigned int len, char fill, int align)
+String& String::appendFixed(unsigned int fixedLength, const char* str, unsigned int len, char fill, int align)
 {
     if (len == (unsigned int)-1)
 	len = ::strlen(str);
     if (!str || len == 0)
 	return *this;
     int alignPos = 0;
-    if (len < space) {
+    if (len < fixedLength) {
 	if (align == Center)
-	    alignPos = space / 2 - len / 2;
+	    alignPos = fixedLength / 2 - len / 2;
 	else if (align == Right)
-	    alignPos = space - len;
+	    alignPos = fixedLength - len;
     } else
-	len = space;
-    char* buf = (char*)::malloc(space + 1);
+	len = fixedLength;
+    char* buf = (char*)::malloc(fixedLength + 1);
     if (!buf) {
-	Debug("String",DebugFail,"malloc(%d) returned NULL!",space);
+	Debug("String",DebugFail,"malloc(%d) returned NULL!",fixedLength + 1);
 	return *this;
     }
-    ::memset(buf,fill,space);
+    ::memset(buf,fill,fixedLength);
     ::memcpy(buf + alignPos,str,len);
-    buf[space] = 0;
+    buf[fixedLength] = 0;
     operator+=(buf);
     ::free(buf);
     return *this;

@@ -2453,38 +2453,38 @@ public:
     String& append(double value, unsigned int decimals = 3);
 
     /**
-     * Add the parameters in a printf style
+     * Build a String in a printf style.
      * @param format The output format.
      * NOTE: The length of the resulting string will be at most 256
      */
     String& printf(const char* format, ...) FORMAT_CHECK(2);
 
     /**
-     * Add the parameters in a printf style
+     * Build a String in a printf style.
      * @param length maximum length of the resulting string
      * @param format The output format.
      */
     String& printf(unsigned int length, const char* format,  ...) FORMAT_CHECK(3);
 
     /**
-     * Append a string and align it.
-     * @param space The space in wich the str will pe aligned.
-     * @param str The string to append
-     * @param len The str length
+     * Build a fixed aligned string from str and append it.
+     * @param fixedLength The fixed length in which the 'str' will be aligned.
+     * @param str The string to align
+     * @param len The number of characters to use from str.
      * @param fill Character to fill the empty space.
      * @param align The alignment mode.
      */
-    String& appendFixed(unsigned int space, const char* str, unsigned int len = -1, char fill = ' ', int align = Left);
+    String& appendFixed(unsigned int fixedLength, const char* str, unsigned int len = -1, char fill = ' ', int align = Left);
 
-     /**
-      * Append a string and align it.
-      * @param space The space in wich the str will pe aligned.
-      * @param str The string to append
-      * @param fill Character to fill the empty space.
-      * @param align The alignment mode.
-      */
-    inline String& appendFixed(unsigned int space, const String& str, char fill = ' ', int align = Left)
-	{ return appendFixed(space,str.c_str(),str.length(),fill,align); }
+    /**
+     * Build a fixed aligned string from str and append it.
+     * @param fixedLength The fixed length in which the 'str' will be aligned.
+     * @param str The string to align
+     * @param fill Character to fill the empty space.
+     * @param align The alignment mode.
+     */
+    inline String& appendFixed(unsigned int fixedLength, const String& str, char fill = ' ', int align = Left)
+	{ return appendFixed(fixedLength,str.c_str(),str.length(),fill,align); }
 
     /**
      * Locate the first instance of a character in the string

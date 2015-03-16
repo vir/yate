@@ -1035,8 +1035,10 @@ String& String::printf(const char* format, ...)
     va_start(va,format);
     char* buf = string_printf(256,format,va);
     va_end(va);
-    if (!buf)
+    if (!buf) {
+	clear();
 	return *this;
+    }
     char* old = m_string;
     m_string = buf;
     ::free(old);

@@ -1879,6 +1879,12 @@ public:
     explicit String(bool value);
 
     /**
+     * Creates a new initialized string from a double value.
+     * @param value Value to convert to string
+     */
+    explicit String(double value);
+
+    /**
      * Copy constructor.
      * @param value Initial value of the string
      */
@@ -2263,6 +2269,12 @@ public:
 	{ return operator=(boolText(value)); }
 
     /**
+     * Assignment operator for double.
+     * @param value Value to assign to the string
+     */
+    String& operator=(double value);
+
+    /**
      * Appending operator for strings.
      * @param value Value to assign to the string
      * @see TelEngine::strcat
@@ -2306,6 +2318,12 @@ public:
      */
     inline String& operator+=(bool value)
 	{ return operator+=(boolText(value)); }
+
+    /**
+     * Appending operator for double.
+     * @param value Value to append to the string
+     */
+    String& operator+=(double value);
 
     /**
      * Equality operator.
@@ -2379,6 +2397,12 @@ public:
      * Stream style appending operator for booleans
      */
     inline String& operator<<(bool value)
+	{ return operator+=(value); }
+
+    /**
+     * Stream style appending operator for double
+     */
+    inline String& operator<<(double value)
 	{ return operator+=(value); }
 
     /**

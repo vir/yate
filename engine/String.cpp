@@ -405,6 +405,18 @@ String::String(bool value)
     changed();
 }
 
+String::String(double value)
+    : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
+{
+    XDebug(DebugAll,"String::String(%g) [%p]",value,this);
+    char buf[80];
+    ::sprintf(buf,"%g",value);
+    m_string = ::strdup(buf);
+    if (!m_string)
+	Debug("String",DebugFail,"strdup() returned NULL!");
+    changed();
+}
+
 String::String(const String* value)
     : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
@@ -782,6 +794,13 @@ String& String::operator=(uint64_t value)
     return operator=(buf);
 }
 
+String& String::operator=(double value)
+{
+    char buf[80];
+    ::sprintf(buf,"%g",value);
+    return operator=(buf);
+}
+
 String& String::operator+=(char value)
 {
     char buf[2] = {value,0};
@@ -813,6 +832,13 @@ String& String::operator+=(uint64_t value)
 {
     char buf[24];
     ::sprintf(buf,FMT64U,value);
+    return operator+=(buf);
+}
+
+String& String::operator+=(double value)
+{
+    char buf[80];
+    ::sprintf(buf,"%g",value);
     return operator+=(buf);
 }
 

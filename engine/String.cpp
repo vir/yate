@@ -1024,9 +1024,9 @@ String& String::append(double value, unsigned int decimals)
     return operator+=(buf);
 }
 
-char* string_printf(unsigned int length, const char* format, va_list& va)
+static char* string_printf(unsigned int length, const char* format, va_list& va)
 {
-    if (!format)
+    if (TelEngine::null(format) || !length)
 	return 0;
     char* buf = (char*)::malloc(length + 1);
     if (!buf) {
@@ -1059,7 +1059,8 @@ String& String::printf(const char* format, ...)
 {
     va_list va;
     va_start(va,format);
-    char* buf = string_printf(256,format,va);
+    unsigned int len = TelEngine::null(format) ? 0 : (128 + ::strlen(format));
+    char* buf = string_printf(len,format,va);
     va_end(va);
     if (!buf) {
 	clear();

@@ -2479,7 +2479,7 @@ public:
     /**
      * Build a String in a printf style.
      * @param format The output format.
-     * NOTE: The length of the resulting string will be at most 256
+     * NOTE: The length of the resulting string will be at most 128 + length of format
      */
     String& printf(const char* format, ...) FORMAT_CHECK(2);
 

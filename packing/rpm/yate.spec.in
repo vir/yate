@@ -94,6 +94,7 @@ for small to large scale projects.
 %{_libdir}/libyatescript.so.*
 %{_libdir}/libyatejabber.so.*
 %{_libdir}/libyatesig.so.*
+%{_libdir}/libyateasn.so.*
 %{_libdir}/libyategsm.so.*
 %{_libdir}/libyatemgcp.so.*
 %{_bindir}/yate
@@ -637,6 +638,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Wed Apr 01 2015 Paul Chitescu <paulc@voip.null.ro>
+- Package the new dynamic libyateasn.so
+
 * Tue Apr 29 2014 Paul Chitescu <paulc@voip.null.ro>
 - Added SQLite module and subpackage
 

@@ -27,10 +27,11 @@ YLIB := libyate.so.@PACKAGE_VERSION@
 SLIBS:= $(YLIB) libyate.so \
 	libyatescript.so.@PACKAGE_VERSION@ libyatescript.so \
 	libyatesig.so.@PACKAGE_VERSION@ libyatesig.so \
+	libyateasn.so.@PACKAGE_VERSION@ libyateasn.so \
 	libyategsm.so.@PACKAGE_VERSION@ libyategsm.so \
 	libyatemgcp.so.@PACKAGE_VERSION@ libyatemgcp.so \
 	libyatejabber.so.@PACKAGE_VERSION@ libyatejabber.so
-ILIBS:= yscript ygsm
+ILIBS:= yscript yasn ygsm
 INCS := yateclass.h yatemime.h yatengine.h yatephone.h yatecbase.h yatexml.h
 GENS := yateversn.h
 LIBS :=

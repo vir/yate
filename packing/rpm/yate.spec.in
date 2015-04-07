@@ -95,7 +95,7 @@ for small to large scale projects.
 %{_libdir}/libyatejabber.so.*
 %{_libdir}/libyatesig.so.*
 %{_libdir}/libyateasn.so.*
-%{_libdir}/libyategsm.so.*
+%{_libdir}/libyateradio.so.*
 %{_libdir}/libyatemgcp.so.*
 %{_bindir}/yate
 %{_mandir}/*/yate.*
@@ -638,6 +638,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Tue Apr 07 2015 Marian Podgoreanu <marian@voip.null.ro>
+- Renamed GSM Layer 3 radio library
+
 * Wed Apr 01 2015 Paul Chitescu <paulc@voip.null.ro>
 - Package the new dynamic libyateasn.so
 

@@ -19,7 +19,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-#include <yategsm.h>
+#include <yateradio.h>
 
 using namespace TelEngine;
 

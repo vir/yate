@@ -1718,6 +1718,7 @@ void YStunSocketFilter::dispatchChanRtp()
     m->addParam("remoteip",m_remoteAddr.host());
     m->addParam("remoteport",String(m_remoteAddr.port()));
     m->addParam("rtpid",m_userId);
+    m->addParam("source","ice");
     Engine::enqueue(m);
 }
 

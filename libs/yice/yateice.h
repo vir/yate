@@ -113,6 +113,7 @@ public:
      * @return IceRtpCandidate pointer or 0
      */
     IceRtpCandidate* findByComponent(unsigned int component);
+    const IceRtpCandidate* findByComponent(unsigned int component) const;
 
     /**
      * Generate a random password or username to be used with ICE-UDP transport

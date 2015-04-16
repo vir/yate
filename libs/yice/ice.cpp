@@ -26,6 +26,14 @@ String IceRtpCandidate::toSDPAttribute(const IceRtpCandidates& container) const
 // Fill this object from a candidate SDP addtribute
 void IceRtpCandidate::fromSDPAttribute(const String& str, const IceRtpCandidates& container)
 {
+    String s(str);
+    s.extractTo(" ", m_generation); // foundation
+    s.extractTo(" ", m_component);
+    s.extractTo(" ", m_protocol); // transport
+    s.extractTo(" ", m_priority);
+    s.extractTo(" ", m_address);
+    s.extractTo(" ", m_port);
+    s.extractTo(" ", m_type);
 }
 
 // Utility function needed for debug: dump a candidate to a string
@@ -57,6 +65,16 @@ void IceRtpCandidate::Update()
 
 // Find a candidate by its component value
 IceRtpCandidate* IceRtpCandidates::findByComponent(unsigned int component)
+{
+    String tmp(component);
+    for (ObjList* o = skipNull(); o; o = o->skipNext()) {
+	IceRtpCandidate* c = static_cast<IceRtpCandidate*>(o->get());
+	if (c->m_component == tmp)
+	    return c;
+    }
+    return 0;
+}
+const IceRtpCandidate* IceRtpCandidates::findByComponent(unsigned int component) const
 {
     String tmp(component);
     for (ObjList* o = skipNull(); o; o = o->skipNext()) {

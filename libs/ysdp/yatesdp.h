@@ -345,7 +345,6 @@ public:
 
     const IceRtpCandidates* remoteIceCandidates() const
 	{ return m_rIceCandidates; }
-
 private:
     bool m_audio;
     bool m_video;
@@ -379,6 +378,10 @@ private:
     String m_rCrypto;
     // local security descriptor
     String m_lCrypto;
+    // remote cert fingerprint
+    String m_rFingerprint;
+    // local cert fingerprint
+    String m_lFingerprint;
     // local ICE candidates
     IceRtpCandidates* m_lIceCandidates;
     // remote ICE candidates
@@ -718,6 +721,7 @@ protected:
     int m_rfc2833;                       // Payload of RFC 2833 for remote party
     bool m_ice;                          // ICE support
     bool m_ipv6;                         // IPv6 support
+    bool m_dtlsSrtp;                     // DTLS-SRTP (RFC5764) support
 
 private:
     DebugEnabler* m_enabler;             // Debug enabler used for output

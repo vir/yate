@@ -32,7 +32,8 @@ SDPSession::SDPSession(SDPParser* parser)
       m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_sdpHash(YSTRING_INIT_HASH),
       m_secure(m_parser->m_secure), m_rfc2833(m_parser->m_rfc2833),
-      m_ice(m_parser->m_ice), m_ipv6(false), m_enabler(0), m_ptr(0)
+      m_ice(m_parser->m_ice), m_ipv6(false), m_dtlsSrtp(true),
+      m_enabler(0), m_ptr(0)
 {
     setSdpDebug();
 }
@@ -128,11 +129,11 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
     media->update(*m,start);
 
     const IceRtpCandidates* iceLocal = media->localIceCandidates();
-    if(iceLocal) {
+    if (iceLocal) {
 	const IceRtpCandidates* iceRemote = media->remoteIceCandidates();
 	// Start STUN
 	Message* msg = buildSocketStun(m->userData());
-	if(msg) {
+	if (msg) {
 	    //IceRtpCandidate* local =  YOBJECT(IceRtpCandidate,iceLocal);
 	    //IceRtpCandidate* remote = YOBJECT(IceRtpCandidate,iceRemote);
 	    msg->addParam("localusername",iceLocal->m_ufrag);
@@ -146,6 +147,28 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
 	    msg->addParam("userid", m->getValue("rtpid"));
 	    msg->addParam("rfc5389", String::boolText(true));
 	    Engine::enqueue(msg);
+	}
+    }
+
+    if (m_dtlsSrtp) {
+	String setup = media->remoteAttrs().getParam(YSTRING("setup"));
+	String fp = media->remoteAttrs().getParam(YSTRING("fingerprint"));
+	bool act;
+	if (setup == YSTRING("actpass"))
+	    act = true;
+	else if (setup == YSTRING("active"))
+	    act = false;
+	else {
+	    Debug(m_enabler,DebugWarn,"Got strange 'setup' attribute in SDP from %s [%p]",addr,m_ptr);
+	    act = true;
+	}
+	Message msg("socket.dtls");
+	msg.userData(m->userData());
+	msg.copyParams(*m, "id,rtpid,localip,localport,sdp_fingerprint,context,domain");
+	msg.setParam("active", String::boolText(act));
+	if(Engine::dispatch(&msg)) {
+	    media->parameter(false, "setup", act ? "active" : "passive", false);
+	    media->parameter(false, "fingerprint", msg.retValue(), false);
 	}
     }
 

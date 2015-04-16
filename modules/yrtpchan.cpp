@@ -797,9 +797,9 @@ bool YRTPWrapper::setupSRTP(Message& msg, bool buildMaster)
     else
 	buildMaster = false;
 
-    String suite;
-    String key;
-    if (!(srtp->supported(m_rtp) && srtp->create(suite,key,true))) {
+    String suite = msg[YSTRING("crypto_suite")];;
+    String key = msg[YSTRING("crypto_key_tx")];
+    if (!(srtp->supported(m_rtp) && (key.null() ? srtp->create(suite,key,true) : srtp->setup(suite,key,0)))) {
 	if (buildMaster)
 	    TelEngine::destruct(srtp);
 	return false;

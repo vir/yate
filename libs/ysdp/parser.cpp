@@ -244,6 +244,11 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 		    IceRtpCandidate* c = new IceRtpCandidate("ICE_RTP_candidate_" + String((int)Random::random()));
 		    c->fromSDPAttribute(line, *cands);
 		    cands->append(c);
+		    if (addr.null() && c->m_component == YSTRING("1")) { // Workaround firefox bug 784476 (0.0.0.0 address in c= line)
+			Debug(this,DebugWarn,"Replacing bad media '%s' address with ice candidate address '%s:%s'",type.c_str(),c->m_address.c_str(),c->m_port.c_str());
+			addr = c->m_address;
+			port = c->m_port.toLong();
+		    }
 		}
 		else if (cands && line.startSkip("ice-", false)) {
 		    if (line.startSkip("ufrag:", false))

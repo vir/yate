@@ -32,7 +32,7 @@ case "$1" in
         for DIR in $H $P $C
         do
             mkdir -p ${DIR}
-            dpkg-statoverride --list $H >/dev/null || chown yate:yate ${DIR}
+            dpkg-statoverride --list ${DIR} >/dev/null || chown yate:yate ${DIR}
         done
         ;;
 

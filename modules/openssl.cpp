@@ -75,6 +75,17 @@ static TokenDict s_verifyMode[] = {
     { 0, 0 }
 };
 
+#ifndef OPENSSL_NO_DTLS_SRTP
+static TokenDict s_srtpSuites[] = {
+    { "AES_CM_128_HMAC_SHA1_80", SRTP_AES128_CM_SHA1_80 },
+    { "AES_CM_128_HMAC_SHA1_32", SRTP_AES128_CM_SHA1_32 },
+//    { "AES_F8_128_HMAC_SHA1_80", SRTP_AES128_F8_SHA1_80 },
+//    { "AES_F8_128_HMAC_SHA1_32", SRTP_AES128_F8_SHA1_32 },
+    { "SRTP_NULL_HMAC_SHA1_80", SRTP_NULL_SHA1_80 },
+    { "SRTP_NULL_HMAC_SHA1_32", SRTP_NULL_SHA1_32 },
+};
+#endif
+
 class SslContext : public String
 {
 public:
@@ -189,6 +200,7 @@ public:
 };
 
 class SslHandler;
+class DtlsHandler;
 
 class OpenSSL : public Module
 {
@@ -208,6 +220,7 @@ protected:
     virtual void statusDetail(String& str);
 
     SslHandler* m_handler;
+    DtlsHandler* m_handler2;
     ObjList m_contexts;                  // Server contexts list
     String m_statusCmd;                  // Module status command
 };
@@ -235,6 +248,61 @@ public:
     virtual bool received(Message& msg);
 };
 
+#ifndef OPENSSL_NO_DTLS_SRTP
+class DtlsHandler : public MessageHandler
+{
+public:
+    inline DtlsHandler()
+	: MessageHandler("socket.dtls",100,__plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
+
+class ChanRtpHandler : public MessageHandler
+{
+public:
+    inline ChanRtpHandler()
+	: MessageHandler("chan.rtp",20,__plugin.name())
+	{ setFilter("source","ice"); }
+    virtual bool received(Message& msg);
+};
+
+class DtlsSocketFilter : public SocketFilter, public Mutex
+{
+    YCLASS(DtlsSocketFilter, SocketFilter);
+public:
+    DtlsSocketFilter(const char* rtpid);
+    virtual ~DtlsSocketFilter();
+    virtual bool received(void* buffer, int length, int flags,
+	const struct sockaddr* addr, socklen_t addrlen);
+    virtual void timerTick(const Time& when);
+    // Install the filter. Return false if it fails
+    bool init(const NamedList& msg);
+    void update(const NamedList& msg);
+    String fingerprint() const;
+    static bool isDTLS(unsigned char* buffer, unsigned int length)
+	{ return (*buffer > 19 && *buffer < 64); }
+    static DtlsSocketFilter* find(String rtpid);
+    void processDtls();
+    void dropConnection(const char* reason);
+private:
+    static ObjList m_objects;
+    static Mutex m_listMutex;
+private:
+    bool m_active;
+    SocketAddr m_remoteAddr;
+    SSL_CTX* m_context;
+    SSL* m_ssl;
+    BIO* m_bio;
+    String m_rtpid;
+    String m_chan;
+    bool m_wantMore;
+    bool m_done;
+};
+#endif
+
+ObjList DtlsSocketFilter::m_objects;
+Mutex DtlsSocketFilter::m_listMutex;
 
 // Attempt to add randomness from system time when called
 static void addRand(u_int64_t usec)
@@ -601,6 +669,324 @@ bool SslHandler::received(Message& msg)
 }
 
 
+#ifndef OPENSSL_NO_DTLS_SRTP
+// Handler for the socket.dtls message - turns regular socket into DTLS-SRTP
+bool DtlsHandler::received(Message& msg)
+{
+    addRand(msg.msgTime());
+    Socket* socket = static_cast<Socket*>(msg.userObject(YATOM("Socket")));
+    if (!socket) {
+	Debug(&__plugin,DebugGoOn,"DtlsHandler: No socket to install filter for.");
+	return false;
+    }
+    if (!socket->valid()) {
+	Debug(&__plugin,DebugWarn,"DtlsHandler: Invalid Socket");
+	return false;
+    }
+
+    DtlsSocketFilter* filter = new DtlsSocketFilter(msg[YSTRING("rtpid")]);
+    if (!filter->init(msg)) {
+	filter->destruct();
+	Debug(&__plugin,DebugWarn,"DtlsHandler: Can not initialize DTLS socket filter");
+	return false;
+    }
+
+    // Install
+    if (!socket->installFilter(filter)) {
+	Debug(&__plugin,DebugGoOn,
+	    "Error installing DTLS filter for rtpid '%s'. [%p]",
+	    msg.getValue(YSTRING("rtpid")),this);
+	return false;
+    }
+    msg.retValue() = filter->fingerprint();
+    DDebug(&__plugin,DebugAll,
+	"DTLS Filter installed for RTP '%s'. [%p]",
+	msg.getValue(YSTRING("rtpid")),this);
+    filter->processDtls();
+    return true;
+}
+
+
+/**
+ * DtlsSocketFilter
+ */
+DtlsSocketFilter::DtlsSocketFilter(const char* rtpid)
+    : m_active(false)
+    , m_context(NULL), m_ssl(NULL), m_bio(NULL)
+    , m_rtpid(rtpid)
+    , m_wantMore(false)
+    , m_done(false)
+{
+    DDebug(&__plugin,DebugAll,"DtlsSocketFilter. [%p]",this);
+    Lock lck(m_listMutex);
+    m_objects.append(this);
+}
+
+DtlsSocketFilter::~DtlsSocketFilter()
+{
+    DDebug(&__plugin,DebugAll,"~DtlsSocketFilter. [%p]",this);
+    Lock lck(m_listMutex);
+    m_objects.remove(this,false);
+}
+
+bool DtlsSocketFilter::received(void* buffer, int length, int flags,
+	const struct sockaddr* addr, socklen_t addrlen)
+{
+    if (!isDTLS(static_cast<unsigned char*>(buffer), length)) {
+#ifdef XDEBUG
+	SocketAddr tmp(addr,addrlen);
+	Debug(&__plugin,DebugAll,"Non-DTLS from '%s:%d' length %d [%p]",
+	    tmp.host().c_str(),tmp.port(),length,this);
+#endif
+	return false;
+    }
+
+#ifdef XDEBUG
+    String s;
+    s.hexify(buffer, length, ' ');
+    SocketAddr tmp(addr,addrlen);
+    Debug(&__plugin,DebugAll,"DTLS from '%s:%d' length %d [%p]\n===\n%s\n===",
+	tmp.host().c_str(),tmp.port(),length,this,s.c_str());
+#endif
+    if (m_ssl && m_bio) {
+	BIO* rbio = BIO_new_mem_buf(buffer, length);
+	SSL_set_bio(m_ssl, rbio, m_bio);
+	processDtls();
+    }
+    return true;
+}
+
+static int dtls_verify_callback (int ok, X509_STORE_CTX *ctx) {
+    /* This function should ask the user
+     * if he trusts the received certificate.
+     * Here we always trust.
+     */
+    return 1;
+}
+
+static String getCertFingerprint(X509 * x)
+{
+    const EVP_MD * digest;
+    unsigned char md[EVP_MAX_MD_SIZE];
+    unsigned int n;
+
+    digest = EVP_get_digestbyname("sha256");
+    X509_digest(x, digest, md, &n);
+
+    String s;
+    s.hexify(md, n, ':', true);
+    DDebug(&__plugin,DebugAll,"getCertFingerprint(%p): '%s' %s %s", x, x->name, OBJ_nid2sn(EVP_MD_type(digest)), s.c_str());
+    return YSTRING("sha-256 ") + s;
+}
+
+/* One more example:
+ * https://gist.github.com/roxlu/9835067
+ */
+
+
+bool DtlsSocketFilter::init(const NamedList& msg)
+{
+    Lock lck(this);
+    if (m_context || m_ssl)
+	return false;
+    // Set data
+    m_active = msg.getBoolValue("active", true);
+    m_chan = msg.getValue("id");
+    update(msg);
+#if 0
+    if (msg.getBoolValue("server",false)) {
+	Lock lock(&__plugin);
+	SslContext* c = __plugin.findContext(msg);
+	if (!c)
+	    return false;
+	sSock = new SslSocket(pSock->handle(),true,
+	    msg.getIntValue("verify",s_verifyMode,SSL_VERIFY_NONE),c);
+    }
+    else {
+	const String& cert = msg["certificate"];
+	SslContext* c = cert ? new SslContext(msg) : 0;
+	if (!c || c->loadCertificate(cert,msg["key"]))
+	    sSock = new SslSocket(pSock->handle(),false,
+		msg.getIntValue("verify",s_verifyMode,SSL_VERIFY_NONE),c);
+	TelEngine::destruct(c);
+    }
+#endif
+    m_context = ::SSL_CTX_new(m_active ? ::DTLSv1_client_method() : ::DTLSv1_server_method());
+    SSL_CTX_set_info_callback(m_context,infoCallback);
+#ifdef DEBUG
+    SSL_CTX_set_msg_callback(m_context,msgCallback);
+#endif
+
+    SSL_CTX_set_cipher_list(m_context, "ALL:NULL:eNULL:aNULL");
+    SSL_CTX_set_session_cache_mode(m_context, SSL_SESS_CACHE_OFF);
+
+    if (!SSL_CTX_use_certificate_file(m_context, "conf.d/test_crt.pem", SSL_FILETYPE_PEM))
+	Debug(&__plugin,DebugGoOn,"ERROR: no certificate found! [%p]", this);
+    if (!SSL_CTX_use_PrivateKey_file(m_context, "conf.d/test_key.pem", SSL_FILETYPE_PEM))
+	Debug(&__plugin,DebugGoOn,"ERROR: no private key found! [%p]", this);
+    if (!SSL_CTX_check_private_key(m_context))
+	Debug(&__plugin,DebugGoOn,"ERROR: invalid private key! [%p]", this);
+    const char* srtp_profiles = "SRTP_AES128_CM_SHA1_80";
+    SSL_CTX_set_tlsext_use_srtp(m_context, srtp_profiles);
+
+    /* Client has to authenticate */
+    SSL_CTX_set_verify(m_context, SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE, dtls_verify_callback);
+    SSL_CTX_set_read_ahead(m_context, 1);
+
+    m_ssl = SSL_new(m_context);
+
+    return true;
+}
+
+// Update with ICE-detected remote address. Called with mutex locked.
+void DtlsSocketFilter::update(const NamedList& msg)
+{
+    XDebug(&__plugin,DebugAll,"DtlsSocketFilter::update(%s) [%p]", msg.c_str(), this);
+    const String& rip = msg[YSTRING("remoteip")];
+    if (rip.null())
+	return;
+    int rport = msg.getIntValue(YSTRING("remoteport"));
+    m_remoteAddr.host(rip);
+    m_remoteAddr.port(rport);
+    Debug(&__plugin,DebugAll,"DtlsSocketFilter::update: remote: %s port: %d [%p]", rip.c_str(), rport, this);
+    if (socket())
+	socket()->connect(m_remoteAddr);
+}
+
+void DtlsSocketFilter::timerTick(const Time& when)
+{
+    XDebug(&__plugin,DebugAll,"DtlsSocketFilter::timerTick() [%p]", this);
+    processDtls();
+}
+
+String DtlsSocketFilter::fingerprint() const
+{
+    return getCertFingerprint(SSL_get_certificate(m_ssl));
+}
+
+DtlsSocketFilter* DtlsSocketFilter::find(String rtpid)
+{
+    if (rtpid.null())
+	return 0;
+    Lock lock(m_listMutex);
+    ObjList* l = &m_objects;
+    for (; l; l=l->next()) {
+	DtlsSocketFilter *p = static_cast<DtlsSocketFilter *>(l->get());
+	if (p && (p->m_rtpid == rtpid)) {
+	    p->lock();
+	    return p;
+	}
+    }
+    return 0;
+}
+
+void DtlsSocketFilter::processDtls()
+{
+    Lock lck(this);
+    if (m_done || m_remoteAddr.null())
+	return;
+    if (! m_bio) {
+	m_bio = BIO_new_dgram(socket()->handle(), BIO_NOCLOSE);
+	BIO* rbio = BIO_new(BIO_s_mem());
+	SSL_set_bio(m_ssl, rbio, m_bio);
+	BIO_ctrl(m_bio, BIO_CTRL_DGRAM_SET_CONNECTED, 0, m_remoteAddr.address());
+    }
+    //while (DTLSv1_listen(m_ssl, &client_addr) <= 0);
+    int r = m_active ? ::SSL_connect(m_ssl) : ::SSL_accept(m_ssl);
+    int e = ::SSL_get_error(m_ssl,r);
+    XDebug(&__plugin,DebugAll,"SSL_connect returned %d, error code: %d (%08X), errno: %d [%p]", r, e, e, errno, this);
+    if (r < 0) {
+	if (e == SSL_ERROR_WANT_READ || e == SSL_ERROR_WANT_WRITE || e == SSL_ERROR_WANT_CONNECT || e == SSL_ERROR_WANT_ACCEPT) {
+	    m_wantMore = true;
+	    return;
+	}
+	char buf[240]; // buf must be at least 120 bytes long (see manual)
+	Debug(&__plugin,DebugGoOn, "SSL_connect: %s\n", ERR_error_string(ERR_get_error(), buf));
+	return;
+    }
+    if (r != 1)
+	return;
+
+    SRTP_PROTECTION_PROFILE *srtp_profile=SSL_get_selected_srtp_profile(m_ssl);
+    const char* srtpSuite = lookup(srtp_profile->id, s_srtpSuites, "Unknown");
+    Debug(&__plugin, DebugInfo, "SRTP Extension negotiated, profile=%s = %s\n", srtp_profile->name, srtpSuite);
+
+    if (!__plugin.debugAt(DebugAll)) {
+	BIO* bio = BIO_new(BIO_s_mem());
+	SSL_SESSION_print(bio,SSL_get_session(m_ssl));
+	char* p;
+	BIO_get_mem_data(bio, &p);
+	Debug(&__plugin, DebugAll, "SSL Session dump: %s", p);
+	BIO_free_all(bio);
+    }
+
+    int keymatexportlen = 60; /* (128 bits key + 112 bits salt) * 2 = (16 bytes + 14 bytes) * 2 = 60 bytes */
+    DataBlock exportedkeymat(NULL, keymatexportlen, true);
+    if (!SSL_export_keying_material(m_ssl, static_cast<unsigned char*>(exportedkeymat.data()), keymatexportlen, "EXTRACTOR-dtls_srtp", 19, NULL, 0, 0)) {
+	Debug(&__plugin, DebugFail, "Keying material export error");
+	dropConnection("Keying material export error");
+	return;
+    }
+#ifdef DEBUG
+    String s;
+    s.hexify(exportedkeymat.data(), keymatexportlen, ' ');
+    Debug(&__plugin, DebugAll, "Keying material (%d bytes): %s", keymatexportlen, s.c_str());
+#endif
+
+    DataBlock client_write_SRTP_master_key(exportedkeymat.data(0), 16); // first 128 bits
+    DataBlock server_write_SRTP_master_key(exportedkeymat.data(16), 16); // second 128 bits
+    DataBlock client_write_SRTP_master_salt(exportedkeymat.data(32), 14); // third 112 bits
+    DataBlock server_write_SRTP_master_salt(exportedkeymat.data(46), 14); // fourth 112 bits
+
+    Base64 serverKey, clientKey;
+    serverKey << server_write_SRTP_master_key << server_write_SRTP_master_salt;
+    clientKey << client_write_SRTP_master_key << client_write_SRTP_master_salt;
+
+    String txKey, rxKey;
+    if (m_active) {
+	serverKey.encode(rxKey);
+	clientKey.encode(txKey);
+    }
+    else {
+	serverKey.encode(txKey);
+	clientKey.encode(rxKey);
+    }
+    Message m("chan.rtp");
+    m.addParam("crypto_suite", srtpSuite);
+    m.addParam("crypto_key", YSTRING("inline:") + rxKey);
+    m.addParam("crypto_key_tx", YSTRING("inline:") + txKey);
+    m.addParam("rtpid", m_rtpid);
+    m.addParam("secure", String::boolText(true));
+    m_done = Engine::dispatch(m);
+    if (!m_done) {
+	dropConnection("Encryption not set");
+	return;
+    }
+}
+
+void DtlsSocketFilter::dropConnection(const char* reason)
+{
+    Debug(&__plugin, DebugWarn, "Dropping channel %s (rtpid %s), reason: %s", m_chan.c_str(), m_rtpid.c_str(), reason);
+    Message* m = new Message("call.drop");
+    m->addParam("id", m_chan);
+    m->addParam("reason", reason ? reason : "DTLS-SRTP failure");
+    Engine::enqueue(m);
+}
+
+bool ChanRtpHandler::received(Message& msg)
+{
+    DtlsSocketFilter* f = DtlsSocketFilter::find(msg[YSTRING("rtpid")]);
+    if (f) {
+	f->update(msg);
+	f->unlock();
+    }
+    return false;
+}
+#endif /* OPENSSL_NO_DTLS_SRTP */
+
+
+
+
 #ifndef OPENSSL_NO_AES
 AesCtrCipher::AesCtrCipher()
     : m_key(0)
@@ -883,7 +1269,7 @@ bool CipherHandler::received(Message& msg)
 
 OpenSSL::OpenSSL()
     : Module("openssl","misc",true),
-      m_handler(0)
+      m_handler(0), m_handler2(0)
 {
     Output("Loaded module OpenSSL - based on " OPENSSL_VERSION_TEXT);
     m_statusCmd << "status " << name();
@@ -913,6 +1299,13 @@ void OpenSSL::initialize()
 	Engine::install(new CipherHandler);
 #endif
     }
+#ifndef OPENSSL_NO_DTLS_SRTP
+    if (!m_handler2) {
+	m_handler2 = new DtlsHandler;
+	Engine::install(m_handler2);
+	Engine::install(new ChanRtpHandler);
+    }
+#endif
 
     lock();
     // Load server contexts

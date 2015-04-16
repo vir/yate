@@ -4130,7 +4130,6 @@ bool YateSIPWSTransport::send(SIPEvent* event)
 // Process data (read/send)
 int YateSIPWSTransport::process()
 {
-    Debugger debug(DebugAll,"YateSIPWSTransport::process()", "m_id=%s, m_de=%p [%p]", m_id.c_str(), m_de, this);
     if (s_engineHalt) {
 	// Stop processing
 	Lock lck(this);

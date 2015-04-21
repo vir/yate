@@ -768,7 +768,7 @@ static String getCertFingerprint(X509 * x)
 {
     const EVP_MD * digest;
     unsigned char md[EVP_MAX_MD_SIZE];
-    unsigned int n;
+    unsigned int n = EVP_MAX_MD_SIZE;
 
     digest = EVP_get_digestbyname("sha256");
     X509_digest(x, digest, md, &n);

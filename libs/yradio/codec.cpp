@@ -5090,15 +5090,17 @@ static const char* const s_gsm7esc[128] = {
 };
 
 // Decode GSM 7bit buffer
-void GSML3Codec::decodeGSM7Bit(unsigned char* buf, unsigned int len, String& text)
+void GSML3Codec::decodeGSM7Bit(unsigned char* buf, unsigned int len, String& text, unsigned int heptets)
 {
     if (!(buf && len))
 	return;
     DataBlock out;
     unpackGSM7Bit(buf,len,out);
+    if (heptets > out.length())
+	heptets = out.length();
     uint8_t* b = (uint8_t*)out.data();
     bool esc = false;
-    for (unsigned int i = 0; i < out.length(); b++, i++) {
+    for (unsigned int i = 0; i < heptets; b++, i++) {
 	if (esc) {
 	    text << s_gsm7esc[*b];
 	    esc = false;
@@ -5111,13 +5113,14 @@ void GSML3Codec::decodeGSM7Bit(unsigned char* buf, unsigned int len, String& tex
 }
 
 // Encode GSM 7bit buffer
-void GSML3Codec::encodeGSM7Bit(const String& text, DataBlock& buf)
+bool GSML3Codec::encodeGSM7Bit(const String& text, DataBlock& buf)
 {
     static uint8_t escape = 0x1b;
     if (!text)
-	return;
+	return false;
     DataBlock gsm;
     String tmp = text;
+    bool ok = true;
     while (tmp) {
 	bool notFound = true;
 	for (uint8_t i = 0; i < 128; i++) {
@@ -5139,10 +5142,12 @@ void GSML3Codec::encodeGSM7Bit(const String& text, DataBlock& buf)
 	    if (notFound) {
 		UChar c;
 		tmp >> c;
+		ok = false;
 	    }
 	}
     }
     packGSM7Bit(gsm.data(0),gsm.length(),buf);
+    return ok;
 }
 
 unsigned int GSML3Codec::decodeXml(XmlElement* xml, const NamedList& params, const String& pduTag)

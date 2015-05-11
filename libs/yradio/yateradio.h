@@ -239,15 +239,18 @@ public:
      * @param buf Input buffer
      * @param len Input buffer length
      * @param text Destination text
+     * @param heptets Maximum number of heptets in buffer
      */
-    static void decodeGSM7Bit(unsigned char* buf, unsigned int len, String& text);
+    static void decodeGSM7Bit(unsigned char* buf, unsigned int len, String& text,
+	unsigned int heptets = (unsigned int)-1);
 
     /**
      * Encode GSM 7bit buffer
      * @param text Input text
      * @param buf Destination buffer
+     * @return True if all characters were encoded correctly
      */
-    static void encodeGSM7Bit(const String& text, DataBlock& buf);
+    static bool encodeGSM7Bit(const String& text, DataBlock& buf);
 
     /**
      * IE types dictionary

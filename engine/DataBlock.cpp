@@ -82,20 +82,27 @@ const DataBlock& DataBlock::empty()
     return s_empty;
 }
 
-DataBlock::DataBlock()
-    : m_data(0), m_length(0)
+DataBlock::DataBlock(unsigned int overAlloc)
+    : m_data(0), m_length(0), m_allocated(0), m_overAlloc(overAlloc)
 {
 }
 
 DataBlock::DataBlock(const DataBlock& value)
     : GenObject(),
-      m_data(0), m_length(0)
+      m_data(0), m_length(0), m_allocated(0), m_overAlloc(value.overAlloc())
 {
     assign(value.data(),value.length());
 }
 
-DataBlock::DataBlock(void* value, unsigned int len, bool copyData)
-    : m_data(0), m_length(0)
+DataBlock::DataBlock(const DataBlock& value, unsigned int overAlloc)
+    : GenObject(),
+      m_data(0), m_length(0), m_allocated(0), m_overAlloc(overAlloc)
+{
+    assign(value.data(),value.length());
+}
+
+DataBlock::DataBlock(void* value, unsigned int len, bool copyData, unsigned int overAlloc)
+    : m_data(0), m_length(0), m_allocated(0), m_overAlloc(overAlloc)
 {
     assign(value,len,copyData);
 }
@@ -123,15 +130,17 @@ void DataBlock::clear(bool deleteData)
     }
 }
 
-DataBlock& DataBlock::assign(void* value, unsigned int len, bool copyData)
+DataBlock& DataBlock::assign(void* value, unsigned int len, bool copyData, unsigned int allocated)
 {
     if ((value != m_data) || (len != m_length)) {
 	void *odata = m_data;
 	m_length = 0;
+	m_allocated = 0;
 	m_data = 0;
 	if (len) {
 	    if (copyData) {
-		void *data = ::malloc(len);
+		allocated = allocLen(len);
+		void *data = ::malloc(allocated);
 		if (data) {
 		    if (value)
 			::memcpy(data,value,len);
@@ -140,12 +149,17 @@ DataBlock& DataBlock::assign(void* value, unsigned int len, bool copyData)
 		    m_data = data;
 		}
 		else
-		    Debug("DataBlock",DebugFail,"malloc(%d) returned NULL!",len);
+		    Debug("DataBlock",DebugFail,"malloc(%d) returned NULL!",allocated);
 	    }
-	    else
+	    else {
+		if (allocated < len)
+		    allocated = len;
 		m_data = value;
-	    if (m_data)
+	    }
+	    if (m_data) {
 		m_length = len;
+		m_allocated = allocated;
+	    }
 	}
 	if (odata && (odata != m_data))
 	    ::free(odata);
@@ -189,14 +203,20 @@ void DataBlock::append(const DataBlock& value)
     if (m_length) {
 	if (value.length()) {
 	    unsigned int len = m_length+value.length();
-	    void *data = ::malloc(len);
+	    if (len <= m_allocated) {
+		::memcpy(m_length+(char*)m_data,value.data(),value.length());
+		m_length = len;
+		return;
+	    }
+	    unsigned int aLen = allocLen(len);
+	    void *data = ::malloc(aLen);
 	    if (data) {
 		::memcpy(data,m_data,m_length);
 		::memcpy(m_length+(char*)data,value.data(),value.length());
-		assign(data,len,false);
+		assign(data,len,false,aLen);
 	    }
 	    else
-		Debug("DataBlock",DebugFail,"malloc(%d) returned NULL!",len);
+		Debug("DataBlock",DebugFail,"malloc(%d) returned NULL!",aLen);
 	}
     }
     else
@@ -208,14 +228,20 @@ void DataBlock::append(const String& value)
     if (m_length) {
 	if (value.length()) {
 	    unsigned int len = m_length+value.length();
-	    void *data = ::malloc(len);
+	    if (len <= m_allocated) {
+		::memcpy(m_length+(char*)m_data,value.safe(),value.length());
+		m_length = len;
+		return;
+	    }
+	    unsigned int aLen = allocLen(len);
+	    void *data = ::malloc(aLen);
 	    if (data) {
 		::memcpy(data,m_data,m_length);
 		::memcpy(m_length+(char*)data,value.safe(),value.length());
-		assign(data,len,false);
+		assign(data,len,false,aLen);
 	    }
 	    else
-		Debug("DataBlock",DebugFail,"malloc(%d) returned NULL!",len);
+		Debug("DataBlock",DebugFail,"malloc(%d) returned NULL!",aLen);
 	}
     }
     else
@@ -240,6 +266,16 @@ void DataBlock::insert(const DataBlock& value)
     }
     else
 	assign(value.data(),vl);
+}
+
+unsigned int DataBlock::allocLen(unsigned int len) const
+{
+    // allocate a multiple of 8 bytes
+    unsigned int over = (8 - (len & 7)) & 7;
+    if (over < m_overAlloc)
+	return (len + m_overAlloc + 7) & ~7;
+    else
+	return len + over;
 }
 
 bool DataBlock::convert(const DataBlock& src, const String& sFormat,

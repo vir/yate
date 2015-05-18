@@ -3751,21 +3751,31 @@ public:
 
     /**
      * Constructs an empty data block
+     * @param overAlloc How many bytes of memory to overallocate
      */
-    DataBlock();
+    DataBlock(unsigned int overAlloc = 0);
 
     /**
      * Copy constructor
+     * @param value Data block to copy from
      */
     DataBlock(const DataBlock& value);
+
+    /**
+     * Copy constructor with overallocation
+     * @param value Data block to copy from
+     * @param overAlloc How many bytes of memory to overallocate
+     */
+    DataBlock(const DataBlock& value, unsigned int overAlloc);
 
     /**
      * Constructs an initialized data block
      * @param value Data to assign, may be NULL to fill with zeros
      * @param len Length of data, may be zero (then value is ignored)
      * @param copyData True to make a copy of the data, false to just insert the pointer
+     * @param overAlloc How many bytes of memory to overallocate
      */
-    DataBlock(void* value, unsigned int len, bool copyData = true);
+    DataBlock(void* value, unsigned int len, bool copyData = true, unsigned int overAlloc = 0);
 
     /**
      * Destroys the data, disposes the memory.
@@ -3824,6 +3834,20 @@ public:
 	{ return m_length; }
 
     /**
+     * Get the memory overallocation setting.
+     * @return Amount of memory that will be overallocated.
+     */
+    inline unsigned int overAlloc() const
+	{ return m_overAlloc; }
+
+    /**
+     * Set the memory overallocation.
+     * @param bytes How many bytes of memory to overallocate
+     */
+    inline void overAlloc(unsigned int bytes)
+	{ m_overAlloc = bytes; }
+
+    /**
      * Clear the data and optionally free the memory
      * @param deleteData True to free the deta block, false to just forget it
      */
@@ -3834,8 +3858,9 @@ public:
      * @param value Data to assign, may be NULL to fill with zeros
      * @param len Length of data, may be zero (then value is ignored)
      * @param copyData True to make a copy of the data, false to just insert the pointer
+     * @param allocated Real allocated data length in case it should not be copied
      */
-    DataBlock& assign(void* value, unsigned int len, bool copyData = true);
+    DataBlock& assign(void* value, unsigned int len, bool copyData = true, unsigned int allocated = 0);
 
     /**
      * Append data to the current block
@@ -3971,8 +3996,11 @@ public:
     String sqlEscape(char extraEsc) const;
 
 private:
+    unsigned int allocLen(unsigned int len) const;
     void* m_data;
     unsigned int m_length;
+    unsigned int m_allocated;
+    unsigned int m_overAlloc;
 };
 
 /**

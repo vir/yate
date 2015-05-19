@@ -1378,6 +1378,20 @@ bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
 		case ';':
 		case '}':
 		    break;
+		case '{':
+		    {
+			saved = expr;
+			JsObject* jso = parseObject(expr,false,0);
+			if (!jso)
+			    return gotError("Expecting valid object",saved);
+			if (skipComments(expr) != ';') {
+			    TelEngine::destruct(jso);
+			    return gotError("Expecting ';'",expr);
+			}
+			addOpcode(new ExpWrapper(ExpEvaluator::OpcCopy,jso));
+			pop = 1;
+		    }
+		    break;
 		default:
 		    if (!runCompile(expr,';'))
 			return false;

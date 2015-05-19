@@ -1378,6 +1378,20 @@ bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
 		case ';':
 		case '}':
 		    break;
+		case '{':
+		    {
+			saved = expr;
+			JsObject* jso = parseObject(expr,false,0);
+			if (!jso)
+			    return gotError("Expecting valid object",saved);
+			if (skipComments(expr) != ';') {
+			    TelEngine::destruct(jso);
+			    return gotError("Expecting ';'",expr);
+			}
+			addOpcode(new ExpWrapper(ExpEvaluator::OpcCopy,jso));
+			pop = 1;
+		    }
+		    break;
 		default:
 		    if (!runCompile(expr,';'))
 			return false;
@@ -2527,11 +2541,15 @@ void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* co
 	    continue;
 	String name = *op;
 	JsObject* jsobj = YOBJECT(JsObject,ctxt->resolve(stack,name,context));
-	if (!jsobj)
+	if (!jsobj) {
+	    object->params().setParam(new ExpWrapper(0,op->name()));
 	    continue;
+	}
 	NamedString* ns = jsobj->getField(stack,name,context);
-	if (!ns)
+	if (!ns) {
+	    object->params().setParam(new ExpWrapper(0,op->name()));
 	    continue;
+	}
 	ExpOperation* objOper = YOBJECT(ExpOperation,ns);
 	NamedString* temp = 0;
 	if (objOper)

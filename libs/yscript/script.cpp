@@ -52,7 +52,7 @@ bool ScriptParser::parseFile(const char* name, bool fragment)
     if (!f.openPath(name))
 	return false;
     int64_t len = f.length();
-    if (len <= 0 || len > 262143)
+    if (len <= 0 || len > (int64_t)m_maxFileLen)
 	return false;
     DataBlock data(0,(unsigned int)len+1);
     char* text = (char*)data.data();

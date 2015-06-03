@@ -2117,6 +2117,27 @@ bool Socket::setTOS(int tos)
 #endif
 }
 
+int Socket::getTOS()
+{
+    int tos = Normal;
+    socklen_t len = sizeof(tos);
+#if defined(AF_INET6) && defined(IPV6_TCLASS)
+    SocketAddr addr;
+    if (getSockName(addr) && addr.family() == AF_INET6) {
+	if (getOption(IPPROTO_IPV6,IPV6_TCLASS,&tos,&len))
+	    return tos;
+	tos = Normal;
+	len = sizeof(tos);
+    }
+#endif
+#ifdef IP_TOS
+    getOption(IPPROTO_IP,IP_TOS,&tos,&len);
+#else
+    m_error = ENOTIMPL;
+#endif
+    return tos;
+}
+
 bool Socket::setBlocking(bool block)
 {
     unsigned long flags = 1;

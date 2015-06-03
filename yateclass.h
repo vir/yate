@@ -6989,6 +6989,12 @@ public:
 	{ return setTOS(lookup(tos,tosValues(),defTos)); }
 
     /**
+     * Retrieve the TOS / DSCP on the IP level of this socket
+     * @return TOS or DiffServ value, Normal if not supported or an error occured
+     */
+    virtual int getTOS();
+
+    /**
      * Set the blocking or non-blocking operation mode of the socket
      * @param block True if I/O operations should block, false for non-blocking
      * @return True if operation was successfull, false if an error occured

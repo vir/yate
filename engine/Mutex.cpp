@@ -87,7 +87,7 @@ private:
 
 class SemaphorePrivate {
 public:
-    SemaphorePrivate(unsigned int maxcount, const char* name);
+    SemaphorePrivate(unsigned int maxcount, const char* name, unsigned int initialCount);
     ~SemaphorePrivate();
     inline void ref()
 	{ ++m_refcount; }
@@ -365,16 +365,19 @@ bool MutexPrivate::unlock()
 }
 
 
-SemaphorePrivate::SemaphorePrivate(unsigned int maxcount, const char* name)
+SemaphorePrivate::SemaphorePrivate(unsigned int maxcount, const char* name,
+    unsigned int initialCount)
     : m_refcount(1), m_waiting(0), m_maxcount(maxcount),
       m_name(name)
 {
+    if (initialCount > m_maxcount)
+	initialCount = m_maxcount;
     GlobalMutex::lock();
     s_count++;
 #ifdef _WINDOWS
-    m_semaphore = ::CreateSemaphore(NULL,1,maxcount,NULL);
+    m_semaphore = ::CreateSemaphore(NULL,initialCount,maxcount,NULL);
 #else
-    ::sem_init(&m_semaphore,0,1);
+    ::sem_init(&m_semaphore,0,initialCount);
 #endif
     GlobalMutex::unlock();
 }
@@ -527,6 +530,11 @@ void Lockable::enableSafety(bool safe)
     s_safety = safe;
 }
 
+bool Lockable::safety()
+{
+    return s_safety;
+}
+
 void Lockable::wait(unsigned long maxwait)
 {
     s_maxwait = maxwait;
@@ -646,13 +654,13 @@ MutexPool::~MutexPool()
 }
 
 
-Semaphore::Semaphore(unsigned int maxcount, const char* name)
+Semaphore::Semaphore(unsigned int maxcount, const char* name, unsigned int initialCount)
     : m_private(0)
 {
     if (!name)
 	name = "?";
     if (maxcount)
-	m_private = new SemaphorePrivate(maxcount,name);
+	m_private = new SemaphorePrivate(maxcount,name,initialCount);
 }
 
 Semaphore::Semaphore(const Semaphore &original)

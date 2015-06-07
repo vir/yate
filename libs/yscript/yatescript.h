@@ -1866,7 +1866,7 @@ protected:
      * Default constructor for derived classes
      */
     inline ScriptParser()
-	: m_code(0)
+	: m_code(0), m_maxFileLen(500000)
 	{ }
 
     /**
@@ -1875,8 +1875,16 @@ protected:
      */
     void setCode(ScriptCode* code);
 
+    /**
+     * Set the maximum loaded file length
+     * @param len New maximum file length
+     */
+    inline void setMaxFileLen(unsigned int len)
+	{ m_maxFileLen = len; }
+
 private:
     ScriptCode* m_code;
+    unsigned int m_maxFileLen;
 };
 
 class JsFunction;

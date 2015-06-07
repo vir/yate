@@ -59,6 +59,7 @@ static TokenDict dict_payloads[] = {
     { "speex/32000", 104 },
     { "isac/16000",  105 },
     { "isac/32000",  106 },
+    { "gsm-efr",     107 },
     { "mjpeg",        26 },
     { "h261",         31 },
     { "h263",         34 },

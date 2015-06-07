@@ -9,11 +9,16 @@ DEFS :=
 INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@ -L../.. -lyate
+SONAME_OPT := @SONAME_OPT@
+YATELIBS := -L../.. -lyate @LIBS@
 INCFILES := @top_srcdir@/yateclass.h @srcdir@/yateasn.h
 
 PROGS=
 LIBS = libyasn.a
 OBJS = asn.o
+LIBD_DEV:= libyateasn.so
+LIBD_VER:= $(LIBD_DEV).@PACKAGE_VERSION@
+LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)
 
 LOCALFLAGS =
 LOCALLIBS =
@@ -44,7 +49,7 @@ strip: all
 
 .PHONY: clean
 clean:
-	@-$(RM) $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
+	@-$(RM) $(PROGS) $(LIBS) $(LIBD) $(OBJS) core 2>/dev/null
 
 %.o: @srcdir@/%.cpp $(INCFILES)
 	$(COMPILE) -c $<
@@ -52,5 +57,11 @@ clean:
 Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
 
-libyasn.a: $(OBJS)
+../../$(LIBD_VER): $(OBJS)
+	$(LINK) -o $@ $(SONAME_OPT)$(LIBD_VER) $^ $(YATELIBS)
+
+../../$(LIBD_DEV): ../../$(LIBD_VER)
+	cd ../.. && ln -sf $(LIBD_VER) $(LIBD_DEV)
+
+$(LIBS): $(OBJS)
 	$(AR) rcs $@ $^

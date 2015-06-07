@@ -1,4 +1,4 @@
-yate (5.4.1~svn5941) UNRELEASED; urgency=low
+yate (5.5.1~svn5977) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1335,8 +1335,47 @@ yate (5.4.1~svn5941) UNRELEASED; urgency=low
     call controller signal termination to an ISUP call: the call may be
     already locked trying to send a message.  + Added accessor for
     Lockable safety flag.
+  * Updated to SVN revision 5977: + Make an explicit conversion to
+    satisfy the Windows compiler.  + Fixed build on systems where
+    timezone is not an integer type variable.  + Added GSM-EFR codec
+    support and transcoder.  + Resolves Mantis bug #387.  + Patch
+    written bei Ulrich Weigand on OBS for openSUSE.  + Added support for
+    PPC and PPC64 platforms.  + Patch by Andre Sencioles Vitorio
+    Oliveira <andre@bcp.net.br>  + Add -L flag for PostgreSQL library in
+    non-default place.  + Renamed configure.in to configure.ac to
+    preserve compatibility with newer autoconf.  + Added eventlogs
+    module to Windows build (partially set in rev. 5949).  + Cancel call
+    monitor thread instead of deleting it: avoid virtual method call on
+    Windows.  + Fixed string in VC project file.  + Fixed dependencies
+    of _eventlogs project.  + Added SQLite database module to Windows
+    build.  + Bumped version to 5.4.2  + Bumped version to devel 5.4.3
+    + Synchronized Windows version.  + Make some explicit conversions to
+    silence compiler warnings.  + Added utility method to append and
+    align a string on a specified size.  + Added printf style format
+    method for String.  + Clear the String in 'printf' method if
+    'malloc' fails.  + Added a better description and more suggestive
+    parameters for String::appendFixed method.  + Clear the string if we
+    failed to obtain the 'printf" formatted one.  + Added String
+    constructor from double. Added assignment and append operators from
+    double.  + The helper function string_printf is now static.  + Made
+    String::printf(const char* format, ...) grow with the format string
+    length.  + Build, install and use a dynamic library for ASN.1 code.
+    + Renamed gsm library to radio. Renamed library source directory and
+    header also.  + Make sure we don't dereference a channel whose
+    disconnect() was called from destroyed().  + Added dictionary for
+    GPRS mobility management reject causes.  + Bumped version to 5.5.0
+    + Bumped version to 5.5.1 devel.  + Added more features to the GSM 7
+    bit coder.  + Reduce parsing time for very large scripts by limiting
+    the simplification backtrace depth.  + This provides improved
+    performance for repeated binary data appending.  + Added
+    overallocation support for DataBlock.  + Resolve to undefined
+    members of inline objects or arrays that have an undefined right
+    hand variable.  + Allow the return {inline:object}; syntax.  + Made
+    the maximum script file size configurable at runtime and increased
+    default to 500000.  + Added method to retrieve the TOS/DSCP of a
+    Socket.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 20 Feb 2015 02:19:11 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 07 Jun 2015 07:49:07 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

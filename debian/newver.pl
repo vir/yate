@@ -13,7 +13,8 @@ close CL;
 print "Found last seen revision $lastrev\n";
 
 my $yatever;
-open CF, "< configure.in" or die;
+my $conf_in = (-f 'configure.ac') ? 'configure.ac' : 'configure.in';
+open CF, "< $conf_in" or die;
 while(<CF>) {
 	chomp;
 	if(/^\s*AC_INIT\(Yate, ([\d\.]+)\)/) {

@@ -23,7 +23,7 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 DAEMON=/usr/bin/yate
 PIDFILE=/var/run/yate/yate.pid
-LOG=/var/log/yate
+LOG=/var/log/yate.log
 
 # Extra Yate command line options
 OPTS="-C -Dz -rs -vvv -l $LOG"

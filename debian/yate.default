@@ -1,0 +1,11 @@
+# Defaults for yate initscript
+# sourced by /etc/init.d/yate
+# installed at /etc/default/yate by the maintainer scripts
+
+#
+# This is a POSIX shell fragment
+#
+
+# Additional options that are passed to the Daemon.
+#OPTS="-C -Dz -rs -vvv -l $LOG"
+

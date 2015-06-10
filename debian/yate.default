@@ -1,0 +1,16 @@
+# Defaults for yate initscript
+# sourced by /etc/init.d/yate
+# installed at /etc/default/yate by the maintainer scripts
+
+#
+# This is a POSIX shell fragment
+#
+
+# Paths
+#DAEMON=/usr/bin/yate
+#PIDFILE=/var/run/yate/yate.pid
+#LOGFILE=/var/log/yate.log
+
+# Extra Yate command line options
+#OPTS="-C -Dz -rs -vvv"
+

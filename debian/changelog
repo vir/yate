@@ -1,3 +1,10 @@
+yate (5.5.1~vir2015061001) UNRELEASED; urgency=medium
+
+  * Added /etc/defaults/yate file
+  * Appended ".log" to log file name
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Wed, 10 Jun 2015 16:39:54 +0300
+
 yate (5.5.1~vir2015060801) UNRELEASED; urgency=medium
 
   * Fix build

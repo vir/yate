@@ -11,8 +11,8 @@
 
 ### BEGIN INIT INFO
 # Provides:          yate
-# Required-Start:    $local_fs
-# Required-Stop:     $local_fs
+# Required-Start:    $local_fs $network
+# Required-Stop:     $local_fs $network
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: Yate server
@@ -21,105 +21,140 @@
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
+DESC="Yet another telephony engine"
+NAME=yate
+SCRIPTNAME=/etc/init.d/$NAME
 DAEMON=/usr/bin/yate
-PIDFILE=/var/run/yate/yate.pid
-LOG=/var/log/yate.log
+PIDFILE=/var/run/${NAME}/${NAME}.pid
+LOGFILE=/var/log/${NAME}.log
 
 # Extra Yate command line options
-OPTS="-C -Dz -rs -vvv -l $LOG"
+OPTS="-C -Dz -rs -vvv"
 
-# Include yate defaults if available
-if [ -f /etc/default/yate ] ; then
-	. /etc/default/yate
-fi
+# Exit if the package is not installed
+[ -x "$DAEMON" ] || exit 0
 
-set -e
+# Read configuration variable file if it is present
+[ -r /etc/default/$NAME ] && . /etc/default/$NAME
+
+# Load the VERBOSE setting and other rcS variables
+. /lib/init/vars.sh
+
+# Define LSB log_* functions.
+# Depend on lsb-base (>= 3.2-14) to ensure that this file is present
+# and status_of_proc is working.
+. /lib/lsb/init-functions
 
 
-# Check if the process is running looking at /proc
-# (works for all users)
-running()
+#
+# Function that starts the daemon/service
+#
+do_start()
 {
-    # No pidfile, probably no daemon present
-    [ ! -f "$PIDFILE" ] && return 1
-    # Obtain the pid and check it against the binary name
-    pid=`head -n 1 $PIDFILE`
-    [ -z "$pid" ] && return 1
-    [ ! -d /proc/$pid ] &&  return 1
-    cmd=`cat /proc/$pid/cmdline | tr "\000" "\n"|head -n 1 |cut -d : -f 1`
-    # Is this the expected child?
-    [ "$cmd" != "$DAEMON" ] &&  return 1
-    return 0
-}
-
-
-start() {
-	test -x $DAEMON || exit 0
-	echo -n $"Starting YATE: "
+	# Return
+	#   0 if daemon has been started
+	#   1 if daemon was already running
+	#   2 if daemon could not be started
 	unset DISPLAY
 	PIDDIR=`dirname ${PIDFILE}`
 	mkdir -p ${PIDDIR}
 	chown yate:yate ${PIDDIR}
-	touch $LOG
-	chown yate:yate $LOG
-	start-stop-daemon --start --quiet --pidfile $PIDFILE --chuid yate:yate --exec $DAEMON -- -d -p $PIDFILE $OPTS
-	if running ; then
-		echo "yate."
-	else
-		echo " ERROR."
-	fi
+	touch $LOGFILE
+	chown yate:yate $LOGFILE
+	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --chuid yate:yate --test > /dev/null \
+		|| return 1
+	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --chuid yate:yate -- -d -p $PIDFILE -l $LOGFILE $OPTS \
+		|| return 2
+	# XXX Add code here, that waits for the process to be ready
+	# to handle requests. As a last resort, sleep for some time.
 }
 
-stop() {
-	echo -n $"Stopping YATE: "
-	start-stop-daemon --stop --oknodo --quiet --retry 5 --pidfile $PIDFILE --exec $DAEMON
-	echo "yate."
+#
+# Function that stops the daemon/service
+#
+do_stop()
+{
+	# Return
+	#   0 if daemon has been stopped
+	#   1 if daemon was already stopped
+	#   2 if daemon could not be stopped
+	#   other if a failure occurred
+	start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE --name $NAME
+	RETVAL="$?"
+	[ "$RETVAL" = 2 ] && return 2
+	# Wait for children to finish too if this is a daemon that forks
+	# and if the daemon is only ever run from this initscript.
+	# If the above conditions are not satisfied then add some other code
+	# that waits for the process to drop all resources that could be
+	# needed by services started subsequently.  A last resort is to
+	# sleep for some time.
+	start-stop-daemon --stop --quiet --oknodo --retry=0/30/KILL/5 --exec $DAEMON
+	[ "$?" = 2 ] && return 2
+	# Many daemons don't delete their pidfiles when they exit.
+	rm -f $PIDFILE
+	return "$RETVAL"
 }
 
-reload() {
-	echo -n $"Reloading YATE configuration: "
-	start-stop-daemon --stop --signal HUP --quiet --pidfile $PIDFILE --exec $DAEMON
-	echo "done."
+#
+# Function that sends a SIGHUP to the daemon/service
+#
+do_reload() {
+	start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDFILE --name $NAME
+	#start-stop-daemon --stop --signal HUP --quiet --pidfile $PIDFILE --exec $DAEMON
+	return 0
 }
-
 
 
 # See how we were called.
 case "$1" in
     start)
-	start
+	[ "$VERBOSE" != no ] && log_daemon_msg "Starting $DESC" "$NAME"
+	do_start
+	case "$?" in
+		0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+		2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+	esac
 	;;
     stop)
-	stop
+	[ "$VERBOSE" != no ] && log_daemon_msg "Stopping $DESC" "$NAME"
+	do_stop
+	case "$?" in
+		0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+		2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+	esac
 	;;
-    reload)
-  	reload
-        ;;
+    reload|force-reload)
+	log_daemon_msg "Reloading $DESC" "$NAME"
+	do_reload
+	log_end_msg $?
+	;;
     status)
-	echo -n "$LABEL is "
-	if running ;  then
-		echo "running"
-	else
-		echo " not running."
-		exit 1
-	fi
+	status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
 	;;
     restart)
-	stop
-	start
-	;;
-    condrestart)
-	if running; then
-	    stop
-	    start
-	fi
+	log_daemon_msg "Restarting $DESC" "$NAME"
+	do_stop
+	case "$?" in
+	  0|1)
+		do_start
+		case "$?" in
+			0) log_end_msg 0 ;;
+			1) log_end_msg 1 ;; # Old process is still running
+			*) log_end_msg 1 ;; # Failed to start
+		esac
+		;;
+	  *)
+		# Failed to stop
+		log_end_msg 1
+		;;
+	esac
 	;;
     *)
-	echo $"Usage: $0 {start|stop|status|restart|condrestart|reload}"
+	echo "Usage: $SCRIPTNAME {start|stop|status|restart|reload|force-reload}" >&2
+	exit 3
 	;;
 esac
 
 exit 0
 # vim: noexpandtab shiftwidth=8
-
 

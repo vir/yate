@@ -6,6 +6,11 @@
 # This is a POSIX shell fragment
 #
 
-# Additional options that are passed to the Daemon.
-#OPTS="-C -Dz -rs -vvv -l $LOG"
+# Paths
+#DAEMON=/usr/bin/yate
+#PIDFILE=/var/run/yate/yate.pid
+#LOGFILE=/var/log/yate.log
+
+# Extra Yate command line options
+#OPTS="-C -Dz -rs -vvv"
 

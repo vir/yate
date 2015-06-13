@@ -1,3 +1,9 @@
+yate (5.5.1~vir2015061301) UNRELEASED; urgency=medium
+
+  * Fixed init script (jessie support)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Sat, 13 Jun 2015 06:34:51 +0300
+
 yate (5.5.1~vir2015061001) UNRELEASED; urgency=medium
 
   * Added /etc/defaults/yate file

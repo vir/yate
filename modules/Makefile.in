@@ -21,7 +21,7 @@ QT4_LIB_NET := @QT4_LIB_NET@
 QT4_STATIC_MODULES :=
 HAVE_PGSQL := @HAVE_PGSQL@
 PGSQL_INC := @PGSQL_INC@
-PGSQL_LIB := -lpq
+PGSQL_LIB := @PGSQL_LIB@
 HAVE_MYSQL := @HAVE_MYSQL@
 MYSQL_INC := @MYSQL_INC@
 MYSQL_LIB := @MYSQL_LIB@
@@ -178,6 +178,7 @@ endif
 
 ifneq (@HAVE_AMRNB@,no)
 PROGS := $(PROGS) amrnbcodec.yate
+PROGS := $(PROGS) efrcodec.yate
 endif
 
 ifneq ($(HAVE_OPENSSL),no)
@@ -315,11 +316,11 @@ server/zapcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @ZAP_FLAGS@
 $(JUSTSIG) server/wpcard.yate server/tdmcard.yate server/zapcard.yate: LOCALLIBS = -lyatesig
 
 sig/ss7_lnp_ansi.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/yasn
-sig/ss7_lnp_ansi.yate: LOCALLIBS = -lyatesig -L../libs/yasn -lyasn
+sig/ss7_lnp_ansi.yate: LOCALLIBS = -lyatesig -lyateasn
 
 sig/camel_map.yate: ../libs/yasn/libyasn.a
 sig/camel_map.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/yasn
-sig/camel_map.yate: LOCALLIBS = -lyatesig -L../libs/yasn -lyasn
+sig/camel_map.yate: LOCALLIBS = -lyatesig -lyateasn
 
 server/analogdetect.yate: ../libs/ymodem/libyatemodem.a
 server/analogdetect.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymodem
@@ -388,8 +389,8 @@ gsmcodec.yate: EXTERNLIBS = @GSM_LIB@
 speexcodec.yate: EXTERNFLAGS = @SPEEX_INC@
 speexcodec.yate: EXTERNLIBS = @SPEEX_LIB@
 
-amrnbcodec.yate: EXTERNFLAGS = @AMRNB_INC@
-amrnbcodec.yate: EXTERNLIBS = @AMRNB_LIB@
+amrnbcodec.yate efrcodec.yate: EXTERNFLAGS = @AMRNB_INC@
+amrnbcodec.yate efrcodec.yate: EXTERNLIBS = @AMRNB_LIB@
 
 faxchan.yate: EXTERNFLAGS = $(SPANDSP_INC)
 faxchan.yate: EXTERNLIBS = $(SPANDSP_LIB)
@@ -420,9 +421,9 @@ javascript.yate: LOCALLIBS = -lyatescript -L../libs/ypbx -lyatepbx
 zlibcompress.yate: EXTERNFLAGS = $(ZLIB_INC)
 zlibcompress.yate: EXTERNLIBS = $(ZLIB_LIB)
 
-server/ysnmpagent.yate: ../libs/yasn/libyasn.a ../libs/ysnmp/libysnmp.a
+server/ysnmpagent.yate: ../libyateasn.so ../libs/ysnmp/libysnmp.a
 server/ysnmpagent.yate: LOCALFLAGS = -I@top_srcdir@/libs/yasn -I@top_srcdir@/libs/ysnmp
-server/ysnmpagent.yate: LOCALLIBS = -L../libs/yasn -lyasn -L../libs/ysnmp -lysnmp
+server/ysnmpagent.yate: LOCALLIBS = -L../libs/ysnmp -lysnmp -lyateasn
 
 ../libyatesig.so ../libs/ysig/libyatesig.a: @top_srcdir@/libs/ysig/yatesig.h
 	$(MAKE) -C ../libs/ysig
@@ -463,7 +464,7 @@ server/ysnmpagent.yate: LOCALLIBS = -L../libs/yasn -lyasn -L../libs/ysnmp -lysnm
 ../libyateqt4.so: @top_srcdir@/clients/qt4/qt4client.h
 	$(MAKE) -C ../clients/qt4
 
-../libs/yasn/libyasn.a: @top_srcdir@/libs/yasn/yateasn.h
+../libyateasn.so ../libs/yasn/libyasn.a: @top_srcdir@/libs/yasn/yateasn.h
 	$(MAKE) -C ../libs/yasn
 
 ../libs/ysnmp/libysnmp.a: @top_srcdir@/libs/ysnmp/yatesnmp.h

@@ -405,6 +405,18 @@ String::String(bool value)
     changed();
 }
 
+String::String(double value)
+    : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
+{
+    XDebug(DebugAll,"String::String(%g) [%p]",value,this);
+    char buf[80];
+    ::sprintf(buf,"%g",value);
+    m_string = ::strdup(buf);
+    if (!m_string)
+	Debug("String",DebugFail,"strdup() returned NULL!");
+    changed();
+}
+
 String::String(const String* value)
     : m_string(0), m_length(0), m_hash(YSTRING_INIT_HASH), m_matches(0)
 {
@@ -782,6 +794,13 @@ String& String::operator=(uint64_t value)
     return operator=(buf);
 }
 
+String& String::operator=(double value)
+{
+    char buf[80];
+    ::sprintf(buf,"%g",value);
+    return operator=(buf);
+}
+
 String& String::operator+=(char value)
 {
     char buf[2] = {value,0};
@@ -813,6 +832,13 @@ String& String::operator+=(uint64_t value)
 {
     char buf[24];
     ::sprintf(buf,FMT64U,value);
+    return operator+=(buf);
+}
+
+String& String::operator+=(double value)
+{
+    char buf[80];
+    ::sprintf(buf,"%g",value);
     return operator+=(buf);
 }
 
@@ -996,6 +1022,82 @@ String& String::append(double value, unsigned int decimals)
     char buf[80];
     ::sprintf(buf,"%0.*f",decimals,value);
     return operator+=(buf);
+}
+
+static char* string_printf(unsigned int length, const char* format, va_list& va)
+{
+    if (TelEngine::null(format) || !length)
+	return 0;
+    char* buf = (char*)::malloc(length + 1);
+    if (!buf) {
+	Debug("String",DebugFail,"malloc(%d) returned NULL!",length);
+	return 0;
+    }
+    int len = ::vsnprintf(buf,length,format,va);
+    buf[len] = 0;
+    return buf;
+}
+
+String& String::printf(unsigned int length, const char* format,  ...)
+{
+    va_list va;
+    va_start(va,format);
+    char* buf = string_printf(length,format,va);
+    va_end(va);
+    if (!buf) {
+	clear();
+	return *this;
+    }
+    char* old = m_string;
+    m_string = buf;
+    ::free(old);
+    changed();
+    return *this;
+}
+
+String& String::printf(const char* format, ...)
+{
+    va_list va;
+    va_start(va,format);
+    unsigned int len = TelEngine::null(format) ? 0 : (128 + ::strlen(format));
+    char* buf = string_printf(len,format,va);
+    va_end(va);
+    if (!buf) {
+	clear();
+	return *this;
+    }
+    char* old = m_string;
+    m_string = buf;
+    ::free(old);
+    changed();
+    return *this;
+}
+
+String& String::appendFixed(unsigned int fixedLength, const char* str, unsigned int len, char fill, int align)
+{
+    if (len == (unsigned int)-1)
+	len = ::strlen(str);
+    if (!str || len == 0)
+	return *this;
+    int alignPos = 0;
+    if (len < fixedLength) {
+	if (align == Center)
+	    alignPos = fixedLength / 2 - len / 2;
+	else if (align == Right)
+	    alignPos = fixedLength - len;
+    } else
+	len = fixedLength;
+    char* buf = (char*)::malloc(fixedLength + 1);
+    if (!buf) {
+	Debug("String",DebugFail,"malloc(%d) returned NULL!",fixedLength + 1);
+	return *this;
+    }
+    ::memset(buf,fill,fixedLength);
+    ::memcpy(buf + alignPos,str,len);
+    buf[fixedLength] = 0;
+    operator+=(buf);
+    ::free(buf);
+    return *this;
 }
 
 bool String::operator==(const char* value) const

@@ -88,6 +88,6 @@ debian/tmp/usr/lib/yate/server/lksctp.yate
 
 debian/tmp/usr/lib/yate/lazyrec.yate
 
-debian/tmp/usr/lib/libyategsm.so.*
+debian/tmp/usr/lib/libyateradio.so.*
 
 

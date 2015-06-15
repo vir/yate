@@ -1,6 +1,6 @@
 # Have to rotate the log file before it reaches 2GB in size
 
-/var/log/yate {
+/var/log/yate.log {
     size=100M
     rotate 7
     missingok

@@ -1,6 +1,6 @@
 /**
- * yategsm.h
- * GSM Radio Layer 3 library
+ * yateradio.h
+ * Radio library
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
@@ -18,32 +18,32 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-#ifndef __YATEGSM_H
-#define __YATEGSM_H
+#ifndef __YATERADIO_H
+#define __YATERADIO_H
 
 #include <yateclass.h>
 #include <yatexml.h>
 
 #ifdef _WINDOWS
 
-#ifdef LIBYGSM_EXPORTS
-#define YGSM_API __declspec(dllexport)
+#ifdef LIBYRADIO_EXPORTS
+#define YRADIO_API __declspec(dllexport)
 #else
-#ifndef LIBYGSM_STATIC
-#define YGSM_API __declspec(dllimport)
+#ifndef LIBYRADIO_STATIC
+#define YRADIO_API __declspec(dllimport)
 #endif
 #endif
 
 #endif /* _WINDOWS */
 
-#ifndef YGSM_API
-#define YGSM_API
+#ifndef YRADIO_API
+#define YRADIO_API
 #endif
 
 
 namespace TelEngine {
 
-class YGSM_API GSML3Codec
+class YRADIO_API GSML3Codec
 {
     YNOCOPY(GSML3Codec);
 public:
@@ -239,15 +239,18 @@ public:
      * @param buf Input buffer
      * @param len Input buffer length
      * @param text Destination text
+     * @param heptets Maximum number of heptets in buffer
      */
-    static void decodeGSM7Bit(unsigned char* buf, unsigned int len, String& text);
+    static void decodeGSM7Bit(unsigned char* buf, unsigned int len, String& text,
+	unsigned int heptets = (unsigned int)-1);
 
     /**
      * Encode GSM 7bit buffer
      * @param text Input text
      * @param buf Destination buffer
+     * @return True if all characters were encoded correctly
      */
-    static void encodeGSM7Bit(const String& text, DataBlock& buf);
+    static bool encodeGSM7Bit(const String& text, DataBlock& buf);
 
     /**
      * IE types dictionary
@@ -274,6 +277,11 @@ public:
      */
     static const TokenDict s_mmRejectCause[];
 
+    /**
+     * GPRS Mobility Management reject causes dictionary
+     */
+    static const TokenDict s_gmmRejectCause[];
+
 private:
 
     unsigned int decodeXml(XmlElement* xml, const NamedList& params, const String& pduTag);
@@ -291,6 +299,6 @@ private:
 
 }; // namespace TelEngine
 
-#endif /* __YATEGSM_H */
+#endif /* __YATERADIO_H */
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

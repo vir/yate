@@ -1,5 +1,5 @@
 # Process this file with autoconf to produce a configure script.
-AC_INIT(Yate, 5.4.1)
+AC_INIT(Yate, 5.5.1)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
 
@@ -43,7 +43,7 @@ case "x$archname" in
     x*-*-*)
 	ARCHLIB="lib/$archname"
 	;;
-    x*x86_64*)
+    x*x86_64*|xppc64*|xaarch64)
 	ARCHLIB=lib64
 	;;
 esac
@@ -190,6 +190,20 @@ if [[ "$have_gmtoff" = "yes" ]]; then
 HAVE_GMTOFF="-DHAVE_GMTOFF"
 fi
 AC_SUBST(HAVE_GMTOFF)
+
+HAVE_INT_TZ=""
+AC_MSG_CHECKING([for integer timezone variable])
+have_tzint="no"
+AC_TRY_COMPILE([
+#include <time.h>
+],[
+long tz = -timezone;
+],have_tzint="yes")
+AC_MSG_RESULT([$have_tzint])
+if [[ "$have_tzint" = "yes" ]]; then
+HAVE_INT_TZ="-DHAVE_INT_TZ"
+fi
+AC_SUBST(HAVE_INT_TZ)
 
 HAVE_POLL=no
 AC_ARG_ENABLE(poll,AC_HELP_STRING([--enable-poll],[Use poll() on sockets (default: yes)]),want_poll=$enableval,want_poll=yes)
@@ -599,6 +613,7 @@ AC_SUBST(OBJCFLAGS)
 
 HAVE_PGSQL=no
 PGSQL_INC=""
+PGSQL_LIB=""
 AC_ARG_WITH(libpq,AC_HELP_STRING([--with-libpq=DIR],[use Postgress SQL from DIR (default /usr)]),[ac_cv_use_libpq=$withval],[ac_cv_use_libpq=/usr])
 if [[ "x$ac_cv_use_libpq" != "xno" ]]; then
 AC_MSG_CHECKING([for Postgress SQL in $ac_cv_use_libpq])
@@ -607,6 +622,11 @@ libpq="$ac_cv_use_libpq/$local_lib/libpq.so"
 if [[ "x$local_lib" != "xlib" -a ! -f "$libpq" ]]; then
     local_lib="lib"
     libpq="$ac_cv_use_libpq/$local_lib/libpq.so"
+fi
+if [[ "x$ac_cv_use_libpq" != "x/usr" ]]; then
+    PGSQL_LIB="-L$ac_cv_use_libpq/$local_lib -lpq"
+else
+    PGSQL_LIB="-lpq"
 fi
 for i in include include/pgsql pgsql/include include/postgresql; do
     incpq="$ac_cv_use_libpq/$i"
@@ -635,6 +655,7 @@ AC_MSG_RESULT([$HAVE_PGSQL])
 fi
 AC_SUBST(HAVE_PGSQL)
 AC_SUBST(PGSQL_INC)
+AC_SUBST(PGSQL_LIB)
 
 HAVE_MYSQL=no
 MYSQL_INC=""
@@ -1719,7 +1740,7 @@ AC_CONFIG_FILES([packing/rpm/yate.spec
 		 libs/yasn/Makefile
 	         libs/ysnmp/Makefile
 	         libs/miniwebrtc/Makefile
-	         libs/ygsm/Makefile
+	         libs/yradio/Makefile
                  share/Makefile
                  share/scripts/Makefile
                  share/skins/Makefile

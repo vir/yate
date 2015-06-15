@@ -1378,6 +1378,20 @@ bool JsCode::getInstruction(ParsePoint& expr, char stop, GenObject* nested)
 		case ';':
 		case '}':
 		    break;
+		case '{':
+		    {
+			saved = expr;
+			JsObject* jso = parseObject(expr,false,0);
+			if (!jso)
+			    return gotError("Expecting valid object",saved);
+			if (skipComments(expr) != ';') {
+			    TelEngine::destruct(jso);
+			    return gotError("Expecting ';'",expr);
+			}
+			addOpcode(new ExpWrapper(ExpEvaluator::OpcCopy,jso));
+			pop = 1;
+		    }
+		    break;
 		default:
 		    if (!runCompile(expr,';'))
 			return false;
@@ -2527,11 +2541,15 @@ void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* co
 	    continue;
 	String name = *op;
 	JsObject* jsobj = YOBJECT(JsObject,ctxt->resolve(stack,name,context));
-	if (!jsobj)
+	if (!jsobj) {
+	    object->params().setParam(new ExpWrapper(0,op->name()));
 	    continue;
+	}
 	NamedString* ns = jsobj->getField(stack,name,context);
-	if (!ns)
+	if (!ns) {
+	    object->params().setParam(new ExpWrapper(0,op->name()));
 	    continue;
+	}
 	ExpOperation* objOper = YOBJECT(ExpOperation,ns);
 	NamedString* temp = 0;
 	if (objOper)
@@ -3363,14 +3381,47 @@ bool JsFunction::runNative(ObjList& stack, const ExpOperation& oper, GenObject* 
     XDebug(DebugAll,"JsFunction::runNative() '%s' in '%s' [%p]",
 	oper.name().c_str(),toString().c_str(),this);
     if (oper.name() == YSTRING("apply")) {
+	// func.apply(new_this)
 	// func.apply(new_this,["array","of","params",...])
-	if (oper.number() != 2)
-	    return false;
+	switch (oper.number()) {
+	    case 1:
+	    case 2:
+		break;
+	    default:
+		return false;
+	}
+	ObjList args;
+	extractArgs(this,stack,oper,context,args);
+	JsObject* thisObj = YOBJECT(JsObject,args[0]);
+	JsArray* callArgs = YOBJECT(JsArray,args[1]);
+	int argc = 0;
+	if (callArgs) {
+	    int32_t len = callArgs->length();
+	    for (int32_t i = 0; i < len; i++)
+		if (callArgs->runField(stack,ExpOperation((int64_t)i,String(i)),context))
+		    argc++;
+	}
+	ExpFunction func(toString(),argc);
+	return runDefined(stack,func,context,thisObj);
     }
     else if (oper.name() == YSTRING("call")) {
+	// func.call(new_this)
 	// func.call(new_this,param1,param2,...)
 	if (!oper.number())
 	    return false;
+	ObjList args;
+	extractArgs(this,stack,oper,context,args);
+	JsObject* thisObj = YOBJECT(JsObject,args[0]);
+	int argc = 0;
+	ObjList* l = args.next();
+	if (l) {
+	    while (ExpOperation* op = static_cast<ExpOperation*>(l->remove(false))) {
+		ExpEvaluator::pushOne(stack,op);
+		argc++;
+	    }
+	}
+	ExpFunction func(toString(),argc);
+	return runDefined(stack,func,context,thisObj);
     }
     else {
 	JsObject* obj = YOBJECT(JsObject,params().getParam(YSTRING("prototype")));

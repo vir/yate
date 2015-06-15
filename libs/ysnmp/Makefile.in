@@ -7,7 +7,7 @@ AR  := ar
 DEFS :=
 INCLUDES := -I@top_srcdir@ -I../.. -I@top_srcdir@/libs/yasn -I@srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
-LDFLAGS:= @LDFLAGS@ -L../yasn -lyasn -L../.. -lyate
+LDFLAGS:= @LDFLAGS@ -lyate
 INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/libs/yasn/yateasn.h @srcdir@/yatesnmp.h
 
 PROGS=

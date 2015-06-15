@@ -191,11 +191,14 @@ bool CallEndpoint::disconnect(bool final, const char* reason, bool notify, const
     }
 
     temp->setPeer(0,reason,notify,params);
+    bool dead = !alive();
+    if (dead)
+	Debug(DebugMild,"CallEndpoint '%s' disconnect called while dead [%p]",m_id.c_str(),this);
     if (final)
 	disconnected(true,reason);
     lock.drop();
     temp->deref();
-    return deref();
+    return dead || deref();
 }
 
 void CallEndpoint::setPeer(CallEndpoint* peer, const char* reason, bool notify, const NamedList* params)

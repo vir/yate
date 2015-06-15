@@ -1,6 +1,8 @@
 ## analog and isdn cards ##
 debian/tmp/usr/lib/libyatesig.so.*
 debian/tmp/usr/lib/libyatesig.so
+debian/tmp/usr/lib/libyateasn.so.*
+debian/tmp/usr/lib/libyateasn.so
 debian/tmp/etc/yate/analog.conf
 debian/tmp/usr/lib/yate/server/analog.yate
 #debian/tmp/etc/yate/wpcard.conf

@@ -467,7 +467,7 @@ void Connection::run()
     // For the sake of responsiveness try to turn off the tcp assembly timer
     int arg = 1;
     if (cfg().getBoolValue("interactive",false) &&
-	!m_socket->setOption(SOL_SOCKET, TCP_NODELAY, &arg, sizeof(arg)))
+	!m_socket->setOption(IPPROTO_TCP, TCP_NODELAY, &arg, sizeof(arg)))
 	Debug("RManager",DebugMild, "Failed to set tcp socket to TCP_NODELAY mode: %s", strerror(m_socket->error()));
 
     if (cfg().getValue("userpass")) {

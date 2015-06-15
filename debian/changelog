@@ -1,3 +1,28 @@
+yate (5.5.1~vir2015061301) UNRELEASED; urgency=medium
+
+  * Fixed init script (jessie support)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Sat, 13 Jun 2015 06:34:51 +0300
+
+yate (5.5.1~vir2015061001) UNRELEASED; urgency=medium
+
+  * Added /etc/defaults/yate file
+  * Appended ".log" to log file name
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Wed, 10 Jun 2015 16:39:54 +0300
+
+yate (5.5.1~vir2015060801) UNRELEASED; urgency=medium
+
+  * Fix build
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Mon, 08 Jun 2015 09:43:53 +0300
+
+yate (5.5.1~vir2015060701) UNRELEASED; urgency=medium
+
+  * Merged upstream updates (SVN r5977)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Sun, 07 Jun 2015 08:00:29 +0300
+
 yate (5.4.1~vir2015020901) UNRELEASED; urgency=medium
 
   * Merged upstream updates (SVN r5936)

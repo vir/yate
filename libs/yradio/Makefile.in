@@ -1,5 +1,5 @@
 # Makefile
-# This file holds the make rules for the libyategsm
+# This file holds the make rules for the libyateradio
 
 DEBUG :=
 
@@ -11,12 +11,12 @@ CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@
 SONAME_OPT := @SONAME_OPT@
 YATELIBS := -L../.. -lyate @LIBS@
-INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatexml.h @srcdir@/yategsm.h
+INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatexml.h @srcdir@/yateradio.h
 
 PROGS=
-LIBS = libyategsm.a
+LIBS = libyateradio.a
 OBJS = codec.o
-LIBD_DEV:= libyategsm.so
+LIBD_DEV:= libyateradio.so
 LIBD_VER:= $(LIBD_DEV).@PACKAGE_VERSION@
 LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)
 

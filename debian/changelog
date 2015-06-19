@@ -1,4 +1,4 @@
-yate (5.5.1~svn5977) UNRELEASED; urgency=low
+yate (5.5.1~svn5978) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1374,8 +1374,13 @@ yate (5.5.1~svn5977) UNRELEASED; urgency=low
     the maximum script file size configurable at runtime and increased
     default to 500000.  + Added method to retrieve the TOS/DSCP of a
     Socket.
+  * Updated to SVN revision 5978: + Fix build  + Fix dirs creation  +
+    snmp_data.conf moved into /var/cache/yate  + Fixed init script. New
+    package 5.5.1~vir2015061301  + Added /etc/defaults/yate file
+    (Closes: #6)  + Appended ".log" to log file name (Closes: #5)  +
+    Added generic radio interface.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 07 Jun 2015 07:49:07 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 20 Jun 2015 02:19:11 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

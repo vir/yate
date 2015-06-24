@@ -1,0 +1,66 @@
+; This file holds configuration for bladerf module
+
+[general]
+
+; priority: integer: Priority of radio create message handler
+; Defaults to 90
+;priority=90
+
+; fpga_load: boolean: Load FPGA from file on device open
+; Allowed values:
+;  Boolean yes: Always load
+;  Boolean no: Don't load (not recommended)
+;  auto: Check if already loaded. Load only if check fails or not loaded
+; Defaults to boolean 'yes' if missing or invalid
+;fpga_load=yes
+
+; fpga_file_115: string: 115KLE FPGA file to load
+;fpga_file_115=${modulepath}/server/bts/hostedx115.rbf
+
+; fpga_file_40: string: 40KLE FPGA file to load
+;fpga_file_40=${modulepath}/server/bts/hostedx40.rbf
+
+; tx_fpga_corr_phase: integer: TX FPGA PHASE correction
+; Interval allowed: [-4096..4096]
+; Defaults to 0 if missing or invalid
+;tx_fpga_corr_phase=0
+
+; tx_powerbalance: float: TX I/Q power balance
+; Interval allowed: (0..2)
+; Defaults to 1 if missing or invalid
+;tx_powerbalance=1
+
+
+[libusb]
+; This section configures libusb backend related data
+
+; debug_level: libusb debug level
+; Default to 0 (no debug messages)
+;debug_level=0
+
+; ctrl_transfer_timeout: integer: Control transfer timeout in milliseconds
+; This parmeter is applied on device creation
+; Allowed interval: [200 .. 2000]
+; Defaults to 500
+;ctrl_transfer_timeout=500
+
+; bulk_transfer_timeout: integer: Bulk transfer timeout in milliseconds
+; This parmeter is applied on device creation
+; Allowed interval: [200 .. 2000]
+; Defaults to 500
+;bulk_transfer_timeout=500
+
+
+[test_name]
+; This section configures a test
+; There may be more than one test section
+
+; Parameters starting with 'init:' can be used to run device commands after creation
+;  and before power up
+; Handled commands:
+; txpattern=circle/zero/random/comma_separated_list_of_values
+; samplerate=device_sample_rate
+; filter=device_filter_bandwidth
+; txfrequency=tx_frequency_in_hertz
+; rxfrequency=rx_frequency_in_hertz
+

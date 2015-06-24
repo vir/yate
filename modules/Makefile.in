@@ -37,6 +37,9 @@ OPENSSL_LIB := @OPENSSL_LIB@
 HAVE_ZLIB := @HAVE_ZLIB@
 ZLIB_INC := @ZLIB_INC@
 ZLIB_LIB := @ZLIB_LIB@
+HAVE_LIBUSB := @HAVE_LIBUSB@
+LIBUSB_INC := @LIBUSB_INC@
+LIBUSB_LIB := @LIBUSB_LIB@
 SED := sed
 DEFS :=
 INCLUDES := -I.. -I@top_srcdir@
@@ -195,6 +198,11 @@ ifeq (@HAVE_COREDUMPER@,yes)
 COREDUMP_INC := -DHAVE_COREDUMPER @COREDUMPER_INC@
 COREDUMP_LIB := @COREDUMPER_LIB@
 endif
+
+ifneq (@HAVE_LIBUSB@,no)
+PROGS := $(PROGS) radio/ybladerf.yate
+endif
+
 
 LOCALFLAGS =
 LOCALLIBS =
@@ -415,6 +423,12 @@ server/ysnmpagent.yate: ../libyateasn.so ../libs/ysnmp/libysnmp.a
 server/ysnmpagent.yate: LOCALFLAGS = -I@top_srcdir@/libs/yasn -I@top_srcdir@/libs/ysnmp
 server/ysnmpagent.yate: LOCALLIBS = -L../libs/ysnmp -lysnmp -lyateasn
 
+radio/ybladerf.yate: ../libyateradio.so
+radio/ybladerf.yate: LOCALFLAGS = -I@top_srcdir@/libs/yradio
+radio/ybladerf.yate: LOCALLIBS = -lyateradio
+radio/ybladerf.yate: EXTERNFLAGS = $(LIBUSB_INC)
+radio/ybladerf.yate: EXTERNLIBS = $(LIBUSB_LIB)
+
 ../libyatesig.so ../libs/ysig/libyatesig.a: @top_srcdir@/libs/ysig/yatesig.h
 	$(MAKE) -C ../libs/ysig
 
@@ -459,3 +473,6 @@ server/ysnmpagent.yate: LOCALLIBS = -L../libs/ysnmp -lysnmp -lyateasn
 
 ../libs/ysnmp/libysnmp.a: @top_srcdir@/libs/ysnmp/yatesnmp.h
 	$(MAKE) -C ../libs/ysnmp
+
+../libyateradio.so ../libs/yradio/libyateradio.a: @top_srcdir@/libs/yradio/yateradio.h
+	$(MAKE) -C ../libs/yradio

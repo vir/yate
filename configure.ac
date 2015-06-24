@@ -1450,6 +1450,33 @@ AC_SUBST(ZLIB_INC)
 AC_SUBST(ZLIB_LIB)
 
 
+HAVE_LIBUSB=no
+LIBUSB_INC=""
+LIBUSB_LIB=""
+AC_ARG_WITH(libusb,AC_HELP_STRING([--with-libusb=DIR],[use libusb DIR (default /usr)]),[ac_cv_use_libusb=$withval],[ac_cv_use_libusb=/usr])
+if [[ "x$ac_cv_use_libusb" != "xno" ]]; then
+    AC_MSG_CHECKING([for libusb in $ac_cv_use_libusb])
+    if [[ -f "$ac_cv_use_libusb/include/libusb-1.0/libusb.h" ]]; then
+	# Save current system libs and include dirs and restore them after trying to link
+	SAVE_LIBS="$LIBS"
+	SAVE_CFLAGS="$CFLAGS"
+	LIBS="$LIBS -lusb-1.0"
+	CFLAGS="$CFLAGS -I$ac_cv_use_libusb/include/libusb-1.0"
+	AC_TRY_LINK([#include <libusb.h>],[libusb_get_version();],[HAVE_LIBUSB=yes],[HAVE_LIBUSB=no])
+	LIBS="$SAVE_LIBS"
+	CFLAGS="$SAVE_CFLAGS"
+	if [[ "$HAVE_LIBUSB" = "yes" ]]; then
+	    LIBUSB_INC="-I$ac_cv_use_libusb/include/libusb-1.0"
+	    LIBUSB_LIB="-lusb-1.0"
+	fi
+    fi
+    AC_MSG_RESULT([$HAVE_LIBUSB])
+fi
+AC_SUBST(HAVE_LIBUSB)
+AC_SUBST(LIBUSB_INC)
+AC_SUBST(LIBUSB_LIB)
+
+
 HAVE_QT4=no
 QT4_INC=""
 QT4_LIB=""

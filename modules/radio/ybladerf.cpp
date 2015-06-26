@@ -289,42 +289,25 @@ inline String& addIntervalInt(String& s, int minVal, int maxVal, const char* sep
     return s.append(tmp.printf("[%d..%d]",minVal,maxVal),sep);
 }
 
-static inline bool retValNoParam(String& buf, bool missing, const char* param)
+static inline bool retMsgError(NamedList& list, const char* what, const char* param = 0)
 {
-    buf << (missing ? "Missing required parameter" : "Invalid parameter");
-    if (param)
-	buf << " '" << param << "'";
-    buf << "\r\n";
-    return true;
-}
-
-static inline bool retValFailure(String& buf, unsigned int code)
-{
-    String tmp;
-    tmp.printf("Failure: %u %s\r\n",code,RadioInterface::errorName(code));
-    buf << tmp;
-    return true;
-}
-
-static inline bool retValNoParam(NamedList& list, bool missing, const char* param)
-{
-    String buf(missing ? "Missing required parameter" : "Invalid parameter");
-    if (param)
-	buf << " '" << param << "'";
-    list.setParam("error",buf);
+    NamedString* ns = new NamedString("error",what);
+    if (!TelEngine::null(param))
+	*ns << " '" << param << "'";
+    list.setParam(ns);
     return false;
 }
 
-static inline bool retValFailure(NamedList& list, const char* error)
+static inline bool retParamError(NamedList& list, const char* param)
 {
-    list.setParam("error",error);
-    return false;
+    if (list.getParam(param))
+	return retMsgError(list,"Missing parameter",param);
+    return retMsgError(list,"Invalid parameter",param);
 }
 
 static inline bool retValFailure(NamedList& list, unsigned int code)
 {
-    String buf;
-    return retValFailure(list,buf.printf("%u %s",code,RadioInterface::errorName(code)));
+    return retMsgError(list,String(code) + " " + RadioInterface::errorName(code));
 }
 
 static inline bool getFirstStr(String& dest, String& line)
@@ -969,6 +952,8 @@ public:
     unsigned int getFpgaCorr(bool tx, int corr, int16_t& value);
     // Retrieve TX/RX timestamp
     unsigned int getTimestamp(bool tx, uint64_t& ts);
+    // Write LMS register
+    unsigned int writeLMS(uint8_t addr, uint8_t value, uint8_t* rst = 0);
     // Enable or disable loopback
     unsigned int setLoopback(const char* name = 0);
     unsigned int setLoopback(int mode = 0);
@@ -1191,13 +1176,13 @@ private:
 	}
     // Read address from LMS, clear mask, set val (using OR) and write it back
     inline unsigned int lmsSet(uint8_t addr, uint8_t val, uint8_t clearMask,
-	String* error) {
+	String* error = 0) {
 	    uint8_t data = 0;
 	    unsigned int status = lmsRead(addr,data,error);
 	    return status ? status : lmsWrite(addr,(data & ~clearMask) | val,error);
 	}
     // Read address from LMS, set val (using OR) and write it back
-    inline unsigned int lmsSet(uint8_t addr, uint8_t val, String* error) {
+    inline unsigned int lmsSet(uint8_t addr, uint8_t val, String* error = 0) {
 	    uint8_t data = 0;
 	    unsigned int status = lmsRead(addr,data,error);
 	    return status ? status : lmsWrite(addr,data | val,error);
@@ -1758,6 +1743,7 @@ protected:
     bool onCmdStatus(String& retVal, String& line);
     bool onCmdGain(BrfInterface* ifc, Message& msg);
     bool onCmdCorrection(BrfInterface* ifc, Message& msg);
+    bool onCmdLmsWrite(BrfInterface* ifc, Message& msg);
     bool onCmdBufOutput(BrfInterface* ifc, Message& msg);
     bool onCmdShow(BrfInterface* ifc, Message& msg);
     bool test(const String& cmd, NamedList& list);
@@ -1774,8 +1760,8 @@ INIT_PLUGIN(BrfModule);
 static Configuration s_cfg;                      // Configuration file (protected by plugin mutex)
 static uint8_t s_debugPeripheral = 0;            // Debug peripheral access
 static const String s_modCmds[] = {"test","help",""};
-static const String s_ifcCmds[] = {"vgagain","correction","bufoutput","rxdcoutput",
-    "txpattern","show",""};
+static const String s_ifcCmds[] = {"vgagain","correction","lmswrite",
+    "bufoutput","rxdcoutput","txpattern","show",""};
 // libusb
 static unsigned int s_lusbCtrlTransferTout = LUSB_CTRL_TIMEOUT; // Control transfer timeout def val (in milliseconds)
 static unsigned int s_lusbBulkTransferTout = LUSB_BULK_TIMEOUT; // Bulk transfer timeout def val (in milliseconds)
@@ -2854,6 +2840,15 @@ unsigned int BrfLibUsbDevice::getTimestamp(bool tx, uint64_t& ts)
     BRF_TX_SERIALIZE;
     BRF_CHECK_DEV("getTimestamp()");
     return internalGetTimestamp(tx,ts);
+}
+
+unsigned int BrfLibUsbDevice::writeLMS(uint8_t addr, uint8_t value, uint8_t* rst)
+{
+    BRF_TX_SERIALIZE;
+    BRF_CHECK_DEV("getTimestamp()");
+    if (rst)
+	return lmsSet(addr,value,*rst);
+    return lmsWrite(addr,value);
 }
 
 unsigned int BrfLibUsbDevice::setLoopback(const char* name)
@@ -6410,6 +6405,8 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	"\r\n  Set or retrieve TX/RX VGA mixer gain"
 	"\r\ncontrol ifc_name correction tx=boolean corr={dc-i|dc-q|fpga-gain|fpga-phase} [value=]"
 	"\r\n  Set or retrieve TX/RX DC I/Q or FPGA GAIN/PHASE correction"
+	"\r\ncontrol ifc_name lmswrite addr= value= [resetmask=]"
+	"\r\n  Set LMS value at given address. Use reset mask for partial register set"
 	"\r\ncontrol ifc_name bufoutput tx=boolean [count=] [nodata=boolean]"
 	"\r\n  Set TX/RX buffer output"
 	"\r\ncontrol ifc_name rxdcoutput [count=]"
@@ -6439,17 +6436,19 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	return onCmdGain(ifc,msg);
     if (cmd == YSTRING("correction"))
 	return onCmdCorrection(ifc,msg);
+    if (cmd == YSTRING("lmswrite"))
+	return onCmdLmsWrite(ifc,msg);
     if (cmd == YSTRING("bufoutput"))
 	return onCmdBufOutput(ifc,msg);
     if (cmd == YSTRING("rxdcoutput")) {
 	if (!ifc->device())
-	    return retValFailure(msg,"No device");
+	    return retMsgError(msg,"No device");
 	ifc->device()->showRxDCInfo(msg.getIntValue(YSTRING("count")));
 	return true;
     }
     if (cmd == YSTRING("txpattern")) {
 	if (!ifc->device())
-	    return retValFailure(msg,"No device");
+	    return retMsgError(msg,"No device");
 	ifc->device()->setTxPattern(msg[YSTRING("pattern")]);
 	return true;
     }
@@ -6518,25 +6517,21 @@ bool BrfModule::onCmdStatus(String& retVal, String& line)
 
 #define BRF_GET_BOOL_PARAM(bDest,param) \
     const String& tmpGetBParamStr = msg[YSTRING(param)]; \
-    if (!tmpGetBParamStr) \
-	return retValNoParam(msg,true,param); \
     if (!tmpGetBParamStr.isBoolean()) \
-	return retValNoParam(msg,false,param); \
+	return retParamError(msg,param); \
     bDest = tmpGetBParamStr.toBoolean();
 
 // control ifc_name vgagain tx=boolean mixer={1|2} [value=]
 bool BrfModule::onCmdGain(BrfInterface* ifc, Message& msg)
 {
     if (!ifc->device())
-	return retValFailure(msg,"No device");
+	return retMsgError(msg,"No device");
     bool tx = true;
     BRF_GET_BOOL_PARAM(tx,"tx");
     const String& what = msg[YSTRING("vga")];
-    if (!what)
-	return retValNoParam(msg,true,"vga");
     bool preMixer = (what == YSTRING("1"));
     if (!preMixer && what != YSTRING("2"))
-	return retValNoParam(msg,false,"vga");
+	return retParamError(msg,"vga");
     unsigned int code = 0;
     int crt = 0;
     const String& value = msg[YSTRING("gain")];
@@ -6557,12 +6552,12 @@ bool BrfModule::onCmdGain(BrfInterface* ifc, Message& msg)
 bool BrfModule::onCmdCorrection(BrfInterface* ifc, Message& msg)
 {
     if (!ifc->device())
-	return retValFailure(msg,"No device");
+	return retMsgError(msg,"No device");
     bool tx = true;
     BRF_GET_BOOL_PARAM(tx,"tx");
     const String& corr = msg[YSTRING("corr")];
     if (!corr)
-	return retValNoParam(msg,true,"corr");
+	return retParamError(msg,"corr");
     const String& value = msg[YSTRING("value")];
     unsigned int code = 0;
     int16_t crt = 0;
@@ -6577,7 +6572,7 @@ bool BrfModule::onCmdCorrection(BrfInterface* ifc, Message& msg)
 	int c = (corr == YSTRING("fpga-phase")) ? BrfLibUsbDevice::CorrFpgaPHASE:
 	    BrfLibUsbDevice::CorrFpgaGAIN;
 	if (c == BrfLibUsbDevice::CorrFpgaGAIN && corr != YSTRING("fpga-gain"))
-	    return retValNoParam(msg,false,"corr");
+	    return retParamError(msg,"corr");
 	if (value)
 	    code = ifc->device()->setFpgaCorr(tx,c,value.toInteger());
 	if (!code)
@@ -6590,11 +6585,35 @@ bool BrfModule::onCmdCorrection(BrfInterface* ifc, Message& msg)
     return true;
 }
 
+// control ifc_name lmswrite addr= value= [resetmask=]
+bool BrfModule::onCmdLmsWrite(BrfInterface* ifc, Message& msg)
+{
+    if (!ifc->device())
+	return retMsgError(msg,"No device");
+    int addr = msg.getIntValue(YSTRING("addr"),-1);
+    if (addr < 0 || addr > 127)
+	return retParamError(msg,"addr");
+    int val = msg.getIntValue(YSTRING("value"),-1);
+    if (val < 0 || val > 255)
+	return retParamError(msg,"value");
+    const String& rstStr = msg[YSTRING("resetmask")];
+    unsigned int code = 0;
+    if (rstStr) {
+	uint8_t rst = (uint8_t)rstStr.toInteger();
+	code = ifc->device()->writeLMS(addr,val,&rst);
+    }
+    else
+	code = ifc->device()->writeLMS(addr,val);
+    if (!code)
+	return true;
+    return retValFailure(msg,code);
+}
+
 // control ifc_name bufoutput tx=boolean [count=value] [nodata=false]
 bool BrfModule::onCmdBufOutput(BrfInterface* ifc, Message& msg)
 {
     if (!ifc->device())
-	return retValFailure(msg,"No device");
+	return retMsgError(msg,"No device");
     bool tx = true;
     BRF_GET_BOOL_PARAM(tx,"tx");
     ifc->device()->showBuf(tx,msg.getIntValue(YSTRING("count")),
@@ -6606,7 +6625,7 @@ bool BrfModule::onCmdBufOutput(BrfInterface* ifc, Message& msg)
 bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg)
 {
     if (!ifc->device())
-	return retValFailure(msg,"No device");
+	return retMsgError(msg,"No device");
     String info = msg.getValue(YSTRING("info"),"status");
     String str;
     if (info == YSTRING("status"))
@@ -6638,7 +6657,7 @@ bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg)
 	TelEngine::destruct(lst);
     }
     else
-	return retValNoParam(msg,false,"info");
+	return retParamError(msg,"info");
     if (str)
 	Output("Interface '%s' info=%s [%p]\r\n-----\r\n%s\r\n-----",
 	    ifc->debugName(),info.c_str(),ifc,str.c_str());
@@ -6667,7 +6686,7 @@ bool BrfModule::test(const String& cmd, NamedList& list)
 	const String& name = start ? list[YSTRING("name")] : String::empty();
 	if (start && !name) {
 	    s_exec = false;
-	    return retValNoParam(list,true,"name");
+	    return retParamError(list,"name");
 	}
 	lock();
 	m_test = 0;
@@ -6713,10 +6732,9 @@ bool BrfModule::test(const String& cmd, NamedList& list)
 	    else if (cmd == YSTRING("resume"))
 		crt->resume();
 	    else if (cmd == YSTRING("exec")) {
-		String line = list.getValue(YSTRING("command"));
-		String c;
-		if (getFirstStr(c,line))
-		    ok = crt->execute(c,line,error,true);
+		const String& c = list[YSTRING("command")];
+		if (c)
+		    ok = crt->execute(c,list[YSTRING("value")],error,true);
 		else {
 		    ok = false;
 		    error = "Empty command";

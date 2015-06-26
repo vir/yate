@@ -3397,8 +3397,8 @@ unsigned int BrfLibUsbDevice::recv(uint64_t& ts, float* data, unsigned int& samp
 #endif
 	    // Copy data
 	    while (start != last) {
-		*data++ = (float)*start++;
-		*data++ = (float)*start++;
+		*data++ = ((float)*start++) / 2048;
+		*data++ = ((float)*start++) / 2048;
 	    }
 	    samplesCopied += avail;
 	    samplesLeft -= avail;
@@ -3739,16 +3739,14 @@ unsigned int BrfLibUsbDevice::internalSetRxVga(int vga, bool preMixer, String* e
 	bool changed = false;
 	if (preMixer) {
 	    vga = clampInt(vga,BRF_RXVGA1_GAIN_MIN,BRF_RXVGA1_GAIN_MAX,"RX VGA1");
-	    vga = s_rxvga1_set[vga];
-	    data = (uint8_t)((data & ~0x7f) | vga);
+	    data = (uint8_t)((data & ~0x7f) | s_rxvga1_set[vga]);
 	    BRF_FUNC_CALL_BREAK(lmsWrite(addr,data,&e));
 	    changed = (m_rxIO.vga1 != vga);
 	    m_rxIO.vga1 = vga;
 	}
 	else {
-	    vga = clampInt(vga,BRF_RXVGA2_GAIN_MIN,BRF_RXVGA2_GAIN_MAX,"RX VGA2");
-	    vga /= 3;
-	    data = (uint8_t)((data & ~0x1f) | vga);
+	    vga = clampInt(vga / 3 * 3,BRF_RXVGA2_GAIN_MIN,BRF_RXVGA2_GAIN_MAX,"RX VGA2");
+	    data = (uint8_t)((data & ~0x1f) | (vga / 3));
 	    BRF_FUNC_CALL_BREAK(lmsWrite(addr,data,&e));
 	    changed = (m_rxIO.vga2 != vga);
 	    m_rxIO.vga2 = vga;

@@ -1,4 +1,4 @@
-yate (5.5.1~svn5979) UNRELEASED; urgency=low
+yate (5.5.1~svn5981) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1380,8 +1380,11 @@ yate (5.5.1~svn5979) UNRELEASED; urgency=low
     (Closes: #6)  + Appended ".log" to log file name (Closes: #5)  +
     Added generic radio interface.
   * Updated to SVN revision 5979: + Added bladeRF module.
+  * Updated to SVN revision 5981: + Fixed bug: divide radio data by 2048
+    as expected by the upper layer. Fixed RX VGA status reporting.  +
+    Added command used to change LMS register.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 25 Jun 2015 02:19:11 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 27 Jun 2015 02:19:11 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

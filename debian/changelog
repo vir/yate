@@ -1,4 +1,4 @@
-yate (5.5.1~svn5981) UNRELEASED; urgency=low
+yate (5.5.1~svn5982) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1383,8 +1383,10 @@ yate (5.5.1~svn5981) UNRELEASED; urgency=low
   * Updated to SVN revision 5981: + Fixed bug: divide radio data by 2048
     as expected by the upper layer. Fixed RX VGA status reporting.  +
     Added command used to change LMS register.
+  * Updated to SVN revision 5982: + Compute RX DC offset before TX LO.
+    Work in progress.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 27 Jun 2015 02:19:11 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 30 Jun 2015 02:19:11 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

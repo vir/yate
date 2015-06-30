@@ -6388,12 +6388,16 @@ BrfModule::BrfModule()
     m_ifaceId(0)
 {
     String tmp;
+#ifdef HAVE_LIBUSB_VER
     const libusb_version* ver = ::libusb_get_version();
     tmp.printf(" using libusb %u.%u.%u.%u",ver->major,ver->minor,ver->micro,ver->nano);
     if (!TelEngine::null(ver->rc))
 	tmp << " rc='" << ver->rc << "'";
     if (!TelEngine::null(ver->describe))
 	tmp << " desc='" << ver->describe << "'";
+#else
+    tmp = " using old libusb 1.0";
+#endif
     Output("Loaded module BladeRF%s",tmp.safe());
 }
 

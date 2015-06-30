@@ -858,6 +858,8 @@ public:
 	{ return m_devFwVerStr; }
     inline const String& fpgaFile() const
 	{ return m_devFpgaFile; }
+    inline const String& fpgaMD5() const
+	{ return m_devFpgaMD5; }
     inline const String& fpgaVerStr() const
 	{ return m_devFpgaVerStr; }
     inline bool exiting() const
@@ -1463,6 +1465,7 @@ private:
     String m_devFwVerStr;                // Device firmware version string
     String m_devFpgaVerStr;              // Device FPGA version string
     String m_devFpgaFile;                // Device FPGA file (nul if not loaded)
+    String m_devFpgaMD5;                 // FPGA MD5
     uint16_t m_ctrlTransferPage;         // Control transfer page size
     DataBlock m_calCache;
     //
@@ -3100,8 +3103,10 @@ void BrfLibUsbDevice::internalDumpDev(String& buf, bool info, bool state,
 	buf << sep << "Speed=" << speedStr(speed());
 	buf << sep << "Firmware=" << fwVerStr();
 	buf << sep << "FPGA=" << fpgaVerStr();
-	if (!fromStatus)
+	if (!fromStatus) {
 	    buf.append(fpgaFile()," - ");
+	    buf.append(fpgaMD5()," - MD5: ");
+	}
     }
     else {
 	if (buf)
@@ -3558,10 +3563,11 @@ unsigned int BrfLibUsbDevice::updateFpga(const NamedList& params)
 	    (load ? "checked, already loaded" : "disabled by config"),m_owner);
     m_devFpgaFile.clear();
     m_devFpgaVerStr.clear();
+    m_devFpgaMD5.clear();
     String e;
     unsigned int status = 0;
     while (load > 0) {
-	m_devFpgaFile.clear();
+	MD5 md5;
 	String val;
 	status = getCalField(val,"B","FPGA size",&e);
 	if (status)
@@ -3601,6 +3607,7 @@ unsigned int BrfLibUsbDevice::updateFpga(const NamedList& params)
 		f.error() << " '" << tmp << "')";
 	    break;
 	}
+	md5 << buf;
 	Debug(m_owner,DebugAll,"Loading FPGA from '%s' len=%u [%p]",
 	    fName.c_str(),buf.length(),m_owner);
 	// Write the FPGA
@@ -3626,6 +3633,7 @@ unsigned int BrfLibUsbDevice::updateFpga(const NamedList& params)
 	status = restoreAfterFpgaLoad(&e);
 	if (status == 0) {
 	    m_devFpgaFile = fName;
+	    m_devFpgaMD5 = md5.hexDigest();
 	    Debug(m_owner,DebugAll,"Loaded FPGA from '%s' [%p]",fName.c_str(),m_owner);
 	}
 	break;
@@ -5020,6 +5028,7 @@ void BrfLibUsbDevice::closeDevice()
     m_devFwVerStr.clear();
     m_devFpgaVerStr.clear();
     m_devFpgaFile.clear();
+    m_devFpgaMD5.clear();
     Debug(m_owner,DebugAll,"Device closed [%p]",m_owner);
 }
 

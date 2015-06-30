@@ -598,7 +598,7 @@ public:
 	showDcOffsChange(0), startTime(0), transferred(0),
 	timestamp(0), lastTs(0), buffers(0), hdrLen(0), bufSamples(0),
 	bufSamplesLen(0), crtBuf(0), crtBufSampOffs(0),
-	syncTsRequested(false), syncTs(0),
+	syncFlags(0), syncTs(0), syncStatus(tx),
 #ifdef LITTLE_ENDIAN
 	m_bufEndianOk(true)
 #else
@@ -624,6 +624,7 @@ public:
 	}
     inline void setRf(bool on) {
 	    rfEnabled = on;
+	    syncFlags = 0;
 	    resetPosTime();
 	}
     inline bool advanceBuffer() {
@@ -715,8 +716,9 @@ public:
     unsigned int crtBufSampOffs;         // Current buffer samples offset
     DataBlock buffer;                    // I/O buffer
     // Sync timestamp
-    bool syncTsRequested;
+    unsigned int syncFlags;
     uint64_t syncTs;
+    BrfDevStatus syncStatus;
 protected:
     // Reset current buffer to start
     inline void setCrtBuf(unsigned int index = 0) {
@@ -835,6 +837,7 @@ public:
 	DevStatDcQ = 0x0020,
 	DevStatLpfBw = 0x0040,
 	DevStatSampleRate = 0x0080,
+	DevStatTs = 0x1000,
 	DevStatVga = DevStatVga1 | DevStatVga2,
 	DevStatDc = DevStatDcI | DevStatDcQ,
     };
@@ -1365,7 +1368,11 @@ private:
 	float* buf, unsigned int samples, String* error, double& energy,
 	int* dumpRx = 0);
     unsigned int calibrateRx(String* error);
-    unsigned int calibrateTxLOLeakage(String* error);
+    unsigned int readComputeDcOffsets(uint8_t dcI, uint8_t dcQ,
+	float* buf, unsigned int samples, String* error,
+	float& totalPower, float& rxDcOffset, float* txDcOffset = 0);
+    unsigned int calibrateBBTxDc(int& dcI, int& dcQ, String* error);
+    unsigned int calibrateBB(String* error);
     // Set error string or put a debug message
     unsigned int showError(unsigned int code, const char* error, const char* prefix,
 	String* buf, int level = DebugNote);
@@ -1413,17 +1420,21 @@ private:
     // 1(false): Use control signal from test mode registers
     inline unsigned int setRxVga2Decode(bool on, String* error)
 	{ return on ? lmsReset(0x64,0x01,error) : lmsSet(0x64,0x01,error); }
-    // Request TX ON/OFF. Wait for change
-    inline unsigned int syncTs(bool tx, String* error = 0) {
-	    BrfDevIO& io = getIO(tx);
-	    io.syncTsRequested = true;
+    // Request changes (synchronous TX). Wait for change
+    inline unsigned int syncTxStatus(unsigned int flagsTx, unsigned int flagsRx,
+	String* error = 0) {
+	    m_txIO.syncFlags = flagsTx;
+	    m_rxIO.syncFlags = flagsRx;
 	    unsigned int intervals = (m_bulkTout / Thread::idleMsec()) + 1;
 	    unsigned int status = 0;
-	    while (io.syncTsRequested) {
+	    while (m_txIO.syncFlags || m_rxIO.syncFlags) {
 		Thread::idle();
 		BRF_FUNC_CALL_RET(cancelled(error));
-		if ((intervals--) == 0)
+		if ((intervals--) == 0) {
+		    m_txIO.syncFlags = 0;
+		    m_rxIO.syncFlags = 0;
 		    return setError(RadioInterface::Failure,error,"Sync TS timeout");
+		}
 	    }
 	    return 0;
 	}
@@ -1467,8 +1478,6 @@ private:
     BrfDevIO m_txIO;
     BrfDevIO m_rxIO;
     LusbTransfer m_usbTransfer[EpCount]; // List of USB transfers
-    int m_txISet;                        // Set TX DC I offs when syncing ts
-    int m_txQSet;                        // Set TX DC Q offs when syncing ts
     int m_loopback;                      // Current loopback mode
     String m_name;
     // TX power scale
@@ -2106,8 +2115,6 @@ BrfLibUsbDevice::BrfLibUsbDevice(BrfInterface* owner)
     m_freqOffset(BRF_FREQ_OFFS_DEF),
     m_txIO(true),
     m_rxIO(false),
-    m_txISet(BRF_TX_DC_OFFSET_MIN - 1),
-    m_txQSet(BRF_TX_DC_OFFSET_MIN - 1),
     m_loopback(0),
     m_calibrated(false),
     m_txPowerBalance(1),
@@ -2709,7 +2716,7 @@ unsigned int BrfLibUsbDevice::calibrate()
     }
     bool txLoOk = false;
     if (!status) {
-	status = calibrateTxLOLeakage(&e);
+	status = calibrateBB(&e);
 	txLoOk = (status == 0);
     }
     m_calibrated = (status == 0);
@@ -3228,17 +3235,15 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	    else
 		oldBufSampOffs = io.crtBufSampOffs;
 	}
-	if (io.syncTsRequested) {
-	    if (m_txISet >= BRF_TX_DC_OFFSET_MIN) {
-		BRF_FUNC_CALL_BREAK(internalSetDcOffset(true,true,m_txISet));
-		m_txISet = BRF_TX_DC_OFFSET_MIN - 1;
-	    }
-	    if (m_txQSet >= BRF_TX_DC_OFFSET_MIN) {
-		BRF_FUNC_CALL_BREAK(internalSetDcOffset(true,false,m_txQSet));
-		m_txQSet = BRF_TX_DC_OFFSET_MIN - 1;
-	    }
-	    io.syncTs = ts + nBuf * io.bufSamples;
-	    io.syncTsRequested = false;
+	if (m_txIO.syncFlags || m_rxIO.syncFlags) {
+	    if ((m_txIO.syncFlags & ~DevStatTs) != 0)
+		setStatus(m_txIO.syncStatus,m_txIO.syncFlags);
+	    if ((m_rxIO.syncFlags & ~DevStatTs) != 0)
+		setStatus(m_rxIO.syncStatus,m_rxIO.syncFlags);
+	    if ((io.syncFlags & DevStatTs) != 0)
+		io.syncTs = ts + nBuf * io.bufSamples;
+	    m_txIO.syncFlags = 0;
+	    m_rxIO.syncFlags = 0;
 	}
 	if (!nBuf)
 	    break;
@@ -3292,7 +3297,8 @@ void BrfLibUsbDevice::sendTxPatternChanged()
     m_txPatternBuffer.clear();
     m_txPatternBufSamples = bytes2samplesf(m_txPattern.length());
     if (m_txPatternBufSamples) {
-	unsigned int bufs = (m_txIO.bufSamples + m_txPatternBufSamples - 1) /
+	// Round up to use full TX buffers
+	unsigned int bufs = (totalSamples(true) + m_txPatternBufSamples - 1) /
 	    m_txPatternBufSamples;
 	unsigned int n = samplesf2bytes(m_txPatternBufSamples);
 	while (bufs--)
@@ -4348,9 +4354,9 @@ unsigned int BrfLibUsbDevice::internalSetLpfBandwidth(bool tx, uint32_t band,
 	data &= ~0x3c; // Clear out previous bandwidth setting
 	data |= (bw << 2); // Apply new bandwidth setting
 	BRF_FUNC_CALL_BREAK(lmsWrite(reg,data,&e));
-	getIO(tx).lpfBw = s_bandSet[15 - i];
-	Debug(m_owner,DebugAll,"%s LPF bandwidth set to %u (0x%x) [%p]",
-	    brfDir(tx),band,data,m_owner);
+	getIO(tx).lpfBw = s_bandSet[i];
+	Debug(m_owner,DebugAll,"%s LPF bandwidth set to %u (from %u, reg=0x%x) [%p]",
+	    brfDir(tx),getIO(tx).lpfBw,band,data,m_owner);
 	return 0;
     }
     e.printf(1024,"Failed to set %s LPF bandwidth %u: %s",brfDir(tx),band,e.c_str());
@@ -5474,9 +5480,9 @@ unsigned int BrfLibUsbDevice::readComputeX_LMSIQ(uint8_t dcI, uint8_t dcQ, doubl
 {
     unsigned int status = 0;
     // Apply I/Q offset
-    m_txISet = decodeDCOffs(true,dcI);
-    m_txQSet = decodeDCOffs(true,dcQ);
-    BRF_FUNC_CALL_RET(syncTs(true,error));
+    m_txIO.syncStatus.dcOffsetI = decodeDCOffs(true,dcI);
+    m_txIO.syncStatus.dcOffsetQ = decodeDCOffs(true,dcQ);
+    BRF_FUNC_CALL_RET(syncTxStatus(DevStatTs | DevStatDc,0,error));
     BRF_FUNC_CALL_RET(readBuffer(m_txIO.syncTs + 10 * samples,buf,samples,error));
     bool dump = dumpRx && *dumpRx;
     if (dump) {
@@ -5558,9 +5564,138 @@ unsigned int BrfLibUsbDevice::calibrateRx(String* error)
     return status;
 }
 
-unsigned int BrfLibUsbDevice::calibrateTxLOLeakage(String* error)
+static inline void cxMult(const float i1, const float q1, const float i2, const float q2,
+    float &ir, float &qr)
 {
-    Debug(m_owner,DebugInfo,"Calibrating TX LO Leakage [%p]",m_owner);
+    ir = i1 * i2 - q1 * q2;
+    qr = i1 * q2 + i2 * q1;
+}
+
+static void calculateDcOffsets(BrfLibUsbDevice* dev, float* input, unsigned samples,
+    float& totalPower, float& rxDcOffset, float* txDcOffset = 0)
+{
+    if ((samples % 8) != 0)
+	Debug(dev->owner(),DebugFail,"Buffer samples (%u) should be multiple of 8 [%p]",
+	    samples,dev->owner());
+
+    // number of complex samples in the buffer
+    unsigned Ns = samples / 2;
+
+    // one cycle of a -pi/4 complex sinusoid
+    // note that is NOT the same as the test tone cycle array
+    static const float ci[4] = {+1,0,-1,0};
+    static const float cq[4] = {0,-1,0,+1};
+
+    float sumE = 0.0F;
+    float sumRxI = 0.0F;
+    float sumRxQ = 0.0F;
+    float sumTxI = 0.0F;
+    float sumTxQ = 0.0F;
+    float* ip = input;
+    // note that i counts complex pairs, not floats
+    for (unsigned i = 0; i < Ns; i++) {
+	const float vi = *ip++;
+	const float vq = *ip++;
+	sumE += vi * vi + vq * vq;
+	sumRxI += vi;
+	sumRxQ += vq;
+	float si, sq;
+	cxMult(vi,vq,ci[i%4],cq[i%4],si,sq);
+	sumTxI += si;
+	sumTxQ += sq;
+    }
+    totalPower = sumE / Ns;
+    float meanRxI = sumRxI / Ns;
+    float meanRxQ = sumRxQ / Ns;
+    rxDcOffset = meanRxI * meanRxI + meanRxQ * meanRxQ;
+    if (txDcOffset) {
+	float meanTxI = sumTxI / Ns;
+	float meanTxQ = sumTxQ / Ns;
+	*txDcOffset = meanTxI * meanTxI+meanTxQ * meanTxQ;
+    }
+}
+
+unsigned int BrfLibUsbDevice::readComputeDcOffsets(uint8_t dcI, uint8_t dcQ,
+    float* buf, unsigned int samples, String* error,
+    float& totalPower, float& rxDcOffset, float* txDcOffset)
+{
+    unsigned int status = 0;
+    // Apply I/Q offset
+    m_txIO.syncStatus.dcOffsetI = decodeDCOffs(true,dcI);
+    m_txIO.syncStatus.dcOffsetQ = decodeDCOffs(true,dcQ);
+    BRF_FUNC_CALL_RET(syncTxStatus(DevStatTs | DevStatDc,0,error));
+    BRF_FUNC_CALL_RET(readBuffer(m_txIO.syncTs + 10 * samples,buf,samples,error));
+    calculateDcOffsets(this,buf,samples,totalPower,rxDcOffset,txDcOffset);
+    return 0;
+}
+
+unsigned int BrfLibUsbDevice::calibrateBBTxDc(int& dcI, int& dcQ, String* error)
+{
+    const char* oper = "Baseband TX DC calibration";
+    Debug(m_owner,DebugInfo,"%s starting [%p]",oper,m_owner);
+    dcI = 128;
+    dcQ = 128;
+    unsigned int samples = m_rxIO.bufSamples * m_rxIO.buffers;
+    DataBlock d(0,samplesf2bytes(samples));
+    float* buf = (float*)d.data(0);
+    int tmpDcI = 0;
+    int tmpDcQ = 0;
+    float power = 0;
+    float rxDc = 0;
+    float txDc = 0;
+    uint8_t innerLoops[] = {18,18,31,31,5,5};
+    uint8_t steps[] = {15,15,1,1,1,1};
+    String e;
+    unsigned int status = readComputeDcOffsets(dcI,dcQ,buf,samples,&e,power,rxDc,&txDc);
+    float bestDcOffs = txDc;
+    Output("Starting with I/Q=%d/%d power=%g rxDC=%g txDC=%g",dcI,dcQ,power,rxDc,txDc);
+    for (unsigned int i = 0; !status && i < sizeof(innerLoops); i++) {
+	bool iLoop = ((i % 2) == 0);
+	#define SET_I_Q_TEMP(_i,_q) tmpDcI = clampInt(_i,0,255); tmpDcQ = clampInt(_q,0,255); break
+	switch (i) {
+	    case 0: SET_I_Q_TEMP(255,128);
+	    case 1: SET_I_Q_TEMP(dcI,255);
+	    case 2: SET_I_Q_TEMP(dcI + 15,dcQ);
+	    case 3: SET_I_Q_TEMP(dcI,dcQ + 15);
+	    case 4: SET_I_Q_TEMP(dcI + 2,dcQ);
+	    case 5: SET_I_Q_TEMP(dcI,dcQ + 2);
+	}
+	#undef SET_I_Q_TEMP
+	int& bestIQ = iLoop ? dcI : dcQ;
+	int& iq = iLoop ? tmpDcI : tmpDcQ;
+	Output("%d: LoopMode=%c I=%d Q=%d (best_I/Q=%d/%d)",
+	    i + 1,brfIQ(iLoop),tmpDcI,tmpDcQ,dcI,dcQ);
+	for (unsigned int n = innerLoops[i]; n; --n) {
+	    status = readComputeDcOffsets(tmpDcI,tmpDcQ,buf,samples,&e,power,rxDc,&txDc);
+	    if (status)
+		break;
+	    String dump;
+	    dump.printf(1024,"  I=%-3d Q=%-3d power=%.6f\tdiff=%.6f\trxDC=%.6f\ttxDC=%f",
+		tmpDcI,tmpDcQ,power,power - (rxDc + txDc),rxDc,txDc);
+	    if (bestDcOffs > txDc) {
+		dump << "\t" << brfIQ(iLoop) << " " << bestIQ << " -> " << iq;
+		bestDcOffs = txDc;
+		bestIQ = iq;
+	    }
+	    Output("%s",dump.c_str());
+	    if (iq - steps[i] < 0)
+		break;
+	    iq -= steps[i];
+	}
+    }
+    if (status == 0) {
+	dcI = decodeDCOffs(true,dcI);
+	dcQ = decodeDCOffs(true,dcQ);
+	Debug(m_owner,DebugInfo,"%s finished I=%d Q=%d [%p]",oper,dcI,dcQ,m_owner);
+	return 0;
+    }
+    e.printf(2048,"%s failed - %s",oper,e.c_str());
+    return showError(status,e,0,error);
+}
+
+unsigned int BrfLibUsbDevice::calibrateBB(String* error)
+{
+    Debug(m_owner,DebugInfo,"Calibrating BB TX [%p]",m_owner);
     String e;
     unsigned int status = 0;
     String pattern = m_txPatternStr;
@@ -5569,11 +5704,10 @@ unsigned int BrfLibUsbDevice::calibrateTxLOLeakage(String* error)
     BrfDevStatus rxOld(m_rxIO);
     m_txIO.showDcOffsChange++;
     bool oldRxDcAuto = setRxDcAuto(false);
-    int dumpRx = 0;
-    BrfDevTmpAltSet tmpAltSet(this,status,&e,"Calibrate TX LO Leakage");
+    BrfDevTmpAltSet tmpAltSet(this,status,&e,"Calibrate BB");
     while (status == 0) {
 	// Calibrate RX
-	BRF_FUNC_CALL_BREAK(calibrateRx(&e));
+//	BRF_FUNC_CALL_BREAK(calibrateRx(&e));
 	// Turn radio OFF
 	BRF_FUNC_CALL_BREAK(internalPowerOn(false,false,false,&e));
 	// Set loopback
@@ -5586,14 +5720,24 @@ unsigned int BrfLibUsbDevice::calibrateTxLOLeakage(String* error)
 	if (p.c_str()) {
 	    lp = lookup(p["loopback"],s_loopback,lp);
 	    paOn = p.getBoolValue("transmit");
-	    dumpRx = p.getIntValue("dumprx");
 	    pattern = p.getValue("txpattern",pattern);
 	}
+
+	unsigned int Fc = 850000000;
+	BRF_FUNC_CALL_BREAK(internalSetFrequency(true,Fc + m_txIO.sampleRate / 4,&e));
+	BRF_FUNC_CALL_BREAK(internalSetFrequency(false,Fc,&e));
+
 	BRF_FUNC_CALL_BREAK(internalSetLoopback(lp,&e));
 	if (paOn)
 	    BRF_FUNC_CALL_BREAK(selectPaLna(true,lowBand,&e));
 	setTxPattern(pattern);
 #if 1
+	// Set VGA
+	BRF_FUNC_CALL_BREAK(internalSetVga(true,BRF_TXVGA1_GAIN_MIN,true,&e));
+	BRF_FUNC_CALL_BREAK(internalSetVga(true,BRF_TXVGA2_GAIN_MIN,false,&e));
+	BRF_FUNC_CALL_BREAK(internalSetVga(false,BRF_RXVGA1_GAIN_MIN,true,&e));
+	BRF_FUNC_CALL_BREAK(internalSetVga(false,BRF_RXVGA2_GAIN_MIN,false,&e));
+#else
 	// Set VGA
 	BRF_FUNC_CALL_BREAK(internalSetVga(true,-10,true,&e));
 	BRF_FUNC_CALL_BREAK(internalSetVga(true,25,false,&e));
@@ -5607,10 +5751,18 @@ unsigned int BrfLibUsbDevice::calibrateTxLOLeakage(String* error)
 	dumpLoopbackStatus();
 	String s;
 	internalDumpDev(s,false,true,"\r\n",true,false,true);
+#if 0
 	String dev;
 	internalDumpPeripheral(UartDevLMS,0,128,&dev,16);
 	s << "\r\nLMS:" << dev;
-	Debug(m_owner,DebugAll,"TX LO Leakage starting status: [%p]\r\n-----\r\n%s\r\n-----",
+	dev = "";
+	internalDumpPeripheral(UartDevGPIO,0,128,&dev,16);
+	s << "\r\nGPIO:" << dev;
+	dev = "";
+	internalDumpPeripheral(UartDevSI5338,0,128,&dev,16);
+	s << "\r\nSI5338:" << dev;
+#endif
+	Debug(m_owner,DebugAll,"BB calibration starting status: [%p]\r\n-----\r\n%s\r\n-----",
 	    m_owner,s.c_str());
 	
 	// Start sending thread
@@ -5618,100 +5770,31 @@ unsigned int BrfLibUsbDevice::calibrateTxLOLeakage(String* error)
 	if (!m_sendThread) {
 	    status = RadioInterface::Failure;
 	    e << "Failed to start send data thread";
+	    break;
 	}
-	break;
-    }
-    while (status == 0) {
-	unsigned int samples = m_rxIO.bufSamples * m_rxIO.buffers;
-	DataBlock d(0,samplesf2bytes(samples));
-	float* buf = (float*)d.data(0);
-	double bestErf = 0xffffffffffffffff;
-	int bestDcI = 128;
-	int bestDcQ = 128;
+	// Calibrate TX DC
 	int dcI = 0;
 	int dcQ = 0;
-	double oldErf = 0xffffffffffffffff;
-	double erf = 0;
-	double energy = 0;
-	BRF_FUNC_CALL_BREAK(readComputeX_LMSIQ(bestDcI,bestDcQ,bestErf,buf,samples,&e,energy,&dumpRx));
-	Output("Starting with I/Q=%d/%d best_erf=%g energy=%g",bestDcI,bestDcQ,bestErf,energy);
-	String tmp = "TX LO Leakage ";
-	for (int i = 0; !status && i < 6; i++) {
-	    int loops = 0;
-	    int step = i > 1 ? 1 : 15;
-	    char loopType = 0;
-	    #define SET_I_Q_TEMP_LOOPS(_i,_q,_iLoop,_loops) \
-		loopType = _iLoop; \
-		dcI = clampInt(_i,0,255,tmp + "init I"); \
-		dcQ = clampInt(_q,0,255,tmp + "init Q"); \
-		loops = _loops; \
-		break;
-	    switch (i) {
-		case 0: SET_I_Q_TEMP_LOOPS(255,128,'I',17);
-		case 1: SET_I_Q_TEMP_LOOPS(bestDcI,255,'Q',17);
-		case 2: SET_I_Q_TEMP_LOOPS(bestDcI + 15,bestDcQ,'I',31);
-		case 3: SET_I_Q_TEMP_LOOPS(bestDcI,bestDcQ + 15,'Q',31);
-		case 4: SET_I_Q_TEMP_LOOPS(bestDcI + 2,bestDcQ,'I',5);
-		case 5: SET_I_Q_TEMP_LOOPS(bestDcI,bestDcQ + 2,'Q',5);
-	    }
-	    #undef SET_I_Q_TEMP_LOOPS
-	    int& bestIQ = (loopType == 'I') ? bestDcI : bestDcQ;
-	    int& iq = (loopType == 'I') ? dcI : dcQ;
-	    Output("%d: LoopMode=%c erf_loops=%d step=%d I/Q=%d/%d best_I/Q=%d/%d",
-		i + 1,loopType,loops,step,dcI,dcQ,bestDcI,bestDcQ);
-	    while (loops--) {
-		BRF_FUNC_CALL_BREAK(readComputeX_LMSIQ(dcI,dcQ,erf,buf,samples,&e,energy,&dumpRx));
-		String dir;
-		if (oldErf < erf)
-		    dir << "UP";
-		else if (oldErf > erf)
-		    dir << "DOWN";
-		else
-		    dir << "-";
-		oldErf = erf;
-		String dump;
-		dump.printf(1024,"  I=%-3d Q=%-3d erf=%.6f\tenergy=%.6f\t%s",dcI,dcQ,erf,energy,dir.safe());
-
-		if (bestErf > erf) {
-		    dump << "\t\t" << loopType << " " << bestIQ << " -> " << iq;
-		    bestErf = erf;
-		    bestIQ = iq;
-		}
-
-		Output("%s",dump.c_str());
-		
-		iq = clampInt(iq - step,0,255,tmp + " dec step");
-	    }
-	    if (status)
-		break;
-	}
-	if (!status) {
-	    txOld.dcOffsetI = clampInt(decodeDCOffs(true,bestDcI),BRF_TX_DC_OFFSET_MIN,
-		BRF_TX_DC_OFFSET_MAX);
-	    txOld.dcOffsetQ = clampInt(decodeDCOffs(true,bestDcQ),BRF_TX_DC_OFFSET_MIN,
-		BRF_TX_DC_OFFSET_MAX);
-	    Debug(m_owner,DebugNote,"TX LO Leakage cal finished I=%d Q=%d [%p]",
-		txOld.dcOffsetI,txOld.dcOffsetQ,m_owner);
-	}
+	BRF_FUNC_CALL_BREAK(calibrateBBTxDc(dcI,dcQ,&e));
+	BRF_FUNC_CALL_BREAK(internalSetCorrectionIQ(true,dcI,dcQ,&e));
 	break;
     }
     setRxDcAuto(oldRxDcAuto);
     m_txIO.showDcOffsChange--;
-    Debug(m_owner,DebugAll,"Finalizing TX LO Leakage calibration [%p]",m_owner);
+    Debug(m_owner,DebugAll,"Finalizing BB calibration [%p]",m_owner);
     BrfThread::cancelThread(m_sendThread,&m_sendThreadMutex,1000,m_owner,m_owner);
     // Restore loopback
     internalSetLoopback(oldLoop);
     // Restore status
-    unsigned int restore = DevStatFreq | DevStatVga;
-    setStatus(txOld,restore | DevStatDc,rxOld,restore);
+    unsigned int restore = DevStatFreq | DevStatVga | DevStatLpfBw;
+    setStatus(txOld,restore,rxOld,restore);
     // Restore TX pattern
     setTxPattern(pattern);
     if (status == 0) {
-	Debug(m_owner,DebugInfo,"Calibrated TX LO Leakage I=%d Q=%d [%p]",
-	    m_txIO.dcOffsetI,m_txIO.dcOffsetQ,m_owner);
+	Debug(m_owner,DebugInfo,"Calibrated BB [%p]",m_owner);
 	return 0;
     }
-    e.printf(1024,"TX LO Leakage calibration failed: %s",e.c_str());
+    e.printf(1024,"BB calibration failed: %s",e.c_str());
     return showError(status,e,0,error);
 }
 

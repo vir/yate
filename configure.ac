@@ -1462,13 +1462,14 @@ if [[ "x$ac_cv_use_libusb" != "xno" ]]; then
 	SAVE_CFLAGS="$CFLAGS"
 	LIBS="$LIBS -lusb-1.0"
 	CFLAGS="$CFLAGS -I$ac_cv_use_libusb/include/libusb-1.0"
-	AC_TRY_LINK([#include <libusb.h>],[libusb_get_version();],[HAVE_LIBUSB=yes],[HAVE_LIBUSB=no])
-	LIBS="$SAVE_LIBS"
-	CFLAGS="$SAVE_CFLAGS"
+	AC_TRY_LINK([#include <libusb.h>],[libusb_has_capability(0);],[HAVE_LIBUSB=yes],[HAVE_LIBUSB=no])
 	if [[ "$HAVE_LIBUSB" = "yes" ]]; then
 	    LIBUSB_INC="-I$ac_cv_use_libusb/include/libusb-1.0"
 	    LIBUSB_LIB="-lusb-1.0"
+	    AC_TRY_LINK([#include <libusb.h>],[libusb_get_version();],[LIBUSB_INC="-DHAVE_LIBUSB_VER $LIBUSB_INC"])
 	fi
+	LIBS="$SAVE_LIBS"
+	CFLAGS="$SAVE_CFLAGS"
     fi
     AC_MSG_RESULT([$HAVE_LIBUSB])
 fi

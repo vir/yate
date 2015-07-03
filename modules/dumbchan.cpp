@@ -45,6 +45,8 @@ public:
 	Message* s = message("chan.startup",exeMsg);
 	if (outgoing)
 	    s->copyParams(exeMsg,"caller,callername,called,billid,callto,username");
+	else
+	    s->copyParams(exeMsg,exeMsg.getValue("copyparams"));
 	Engine::enqueue(s);
     };
     ~DumbChannel();

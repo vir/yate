@@ -1,3 +1,9 @@
+yate (5.5.1~vir2015070801) UNRELEASED; urgency=medium
+
+  * Fixed Yate.pm
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Wed, 08 Jul 2015 17:18:30 +0300
+
 yate (5.5.1~vir2015061301) UNRELEASED; urgency=medium
 
   * Fixed init script (jessie support)

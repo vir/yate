@@ -37,7 +37,7 @@ BEGIN {
     use Data::Dumper;
 
     # Set version && disable output buffering.
-    our $VERSION = '0.25';
+    our $VERSION = '0.26';
     $ |= 1;
 }
 
@@ -62,6 +62,8 @@ sub new($;@) {
     # Accept only 'Debug' as additional parameter.
     my $self = {
 	'Debug' => 0,
+	'stdin' => IO::Handle->new_from_fd(fileno(STDIN), 'r'),
+	'stdout' => IO::Handle->new_from_fd(fileno(STDOUT), 'w'),
 	@_,
     };
 

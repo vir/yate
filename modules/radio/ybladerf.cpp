@@ -31,6 +31,7 @@
 //#define DEBUGGER_DEVICE_METH          // Instantiate a Debugger to trace some device methods
 //#define DEBUG_DEVICE_TX               // Special (verbose) TX debug
 //#define DEBUG_DEVICE_RX               // Special (verbose) RX debug
+//#define DEBUG_DEVICE_AUTOCAL          // Special (verbose) autocalibration debug
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -193,6 +194,7 @@ static inline double brfRxDcOffset(double val)
 #define LUSB_CTRLTRANS_DEV_VENDOR_IN (LUSB_CTRLTRANS_DEV_VENDOR | LIBUSB_ENDPOINT_IN)
 #define LUSB_CTRLTRANS_DEV_VENDOR_OUT (LUSB_CTRLTRANS_DEV_VENDOR | LIBUSB_ENDPOINT_OUT)
 
+// Board reference clock (in Hz)
 static const uint64_t s_freqRefClock = 38400000;
 
 static inline unsigned int bytes2samplesf(unsigned int bytes)
@@ -209,6 +211,8 @@ static inline unsigned int samplesi2bytes(unsigned int samples)
 {
     return samples * 2 * sizeof(int16_t);
 }
+
+#define BRF_ARRAY_LEN(a) (sizeof(a) / sizeof(a[0]))
 
 // Utility: check timeout or cancelled
 static inline unsigned int checkCancelled(String* error = 0)
@@ -275,6 +279,11 @@ static inline char mixer(bool pre)
 static inline char brfIQ(bool i)
 {
     return i ? 'I' : 'Q';
+}
+
+static inline const char* activeStr(bool on)
+{
+    return on ? "active" : "inactive";
 }
 
 static inline String& dumpFloatG(String& buf, double val, const char* prefix = 0,
@@ -479,6 +488,43 @@ static inline void brfCopyTxData(int16_t* dest, float* src, unsigned int samples
     }
 }
 
+class BrfPeripheral : public String
+{
+public:
+    inline BrfPeripheral(const char* name, uint8_t devId)
+	: String(name),
+	m_devId(devId), m_tx(false), m_rx(false), m_haveTrackAddr(false) {
+	    lowCase = name;
+	    lowCase.toLower();
+	    set(false,false);
+	}
+    inline uint8_t devId() const
+	{ return m_devId; }
+    inline bool trackDir(bool tx) const
+	{ return tx ? m_tx : m_rx; }
+    inline bool haveTrackAddr() const
+	{ return m_haveTrackAddr; }
+    void set(bool tx, bool rx, const String& addr = String::empty());
+    // Check for addr track range, return first match addr or -1 if not found
+    inline int isTrackRange(uint8_t addr, uint8_t len) const {
+	    for (; addr < sizeof(m_trackAddr) && len; len--, addr++)
+		if (m_trackAddr[addr])
+		    return addr;
+	    return -1;
+	}
+    inline bool isTrackAddr(uint8_t addr) const
+	{ return addr < sizeof(m_trackAddr) && m_trackAddr[addr]; }
+
+    String lowCase;
+
+protected:
+    uint8_t m_devId;                     // Device id
+    bool m_tx;
+    bool m_rx;
+    bool m_haveTrackAddr;
+    uint8_t m_trackAddr[128];
+};
+
 // Device calibration data
 class BrfCalData
 {
@@ -498,6 +544,7 @@ public:
     uint8_t lnaGain;
     int rxVga1;
     int rxVga2;
+    uint8_t rxVga2GainAB;
 };
 
 // libusb transfer
@@ -595,7 +642,8 @@ public:
 	: BrfDevStatus(tx),
 	busy(false), showBuf(0), showBufData(true), checkTs(0),
 	mutex(false,tx ? "BrfDevIoTx" : "BrfDevIoRx"),
-	showDcOffsChange(0), startTime(0), transferred(0),
+	showDcOffsChange(0), showFpgaPhaseChange(0),
+	startTime(0), transferred(0),
 	timestamp(0), lastTs(0), buffers(0), hdrLen(0), bufSamples(0),
 	bufSamplesLen(0), crtBuf(0), crtBufSampOffs(0),
 	syncFlags(0), syncTs(0), syncStatus(tx),
@@ -702,6 +750,7 @@ public:
     int checkTs;                         // Check IO buffers timestamp
     Mutex mutex;                         // Protect data changes when needed
     unsigned int showDcOffsChange;       // Show DC offset changed debug message
+    unsigned int showFpgaPhaseChange;    // Show FPGA PHASE changed debug message
     uint64_t startTime;                  // Absolute time for start (first TX/RX)
     uint64_t transferred;                // The number of samples transferred
     // TX/RX data
@@ -790,9 +839,9 @@ public:
     // PA Selection
     enum LmsPa {
 	LmsPaNone = 0,                   // All PAs disabled
-	LmsPaAux,                        // AUX PA Enable (for RF Loopback)
 	LmsPa1,                          // PA1 Enable (300MHz - 2.8GHz)
 	LmsPa2,                          // PA2 Enable (1.5GHz - 3.8GHz)
+	LmsPaAux,                        // AUX PA Enable (for RF Loopback)
     };
     // LNA gain values
     enum LnaGain {
@@ -837,6 +886,7 @@ public:
 	DevStatDcQ = 0x0020,
 	DevStatLpfBw = 0x0040,
 	DevStatSampleRate = 0x0080,
+	DevStatFpgaPhase =  0x0100,
 	DevStatTs = 0x1000,
 	DevStatVga = DevStatVga1 | DevStatVga2,
 	DevStatDc = DevStatDcI | DevStatDcQ,
@@ -1109,10 +1159,8 @@ private:
 	String* error = 0);
     unsigned int setStatus(const BrfDevStatus& statTx, unsigned int flagsTx,
 	const BrfDevStatus& statRx, unsigned int flagsRx, String* error = 0) {
-	    unsigned int status = 0;
-	    BRF_FUNC_CALL_RET(setStatus(statRx,flagsRx,error));
-	    BRF_FUNC_CALL_RET(setStatus(statTx,flagsRx,error));
-	    return internalPowerOn(false,statTx.rfEnabled,statRx.rfEnabled,error);
+	    unsigned int status = setStatus(statRx,flagsRx,error);
+	    return status == 0 ? setStatus(statTx,flagsRx,error) : status;
 	}
     void internalDumpDev(String& buf, bool info, bool state, const char* sep,
 	bool internal, bool fromStatus = false, bool withHdr = true);
@@ -1130,7 +1178,7 @@ private:
     // Update FPGA (load, get version)
     unsigned int updateFpga(const NamedList& params);
     unsigned int internalSetFpgaCorr(bool tx, int corr, int16_t value,
-	String* error = 0, int clampLevel = DebugConf);
+	String* error = 0, int clampLevel = DebugNote);
     unsigned int internalGetFpgaCorr(bool tx, int corr, int16_t* value = 0,
 	String* error = 0);
     unsigned int internalSetTxVga(int vga, bool preMixer, String* error = 0);
@@ -1210,6 +1258,7 @@ private:
 	    return status == 0 ? lmsRead(addr2,data2,error,loc) : status;
 	}
     // Write the lms configuration
+    unsigned int lmsWrite(const String& str, String* error = 0);
     inline unsigned int lmsWrite(uint8_t addr, uint8_t data, String* error = 0,
 	const char* loc = 0)
 	{ return accessPeripheralWrite(UartDevLMS,addr,data,error,loc); }
@@ -1357,6 +1406,7 @@ private:
     void updateAlterData(const NamedList& params);
     void rxAlterData();
     // Calibration utilities
+    unsigned int calibrateAuto(String* error);
     unsigned int calBackupRestore(BrfCalData& bak, bool backup, String* error);
     unsigned int calInitFinal(BrfCalData& bak, bool init, String* error);
     unsigned int dcCalProcPrepare(const BrfCalData& bak, uint8_t subMod, String& error);
@@ -1364,16 +1414,19 @@ private:
 	uint8_t& dcReg, String& error);
     unsigned int dcCalProcPost(const BrfCalData& bak, uint8_t subMod, uint8_t dcReg,
 	String& error);
+    // Read data, ignore any buffer related errors
+    unsigned int dummyRead(float* buf, unsigned int samples, String* error);
     unsigned int readBuffer(uint64_t ts, float* buf, unsigned int samples,
 	String* error);
-    unsigned int readComputeX_LMSIQ(uint8_t dcI, uint8_t dcQ, double& erf,
-	float* buf, unsigned int samples, String* error, double& energy,
-	int* dumpRx = 0);
-    unsigned int calibrateRx(String* error);
     unsigned int readComputeDcOffsets(uint8_t dcI, uint8_t dcQ,
 	float* buf, unsigned int samples, String* error,
-	float& totalPower, float& rxDcOffset, float* txDcOffset = 0);
+	float& totalPower, float& rxDcOffset, float& txDcOffset);
+    unsigned int readComputeDcOffsetsCorr(int corrPhase,
+	float* buf, unsigned int samples, String* error,
+	float& totalPower, float& rxDcOffset);
+    void calibrateBBStarting(const char* what);
     unsigned int calibrateBBTxDc(int& dcI, int& dcQ, String* error);
+    unsigned int calibrateBBTxFpgaPhase(int& corr, String* error);
     unsigned int calibrateBB(String* error);
     // Set error string or put a debug message
     unsigned int showError(unsigned int code, const char* error, const char* prefix,
@@ -1400,16 +1453,9 @@ private:
     unsigned int setLoopbackPath(int mode, String& error);
     unsigned int enableRfLoopback(bool on, String& error);
     void dumpLoopbackStatus();
+    void dumpLmsModulesStatus();
     unsigned int internalDumpPeripheral(uint8_t dev, uint8_t addr, uint8_t len,
 	String* buf, uint8_t lineLen);
-    inline int decodePa(uint8_t data) const {
-	    if ((data & 0x02) == 0)
-		return LmsPaAux;
-	    data &= 0x18;
-	    if (data == 0x08)
-		return LmsPa1;
-	    return (data == 0x10) ? LmsPa2 : LmsPaNone;
-	}
     inline int decodeLpf(uint8_t reg1, uint8_t reg2) const {
 	    int on = reg1 & (1 << 1);
 	    int bypass = reg2 & (1 << 6);
@@ -1816,7 +1862,7 @@ protected:
     bool onCmdBufOutput(BrfInterface* ifc, Message& msg);
     bool onCmdShow(BrfInterface* ifc, Message& msg);
     bool test(const String& cmd, NamedList& list);
-    void setDebugPeripheral(const String& value);
+    void setDebugPeripheral(const NamedList& list);
     void setSampleEnergize(const String& value);
 
     unsigned int m_ifaceId;
@@ -1827,7 +1873,6 @@ protected:
 static bool s_usbContextInit = false;            // USB library init flag
 INIT_PLUGIN(BrfModule);
 static Configuration s_cfg;                      // Configuration file (protected by plugin mutex)
-static uint8_t s_debugPeripheral = 0;            // Debug peripheral access
 static const String s_modCmds[] = {"test","help",""};
 static const String s_ifcCmds[] = {"vgagain","correction","lmswrite",
     "bufoutput","rxdcoutput","txpattern","show",""};
@@ -1835,7 +1880,12 @@ static const String s_ifcCmds[] = {"vgagain","correction","lmswrite",
 static unsigned int s_lusbCtrlTransferTout = LUSB_CTRL_TIMEOUT; // Control transfer timeout def val (in milliseconds)
 static unsigned int s_lusbBulkTransferTout = LUSB_BULK_TIMEOUT; // Bulk transfer timeout def val (in milliseconds)
 
-static const String s_uartDevName[BrfLibUsbDevice::UartDevCount] = {"GPIO","LMS","VCTCXO","SI5338"};
+static BrfPeripheral s_uartDev[BrfLibUsbDevice::UartDevCount] = {
+    BrfPeripheral("GPIO",0x00),
+    BrfPeripheral("LMS",0x10),
+    BrfPeripheral("VCTCXO",0x20),
+    BrfPeripheral("SI5338",0x30)
+};
 
 static const TokenDict s_usbEndpoint[] = {
     {"SEND_SAMPLES",  BrfLibUsbDevice::EpSendSamples},
@@ -1859,9 +1909,9 @@ static const TokenDict s_loopback[] = {
     {0,0}
 };
 static const TokenDict s_pa[] = {
-    {"AUX",  BrfLibUsbDevice::LmsPaAux},
-    {"1",    BrfLibUsbDevice::LmsPa1},
-    {"2",    BrfLibUsbDevice::LmsPa2},
+    {"AUXPA",  BrfLibUsbDevice::LmsPaAux},
+    {"PA1",    BrfLibUsbDevice::LmsPa1},
+    {"PA2",    BrfLibUsbDevice::LmsPa2},
     {0,0}
 };
 static const TokenDict s_lpf[] = {
@@ -1990,6 +2040,64 @@ static void lusbTransferCb(libusb_transfer* transfer)
     Lock lck(t);
     t->status = BrfLibUsbDevice::lusbCheckSuccess(transfer->status,&t->error);
     t->running(false);
+}
+
+
+//
+// BrfPeripheral
+//
+void BrfPeripheral::set(bool tx, bool rx, const String& addr)
+{
+    bool changed = m_tx != tx || m_rx != rx;
+    String oldTrackAddr;
+    if (m_haveTrackAddr)
+	oldTrackAddr.hexify(m_trackAddr,sizeof(m_trackAddr));
+    m_tx = tx;
+    m_rx = rx;
+    m_haveTrackAddr = false;
+    ::memset(m_trackAddr,0,sizeof(m_trackAddr));
+    if ((m_tx || m_rx) && addr && addr != oldTrackAddr) {
+	DataBlock tmp;
+	if (tmp.unHexify(addr)) {
+	    uint8_t* d = tmp.data(0);
+	    for (unsigned int i = 0; i < tmp.length(); i++, d++) {
+		if (*d < 128) {
+		    m_trackAddr[*d] = 1;
+		    m_haveTrackAddr = true;
+		}
+		else
+		    Debug(&__plugin,DebugConf,
+			"Ignoring invalid track address 0x%x for peripheral '%s'",*d,c_str());
+	    }
+	}
+	else
+	    Debug(&__plugin,DebugConf,
+		"Ignoring invalid track addresses for peripheral '%s'",c_str());
+    }
+    String newTrackAddr;
+    if (m_haveTrackAddr) {
+	newTrackAddr.hexify(m_trackAddr,sizeof(m_trackAddr));
+	changed = (newTrackAddr != oldTrackAddr);
+    }
+    else if (oldTrackAddr)
+	changed = true;
+    if (!changed)
+	return;
+    String state;
+    if (m_tx || m_rx) {
+	String ta;
+	if (m_haveTrackAddr) {
+	    String tmp;
+	    for (uint8_t i = 0; i < BRF_ARRAY_LEN(m_trackAddr); i++)
+		if (m_trackAddr[i])
+		    ta.append(tmp.hexify(&i,1)," ");
+	}
+	Debug(&__plugin,DebugAll,
+	    "%s peripheral debug changed: tx=%s rx=%s tracked_addr=%s",
+	    c_str(),String::boolText(m_tx),String::boolText(m_rx),ta.safe());
+    }
+    else
+	Debug(&__plugin,DebugAll,"%s peripheral debug is disabled",c_str());
 }
 
 
@@ -2393,7 +2501,7 @@ bool BrfLibUsbDevice::open(const NamedList& params)
 	    BRF_FUNC_CALL_BREAK(internalSetTxVga(txVga2.toInteger(BRF_TXVGA2_GAIN_MIN),false,&e));
 	// Set FPGA correction
 	tmpInt = clampIntParam(params,"tx_fpga_corr_phase",0,-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX);
-	status = internalSetFpgaCorr(true,CorrFpgaPHASE,tmpInt,&e);
+	status = internalSetFpgaCorr(true,CorrFpgaPHASE,tmpInt,&e,DebugConf);
 	if (status)
 	    break;
 	// Make sure we have the correct values for status
@@ -2674,62 +2782,12 @@ unsigned int BrfLibUsbDevice::calibrate()
     Debugger d(DebugAll,"CALIBRATE"," %s [%p]",m_owner->debugName(),m_owner);
 #endif
     Debug(m_owner,DebugInfo,"Calibrating ... [%p]",m_owner);
-    BrfDevStatus txOld(m_txIO);
-    BrfDevStatus rxOld(m_rxIO);
     String e;
-    unsigned int status = internalSetDcCorr(0,0,0,0,&e);
-    int8_t calVal[BRF_CALIBRATE_LAST][BRF_CALIBRATE_MAX_SUBMODULES];
-    ::memset(calVal,-1,sizeof(calVal));
-    for (int m = BRF_CALIBRATE_FIRST; !status && m <= BRF_CALIBRATE_LAST; m++) {
-	if (m == BRF_CALIBRATE_LPF_BANDWIDTH) {
-	    DDebug(m_owner,DebugStub,"%s auto calibration not implemented [%p]",
-		calModName(m),m_owner);
-	    continue;
-	}
-	if ((status = cancelled(&e)) != 0)
-	    break;
-	BrfCalData bak(m);
-	Debug(m_owner,DebugAll,"Calibrating %s [%p]",bak.modName(),m_owner);
-	if ((status = calBackupRestore(bak,true,&e)) != 0)
-	    break;
-	status = calInitFinal(bak,true,&e);
-	for (uint8_t subMod = 0; !status && subMod < bak.desc->subModules; subMod++) {
-	    status = dcCalProcPrepare(bak,subMod,e);
-	    if (!status) {
-		uint8_t dcReg = 0;
-		status = dcCalProc(bak,subMod,31,dcReg,e);
-		if (!status) {
-		    calVal[m][subMod] = dcReg;
-		    status = dcCalProcPost(bak,subMod,dcReg,e);
-		}
-	    }
-	    if (status)
-		e.printf(2048,"Failed to calibrate module %s - %s",
-		    bak.modName(),e.c_str());
-	}
-	unsigned int tmp = calInitFinal(bak,false,status ? 0 : &e);
-	if (!status)
-	    status = tmp;
-	tmp = calBackupRestore(bak,false,status ? 0 : &e);
-	if (!status)
-	    status = tmp;
-	if (status)
-	    break;
-	Debug(m_owner,DebugAll,"Calibrated %s [%p]",bak.modName(),m_owner);
-    }
-    bool txLoOk = false;
-    if (!status) {
+    unsigned int status = calibrateAuto(&e);
+    if (!status)
 	status = calibrateBB(&e);
-	txLoOk = (status == 0);
-    }
     m_calibrated = (status == 0);
-    if (!txLoOk) {
-	// Restore DC offsets
-	unsigned int tmp = internalSetDcCorr(txOld.dcOffsetI,txOld.dcOffsetQ,
-	    rxOld.dcOffsetI,rxOld.dcOffsetQ,status ? 0 : &e);
-	if (!status)
-	    status = tmp;
-    }
+    updateStatus();
     if (status) {
 	if (status == RadioInterface::Cancelled)
 	    Debug(m_owner,DebugInfo,"Calibration cancelled [%p]",m_owner);
@@ -2737,30 +2795,7 @@ unsigned int BrfLibUsbDevice::calibrate()
 	    Debug(m_owner,DebugWarn,"Calibration failed: %s [%p]",e.c_str(),m_owner);
 	return status;	
     }
-    status = updateStatus();
-    if (status) {
-	Debug(m_owner,DebugWarn,
-	    "Calibration finished. Failed to retrieve status [%p]",m_owner);
-	return status;
-    }
-    String s = "\r\n-----";
-    for (int m = BRF_CALIBRATE_FIRST; m <= BRF_CALIBRATE_LAST; m++) {
-	if (m == BRF_CALIBRATE_LPF_BANDWIDTH)
-	    continue;
-	const BrfCalDesc& d = s_calModuleDesc[m];
-	String t;
-	if (d.subModules > 1)
-	    for (uint8_t sm = 0; sm < d.subModules; sm++) {
-		t.printf("\r\n%s - %s: %d",calModName(m),d.subModName[sm],calVal[m][sm]);
-		s << t;
-	    }
-	else
-	    s << t.printf("\r\n%s: %d",calModName(m),calVal[m][0]);
-    }
-    s << "\r\nTX I/Q: " << m_txIO.dcOffsetI << "/" << m_txIO.dcOffsetQ;
-    s << "\r\nRX I/Q: " << m_rxIO.dcOffsetI << "/" << m_rxIO.dcOffsetQ;
-    s << "\r\n-----";
-    Debug(m_owner,DebugInfo,"Calibration finished [%p]%s",m_owner,s.c_str());
+    Debug(m_owner,DebugInfo,"Calibration finished [%p]",m_owner);
     return 0;
 }
 
@@ -2804,7 +2839,7 @@ unsigned int BrfLibUsbDevice::setFpgaCorr(bool tx, int corr, int16_t value)
 {
     BRF_TX_SERIALIZE;
     BRF_CHECK_DEV("setFpgaCorr()");
-    return internalSetFpgaCorr(tx,corr,value,0,DebugNote);
+    return internalSetFpgaCorr(tx,corr,value);
 }
 
 unsigned int BrfLibUsbDevice::getFpgaCorr(bool tx, int corr, int16_t& value)
@@ -3044,6 +3079,8 @@ unsigned int BrfLibUsbDevice::setStatus(const BrfDevStatus& stat, unsigned int f
     SET_STATUS_FUNC(DevStatLpf,internalSetLpf(stat.tx(),stat.lpf,error));
     SET_STATUS_FUNC(DevStatDcI,internalSetDcOffset(stat.tx(),true,stat.dcOffsetI,error));
     SET_STATUS_FUNC(DevStatDcQ,internalSetDcOffset(stat.tx(),false,stat.dcOffsetQ,error));
+    SET_STATUS_FUNC(DevStatFpgaPhase,internalSetFpgaCorr(stat.tx(),CorrFpgaPHASE,
+	stat.fpgaCorrPhase,error));
     return status;
 }
 
@@ -3075,6 +3112,7 @@ void BrfLibUsbDevice::internalDumpDev(String& buf, bool info, bool state,
 	    if (internal) {
 		buf << sep << "RxLPF=" << lookup(m_rxIO.lpf,s_lpf);
 		buf << sep << "TxLPF=" << lookup(m_txIO.lpf,s_lpf);
+		buf << sep << "TxCorrFpgaPhase=" << m_txIO.fpgaCorrPhase;
 	    }
 	}
 	else {
@@ -3254,22 +3292,11 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	    break;
 	if (checkDbgInt(io.checkTs))
 	    ioBufCheckTs(true,nBuf);
-#ifdef DEBUG_DEVICE_TX
-	String tmp;
-	for (unsigned int i = 0; i < nBuf; i++)
-	    tmp.append(String(io.bufTs(i)),"/");
-	Debugger* sendDbg = new Debugger(DebugAll,"TX: writing to device",
-	    " buffers=%u ts=%s [%p]",nBuf,tmp.c_str(),m_owner);
-#endif
 	unsigned int nPrint = checkDbgInt(io.showBuf,nBuf);
 	if (nPrint)
 	    printIOBuffer(true,"SEND",-1,nPrint);
 	status = syncTransfer(EpSendSamples,io.bufStart(0),io.bufLen * nBuf,&e);
-#ifdef DEBUG_DEVICE_TX
-	delete sendDbg;
-#endif
-	io.transferred += nBuf * io.bufSamples;
-	// Reset buffer
+	// Reset buffer to start
 	io.resetBufPos();
 	// Copy partial buffer from end
 	if (oldBufSampOffs) {
@@ -3279,6 +3306,9 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	    ::memcpy(io.bufStart(0),io.bufStart(nBuf),io.hdrLen + samplesi2bytes(oldBufSampOffs));
 	    io.crtBufSampOffs = oldBufSampOffs;
 	}
+	if (status)
+	    break;
+	io.transferred += nBuf * io.bufSamples;
     }
     if (status == 0) {
 	if (clamped)
@@ -3441,16 +3471,12 @@ unsigned int BrfLibUsbDevice::recv(uint64_t& ts, float* data, unsigned int& samp
 	}
 	if (done || !samplesLeft)
 	    break;
+	io.resetBufPos();
 	status = syncTransfer(EpReadSamples,io.bufStart(0),io.buffer.length(),&e);
 	if (status)
 	    break;
-#ifdef DEBUG_DEVICE_RX
-	Debug(m_owner,DebugAll,"RX: read %u bytes from device [%p]",
-	    io.buffer.length(),m_owner);
-#endif
 	io.transferred += io.buffers * io.bufSamples;
 	io.fixEndian();
-	io.resetBufPos();
 	unsigned int nPrint = checkDbgInt(io.showBuf,io.buffers);
 	if (nPrint)
 	    printIOBuffer(false,"RECV",-1,nPrint);
@@ -3659,13 +3685,14 @@ unsigned int BrfLibUsbDevice::internalSetFpgaCorr(bool tx, int corr, int16_t val
     int a = fpgaCorrAddr(tx,corr,what);
     int* changed = 0;
     if (a >= 0) {
+	BrfDevIO& io = getIO(tx);
 	if (corr == CorrFpgaGAIN) {
-	    changed = &getIO(tx).fpgaCorrGain;
+	    changed = &io.fpgaCorrGain;
 	    orig = clampInt(orig,-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX,"FPGA GAIN",lvl);
 	    value = orig + BRF_FPGA_CORR_MAX;
 	}
 	else if (corr == CorrFpgaPHASE) {
-	    changed = &getIO(tx).fpgaCorrPhase;
+	    changed = (io.showFpgaPhaseChange == 0) ? &io.fpgaCorrPhase : 0;
 	    orig = clampInt(orig,-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX,"FPGA PHASE",lvl);
 	    value = orig;
 	}
@@ -4007,16 +4034,17 @@ unsigned int BrfLibUsbDevice::internalSetFrequency(bool tx, uint32_t hz, String*
 	    (uint8_t)(((nint & 1) << 7) | ((nfrac >> 16) & 0x7f)),
 	    (uint8_t)(nfrac >> 8),(uint8_t)nfrac};
 	BRF_FUNC_CALL_BREAK(accessPeripheral(UartDevLMS,true,addr,d,&e,4));
-	// Set PLL currents (ICHP=1.2mA, OFFUP=0mA, OFFDOWN=0mA)
+	// Set PLL currents (ICHP=1.2mA, OFFUP=30uA, OFFDOWN=0mA)
 	BRF_FUNC_CALL_BREAK(lmsSet(addr + 6,0x0c,0x1f,&e));
-	BRF_FUNC_CALL_BREAK(lmsSet(addr + 7,0x00,0x1f,&e));
+	BRF_FUNC_CALL_BREAK(lmsSet(addr + 7,0x03,0x1f,&e));
 	BRF_FUNC_CALL_BREAK(lmsSet(addr + 8,0x00,0x1f,&e));
 	// Loop through the VCOCAP to figure out optimal values
 	BRF_FUNC_CALL_BREAK(tuneVcocap(addr,&e));
 	// Reset CLK_EN for Rx/Tx DSM SPI
 	BRF_FUNC_CALL_BREAK(lmsReset(0x09,0x05,&e));
-	// Select PA/LNA amplifier
-	BRF_FUNC_CALL_BREAK(selectPaLna(tx,lowBand,&e));
+	// Select PA/LNA amplifier (don't do it if loopback is enabled)
+	if (m_loopback == LoopNone)
+	    BRF_FUNC_CALL_BREAK(selectPaLna(tx,lowBand,&e));
 	// Set GPIO band according to the frequency
 	uint32_t gpio = 0;
 	BRF_FUNC_CALL_BREAK(gpioRead(0,gpio,4,&e));
@@ -4189,6 +4217,9 @@ unsigned int BrfLibUsbDevice::syncTransfer(int ep, uint8_t* data, unsigned int l
     Debugger d(DebugAll,"BrfLibUsbDevice::syncTransfer()",
 	" (%s,%p,%u) transfer=(%p)%s [%p]",
 	lookup(ep,s_usbEndpoint),data,len,&t,tmp.safe(),m_owner);
+#else
+    XDebug(m_owner,DebugAll,"syncTransfer ep=%s data=(%p) len=%u [%p]",
+	lookup(ep,s_usbEndpoint),data,len,m_owner);
 #endif
     t.running(true);
     unsigned int cStatus = 0;
@@ -4252,28 +4283,57 @@ unsigned int BrfLibUsbDevice::gpioWrite(uint8_t addr, uint32_t value, uint8_t le
     return accessPeripheral(UartDevGPIO,true,addr,t,error,len,loc);
 }
 
-unsigned int BrfLibUsbDevice::lnaSelect(int lna, String* error)
+unsigned int BrfLibUsbDevice::lmsWrite(const String& str, String* error)
 {
-    XDebug(m_owner,DebugAll,"lnaSelect(%d) [%p]",lna,m_owner);
+    if (!str)
+	return 0;
     String e;
     unsigned int status = 0;
     while (true) {
+	DataBlock db;
+	if (!db.unHexify(str)) {
+	    status = setError(RadioInterface::Failure,&e,"Invalid hex string");
+	    break;
+	}
+	if ((db.length() % 2) != 0) {
+	    status = setError(RadioInterface::Failure,&e,"Invalid string length");
+	    break;
+	}
+	Debug(m_owner,DebugAll,"Writing '%s' to LMS [%p]",str.c_str(),m_owner);
+	uint8_t* b = db.data(0);
+	for (unsigned int i = 0; !status && i < db.length(); i += 2) {
+	    b[i] &= ~0x80;
+	    status = lmsWrite(b[i],b[i + 1],&e);
+	}
+	if (!status)
+	    return 0;
+	break;
+    }
+    e.printf(1024,"LMS write '%s' failed - %s",str.c_str(),e.c_str());
+    return showError(status,e,0,error);
+}
+
+unsigned int BrfLibUsbDevice::lnaSelect(int lna, String* error)
+{
+    String e;
+    unsigned int status = 0;
+    bool valid = (lna >= 0 && lna <= 3);
+    while (valid) {
 	uint8_t data = 0;
 	BRF_FUNC_CALL_BREAK(lmsRead(0x75,data,&e));
+	BRF_FUNC_CALL_BREAK(lmsWrite(0x75,(data & ~0x30) | (lna << 4),&e));
 	int old = (data >> 4) & 0x03;
-	data &= ~0x30;
-	data |= ((lna & 0x03) << 4);
-	BRF_FUNC_CALL_BREAK(lmsWrite(0x75,data,&e));
-	if (old != lna) {
-	    if (lna != LmsLnaNone)
-		Debug(m_owner,DebugInfo,"LNA %d enabled [%p]",lna,m_owner);
-	    else
-		Debug(m_owner,DebugInfo,"LNAs disabled [%p]",m_owner);
-	}
+	int level = old != lna ? DebugInfo : DebugAll;
+	if (lna != LmsLnaNone)
+	    Debug(m_owner,level,"LNA %d selected [%p]",lna,m_owner);
+	else
+	    Debug(m_owner,level,"LNAs disabled [%p]",m_owner);
 	return 0;
     }
+    if (!valid)
+	status = setUnkValue(e);
     if (lna != LmsLnaNone)
-	e.printf(1024,"Failed to enable LNA %d - %s",lna,e.c_str());
+	e.printf(1024,"Failed to select LNA %d - %s",lna,e.c_str());
     else
 	e.printf(1024,"Failed to disable LNAs - %s",e.c_str());
     return showError(status,e,0,error);
@@ -4281,27 +4341,15 @@ unsigned int BrfLibUsbDevice::lnaSelect(int lna, String* error)
 
 unsigned int BrfLibUsbDevice::lnaEnable(bool on, String* error)
 {
-    XDebug(m_owner,DebugAll,"lnaEnable(%u) [%p]",on,m_owner);
-    uint8_t reg1 = 0;
-    uint8_t reg2 = 0;
     String e;
-    unsigned int status = lmsRead2(0x7d,reg1,0x70,reg2,&e);
-    if (status == 0) {
-	bool changed = on != ((reg1 & 0x01) == 0 && (reg2 & 0x02) == 0);
-	if (on) {
-	    reg1 &= ~0x01;
-	    reg2 &= ~0x02;
-	}
-	else {
-	    reg1 |= 0x01;
-	    reg2 |= 0x02;
-	}
-	status = lmsWrite2(0x7d,reg1,0x70,reg2,&e);
-	if (status == 0) {
-	    if (changed)
-		Debug(m_owner,DebugInfo,"%s LNA [%p]",enabledStr(on),m_owner);
-	    return 0;
-	}
+    unsigned int status = 0;
+    while (true) {
+	uint8_t data = 0;
+	BRF_FUNC_CALL_BREAK(lmsRead(0x7d,data,&e));
+	BRF_FUNC_CALL_BREAK(lmsWrite(0x7d,on ? (data & ~0x01) : (data | 0x01),&e));
+	Debug(m_owner,on == ((data & 0x01) == 0) ? DebugAll : DebugInfo,
+	    "%s LNA [%p]",enabledStr(on),m_owner);
+	return 0;
     }
     e.printf("Failed to %s LNA - %s",enableStr(on),e.c_str());
     return showError(status,e,0,error);
@@ -4575,10 +4623,10 @@ unsigned int BrfLibUsbDevice::restoreAfterFpgaLoad(String* error)
 	status = lmsWrite(0x05,0x3e,&e,"Failed to enable LMS TX");
 	if (status)
 	    break;
-	status = lmsWrite(0x47,0x49,&e,"Could not set the bias current for the LO");
+	status = lmsWrite(0x47,0x40,&e,"Could not set the bias current for the LO");
 	if (status)
 	    break;
-	status = lmsWrite(0x59,0x29,&e,"Could not set the ADC");
+	status = lmsWrite(0x59,0x09,&e,"Could not set the ADC");
 	if (status)
 	    break;
 	status = lmsWrite(0x64,0x36,&e,"Could not set the common mode for the ADC");
@@ -4706,23 +4754,23 @@ unsigned int BrfLibUsbDevice::vendorCommand(uint8_t cmd, uint8_t ep, uint8_t* da
 unsigned int BrfLibUsbDevice::accessPeripheral(uint8_t dev, bool tx, uint8_t addr,
     uint8_t* data, String* error, uint8_t len, const char* loc)
 {
-    static const uint8_t s_dev[UartDevCount] = {0,0x10,0x20,0x30};
     if (dev >= UartDevCount)
 	return RadioInterface::Failure;
+    const BrfPeripheral& uartDev = s_uartDev[dev];
 #ifdef DEBUGGER_DEVICE_METH
     String tmp;
     if (tx)
 	tmp.hexify(data,len,' ');
     Debugger debug(DebugInfo,"BrfLibUsbDevice::accessPeripheral()",
 	" dev=%s dir=%s addr=0x%x len=%u bits=%s [%p]",
-	s_uartDevName[dev].c_str(),brfDir(tx),addr,len,tmp.safe(),m_owner);
+	uartDev.c_str(),brfDir(tx),addr,len,tmp.safe(),m_owner);
 #endif
     String e;
     unsigned int status = 0;
     uint8_t a = addr;
     uint8_t* d = data;
     uint8_t n = len;
-    uint8_t maskDirDev = (uint8_t)((tx ? 0x40 : 0x80) | s_dev[dev]);
+    uint8_t maskDirDev = (uint8_t)((tx ? 0x40 : 0x80) | uartDev.devId());
     uint8_t buf[16] = {(uint8_t)'N'};
 #define BRF_ACCESS_PERIPHERAL(nItems) \
 { \
@@ -4754,18 +4802,26 @@ unsigned int BrfLibUsbDevice::accessPeripheral(uint8_t dev, bool tx, uint8_t add
 #undef BRF_ACCESS_PERIPHERAL
     if (status) {
 	e.printf(1024,"%s%s%s %s failed addr=0x%x len=%d - %s",
-	    TelEngine::c_safe(loc),(loc ? " - " : ""),s_uartDevName[dev].c_str(),
+	    TelEngine::c_safe(loc),(loc ? " - " : ""),uartDev.c_str(),
 	    tx ? "write" : "read",addr,len,e.c_str());
 	return showError(status,e,0,error);
     }
-    if (s_debugPeripheral && m_owner->debugAt(DebugAll)) {
-	uint8_t mask = (tx ? 0x80 : 0x40) | (1 << dev);
-	if ((s_debugPeripheral & mask) == mask) {
-	    String s;
-	    Debug(m_owner,DebugAll,"%s %s addr=0x%x len=%u '%s' [%p]",
-		s_uartDevName[dev].c_str(),brfDir(tx),addr,len,
-		s.hexify(data,len,' ').c_str(),m_owner);
-	}
+    if (!(uartDev.trackDir(tx) && m_owner->debugAt(DebugAll)))
+	return 0;
+    String s;
+    if (!uartDev.haveTrackAddr())
+	Debug(m_owner,DebugAll,"%s %s addr=0x%x len=%u '%s' [%p]",
+	    uartDev.c_str(),brfDir(tx),addr,len,s.hexify(data,len,' ').c_str(),m_owner);
+    else if (uartDev.isTrackRange(addr,len)) {
+	uint8_t a = addr;
+	for (unsigned int i = 0; i < len && a < 256; i++, a++)
+	    if (uartDev.isTrackAddr(a)) {
+		String tmp;
+		s.append(tmp.printf("(0x%x=0x%x)",a,data[i])," ");
+	    }
+	if (s)
+	    Debug(m_owner,DebugAll,"%s %s %s [%p]",
+		uartDev.c_str(),brfDir(tx),s.c_str(),m_owner);
     }
     return 0;
 }
@@ -4908,43 +4964,45 @@ unsigned int BrfLibUsbDevice::updateStatus(String* error)
 
 unsigned int BrfLibUsbDevice::paSelect(int pa, String* error)
 {
-    uint8_t data = 0;
     String e;
-    unsigned int status = lmsRead(0x44,data,&e);
-    while (status == 0) {
-	int old = decodePa(data);
-	// Disable all PAs
-	data = (data & ~0x1c) | (1 << 1);
+    unsigned int status = 0;
+    while (true) {
+	uint8_t data = 0;
+	BRF_FUNC_CALL_BREAK(lmsRead(0x44,data,&e));
+	// PA_EN bits 4-3: PA 1/2/none - bit 2: AUXPA (0: powered up, 1: powered down)
+	bool changed = false;
 	switch (pa) {
 	    case LmsPaAux:
-		data &= ~(1 << 1);
+		changed = (data & 0x04) != 0;
+		status = lmsWrite(0x44,data & ~0x04,&e);
 		break;
 	    case LmsPa1:
-		data |= (1 << 3);
+		changed = (data & 0x18) != 0x08;
+		status = lmsWrite(0x44,(data & ~0x18) | 0x08,&e);
 		break;
 	    case LmsPa2:
-		data |= (1 << 4);
+		changed = (data & 0x18) != 0x10;
+		status = lmsWrite(0x44,(data & ~0x18) | 0x10,&e);
 		break;
 	    case LmsPaNone:
+		changed = (data & 0x18) != 0;
+		status = lmsWrite(0x44,data & ~0x18,&e);
 		break;
 	    default:
+		Debug(m_owner,DebugFail,"Unhandled PA %d [%p]",pa,m_owner);
 		status = setUnkValue(e);
 	}
 	if (status)
 	    break;
-	status = lmsWrite(0x44,data,&e);
-	if (status == 0) {
-	    int level = (old != pa) ? DebugInfo : DebugAll;
-	    if (pa != LmsPaNone)
-		Debug(m_owner,level,"PA %s enabled [%p]",lookup(pa,s_pa),m_owner);
-	    else
-		Debug(m_owner,level,"PAs disabled [%p]",m_owner);
-	    return 0;
-	}
-	break;
+	int level = changed ? DebugInfo : DebugAll;
+	if (pa != LmsPaNone)
+	    Debug(m_owner,level,"%s enabled [%p]",lookup(pa,s_pa),m_owner);
+	else
+	    Debug(m_owner,level,"PAs disabled [%p]",m_owner);
+	return 0;
     }
     if (pa != LmsPaNone)
-	e.printf(1024,"Failed to enable PA %d (%s) - %s",pa,lookup(pa,s_pa),e.c_str());
+	e.printf(1024,"Failed to enable PA %s - %s",lookup(pa,s_pa),e.c_str());
     else
 	e.printf(1024,"Failed to disable PAs - %s",e.c_str());
     return showError(status,e,0,error);
@@ -5252,11 +5310,86 @@ void BrfLibUsbDevice::rxAlterData()
 #endif
 }
 
+unsigned int BrfLibUsbDevice::calibrateAuto(String* error)
+{
+#ifdef DEBUG_DEVICE_AUTOCAL
+    Debugger debug(DebugAll,"AUTOCALIBRATION"," '%s' [%p]",m_owner->debugName(),m_owner);
+#endif
+    Debug(m_owner,DebugInfo,"Autocalibration starting ... [%p]",m_owner);
+    String e;
+    unsigned int status = internalSetDcCorr(0,0,0,0,&e);
+    int8_t calVal[BRF_CALIBRATE_LAST][BRF_CALIBRATE_MAX_SUBMODULES];
+    ::memset(calVal,-1,sizeof(calVal));
+    for (int m = BRF_CALIBRATE_FIRST; !status && m <= BRF_CALIBRATE_LAST; m++) {
+	if (m == BRF_CALIBRATE_LPF_BANDWIDTH) {
+	    DDebug(m_owner,DebugStub,"%s auto calibration not implemented [%p]",
+		calModName(m),m_owner);
+	    continue;
+	}
+	BrfCalData bak(m);
+#ifdef DEBUG_DEVICE_AUTOCAL
+	Debugger d(DebugAll,"AUTOCALIBRATION"," module: %s [%p]",bak.modName(),m_owner);
+#endif
+	if ((status = cancelled(&e)) != 0)
+	    break;
+	Debug(m_owner,DebugAll,"Calibrating %s [%p]",bak.modName(),m_owner);
+	if ((status = calBackupRestore(bak,true,&e)) != 0)
+	    break;
+	status = calInitFinal(bak,true,&e);
+	for (uint8_t subMod = 0; !status && subMod < bak.desc->subModules; subMod++) {
+	    status = dcCalProcPrepare(bak,subMod,e);
+	    if (!status) {
+		uint8_t dcReg = 0;
+		status = dcCalProc(bak,subMod,31,dcReg,e);
+		if (!status) {
+		    calVal[m][subMod] = dcReg;
+		    status = dcCalProcPost(bak,subMod,dcReg,e);
+		}
+	    }
+	    if (status)
+		e.printf(2048,"Failed to calibrate module %s - %s",
+		    bak.modName(),e.c_str());
+	}
+	unsigned int tmp = calInitFinal(bak,false,status ? 0 : &e);
+	if (!status)
+	    status = tmp;
+	tmp = calBackupRestore(bak,false,status ? 0 : &e);
+	if (!status)
+	    status = tmp;
+	if (status)
+	    break;
+	Debug(m_owner,DebugAll,"Calibrated %s [%p]",bak.modName(),m_owner);
+    }
+    if (status) {
+	e = "Autocalibration failed - " + e;
+	return showError(status,e,0,error);
+    }
+    String s = "\r\n-----";
+    for (int m = BRF_CALIBRATE_FIRST; m <= BRF_CALIBRATE_LAST; m++) {
+	if (m == BRF_CALIBRATE_LPF_BANDWIDTH)
+	    continue;
+	const BrfCalDesc& d = s_calModuleDesc[m];
+	String t;
+	if (d.subModules > 1)
+	    for (uint8_t sm = 0; sm < d.subModules; sm++) {
+		t.printf("\r\n%s - %s: %d",calModName(m),d.subModName[sm],calVal[m][sm]);
+		s << t;
+	    }
+	else
+	    s << t.printf("\r\n%s: %d",calModName(m),calVal[m][0]);
+    }
+    s << "\r\n-----";
+    Debug(m_owner,DebugInfo,"Autocalibration finished [%p]%s",m_owner,s.c_str());
+    return 0;
+}
+
 unsigned int BrfLibUsbDevice::calBackupRestore(BrfCalData& bak, bool backup,
     String* error)
 {
     const char* what = backup ? "backup" : "restore";
-    DDebug(m_owner,DebugAll,"Calibration %s %s [%p]",what,bak.modName(),m_owner);
+#ifdef DEBUG_DEVICE_AUTOCAL
+    Debugger d(DebugAll,"CAL BACKUP/RESTORE"," %s [%p]",what,m_owner);
+#endif
     unsigned int status = 0;
     String e;
     while (true) {
@@ -5265,10 +5398,13 @@ unsigned int BrfLibUsbDevice::calBackupRestore(BrfCalData& bak, bool backup,
 	if (status)
 	    break;
 	if (bak.module == BRF_CALIBRATE_RX_LPF || bak.module == BRF_CALIBRATE_RX_VGA2) {
-	    BRF_FUNC_CALL_BREAK(lms(backup,0x71,bak.inputMixer,&e));
-	    BRF_FUNC_CALL_BREAK(lms(backup,0x7c,bak.loOpt,&e));
+//	    BRF_FUNC_CALL_BREAK(lms(backup,0x71,bak.inputMixer,&e));
+//	    BRF_FUNC_CALL_BREAK(lms(backup,0x7c,bak.loOpt,&e));
 	    BRF_FUNC_CALL_BREAK(lnaGain(backup,bak.lnaGain,&e));
 	    BRF_FUNC_CALL_BREAK(internalRxVga(backup,bak.rxVga1,true,&e));
+	    if (bak.module == BRF_CALIBRATE_RX_VGA2) {
+		BRF_FUNC_CALL_BREAK(lms(backup,0x68,bak.rxVga2GainAB,&e));
+	    }
 	    status = internalRxVga(backup,bak.rxVga2,false,&e);
 	    break;
 	}
@@ -5291,7 +5427,16 @@ unsigned int BrfLibUsbDevice::calBackupRestore(BrfCalData& bak, bool backup,
 unsigned int BrfLibUsbDevice::calInitFinal(BrfCalData& bak, bool init, String* error)
 {
     const char* what = init ? "initialize" : "finalize";
-    DDebug(m_owner,DebugAll,"Calibration %s %s [%p]",what,bak.modName(),m_owner);
+#ifdef DEBUG_DEVICE_AUTOCAL
+    String lmsDump;
+#if 0
+    if (init) {
+	internalDumpPeripheral(UartDevLMS,0,128,&lmsDump,16);
+	lmsDump = "\r\n-----" + lmsDump + "\r\n-----";
+    }
+#endif
+    Debugger d(DebugAll,"CAL INIT/FINAL"," %s [%p]%s",what,m_owner,lmsDump.safe());
+#endif
     String e;
     unsigned int status = 0;
     while (true) {
@@ -5307,19 +5452,17 @@ unsigned int BrfLibUsbDevice::calInitFinal(BrfCalData& bak, bool init, String* e
 	}
 	// Enable special conditions
 	if (bak.module == BRF_CALIBRATE_RX_LPF || bak.module == BRF_CALIBRATE_RX_VGA2) {
-	    // Set RXVGA2 DECODE on init/finalize
-	    if (!init) {
-		if (bak.module == BRF_CALIBRATE_RX_VGA2) {
-		    BRF_FUNC_CALL_BREAK(setRxVga2Decode(true,&e));
-		}
-	    }
-	    // FAQ 5.26 (rev 1.0r13) DC comparators should be
-	    // powered up before calibration and then powered down after it
 	    if (bak.module == BRF_CALIBRATE_RX_VGA2) {
-		BRF_FUNC_CALL_BREAK(lmsChangeMask(0x63,0xc0,!init,&e));
+		// Set RXVGA2 DECODE on init/finalize
+		if (!init)
+		    BRF_FUNC_CALL_BREAK(setRxVga2Decode(true,&e));
+		// TODO: Check it BRF_FUNC_CALL_BREAK(lmsChangeMask(0x63,0xc0,!init,&e));
 	    }
-	    else
-		BRF_FUNC_CALL_BREAK(lmsChangeMask(0x5f,0x80,!init,&e));
+	    else {
+		// FAQ 5.26 (rev 1.0r13) DC comparators should be
+		//  powered up before calibration and then powered down after it
+		BRF_FUNC_CALL_BREAK(lmsChangeMask(0x5f,0x80,init,&e));
+	    }
 	    // Done for finalize
 	    if (!init)
 		break;
@@ -5367,6 +5510,9 @@ unsigned int BrfLibUsbDevice::calInitFinal(BrfCalData& bak, bool init, String* e
 unsigned int BrfLibUsbDevice::dcCalProcPrepare(const BrfCalData& bak, uint8_t subMod,
     String& e)
 {
+#ifdef DEBUG_DEVICE_AUTOCAL
+    Debugger d(DebugAll,"CAL PREPARE"," submod=%u [%p]",subMod,m_owner);
+#endif
     if (bak.module != BRF_CALIBRATE_RX_VGA2)
 	return 0;
     // Prepare RX VGA2 calibration
@@ -5393,6 +5539,9 @@ unsigned int BrfLibUsbDevice::dcCalProcPrepare(const BrfCalData& bak, uint8_t su
 unsigned int BrfLibUsbDevice::dcCalProc(const BrfCalData& bak, uint8_t subMod,
     uint8_t dcCnt, uint8_t& dcReg, String& e)
 {
+#ifdef DEBUG_DEVICE_AUTOCAL
+    Debugger d(DebugAll,"CAL PROC"," submod=%u dcCnt=0x%x [%p]",subMod,dcCnt,m_owner);
+#endif
     // Set active calibration module address
     uint8_t data = 0;
     unsigned int status = 0;
@@ -5457,6 +5606,9 @@ unsigned int BrfLibUsbDevice::dcCalProc(const BrfCalData& bak, uint8_t subMod,
 unsigned int BrfLibUsbDevice::dcCalProcPost(const BrfCalData& bak, uint8_t subMod,
     uint8_t dcReg, String& e)
 {
+#ifdef DEBUG_DEVICE_AUTOCAL
+    Debugger d(DebugAll,"CAL PROC POST"," submod=%u dcReg=0x%x [%p]",subMod,dcReg,m_owner);
+#endif
     unsigned int status = 0;
     if (bak.module == BRF_CALIBRATE_LPF_TUNING) {
 	// Set DC_REG in TX/RX LPF DCO_DACCAL
@@ -5466,6 +5618,18 @@ unsigned int BrfLibUsbDevice::dcCalProcPost(const BrfCalData& bak, uint8_t subMo
 	if (status)
 	    e.printf("Failed to set DCO_DACCAL - %s",e.c_str());
     }
+    return status;
+}
+
+// Read data, ignore any buffer related errors
+unsigned int BrfLibUsbDevice::dummyRead(float* buf, unsigned int samples, String* error)
+{
+    int oldTsCheck = m_rxIO.checkTs;
+    m_rxIO.checkTs = 0;
+    unsigned int status = syncTxStatus(DevStatTs,0,error);
+    if (!status)
+	status = readBuffer(m_txIO.syncTs + 20 * samples,buf,samples,error);
+    m_rxIO.checkTs = oldTsCheck;
     return status;
 }
 
@@ -5482,95 +5646,6 @@ unsigned int BrfLibUsbDevice::readBuffer(uint64_t ts, float* buf, unsigned int s
 	samples -= n;
     }
     return 0;
-}
-
-unsigned int BrfLibUsbDevice::readComputeX_LMSIQ(uint8_t dcI, uint8_t dcQ, double& erf,
-    float* buf, unsigned int samples, String* error, double& energy, int* dumpRx)
-{
-    unsigned int status = 0;
-    // Apply I/Q offset
-    m_txIO.syncStatus.dcOffsetI = decodeDCOffs(true,dcI);
-    m_txIO.syncStatus.dcOffsetQ = decodeDCOffs(true,dcQ);
-    BRF_FUNC_CALL_RET(syncTxStatus(DevStatTs | DevStatDc,0,error));
-    BRF_FUNC_CALL_RET(readBuffer(m_txIO.syncTs + 10 * samples,buf,samples,error));
-    bool dump = dumpRx && *dumpRx;
-    if (dump) {
-	if (*dumpRx > 0)
-	    *dumpRx = *dumpRx - 1;
-	String tmp;
-	unsigned int n = 50;
-	if (n > samples)
-	    n = samples;
-	appendComplex(tmp,buf,n);
-	Output("RECV (%u/%u): %s",n,samples,tmp.c_str());
-    }
-    energy = 0;
-    double avgI = 0;
-    double avgQ = 0;
-    float* last = buf + samples * 2;
-    for (float* b = buf; b != last; ) {
-	energy += *b * *b;
-	avgI += *b++;
-	energy += *b * *b;
-	avgQ += *b++;
-    }
-    avgI /= samples;
-    avgQ /= samples;
-    erf = avgI * avgI + avgQ * avgQ;
-    energy /= samples;
-    return 0;
-}
-
-unsigned int BrfLibUsbDevice::calibrateRx(String* error)
-{
-    //Debugger debug(DebugAll,"Calibrating RX"," [%p]",m_owner);
-    String e;
-    unsigned int status = 0;
-    BrfDevStatus txOld(m_txIO);
-    BrfDevStatus rxOld(m_rxIO);
-    bool oldRxDcAuto = setRxDcAuto(false);
-    int oldCheckTs = m_rxIO.checkTs;
-    m_rxIO.checkTs = 0;
-    while (true) {
-	// Set VGA to min values
-	BRF_FUNC_CALL_BREAK(internalSetVga(true,BRF_TXVGA1_GAIN_MIN,true,error));
-	BRF_FUNC_CALL_BREAK(internalSetVga(true,BRF_TXVGA2_GAIN_MIN,false,error));
-	BRF_FUNC_CALL_BREAK(internalSetVga(false,BRF_RXVGA1_GAIN_MIN,true,error));
-	BRF_FUNC_CALL_BREAK(internalSetVga(false,BRF_RXVGA2_GAIN_MIN,false,error));
-	// TX / RX different freq
-	if (txOld.frequency == rxOld.frequency)
-	    BRF_FUNC_CALL_BREAK(internalSetFrequency(true,txOld.frequency + 10000000,error));
-	// Disable TX, enable RX
-	BRF_FUNC_CALL_BREAK(internalPowerOn(false,false,true,&e));
-	// Read data, adjust RX DC I / Q
-	Thread::msleep(500);
-	unsigned int samples = 4000; //m_rxIO.bufSamples * m_rxIO.buffers;
-	DataBlock d(0,samplesf2bytes(samples));
-	uint64_t ts = 0;
-	BRF_FUNC_CALL_BREAK(internalGetTimestamp(false,ts,error));
-	float* buf = (float*)d.data(0);
-	BRF_FUNC_CALL_BREAK(readBuffer(ts + 5 * samples,buf,samples,error));
-	String tmp;
-	//appendComplex(tmp,buf,samples);
-	//tmp = "\r\n-----\r\n" + tmp + "\r\n-----";
-	float avgI = 0;
-	float avgQ = 0;
-	for (float* last = buf + samples * 2; buf != last; ) {
-	    avgI += *buf++ * 2048;
-	    avgQ += *buf++ * 2048;
-	}
-	int i = avgI / samples;
-	int q = avgQ / samples;
-	Debug(m_owner,DebugInfo,"Calibrate RX: I/Q=%d/%d samples=%u [%p]%s",
-	    i,q,samples,m_owner,tmp.safe());
-	internalSetCorrectionIQ(false,i,q,error);
-	break;
-    }
-    m_rxIO.checkTs = oldCheckTs;
-    setRxDcAuto(oldRxDcAuto);
-    unsigned int restore = DevStatFreq | DevStatVga;
-    setStatus(txOld,restore,rxOld,restore);
-    return status;
 }
 
 static inline void cxMult(const float i1, const float q1, const float i2, const float q2,
@@ -5626,7 +5701,7 @@ static void calculateDcOffsets(BrfLibUsbDevice* dev, float* input, unsigned samp
 
 unsigned int BrfLibUsbDevice::readComputeDcOffsets(uint8_t dcI, uint8_t dcQ,
     float* buf, unsigned int samples, String* error,
-    float& totalPower, float& rxDcOffset, float* txDcOffset)
+    float& totalPower, float& rxDcOffset, float& txDcOffset)
 {
     unsigned int status = 0;
     // Apply I/Q offset
@@ -5634,14 +5709,62 @@ unsigned int BrfLibUsbDevice::readComputeDcOffsets(uint8_t dcI, uint8_t dcQ,
     m_txIO.syncStatus.dcOffsetQ = decodeDCOffs(true,dcQ);
     BRF_FUNC_CALL_RET(syncTxStatus(DevStatTs | DevStatDc,0,error));
     BRF_FUNC_CALL_RET(readBuffer(m_txIO.syncTs + 10 * samples,buf,samples,error));
-    calculateDcOffsets(this,buf,samples,totalPower,rxDcOffset,txDcOffset);
+    calculateDcOffsets(this,buf,samples,totalPower,rxDcOffset,&txDcOffset);
     return 0;
+}
+
+unsigned int BrfLibUsbDevice::readComputeDcOffsetsCorr(int corrPhase, float* buf,
+    unsigned int samples, String* error, float& totalPower, float& rxDcOffset)
+{
+    unsigned int status = 0;
+    // Apply TX corr phase
+    m_txIO.syncStatus.fpgaCorrPhase = corrPhase;
+    BRF_FUNC_CALL_RET(syncTxStatus(DevStatTs | DevStatFpgaPhase,0,error));
+    BRF_FUNC_CALL_RET(readBuffer(m_txIO.syncTs + 10 * samples,buf,samples,error));
+    calculateDcOffsets(this,buf,samples,totalPower,rxDcOffset);
+    return 0;
+}
+
+void BrfLibUsbDevice::calibrateBBStarting(const char* what)
+{
+    String s;
+    internalDumpDev(s,false,true,"\r\n",true,false,true);
+#if 0
+    String dev;
+    internalDumpPeripheral(UartDevLMS,0,128,&dev,16);
+    s << "\r\nLMS:" << dev;
+    dev = "";
+    internalDumpPeripheral(UartDevGPIO,0,128,&dev,16);
+    s << "\r\nGPIO:" << dev;
+    dev = "";
+    internalDumpPeripheral(UartDevSI5338,0,128,&dev,16);
+    s << "\r\nSI5338:" << dev;
+#endif
+    if (s)
+	s = "\r\n-----\r\n" + s + "\r\n-----";
+    Debug(m_owner,DebugInfo,"%s starting [%p]%s",what,m_owner,s.safe());
+}
+
+static inline void updateLastValue(float& last, float crt, const char*& dir, bool first)
+{
+    if (!first) {
+	if (last > crt)
+	    dir = "down";
+	else if (last < crt)
+	    dir = "up";
+	else
+	    dir = "=";
+    }
+    else
+	dir = "-";
+    last = crt;
 }
 
 unsigned int BrfLibUsbDevice::calibrateBBTxDc(int& dcI, int& dcQ, String* error)
 {
+//#define BRF_BB_TX_DC_TRACE
     const char* oper = "Baseband TX DC calibration";
-    Debug(m_owner,DebugInfo,"%s starting [%p]",oper,m_owner);
+    calibrateBBStarting(oper);
     dcI = 128;
     dcQ = 128;
     unsigned int samples = m_rxIO.bufSamples * m_rxIO.buffers;
@@ -5655,10 +5778,16 @@ unsigned int BrfLibUsbDevice::calibrateBBTxDc(int& dcI, int& dcQ, String* error)
     uint8_t innerLoops[] = {18,18,31,31,5,5};
     uint8_t steps[] = {15,15,1,1,1,1};
     String e;
-    unsigned int status = readComputeDcOffsets(dcI,dcQ,buf,samples,&e,power,rxDc,&txDc);
+    m_txIO.showDcOffsChange++;
+    unsigned int status = dummyRead(buf,samples,&e);
+    if (!status)
+	status = readComputeDcOffsets(dcI,dcQ,buf,samples,&e,power,rxDc,txDc);
     float bestDcOffs = txDc;
+#ifdef BRF_BB_TX_DC_TRACE
+    float lastDcOffs = txDc;
     Output("Starting with I/Q=%d/%d power=%g rxDC=%g txDC=%g",dcI,dcQ,power,rxDc,txDc);
-    for (unsigned int i = 0; !status && i < sizeof(innerLoops); i++) {
+#endif
+    for (unsigned int i = 0; !status && i < BRF_ARRAY_LEN(innerLoops); i++) {
 	bool iLoop = ((i % 2) == 0);
 	#define SET_I_Q_TEMP(_i,_q) tmpDcI = clampInt(_i,0,255); tmpDcQ = clampInt(_q,0,255); break
 	switch (i) {
@@ -5672,30 +5801,106 @@ unsigned int BrfLibUsbDevice::calibrateBBTxDc(int& dcI, int& dcQ, String* error)
 	#undef SET_I_Q_TEMP
 	int& bestIQ = iLoop ? dcI : dcQ;
 	int& iq = iLoop ? tmpDcI : tmpDcQ;
+#ifdef BRF_BB_TX_DC_TRACE
 	Output("%d: LoopMode=%c I=%d Q=%d (best_I/Q=%d/%d)",
 	    i + 1,brfIQ(iLoop),tmpDcI,tmpDcQ,dcI,dcQ);
+#endif
 	for (unsigned int n = innerLoops[i]; n; --n) {
-	    status = readComputeDcOffsets(tmpDcI,tmpDcQ,buf,samples,&e,power,rxDc,&txDc);
+	    status = readComputeDcOffsets(tmpDcI,tmpDcQ,buf,samples,&e,power,rxDc,txDc);
 	    if (status)
 		break;
+#ifdef BRF_BB_TX_DC_TRACE
+	    const char* dir = 0;
+	    updateLastValue(lastDcOffs,txDc,dir,n == innerLoops[i]);
 	    String dump;
-	    dump.printf(1024,"  I=%-3d Q=%-3d power=%.6f\tdiff=%.6f\trxDC=%.6f\ttxDC=%f",
-		tmpDcI,tmpDcQ,power,power - (rxDc + txDc),rxDc,txDc);
-	    if (bestDcOffs > txDc) {
+	    dump.printf(1024,"  I=%-3d Q=%-3d power=%.6f\tdiff=%.6f\trxDC=%.6f\ttxDC=%f\t%s",
+		tmpDcI,tmpDcQ,power,power - (rxDc + txDc),rxDc,txDc,dir);
+	    if (bestDcOffs > txDc)
 		dump << "\t" << brfIQ(iLoop) << " " << bestIQ << " -> " << iq;
+	    Output("%s",dump.c_str());
+#endif
+	    if (bestDcOffs > txDc) {
 		bestDcOffs = txDc;
 		bestIQ = iq;
 	    }
-	    Output("%s",dump.c_str());
 	    if (iq - steps[i] < 0)
 		break;
 	    iq -= steps[i];
 	}
     }
+    m_txIO.showDcOffsChange--;
     if (status == 0) {
 	dcI = decodeDCOffs(true,dcI);
 	dcQ = decodeDCOffs(true,dcQ);
 	Debug(m_owner,DebugInfo,"%s finished I=%d Q=%d [%p]",oper,dcI,dcQ,m_owner);
+	return 0;
+    }
+    e.printf(2048,"%s failed - %s",oper,e.c_str());
+    return showError(status,e,0,error);
+}
+
+unsigned int BrfLibUsbDevice::calibrateBBTxFpgaPhase(int& corr, String* error)
+{
+#define BRF_BB_FPGA_PHASE_TRACE
+    const char* oper = "Baseband TX FPGA PHASE calibration";
+    calibrateBBStarting(oper);
+    m_txIO.showFpgaPhaseChange++;
+    corr = 0;
+    unsigned int samples = m_rxIO.bufSamples * m_rxIO.buffers;
+    DataBlock d(0,samplesf2bytes(samples));
+    float* buf = (float*)d.data(0);
+    float power = 0;
+    float rxDc = 0;
+    unsigned int innerLoops[] = {BRF_FPGA_CORR_MAX,999,99,19};
+    unsigned int steps[] = {100,100,20,1};
+    String e;
+    unsigned int status = dummyRead(buf,samples,&e);
+    if (!status)
+	status = readComputeDcOffsetsCorr(0,buf,samples,&e,power,rxDc);
+    float imagePower = power - rxDc;
+#ifdef BRF_BB_FPGA_PHASE_TRACE
+    float lastImage = imagePower;
+    Output("Starting with power=%g rxDC=%g image=%g",power,rxDc,imagePower);
+#endif
+    for (unsigned int i = 0; !status && i < BRF_ARRAY_LEN(innerLoops); i++) {
+	int v = clampInt(corr + innerLoops[i],-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX);
+	int minV = clampInt(corr - innerLoops[i],-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX);
+#ifdef BRF_BB_FPGA_PHASE_TRACE
+	Output("Loop %u: best=%d corrStart=%d corrMin=%d step=%u",i,corr,v,minV,steps[i]);
+	bool first = true;
+#endif
+	for (unsigned int n = innerLoops[i] * 2 + 1; n; n--) {
+	    status = readComputeDcOffsetsCorr(v,buf,samples,&e,power,rxDc);
+	    if (status)
+		break;
+	    float image = power - rxDc;
+#ifdef BRF_BB_FPGA_PHASE_TRACE
+	    const char* dir = 0;
+	    updateLastValue(lastImage,image,dir,first);
+	    first = false;
+	    String dump;
+	    dump.printf("  %-5d\tpower=%.6f\trxDC=%.6f\timage=%.6f\t%s",
+		v,power,rxDc,image,dir);
+	    if (imagePower > image)
+		dump << "\t" << corr << " -> " << v;
+	    Output("%s",dump.c_str());
+#endif
+	    if (imagePower > image) {
+		imagePower = image;
+		corr = v;
+	    }
+	    int tmp = v - steps[i];
+	    if (tmp >= minV)
+		v = tmp;
+	    else if ((minV - tmp) < (int)steps[i])
+		v = minV;
+	    else
+		break;
+	}
+    }
+    m_txIO.showFpgaPhaseChange--;
+    if (status == 0) {
+	Debug(m_owner,DebugInfo,"%s finished corr=%d [%p]",oper,corr,m_owner);
 	return 0;
     }
     e.printf(2048,"%s failed - %s",oper,e.c_str());
@@ -5711,69 +5916,35 @@ unsigned int BrfLibUsbDevice::calibrateBB(String* error)
     int oldLoop = m_loopback;
     BrfDevStatus txOld(m_txIO);
     BrfDevStatus rxOld(m_rxIO);
-    m_txIO.showDcOffsChange++;
     bool oldRxDcAuto = setRxDcAuto(false);
     BrfDevTmpAltSet tmpAltSet(this,status,&e,"Calibrate BB");
     while (status == 0) {
-	// Calibrate RX
-//	BRF_FUNC_CALL_BREAK(calibrateRx(&e));
-	// Turn radio OFF
-	BRF_FUNC_CALL_BREAK(internalPowerOn(false,false,false,&e));
-	// Set loopback
 	bool paOn = false;
 	bool lowBand = brfIsLowBand(txOld.frequency);
 	int lp = lowBand ? LoopRfLna1 : LoopRfLna2;
 	const char* pattern = "circle";
-	NamedList p("calibrate-tx-lo");
+	NamedList p("calibrate-bb");
 	loadCfg(false,&p);
 	if (p.c_str()) {
 	    lp = lookup(p["loopback"],s_loopback,lp);
 	    paOn = p.getBoolValue("transmit");
 	    pattern = p.getValue("txpattern",pattern);
 	}
-
-	unsigned int Fc = 850000000;
-	BRF_FUNC_CALL_BREAK(internalSetFrequency(true,Fc + m_txIO.sampleRate / 4,&e));
-	BRF_FUNC_CALL_BREAK(internalSetFrequency(false,Fc,&e));
-
 	BRF_FUNC_CALL_BREAK(internalSetLoopback(lp,&e));
+	// Set VGA
+	BRF_FUNC_CALL_BREAK(internalSetVga(true,-14,true,&e));
+	BRF_FUNC_CALL_BREAK(internalSetVga(true,25,false,&e));
+	BRF_FUNC_CALL_BREAK(internalSetVga(false,30,true,&e));
+	BRF_FUNC_CALL_BREAK(internalSetVga(false,0,false,&e));
+	// 0x64: VCM (bits 5-2): RX VGA2 output common voltage control
+	// Make sure we have the correct value to operate
+	BRF_FUNC_CALL_BREAK(lmsSet(0x64,0x34,0x3c,&e));
 	if (paOn)
 	    BRF_FUNC_CALL_BREAK(selectPaLna(true,lowBand,&e));
 	setTxPattern(pattern);
-#if 1
-	// Set VGA
-	BRF_FUNC_CALL_BREAK(internalSetVga(true,BRF_TXVGA1_GAIN_MIN,true,&e));
-	BRF_FUNC_CALL_BREAK(internalSetVga(true,BRF_TXVGA2_GAIN_MIN,false,&e));
-	BRF_FUNC_CALL_BREAK(internalSetVga(false,BRF_RXVGA1_GAIN_MIN,true,&e));
-	BRF_FUNC_CALL_BREAK(internalSetVga(false,BRF_RXVGA2_GAIN_MIN,false,&e));
-#else
-	// Set VGA
-	BRF_FUNC_CALL_BREAK(internalSetVga(true,-10,true,&e));
-	BRF_FUNC_CALL_BREAK(internalSetVga(true,25,false,&e));
-	BRF_FUNC_CALL_BREAK(internalSetVga(false,30,true,&e));
-	BRF_FUNC_CALL_BREAK(internalSetVga(false,30,false,&e));
-#endif
-	// Turn radio ON
-	BRF_FUNC_CALL_BREAK(internalPowerOn(false,true,true,&e));
-	Thread::msleep(500);
-	
-	dumpLoopbackStatus();
-	String s;
-	internalDumpDev(s,false,true,"\r\n",true,false,true);
-#if 0
-	String dev;
-	internalDumpPeripheral(UartDevLMS,0,128,&dev,16);
-	s << "\r\nLMS:" << dev;
-	dev = "";
-	internalDumpPeripheral(UartDevGPIO,0,128,&dev,16);
-	s << "\r\nGPIO:" << dev;
-	dev = "";
-	internalDumpPeripheral(UartDevSI5338,0,128,&dev,16);
-	s << "\r\nSI5338:" << dev;
-#endif
-	Debug(m_owner,DebugAll,"BB calibration starting status: [%p]\r\n-----\r\n%s\r\n-----",
-	    m_owner,s.c_str());
-	
+//	dumpLoopbackStatus();
+//	dumpLmsModulesStatus();
+
 	// Start sending thread
 	m_sendThread = (new BrfThread(this))->start();
 	if (!m_sendThread) {
@@ -5781,15 +5952,29 @@ unsigned int BrfLibUsbDevice::calibrateBB(String* error)
 	    e << "Failed to start send data thread";
 	    break;
 	}
+	unsigned int Fc = 850000000;
 	// Calibrate TX DC
+	m_txIO.syncStatus.frequency = Fc + m_txIO.sampleRate / 4;
+	m_rxIO.syncStatus.frequency = Fc;
+	BRF_FUNC_CALL_BREAK(syncTxStatus(DevStatFreq,DevStatFreq,&e));
 	int dcI = 0;
 	int dcQ = 0;
 	BRF_FUNC_CALL_BREAK(calibrateBBTxDc(dcI,dcQ,&e));
 	BRF_FUNC_CALL_BREAK(internalSetCorrectionIQ(true,dcI,dcQ,&e));
+
+#if 0
+	// TODO: Not tested
+	// Calibrate TX FPGA PHASE
+	m_txIO.syncStatus.frequency = Fc;
+	m_rxIO.syncStatus.frequency = Fc - m_txIO.sampleRate / 2;
+	BRF_FUNC_CALL_BREAK(syncTxStatus(DevStatFreq,DevStatFreq,&e));
+	int corr = 0;
+	BRF_FUNC_CALL_BREAK(calibrateBBTxFpgaPhase(corr,&e));
+	BRF_FUNC_CALL_BREAK(internalSetFpgaCorr(true,CorrFpgaPHASE,corr,&e));
+#endif
 	break;
     }
     setRxDcAuto(oldRxDcAuto);
-    m_txIO.showDcOffsChange--;
     Debug(m_owner,DebugAll,"Finalizing BB calibration [%p]",m_owner);
     BrfThread::cancelThread(m_sendThread,&m_sendThreadMutex,1000,m_owner,m_owner);
     // Restore loopback
@@ -5939,6 +6124,7 @@ unsigned int BrfLibUsbDevice::internalSetLoopback(int mode, String* error)
     String e;
     unsigned int status = 0;
     BrfDevTmpAltSet tmpAltSet(this,status,&e,"Set loopback");
+    int lna = LmsLnaNone;
     while (status == 0) {
 	// Disable everything before enabling the loopback
 	BRF_FUNC_CALL_BREAK(lnaSelect(LmsLnaNone,&e));
@@ -5969,23 +6155,26 @@ unsigned int BrfLibUsbDevice::internalSetLoopback(int mode, String* error)
 		BRF_FUNC_CALL_BREAK(internalEnableRxVga(true,false,&e));
 		break;
 	    case LoopRfLna1:
+		lna = LmsLna1;
+		// falthrough
 	    case LoopRfLna2:
+		if (lna == LmsLnaNone)
+		    lna = LmsLna2;
+		// falthrough
 	    case LoopRfLna3:
-		// Select PA AUX and disable LNAs
+		if (lna == LmsLnaNone)
+		    lna = LmsLna2;
+		// Select PA AUX and enable LNA
 		BRF_FUNC_CALL_BREAK(paSelect(LmsPaAux,&e));
-		BRF_FUNC_CALL_BREAK(lnaEnable(false,&e));
+		BRF_FUNC_CALL_BREAK(lnaEnable(true,&e));
+		BRF_FUNC_CALL_BREAK(lnaSelect(lna,&e));
 		// Enable RX path
 		BRF_FUNC_CALL_BREAK(internalEnableRxVga(true,true,&e));
 		BRF_FUNC_CALL_BREAK(internalSetLpf(false,LpfNormal,&e));
 	    	BRF_FUNC_CALL_BREAK(internalEnableRxVga(true,false,&e));
 		// Select output buffer in RX PLL
-		switch (mode) {
-		    case LoopRfLna1: status = lmsSet(0x25,LmsLna1,0x03,&e); break;
-		    case LoopRfLna2: status = lmsSet(0x25,LmsLna2,0x03,&e); break;
-		    case LoopRfLna3: status = lmsSet(0x25,LmsLna3,0x03,&e); break;
-		}
-		if (!status)
-		    status = enableRfLoopback(true,e);
+		BRF_FUNC_CALL_BREAK(lmsSet(0x25,lna,0x03,&e));
+		status = enableRfLoopback(true,e);
 		break;
 	    case LoopNone:
 		BRF_FUNC_CALL_BREAK(restoreFreq(true,&e));
@@ -6098,6 +6287,10 @@ void BrfLibUsbDevice::dumpLoopbackStatus()
 {
 #define BRF_LS_RESULT(name,mask) \
     s << "\r\n  " << name << ": " << (status ? "ERROR" : tmp.printf("0x%x",data & mask).c_str())
+#define BRF_LS_RESULT_OPEN(name,mask,valueOpen) \
+    BRF_LS_RESULT(name,mask); \
+    if (status == 0) \
+	s << " - " << (((data & mask) == valueOpen) ? "open" : "closed");
     String s;
     String tmp;
     uint8_t data = 0;
@@ -6105,24 +6298,82 @@ void BrfLibUsbDevice::dumpLoopbackStatus()
     // TX Path
     s << "\r\nTX PATH:";
     status = lmsRead(0x35,data);
-    BRF_LS_RESULT("BYP_EN_LPF",0x40); // LPF bypass enable
+    BRF_LS_RESULT("BYP_EN_LPF",0x40); // LPF bypass enable (1: bypass, 0: normal)
+    if (!status)
+	s << " - " << lookup((data & 0x40) == 0x40 ? LpfBypass : LpfNormal,s_lpf);
     status = lmsRead(0x46,data);
-    BRF_LS_RESULT("LOOPBBEN[1:0]",0x0c);
+    BRF_LS_RESULT_OPEN("LOOPBBEN[1:0]",0x0c,0x00); // Baseband loopback swithes control (00: open, 11: closed)
     status = lmsRead(0x08,data);
-    BRF_LS_RESULT("LBEN_OPIN",0x10); // enabled: RX VGA2 and RXLPF should be disabled
-    BRF_LS_RESULT("LBEN_VGA2IN",0x20); // enabled: LPF should be disabled
-    BRF_LS_RESULT("LBEN_LPFIN",0x40); // enabled: RXTIA should be disabled
+    BRF_LS_RESULT_OPEN("LBEN_OPIN",0x10,0x00); // enabled: RX VGA2 and RXLPF should be disabled
+    BRF_LS_RESULT_OPEN("LBEN_VGA2IN",0x20,0x00); // enabled: LPF should be disabled
+    BRF_LS_RESULT_OPEN("LBEN_LPFIN",0x40,0x00); // enabled: RXTIA should be disabled
     BRF_LS_RESULT("LBRFEN (TXMIX)",0x0f); // LNAs should be disabled
+    if (!status) {
+	s << " - ";
+	switch (data & 0x0f) {
+	    case 0: s << "open"; break;
+	    case 1: s << "LNA1"; break;
+	    case 2: s << "LNA2"; break;
+	    case 3: s << "LNA3"; break;
+	    default: s << "invalid";
+	}
+    }
     status = lmsRead(0x0b,data);
-    BRF_LS_RESULT("PD[0] (RF loopback)",0x01);
+    BRF_LS_RESULT_OPEN("PD[0] (RF loopback)",0x01,0x00);
     s << "\r\nRX PATH:";
     status = lmsRead(0x55,data);
     BRF_LS_RESULT("BYP_EN_LPF",0x40); // LPF bypass enable
+    if (!status)
+	s << " - " << lookup((data & 0x40) == 0x40 ? LpfBypass : LpfNormal,s_lpf);
     status = lmsRead(0x09,data);
-    BRF_LS_RESULT("RXOUT",0x80); // RXOUT switch
+    BRF_LS_RESULT_OPEN("RXOUTSW",0x80,0x00); // RXOUTSW switch
     Debug(m_owner,DebugAll,"Loopback switches: [%p]\r\n-----%s\r\n-----",
 	m_owner,s.c_str());
 #undef BRF_LS_RESULT
+#undef BRF_LS_RESULT_OPEN
+}
+
+void BrfLibUsbDevice::dumpLmsModulesStatus()
+{
+#define BRF_MS_RESULT(name,result) \
+    s << "\r\n  " << name << ": " << (status ? "ERROR" : result)
+#define BRF_MS_RESULT_ACTIVE(name,result,mask,valueActive) \
+    BRF_MS_RESULT(name,result); \
+    if (status == 0) \
+	s << tmp.printf("0x%x - %s",data & mask,activeStr((data & mask) == valueActive))
+    String s;
+    String tmp;
+    int tmpInt = 0;
+    uint8_t data = 0;
+    unsigned int status = 0;
+    // TX
+    s << "\r\nTX:";
+    status = internalGetLpf(true,&tmpInt);
+    BRF_MS_RESULT("LPF",lookup(tmpInt,s_lpf));
+    status = lmsRead(0x44,data);
+    BRF_MS_RESULT("AUXPA",tmp.printf("0x%x - %s",data & 0x04,enableStr((data & 0x04) == 0)));
+    BRF_MS_RESULT("PA",tmp.printf("0x%x - %d",data & 0x18,((data & 0x18) >> 3)));
+    s << "\r\nRX:";
+    status = lmsRead(0x75,data);
+    tmp.clear();
+    if (status == 0)
+	tmp.printf("0x%x (%d)",data & 0x30,(data & 0x30) >> 4);
+    BRF_MS_RESULT("LNA","");
+    s << "Selected: " << tmp.safe("ERROR");
+    status = lmsRead(0x7d,data);
+    if (status == 0)
+	s << tmp.printf(" - (0x%x %s)",data & 0x01,activeStr((data & 0x01) == 0));
+    else
+	s << " - Active: ERROR";
+    BRF_MS_RESULT_ACTIVE("VGA1","",0x08,0);
+    status = internalGetLpf(false,&tmpInt);
+    BRF_MS_RESULT("LPF",lookup(tmpInt,s_lpf));
+    status = lmsRead(0x64,data);
+    BRF_MS_RESULT_ACTIVE("VGA2","",0x02,0x02);
+    Debug(m_owner,DebugAll,"LMS modules status: [%p]\r\n-----%s\r\n-----",
+	m_owner,s.c_str());
+#undef BRF_MS_RESULT_ACTIVE
+#undef BRF_MS_RESULT
 }
 
 unsigned int BrfLibUsbDevice::internalDumpPeripheral(uint8_t dev, uint8_t addr,
@@ -6150,7 +6401,7 @@ unsigned int BrfLibUsbDevice::internalDumpPeripheral(uint8_t dev, uint8_t addr,
 	buf->hexify(data,len,' ');
     if (outHere)
 	Output("%s %s status (addr=0x%x):\r\n-----%s\r\n-----",
-	    m_owner->debugName(),s_uartDevName[dev].c_str(),addr,buf->c_str());
+	    m_owner->debugName(),s_uartDev[dev].c_str(),addr,buf->c_str());
     return 0;
 }
 
@@ -6537,7 +6788,7 @@ void BrfModule::initialize()
 	LUSB_CTRL_TIMEOUT,200,2000);
     s_lusbBulkTransferTout = lusb.getIntValue(YSTRING("bulk_transfer_timeout"),
 	LUSB_BULK_TIMEOUT,200,2000);
-    setDebugPeripheral(gen[YSTRING("peripheraldebug")]);
+    setDebugPeripheral(gen);
     setSampleEnergize(gen[YSTRING("sampleenergize")]);
 }
 
@@ -6893,12 +7144,12 @@ bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg)
 	    String* s = static_cast<String*>(o->get());
 	    s->toUpper();
 	    for (uint8_t i = 0; i < BrfLibUsbDevice::UartDevCount; i++) {
-		if (*s != s_uartDevName[i])
+		if (*s != s_uartDev[i])
 		    continue;
 		String tmp;
 		ifc->device()->dumpPeripheral(i,addr,len,&tmp);
 		if (tmp)
-		    str.append(s_uartDevName[i],"\r\n") << tmp;
+		    str.append(s_uartDev[i],"\r\n") << tmp;
 		break;
 	    }
 	}
@@ -7002,55 +7253,23 @@ bool BrfModule::test(const String& cmd, NamedList& list)
     return ok;
 }
 
-// Format: [tx|rx|both] [all|list(gpio,lms,vctcxo,si5338)]
-void BrfModule::setDebugPeripheral(const String& value)
+void BrfModule::setDebugPeripheral(const NamedList& params)
 {
-    String line = value;
-    String s;
-    uint8_t val = 0;
-    if (getFirstStr(s,line)) {
-	if ((s == YSTRING("tx")))
-	    val = 0x80;
-	else if (s == YSTRING("rx"))
-	    val = 0x40;
-	else
-	    val = 0xc0;
-	if (val != 0xc0 || s == YSTRING("both"))
-	    getFirstStr(s,line);
-	uint8_t mask = 0;
-	if (s && s != YSTRING("all")) {
-	    ObjList* lst = s.split(',');
-	    for (ObjList* o = lst->skipNull(); o; o = o->skipNext()) {
-		String* str = static_cast<String*>(o->get());
-		str->toUpper();
-		uint8_t i = 0;
-		while (i < BrfLibUsbDevice::UartDevCount && s_uartDevName[i] != *str)
-		    i++;
-		if (i < BrfLibUsbDevice::UartDevCount)
-		    mask |= (uint8_t)(1 << i);
-	    }
-	    TelEngine::destruct(lst);
+    for (uint8_t i = 0; i < BrfLibUsbDevice::UartDevCount; i++) {
+	BrfPeripheral& p = s_uartDev[i];
+	const String& tmp = params[p.lowCase + "_debug"];
+	bool tx = false;
+	bool rx = false;
+	if (tmp) {
+	    if (tmp == YSTRING("tx"))
+		tx = true;
+	    else if (tmp == YSTRING("rx"))
+		rx = true;
+	    else if (tmp == YSTRING("both"))
+		tx = rx = true;
 	}
-	val |= (mask ? mask : 0x0f);
+	p.set(tx,rx,params[p.lowCase + "_trackaddr"]);
     }
-    if (val == s_debugPeripheral)
-	return;
-    s_debugPeripheral = val;
-    String state;
-    if ((val & 0x80) != 0)
-	state.append("TX","/");
-    if ((val & 0x40) != 0)
-	state.append("RX","/");
-    String dev;
-    if (state)
-	for (uint8_t i = 0; i < BrfLibUsbDevice::UartDevCount; i++) {
-	    if ((val & (1 << i)) != 0)
-		dev.append(s_uartDevName[i],",");
-	}
-    String tmp;
-    tmp << "Peripheral access debug is " << state.safe("disabled");
-    tmp.append(dev," ");
-    Debug(this,DebugInfo,"%s",tmp.c_str());
 }
 
 void BrfModule::setSampleEnergize(const String& value)
@@ -7132,13 +7351,14 @@ void BrfThread::run()
     if (test)
 	test->run();
     else if (m_device) {
-	unsigned int samples = m_device->bufSamples(true);
+	unsigned int samples = m_device->totalSamples(true);
 	DataBlock buf(0,samplesf2bytes(samples));
 	float* b = (float*)buf.data(0);
 	uint64_t ts = 0;
 	m_device->internalGetTimestamp(true,ts);
-	Debug(m_device->owner(),DebugAll,"Start sending at ts=" FMT64U " [%p]",
-	    ts,m_device->owner());
+	Debug(m_device->owner(),DebugAll,
+	    "Start sending at ts=" FMT64U " chunk=%u samples [%p]",
+	    ts,samples,m_device->owner());
 	unsigned int status = 0;
 	while (!status) {
 	    BRF_FUNC_CALL_BREAK(m_device->send(ts,b,samples));

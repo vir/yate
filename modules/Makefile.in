@@ -90,10 +90,11 @@ PROGS := cdrbuild.yate cdrcombine.yate cdrfile.yate regexroute.yate \
 	server/cache.yate \
 	server/eventlogs.yate \
 	client/jabberclient.yate \
-	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
+	callgen.yate analyzer.yate rmanager.yate msgsniff.yate \
+	radio/dummyradio.yate
 
 LIBS :=
-DIRS := client server jabber qt4 sip
+DIRS := client server jabber qt4 sip sig radio
 
 ifneq ($(HAVE_PGSQL),no)
 PROGS := $(PROGS) server/pgsqldb.yate
@@ -423,9 +424,9 @@ server/ysnmpagent.yate: ../libyateasn.so ../libs/ysnmp/libysnmp.a
 server/ysnmpagent.yate: LOCALFLAGS = -I@top_srcdir@/libs/yasn -I@top_srcdir@/libs/ysnmp
 server/ysnmpagent.yate: LOCALLIBS = -L../libs/ysnmp -lysnmp -lyateasn
 
-radio/ybladerf.yate: ../libyateradio.so
-radio/ybladerf.yate: LOCALFLAGS = -I@top_srcdir@/libs/yradio
-radio/ybladerf.yate: LOCALLIBS = -lyateradio
+radio/ybladerf.yate radio/dummyradio.yate: ../libyateradio.so
+radio/ybladerf.yate radio/dummyradio.yate: LOCALFLAGS = -I@top_srcdir@/libs/yradio
+radio/ybladerf.yate radio/dummyradio.yate: LOCALLIBS = -lyateradio
 radio/ybladerf.yate: EXTERNFLAGS = $(LIBUSB_INC)
 radio/ybladerf.yate: EXTERNLIBS = $(LIBUSB_LIB)
 

@@ -1,4 +1,4 @@
-yate (5.5.1~svn5988) UNRELEASED; urgency=low
+yate (5.5.1~svn5995) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1393,8 +1393,14 @@ yate (5.5.1~svn5988) UNRELEASED; urgency=low
     init. Fixed PA/LNA enable/select. Improved peripheral access debug.
     Work in progress on fixing calibration.  + Preliminary version of
     dummy radio interface.
+  * Updated to SVN revision 5995: + Implemented tx/rx timestamp
+    retrieval.  + Added tx power balance calibration. Work in progress.
+    + Added radio test module.  + Copy SIP RFC3329 Security-* parameters
+    to user.auth message.  + Added bladerf fpga files. Changed fpga load
+    default path.  + Fixed statistics reporting.  + Only install bladeRF
+    FPGA files if we could build the module.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 10 Jul 2015 02:19:11 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 11 Jul 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

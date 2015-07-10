@@ -2344,7 +2344,7 @@ void BrfLibUsbDevice::dumpStats(String& buf, const char* sep)
     BRF_TX_SERIALIZE_NONE;
     String s;
     uint64_t now = Time::now();
-    buf << sep << "TxTS=" << m_txIO.timestamp;
+    buf.append("TxTS=",sep) << m_txIO.timestamp;
     buf << sep << "RxTS=" << m_rxIO.timestamp;
     buf << sep << "TxAvg=" << dumpIOAvg(s,m_txIO,now);
     buf << sep << "RxAvg=" << dumpIOAvg(s,m_rxIO,now);
@@ -5972,8 +5972,8 @@ unsigned int BrfLibUsbDevice::calibrateBBTxGain(float& corr, String* error)
     float* buf = (float*)d.data(0);
     float power = 0;
     float rxDc = 0;
-    float innerBounds[] = {1,0.5,0.1,0.05};
-    float innerIntervals[] = {10,10,10,10};
+    float innerBounds[] = {1,0.5,0.2,0.1,0.05};
+    float innerIntervals[] = {10,20,20,20,20};
     String e;
     unsigned int status = dummyRead(buf,samples,&e);
     if (!status)
@@ -5986,7 +5986,7 @@ unsigned int BrfLibUsbDevice::calibrateBBTxGain(float& corr, String* error)
     for (unsigned int i = 0; !status && i < BRF_ARRAY_LEN(innerBounds); i++) {
 	float crt = corr + innerBounds[i];
 	if (crt >= 2)
-	    crt = 2;
+	    crt = 1.999999;
 	unsigned int intervals = innerIntervals[i] + 1;
 	float step = innerBounds[i] * 2 / intervals;
 #ifdef BRF_BB_GAIN_TRACE
@@ -6012,8 +6012,7 @@ unsigned int BrfLibUsbDevice::calibrateBBTxGain(float& corr, String* error)
 		imagePower = image;
 		corr = crt;
 	    }
-	    crt -= step;
-	    if ((crt - step) >= 0)
+	    if ((crt - step) > 0)
 		crt -= step;
 	    else
 		break;

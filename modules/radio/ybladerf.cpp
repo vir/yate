@@ -1662,18 +1662,10 @@ public:
 	{ return setPhaseCal(true,val,port); }
     virtual unsigned int setRxPhaseCal(unsigned val, unsigned port)
 	{ return setPhaseCal(true,val,port); }
-    virtual unsigned int getTxTime(uint64_t& time) const {
-	    // Not tested
-	    //return m_dev->getTimestamp(true,time);
-	    time = 0;
-	    return 0;
-	}
-    virtual unsigned int getRxTime(uint64_t& time) const {
-	    // Not tested
-	    //return m_dev->getTimestamp(false,time);
-	    time = 0;
-	    return 0;
-	}
+    virtual unsigned int getTxTime(uint64_t& time) const
+	{ return m_dev->getTimestamp(true,time); }
+    virtual unsigned int getRxTime(uint64_t& time) const
+	{ return m_dev->getTimestamp(false,time); }
     virtual unsigned int getTime(uint64_t& time) const
 	{ return NotSupported; }
     virtual unsigned int setTxPower(const unsigned dBm)

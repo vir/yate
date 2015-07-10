@@ -4542,6 +4542,16 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
 	hl = message->getHeader("User-Agent");
 	if (hl)
 	    m.addParam("device",*hl);
+	for (const ObjList* l = message->header.skipNull(); l; l = l->skipNext()) {
+	    hl = static_cast<const MimeHeaderLine*>(l->get());
+	    String name(hl->name());
+	    name.toLower();
+	    if (!name.startsWith("security-"))
+		continue;
+	    String tmp;
+	    hl->buildLine(tmp,false);
+	    m.addParam("sip_" + name,tmp);
+	}
     }
 
     if (params) {

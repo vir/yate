@@ -3602,7 +3602,7 @@ unsigned int BrfLibUsbDevice::updateFpga(const NamedList& params)
 	String fName;
 	if (val == YSTRING("115") || val == YSTRING("40"))
 	    fName = params.getValue("fpga_file_" + val,
-		"${modulepath}/server/bts/hostedx" + val + ".rbf");
+		"${sharedpath}/data/hostedx" + val + ".rbf");
 	else {
 	    e << "Unknown FPGA size value '" << val << "'";
 	    status = RadioInterface::Failure;

@@ -5,7 +5,8 @@
 DESTDIR :=
 
 DATA := snmp_mib.conf \
-	NULL-TEAM-MIB.txt YATE-MIB.txt
+	NULL-TEAM-MIB.txt YATE-MIB.txt \
+	hostedx115.rbf hostedx40.rbf
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@

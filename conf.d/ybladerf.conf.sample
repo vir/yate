@@ -15,10 +15,10 @@
 ;fpga_load=yes
 
 ; fpga_file_115: string: 115KLE FPGA file to load
-;fpga_file_115=${modulepath}/server/bts/hostedx115.rbf
+;fpga_file_115=${sharedpath}/data/hostedx115.rbf
 
 ; fpga_file_40: string: 40KLE FPGA file to load
-;fpga_file_40=${modulepath}/server/bts/hostedx40.rbf
+;fpga_file_40=${sharedpath}/data/hostedx40.rbf
 
 ; tx_fpga_corr_phase: integer: TX FPGA PHASE correction
 ; Interval allowed: [-4096..4096]

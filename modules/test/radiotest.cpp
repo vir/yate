@@ -22,6 +22,7 @@
 
 #include <yatephone.h>
 #include <yateradio.h>
+#include <math.h>
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -54,6 +55,7 @@ protected:
     virtual void run();
     void terminated();
     bool setTxData();
+    void regenerateTxData();
     bool execute(const String& cmd, const String& param, bool fatal,
 	const NamedList* params);
     bool execute(const NamedList& cmds, const char* prefix);
@@ -64,6 +66,8 @@ protected:
 	    if ((tx ? m_radio->getTxTime(ts) : m_radio->getRxTime(ts)) == 0)
 		(tx ? m_tx.ts : m_rx.ts) = ts;
 	}
+    inline float* sendBuf()
+	{ return (float*)m_sendBufData.data(0); }
 
     RadioInterface* m_radio;
     bool m_started;
@@ -72,6 +76,8 @@ protected:
     NamedList m_radioParams;
     // TX
     RadioTestIO m_tx;
+    bool m_newTxData;
+    unsigned int m_phase;
     unsigned int m_sendBufCount;
     DataBlock m_sendBufData;
     unsigned int m_sendBufSamples;
@@ -104,10 +110,11 @@ INIT_PLUGIN(RadioTestModule);
 static RadioTest* s_test = 0;
 static Mutex s_testMutex(false,"RadioTest");
 
-static const char* encloseDashes(String& s, bool extra = false)
+static inline const char* encloseDashes(String& s, bool extra = false)
 {
     static const String s1 = "\r\n-----";
-    s = s1 + (extra ? "\r\n" : "") + s + s1;
+    if (s)
+	s = s1 + (extra ? "\r\n" : "") + s + s1;
     return s.safe();
 }
 
@@ -191,6 +198,8 @@ RadioTest::RadioTest(const NamedList& params, const NamedList& radioParams)
     m_params(params),
     m_radioParams(radioParams),
     m_tx(true),
+    m_newTxData(false),
+    m_phase(0),
     m_sendBufCount(0),
     m_sendBufSamples(0),
     m_rx(false),
@@ -228,7 +237,7 @@ void RadioTest::run()
 	m_tx.enabled = true;
 	if (!setTxData())
 	    break;
-	m_rx.enabled = !m_params.getBoolValue("sendonly");
+	m_rx.enabled = false;//!m_params.getBoolValue("sendonly");
 	if (m_rx.enabled) {
 	    unsigned int n = m_params.getIntValue("readsamples",256,1);
 	    m_bufs.reset(n,0);
@@ -306,6 +315,9 @@ void RadioTest::terminated()
 bool RadioTest::setTxData()
 {
     const String& pattern = m_params["txdata"];
+    bool dataRepeat = true;
+    bool dataDump = true;
+    m_newTxData = false;
     if (pattern) {
 	if (pattern == "single-tone" || pattern == "circle") {
 	    float tmp[] = {1,0,0,1,-1,0,0,-1};
@@ -315,6 +327,15 @@ bool RadioTest::setTxData()
 	else if (pattern == "zero") {
 	    float tmp[] = {0,0};
 	    m_sendBufData.assign(tmp,sizeof(tmp));
+	    m_init.addParam("txpattern",pattern);
+	}
+	else if (pattern == "two-circles") {
+	    unsigned int samples = m_params.getIntValue("txdata_length",819,50);
+	    m_sendBufData.assign(0,samplesf2bytes(samples));
+	    m_newTxData = true;
+	    m_phase = 0;
+	    dataRepeat = false;
+	    dataDump = false;
 	    m_init.addParam("txpattern",pattern);
 	}
 	else {
@@ -329,17 +350,37 @@ bool RadioTest::setTxData()
 	Debug(this,DebugConf,"Missing tx data pattern [%p]",this);
 	return false;
     }
-    String tmp;
-    m_init.addParam("txdata",appendComplex(tmp,m_sendBufData));
-    int n = m_params.getIntValue("txdata_repeat");
-    if (n > 0) {
-	DataBlock tmp = m_sendBufData;
-	while (n--)
-	    m_sendBufData += tmp;
+    if (dataDump) {
+	String tmp;
+	m_init.addParam("txdata",appendComplex(tmp,m_sendBufData));
+    }
+    if (dataRepeat) {
+	int n = m_params.getIntValue("txdata_repeat");
+	if (n > 0) {
+	    DataBlock tmp = m_sendBufData;
+	    while (n--)
+		m_sendBufData += tmp;
+	}
     }
     m_sendBufSamples = bytes2samplesf(m_sendBufData.length());
     m_init.addParam("send-samples",String(m_sendBufSamples));
     return true;
+}
+
+void RadioTest::regenerateTxData()
+{
+    // Fs / 4 data
+    static const float s_cs4[4] = {1,0,-1,0};
+    // Fs / 8 data
+    static const float s_r2 = M_SQRT1_2;
+    static const float s_cs8[8] = {1,s_r2,0,-s_r2,-1,-s_r2,0,s_r2};
+
+    float* ip = sendBuf();
+    for (unsigned int i = 0; i < m_sendBufSamples; i++) {
+	*ip++ = 0.5 * (s_cs4[m_phase % 4] + s_cs8[m_phase % 8]);
+	*ip++ = -0.5 * (s_cs4[(m_phase + 1) % 4] + s_cs8[(m_phase + 2) % 8]);
+	m_phase++;
+    }
 }
 
 bool RadioTest::execute(const String& cmd, const String& param, bool fatal,
@@ -384,10 +425,11 @@ bool RadioTest::write()
 {
     if (!m_tx.startTime)
 	m_tx.startTime = Time::now();
+    if (m_newTxData)
+	regenerateTxData();
     if (!m_tx.ts)
 	updateTs(true);
-    unsigned int code = m_radio->send(m_tx.ts,(float*)m_sendBufData.data(),
-	m_sendBufSamples);
+    unsigned int code = m_radio->send(m_tx.ts,sendBuf(),m_sendBufSamples);
     if (!code) {
 	m_tx.ts += m_sendBufSamples;
 	m_tx.transferred += m_sendBufSamples;

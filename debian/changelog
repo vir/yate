@@ -1,4 +1,4 @@
-yate (5.5.1~svn5995) UNRELEASED; urgency=low
+yate (5.5.1~svn5997) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1399,8 +1399,10 @@ yate (5.5.1~svn5995) UNRELEASED; urgency=low
     to user.auth message.  + Added bladerf fpga files. Changed fpga load
     default path.  + Fixed statistics reporting.  + Only install bladeRF
     FPGA files if we could build the module.
+  * Updated to SVN revision 5997: + Added 2 circles send pattern to
+    radio test.  + Work in progress on fixing calibration.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 11 Jul 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 14 Jul 2015 02:19:10 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

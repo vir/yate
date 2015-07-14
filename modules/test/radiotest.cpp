@@ -104,6 +104,7 @@ protected:
     bool onCmdControl(Message& msg);
     bool test(const String& cmd = String::empty(),
 	const NamedList& params = NamedList::empty());
+    void processRadioDataFile(NamedList& params);
 };
 
 INIT_PLUGIN(RadioTestModule);
@@ -128,6 +129,42 @@ static inline unsigned int bytes2samplesf(unsigned int len)
     return len / (2 * sizeof(float));
 }
 
+static String& dumpSamplesFloat(String& s, const DataBlock& buf,
+    const char* fmt4, const char* fmt, const char* sep, unsigned int maxDump = 0)
+{
+    unsigned int samples = buf.length() / (2 * sizeof(float));
+    const float* f = (const float*)buf.data();
+    if (!(f && samples))
+	return s;
+    if (maxDump && maxDump < samples)
+	samples = maxDump;
+    String tmp;
+    unsigned int a = samples / 4;
+    for (; a; a--, f += 8)
+	s.append(tmp.printf(512,fmt4,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7]),sep);
+    for (a = samples % 4; a; a--, f += 2)
+	s.append(tmp.printf(fmt,f[0],f[1]),sep);
+    return s;
+}
+
+static String& dumpSamplesInt16(String& s, const DataBlock& buf,
+    const char* fmt4, const char* fmt, const char* sep, unsigned int maxDump = 0)
+{
+    unsigned int samples = buf.length() / (2 * sizeof(int16_t));
+    const int16_t* f = (const int16_t*)buf.data();
+    if (!(f && samples))
+	return s;
+    if (maxDump && maxDump < samples)
+	samples = maxDump;
+    String tmp;
+    unsigned int a = samples / 4;
+    for (; a; a--, f += 8)
+	s.append(tmp.printf(512,fmt4,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7]),sep);
+    for (a = samples % 4; a; a--, f += 2)
+	s.append(tmp.printf(fmt,f[0],f[1]),sep);
+    return s;
+}
+
 static String& appendComplex(String& s, const float* f, unsigned int n, bool fmfG = true)
 {
     static const char* s_fmtf1 = "(%.3f,%.3f) (%.3f,%.3f) (%.3f,%.3f) (%.3f,%.3f)";
@@ -137,24 +174,10 @@ static String& appendComplex(String& s, const float* f, unsigned int n, bool fmf
 
     const char* fmt1 = fmfG ? s_fmtg1 : s_fmtf1;
     const char* fmt2 = fmfG ? s_fmtg2 : s_fmtf2;
-    n /= 2;
-    if (!(f && n))
-	return s;
-    String tmp;
-    String tmp2;
-    unsigned int a = n / 4;
-    while (a--) {
-	tmp2.printf(512,fmt1,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7]);
-	f += 8;
-	tmp.append(tmp2," ");
-    }
-    a = n % 4;
-    while (a--) {
-	tmp2.printf(fmt2,f[0],f[1]);
-	f += 2;
-	tmp.append(tmp2," ");
-    }
-    return s.append(tmp);
+    DataBlock tmp((void*)f,n * sizeof(float),false);
+    dumpSamplesFloat(s,tmp,fmt1,fmt2," ");
+    tmp.clear(false);
+    return s;
 }
 
 static inline String& appendComplex(String& s, const DataBlock& buf)
@@ -503,6 +526,8 @@ bool RadioTestModule::commandComplete(Message& msg, const String& partLine,
 	itemComplete(msg.retValue(),"start",partWord);
 	itemComplete(msg.retValue(),"exec",partWord);
 	itemComplete(msg.retValue(),"stop",partWord);
+	itemComplete(msg.retValue(),"radiodatafile",partWord);
+	itemComplete(msg.retValue(),"help",partWord);
 	return false;
     }
     return Module::commandComplete(msg,partLine,partWord);
@@ -511,14 +536,20 @@ bool RadioTestModule::commandComplete(Message& msg, const String& partLine,
 bool RadioTestModule::onCmdControl(Message& msg)
 {
     static const char* s_help =
-	"\r\ncontrol module_name {start|stop|exec}"
+	"\r\ncontrol module_name {start [name=conf_sect_name]|stop|exec}"
 	"\r\n  Test commands"
+	"\r\ncontrol module_name radiodatafile [sect=conf_sect_name]"
+	"\r\n  Read radio data file. Process it according to given section parameters."
 	"\r\ncontrol module_name help"
 	"\r\n  Display control commands help";
 
     const String& cmd = msg[YSTRING("operation")];
     if (cmd == YSTRING("help")) {
 	msg.retValue() << s_help;
+	return true;
+    }
+    if (cmd == YSTRING("radiodatafile")) {
+	processRadioDataFile(msg);
 	return true;
     }
     return test(cmd,msg);
@@ -575,6 +606,129 @@ bool RadioTestModule::test(const String& cmd, const NamedList& list)
 	Debug(this,DebugInfo,"Test is not running");
     s_exec = false;
     return true;
+}
+
+void RadioTestModule::processRadioDataFile(NamedList& params)
+{
+    Configuration cfg(Engine::configFile(name()));
+    const char* s = params.getValue("sect","radiodatafile");
+    NamedList* p = cfg.getSection(s);
+    if (!p) {
+	Debug(this,DebugNote,
+	    "Can't handle radio data file process: no section '%s' in config",s);
+	return;
+    }
+    const char* file = p->getValue("file");
+    if (!file) {
+	Debug(this,DebugNote,"Radio data file process sect='%s': missing file",s);
+	return;
+    }
+    RadioDataFile d("RadioTest");
+    if (!d.open(file,0,this))
+	return;
+    const RadioDataDesc& desc = d.desc();
+    String error;
+#define RADIO_FILE_ERROR(what,value) { \
+    error << what << " " << value; \
+    break; \
+}
+    while (true) {
+	if (desc.m_signature[2])
+	    RADIO_FILE_ERROR("unhandled version",desc.m_signature[2]);
+	if (desc.m_sampleLen != 2)
+	    RADIO_FILE_ERROR("unhandled sample length",desc.m_sampleLen);
+	if (desc.m_ports != 1)
+	    RADIO_FILE_ERROR("unhandled ports",desc.m_ports);
+	const char* fmt = 0;
+	const char* sep = " ";
+	unsigned int sz = 0;
+	switch (desc.m_elementType) {
+	    case RadioDataDesc::Float:
+		fmt = p->getValue(YSTRING("fmt-float"),"%+g%+gj");
+		sz = sizeof(float);
+		break;
+	    case RadioDataDesc::Int16:
+		fmt = p->getValue(YSTRING("fmt-int"),"%+d%+dj");
+		sz = sizeof(int16_t);
+		break;
+	    default:
+		RADIO_FILE_ERROR("unhandled element type",desc.m_elementType);
+	}
+	if (error)
+	    break;
+	File fOut;
+	const String& output = (*p)[YSTRING("output")];
+	if (output && !fOut.openPath(output,true,false,true,false,false,true)) {
+	    String tmp;
+	    Thread::errorString(tmp,fOut.error());
+	    error.printf("Failed to open output file '%s' - %d %s",
+		output.c_str(),fOut.error(),tmp.c_str());
+	    break;
+	}
+	Debug(this,DebugAll,"Processing radio data file '%s'",file);
+	uint64_t ts = 0;
+	DataBlock buf;
+	unsigned int n = 0;
+	String fmt4;
+	for (unsigned int i = 0; i < 4; i++)
+	    fmt4.append(fmt,sep);
+	bool dumpData = fOut.valid() ? true : p->getBoolValue(YSTRING("dumpdata"),true);
+	unsigned int dumpMax = p->getIntValue(YSTRING("dumpmax"),0,0);
+	uint64_t oldTs = 0;
+	bool first = true;
+	while (!Thread::check(false) && d.read(ts,buf,this) && buf.length()) {
+	    n++;
+	    if ((buf.length() % sz) != 0) {
+		error.printf("record=%u len=%u - length is not a multiple of element size",
+		    n,buf.length());
+		break;
+	    }
+	    String str;
+	    if (dumpData) {
+		if (!d.sameEndian() && !d.fixEndian(buf,sz))
+		    RADIO_FILE_ERROR("unhandled endiannes for element type",desc.m_elementType);
+		switch (desc.m_elementType) {
+		    case RadioDataDesc::Float:
+			dumpSamplesFloat(str,buf,fmt4,fmt,sep,dumpMax);
+			break;
+		    case RadioDataDesc::Int16:
+			dumpSamplesInt16(str,buf,fmt4,fmt,sep,dumpMax);
+			break;
+		    default:
+			RADIO_FILE_ERROR("unhandled element type",desc.m_elementType);
+		}
+		if (error)
+		    break;
+	    }
+	    if (fOut.valid()) {
+		if (str) {
+		    str += sep;
+		    int wr = fOut.writeData(str.c_str(),str.length());
+		    if (wr != (int)str.length()) {
+			String tmp;
+			Thread::errorString(tmp,fOut.error());
+			error.printf("Failed to write (%d/%u) output file '%s' - %d %s",
+			    wr,str.length(),output.c_str(),fOut.error(),tmp.c_str());
+			break;
+		    }
+		}
+		continue;
+	    }
+	    int64_t delta = 0;
+	    if (first)
+		first = false;
+	    else
+		delta = ts - oldTs;
+	    oldTs = ts;
+	    Output("%u: TS=" FMT64U " bytes=%u samples=%u delta=" FMT64 "%s",
+		n,ts,buf.length(),buf.length() / sz,delta,encloseDashes(str,true));
+	    buf.clear();
+	}
+	break;
+    }
+#undef RADIO_FILE_ERROR
+    if (error)
+	Debug(this,DebugNote,"Processing radio data file '%s': %s",file,error.c_str());
 }
 
 }; // anonymous namespace

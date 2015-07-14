@@ -51,6 +51,49 @@
 ;bulk_transfer_timeout=500
 
 
+[filedump]
+; This section configures file data dump
+; All parameters are applied on reload
+; NOTE: Dump files are closed when the condition is met
+;       (count changes to 0 or reaches 0 after set to positive numbers)
+; A subsequent re-initialize will re-write the dump file
+
+; tx-data-count: integer: Enable or disable device send data dump (before sending it to device)
+; The number of buffers is in device buffers
+; Values:
+;  0: Disable
+;  negative: Dump until stopped
+;  positive: The number of buffers to dump
+; Defaults to 0
+;tx-data-count=0
+
+; tx-data-file: string: File to dump data sent to device
+; 'bordserial' is the serial of the device
+;tx-data-file=tx-data-${boardserial}
+
+; tx-app-count: integer: Enable or disable dump of data received from upper layer
+;  (data is dumped as received, before any changes are made)
+; The number of buffers is in send requests (e.g. a buffer will be counted on each request)
+; Values:
+;  0: Disable
+;  negative: Dump until stopped
+;  positive: The number of buffers to dump
+; Defaults to 0
+;tx-app-count=0
+
+; tx-app-file: string: File to dump data received from upper layer
+; 'bordserial' is the serial of the device
+;tx-app-file=tx-app-${boardserial}
+
+; rx-data-count
+; rx-data-file
+; rx-app-count
+; rx-app-file
+; See the corresponding TX parameters
+; rx-data-file: The data is dumped after read from device, before applying any changes
+; rx-app-file: The data is dumped before returning it to upper layer
+
+
 [test_name]
 ; This section configures a test
 ; There may be more than one test section

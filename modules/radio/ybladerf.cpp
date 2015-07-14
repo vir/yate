@@ -679,6 +679,8 @@ public:
 	timestamp(0), lastTs(0), buffers(0), hdrLen(0), bufSamples(0),
 	bufSamplesLen(0), crtBuf(0), crtBufSampOffs(0),
 	syncFlags(0), syncTs(0), syncStatus(tx),
+	dataDumpParams(""), dataDump(0), dataDumpFile(brfDir(tx)),
+	upDumpParams(""), upDump(0), upDumpFile(String(brfDir(tx)) + "-APP"),
 #ifdef LITTLE_ENDIAN
 	m_bufEndianOk(true)
 #else
@@ -801,6 +803,14 @@ public:
     unsigned int syncFlags;
     uint64_t syncTs;
     BrfDevStatus syncStatus;
+    // File dump
+    NamedList dataDumpParams;
+    int dataDump;
+    RadioDataFile dataDumpFile;
+    NamedList upDumpParams;
+    int upDump;
+    RadioDataFile upDumpFile;
+
 protected:
     // Reset current buffer to start
     inline void setCrtBuf(unsigned int index = 0) {
@@ -988,6 +998,8 @@ public:
 	bool fromStatus = false, bool withHdr = true);
     void dumpBoardStatus(String& buf, const char* sep);
     unsigned int dumpPeripheral(uint8_t dev, uint8_t addr, uint8_t len, String* buf = 0);
+    // Module reload
+    void reLoad();
     // Initialize the device.
     // Call the reset method in order to set the device to a known state
     bool open(const NamedList& params);
@@ -1467,6 +1479,8 @@ private:
     unsigned int showError(unsigned int code, const char* error, const char* prefix,
 	String* buf, int level = DebugNote);
     void printIOBuffer(bool tx, const char* loc, int index = -1, unsigned int nBufs = 0);
+    void dumpIOBuffer(BrfDevIO& io, unsigned int nBufs);
+    void updateIODump(BrfDevIO& io);
     inline BrfDevIO& getIO(bool tx)
 	{ return tx ? m_txIO : m_rxIO; }
     inline unsigned int checkDbgInt(int& val, unsigned int step = 1) {
@@ -1633,6 +1647,11 @@ public:
 	{ return m_dev; }
     inline bool isDevice(void* dev) const
 	{ return m_dev && m_dev == (BrfLibUsbDevice*)dev; }
+    // Module reload
+    inline void reLoad() {
+	    if (m_dev)
+		m_dev->reLoad();
+	}
     virtual unsigned int initialize(const NamedList& params = NamedList::empty());
     virtual unsigned int setParams(NamedList& params, bool shareFate = true);
     virtual unsigned int send(uint64_t when, float* samples, unsigned size,
@@ -2474,6 +2493,45 @@ unsigned int BrfLibUsbDevice::dumpPeripheral(uint8_t dev, uint8_t addr, uint8_t 
     return internalDumpPeripheral(dev,addr,len,buf,16);
 }
 
+// Utility used in reload
+static inline void updateDump(NamedList& lst, const char* file, unsigned int n)
+{
+    lst.clearParams();
+    if (file) {
+	lst.addParam("file",file);
+	lst.addParam("count",String(n));
+    }
+    // Signal change
+    lst.assign("1");
+}
+
+// Module reload
+void BrfLibUsbDevice::reLoad()
+{
+    NamedList p("filedump");
+    loadCfg(false,&p);
+    Lock lck(m_dbgMutex);
+    // Update dump
+    static const String prefix[] = {"tx-data","tx-app","rx-data","rx-app"};
+    for (unsigned int i = 0; i < 4; i++) {
+	int n = p.getIntValue(prefix[i] + "-count",0);
+	String file;
+	if (n) {
+	    file = p[prefix[i] + "-file"];
+	    if (!file)
+		file = prefix[i] + "-${boardserial}";
+	}
+	if (i == 0)
+	    updateDump(m_txIO.dataDumpParams,file,n);
+	else if (i == 1)
+	    updateDump(m_txIO.upDumpParams,file,n);
+	else if (i == 2)
+	    updateDump(m_rxIO.dataDumpParams,file,n);
+	else
+	    updateDump(m_rxIO.upDumpParams,file,n);
+    }
+}
+
 // Initialize the device.
 // Call the reset method in order to set the device to a known state
 bool BrfLibUsbDevice::open(const NamedList& params)
@@ -2548,18 +2606,20 @@ bool BrfLibUsbDevice::open(const NamedList& params)
 	checkTs(false,params.getIntValue("rxcheckts",0));
 	break;
     }
-    if (status == 0) {
-	updateAlterData(params);
-	String s;
-	internalDumpDev(s,true,false,"\r\n",true);
-	Debug(m_owner,DebugAll,"Opened device [%p]%s",m_owner,encloseDashes(s,true));
-    }
-    else {
+    if (status) {
 	Debug(m_owner,DebugWarn,"Failed to open USB device: %s [%p]",
 	    e.safe("Unknown error"),m_owner);
 	doClose();
+	return false;
     }
-    return status == 0;
+    updateAlterData(params);
+    String s;
+    internalDumpDev(s,true,false,"\r\n",true);
+    Debug(m_owner,DebugAll,"Opened device [%p]%s",m_owner,encloseDashes(s,true));
+    txSerialize.drop();
+    rxSerialize.drop();
+    reLoad();
+    return true;
 }
 
 // Close the device
@@ -3229,6 +3289,8 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
     BrfDevIO& io = m_txIO;
     if (!io.startTime)
 	io.startTime = Time::now();
+    if (io.dataDumpParams || io.upDumpParams)
+	updateIODump(io);
     if (!(data && samples))
 	return 0;
 #ifdef DEBUG_DEVICE_TX
@@ -3236,6 +3298,9 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	" %s: ts=" FMT64U " (expected=" FMT64U ") samples=%u [%p]",
 	m_owner->debugName(),ts,io.timestamp,samples,m_owner);
 #endif
+    if (io.upDumpFile.valid() && !(checkDbgInt(io.upDump) &&
+	io.upDumpFile.write(ts,data,samplesf2bytes(samples),owner())))
+	io.upDumpFile.terminate(owner());
     // Check timestamp
     if (io.timestamp != ts) {
 	if (io.timestamp) {
@@ -3329,6 +3394,8 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	unsigned int nPrint = checkDbgInt(io.showBuf,nBuf);
 	if (nPrint)
 	    printIOBuffer(true,"SEND",-1,nPrint);
+	if (io.dataDumpFile.valid())
+	    dumpIOBuffer(io,nBuf);
 	status = syncTransfer(EpSendSamples,io.bufStart(0),io.bufLen * nBuf,&e);
 	// Reset buffer to start
 	io.resetBufPos();
@@ -3407,6 +3474,8 @@ unsigned int BrfLibUsbDevice::recv(uint64_t& ts, float* data, unsigned int& samp
     BrfDevIO& io = m_rxIO;
     if (!io.startTime)
 	io.startTime = Time::now();
+    if (io.dataDumpParams || io.upDumpParams)
+	updateIODump(io);
     if (!(data && samples))
 	return 0;
 #ifdef DEBUG_DEVICE_RX
@@ -3509,6 +3578,8 @@ unsigned int BrfLibUsbDevice::recv(uint64_t& ts, float* data, unsigned int& samp
 	status = syncTransfer(EpReadSamples,io.bufStart(0),io.buffer.length(),&e);
 	if (status)
 	    break;
+	if (io.dataDumpFile.valid())
+	    dumpIOBuffer(io,io.buffers);
 	io.transferred += io.buffers * io.bufSamples;
 	io.fixEndian();
 	unsigned int nPrint = checkDbgInt(io.showBuf,io.buffers);
@@ -3527,8 +3598,12 @@ unsigned int BrfLibUsbDevice::recv(uint64_t& ts, float* data, unsigned int& samp
 	"BrfLibUsbDevice::recv() exiting status=%u ts=" FMT64U " samples=%u [%p]",
 	status,ts,samples,m_owner);
 #endif
-    if (status == 0)
+    if (status == 0) {
 	m_rxIO.timestamp = ts;
+	if (io.upDumpFile.valid() && !(checkDbgInt(io.upDump) &&
+	    io.upDumpFile.write(ts,data,samplesf2bytes(samples),owner())))
+	    io.upDumpFile.terminate(owner());
+    }
     else if (status != RadioInterface::Cancelled)
 	Debug(m_owner,DebugNote,"Recv failed: %s [%p]",e.c_str(),m_owner);
     return status;
@@ -3986,15 +4061,11 @@ unsigned int BrfLibUsbDevice::internalSetTxIQBalance(bool newGain, float newBala
     float oldI = m_txPowerScaleI;
     float oldQ = m_txPowerScaleQ;
     // Update TX power scale
-    float tmp = ::powf(10.0,0.1 * getIO(true).vga2);
-    tmp = tmp < 1.0 ? 1.0 : (1.0 / ::sqrt(tmp));
-    m_txPowerScaleI = m_txPowerScaleQ = 1;//tmp;
+    m_txPowerScaleI = m_txPowerScaleQ = 1;
     if (m_txPowerBalance > 1)
 	m_txPowerScaleQ /= m_txPowerBalance;
     else if (m_txPowerBalance < 1)
 	m_txPowerScaleI *= m_txPowerBalance;
-    else
-	m_txPowerScaleI = m_txPowerScaleQ = 1;
     if (oldI == m_txPowerScaleI && oldQ == m_txPowerScaleQ)
 	return 0;
     if (dbg)
@@ -5125,6 +5196,10 @@ void BrfLibUsbDevice::closeDevice()
     m_devFpgaVerStr.clear();
     m_devFpgaFile.clear();
     m_devFpgaMD5.clear();
+    m_txIO.dataDumpFile.terminate(owner());
+    m_txIO.upDumpFile.terminate(owner());
+    m_rxIO.dataDumpFile.terminate(owner());
+    m_rxIO.upDumpFile.terminate(owner());
     Debug(m_owner,DebugAll,"Device closed [%p]",m_owner);
 }
 
@@ -6007,7 +6082,7 @@ unsigned int BrfLibUsbDevice::calibrateBBTxPhase(int& corr, String* error)
 
 unsigned int BrfLibUsbDevice::calibrateBBTxGain(float& corr, String* error)
 {
-#define BRF_BB_GAIN_TRACE
+//#define BRF_BB_GAIN_TRACE
     BrfDuration duration;
     const char* oper = "Baseband TX GAIN calibration";
     calibrateBBStarting(oper);
@@ -6288,6 +6363,56 @@ void BrfLibUsbDevice::printIOBuffer(bool tx, const char* loc, int index, unsigne
 	Output("%s: %s [%s] buffer %u TS=" FMT64U " [%p]%s",
 	    m_owner->debugName(),brfDir(tx),loc,i,io.bufTs(i),m_owner,
 	    encloseDashes(s,true));
+    }
+}
+
+void BrfLibUsbDevice::dumpIOBuffer(BrfDevIO& io, unsigned int nBufs)
+{
+    nBufs = checkDbgInt(io.dataDump,nBufs);
+    for (unsigned int i = 0; i < nBufs; i++)
+	if (!io.dataDumpFile.write(io.bufTs(i),io.samples(i),io.bufSamplesLen,owner()))
+	    nBufs = 0;
+    if (!nBufs)
+	io.dataDumpFile.terminate(owner());
+}
+
+void BrfLibUsbDevice::updateIODump(BrfDevIO& io)
+{
+    Lock lck(m_dbgMutex);
+    NamedList lst[2] = {io.dataDumpParams,io.upDumpParams};
+    io.dataDumpParams.assign("");
+    io.dataDumpParams.clearParams();
+    io.upDumpParams.assign("");
+    io.upDumpParams.clearParams();
+    lck.drop();
+    NamedList p(Engine::runParams());
+    p.addParam("boardserial",serial());
+    for (uint8_t i = 0; i < 2; i++) {
+	NamedList& nl = lst[i];
+	if (!nl)
+	    continue;
+	RadioDataFile& f = i ? io.upDumpFile : io.dataDumpFile;
+	int& dump = i ? io.upDump : io.dataDump;
+	f.terminate(owner());
+	dump = 0;
+	int n = 0;
+	String file = nl[YSTRING("file")];
+	if (file) {
+	    n = nl.getIntValue(YSTRING("count"),-1);
+	    if (!n)
+		file = 0;
+	}
+	if (file)
+	    p.replaceParams(file);
+	if (!file)
+	    continue;
+	RadioDataDesc d;
+	if (!i) {
+	    d.m_elementType = RadioDataDesc::Int16;
+	    d.m_littleEndian = true;
+	}
+	if (f.open(file,&d,owner()))
+	    dump = n;
     }
 }
 
@@ -6970,6 +7095,21 @@ void BrfModule::initialize()
 	LUSB_BULK_TIMEOUT,200,2000);
     setDebugPeripheral(gen);
     setSampleEnergize(gen[YSTRING("sampleenergize")]);
+    // Reload interfaces
+    lock();
+    if (m_ifaces.skipNull()) {
+	ListIterator iter(m_ifaces);
+	for (GenObject* gen = 0; (gen = iter.get()) != 0; ) {
+	    RefPointer<BrfInterface> iface = static_cast<BrfInterface*>(gen);
+	    if (!iface)
+		continue;
+	    unlock();
+	    iface->reLoad();
+	    iface = 0;
+	    lock();
+	}
+    }
+    unlock();
 }
 
 bool BrfModule::received(Message& msg, int id)

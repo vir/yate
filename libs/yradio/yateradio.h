@@ -1103,6 +1103,164 @@ private:
     String m_name;
 };
 
+
+/**
+ * @short Radio data file header
+ * This class describes records in radio data files
+ */
+class YRADIO_API RadioDataDesc
+{
+public:
+    /**
+     * Samples data type
+     */
+    enum ElementType {
+	Float = 0,
+	Int16 = 1,
+    };
+
+    /**
+     * Timestamp type
+     */
+    enum TsType {
+	TsApp = 0,                       // Application level timestamp
+	TsBoard = 1,                     // Board (device) level timestamp
+    };
+
+    /**
+     * Constructor
+     * @param eType Element type
+     * @param tsType Racords timestamp type
+     * @param sLen Sample length in elements
+     * @param ports Number of device ports
+     */
+    inline RadioDataDesc(uint8_t eType = Float, uint8_t tsType = TsApp,
+	uint8_t sLen = 2, uint8_t ports = 1)
+	: m_elementType(eType), m_sampleLen(sLen), m_ports(ports ? ports : 1),
+	m_tsType(tsType),
+#ifdef LITTLE_ENDIAN
+	m_littleEndian(true)
+#else
+	m_littleEndian(false)
+#endif
+	{
+	    m_signature[0] = 'Y';
+	    m_signature[1] = 'R';
+	    m_signature[2] = 0;
+	}
+
+    uint8_t m_signature[3];              // File signature
+    uint8_t m_elementType;               // Element data type
+    uint8_t m_sampleLen;                 // Sample length in elements
+    uint8_t m_ports;                     // The number of ports
+    uint8_t m_tsType;                    // Records timestamp type
+    bool m_littleEndian;                 // Endiannes
+};
+
+
+/**
+ * @short Radio data file helper
+ * This class implements utilities used to read or write radio data to/from file
+ * The String contains object name used for debug
+ */
+class YRADIO_API RadioDataFile : public String
+{
+public:
+    /**
+     * Constructor
+     * @param name Name used for debug
+     * @param dropOnError Terminate on file/data error
+     */
+    RadioDataFile(const char* name, bool dropOnError = true);
+
+    /**
+     * Destructor
+     */
+    virtual ~RadioDataFile();
+
+    /**
+     * Retrieve data description
+     * @return Data description object
+     */
+    inline const RadioDataDesc& desc() const
+	{ return m_header; }
+
+    /**
+     * Check if enabled
+     * @return True if enabled, false otherwise
+     */
+    inline bool valid() const
+	{ return m_file.valid(); }
+
+    /**
+     * Check if machine endiannes is the same as file endiannes
+     * @return True if they are the same
+     */
+    inline bool sameEndian() const
+	{ return m_littleEndian == m_header.m_littleEndian; }
+
+    /**
+     * Open a file for read/write. Terminate current data dump if any.
+     * Write or read the file header
+     * @param fileName File to open
+     * @param data Data description. Pass a NULL pointer for read or valid data for write
+     * @param dbg Optional DebugEnabler pointer (show debug on failure)
+     * @param error Optional destination for file operation error code
+     * @return True on success, false on failure (read: error set to 0 means
+     *  invalid file size, write: error set to 0 means invalid header)
+     */
+    bool open(const char* fileName, const RadioDataDesc* data,
+	DebugEnabler* dbg = 0, int* error = 0);
+
+    /**
+     * Write a record to file
+     * @param ts Record timestamp
+     * @param buf Buffer to write
+     * @param len Buffer length in bytes
+     * @param dbg Optional DebugEnabler pointer (show debug on failure)
+     * @param error Optional destination for file operation error code
+     * @return True on success, false on failure (error set to 0 means invalid length)
+     */
+    bool write(uint64_t ts, const void* buf, uint32_t len, DebugEnabler* dbg = 0,
+	int* error = 0);
+
+    /**
+     * Read a record from file
+     * The method don't check the record length, this must be done by the upper layer
+     * @param ts Record timestamp
+     * @param buffer Destination buffer. It will be resized to read data length
+     * @param dbg Optional DebugEnabler pointer (show debug on failure)
+     * @param error Optional destination for file operation error code
+     * @return True on success (empty buffer means file EOF),
+     *  false on failure (error set to 0 means invalid record size)
+     */
+    bool read(uint64_t& ts, DataBlock& buffer, DebugEnabler* dbg = 0, int* error = 0);
+
+    /**
+     * Terminate data dump, close file
+     * @param dbg Optional DebugEnabler pointer (show terminate message)
+     */
+    void terminate(DebugEnabler* dbg = 0);
+
+    /**
+     * Convert endiannes
+     * @param buf The buffer to convert
+     * @param bytes Element length in bytes
+     * @return True on success, false if not supported
+     */
+    static bool fixEndian(DataBlock& buf, unsigned int bytes);
+
+protected:
+    bool ioError(bool send, DebugEnabler* dbg, int* error, const char* extra);
+
+    bool m_littleEndian;                 // Machine endiannes
+    bool m_dropOnError;                  // Terminate (close file) on error
+    uint32_t m_chunkSize;                // Item size (used to check data validity)
+    RadioDataDesc m_header;              // File header
+    File m_file;                         // File to use
+    DataBlock m_writeBuf;
+};
+
 }; // namespace TelEngine
 
 #endif /* __YATERADIO_H */

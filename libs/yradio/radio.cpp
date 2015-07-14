@@ -282,4 +282,268 @@ const TokenDict* RadioInterface::errorNameDict()
     return s_errorName;
 }
 
+
+//
+// RadioDataFile
+//
+RadioDataFile::RadioDataFile(const char* name, bool dropOnError)
+    : String(name),
+    m_littleEndian(true),
+    m_dropOnError(dropOnError),
+    m_chunkSize(0),
+    m_writeBuf(256)
+{
+    m_littleEndian = m_header.m_littleEndian;
+}
+
+RadioDataFile::~RadioDataFile()
+{
+    terminate();
+}
+
+static inline unsigned int elementSize(const RadioDataDesc& data)
+{
+    switch (data.m_elementType) {
+	case RadioDataDesc::Float:
+	    return sizeof(float);
+	case RadioDataDesc::Int16:
+	    return sizeof(int16_t);
+    }
+    return 0;
+}
+
+// Open a file for read/write. Terminate current data dump if any.
+// For file write: read the file header
+bool RadioDataFile::open(const char* fileName, const RadioDataDesc* data,
+    DebugEnabler* dbg, int* error)
+{
+    terminate(dbg);
+    if (TelEngine::null(fileName))
+	return false;
+    const char* fileOper = 0;
+    String hdrError;
+    while (true) {
+	m_writeBuf.resize(sizeof(m_header));
+	uint8_t* d = m_writeBuf.data(0);
+	// Write
+	if (data) {
+	    fileOper = "write";
+	    if ((elementSize(*data) * data->m_sampleLen * data->m_ports) == 0) {
+		hdrError = "Invalid header data";
+		break;
+	    }
+	    m_header = *data;
+	    if (!m_file.openPath(fileName,true,false,true,false,true,true)) {
+		fileOper = "open";
+		break;
+	    }
+	    ::memcpy(d,m_header.m_signature,sizeof(m_header.m_signature));
+	    d += sizeof(m_header.m_signature);
+	    *d++ = m_header.m_elementType;
+	    *d++ = m_header.m_sampleLen;
+	    *d++ = m_header.m_ports;
+	    *d++ = m_header.m_tsType;
+	    *d++ = m_header.m_littleEndian ? 0 : 1;
+	    int wr = m_file.writeData(m_writeBuf.data(),m_writeBuf.length());
+	    if (wr == (int)m_writeBuf.length())
+		fileOper = 0;
+	    else if (wr >= 0)
+		hdrError = "Incomplete header write";
+	    break;
+	}
+	// Read
+	fileOper = "open";
+	if (!m_file.openPath(fileName))
+	    break;
+	fileOper = "read";
+	int rd = m_file.readData(d,m_writeBuf.length());
+	if (rd == (int)m_writeBuf.length()) {
+	    ::memcpy(m_header.m_signature,d,sizeof(m_header.m_signature));
+	    d += sizeof(m_header.m_signature);
+	    m_header.m_elementType = *d++;
+	    m_header.m_sampleLen = *d++;
+	    m_header.m_ports = *d++;
+	    m_header.m_tsType = *d++;
+	    if (*d == 0 || *d == 1) {
+		m_header.m_littleEndian = (*d == 0);
+		fileOper = 0;
+		break;
+	    }
+	    hdrError = "Invalid endiannes value";
+	}
+	else if (rd >= 0)
+	    hdrError = "Invalid file size";
+	break;
+    }
+    if (!fileOper) {
+	m_chunkSize = elementSize(m_header) * m_header.m_sampleLen * m_header.m_ports;
+	if (dbg)
+	    Debug(dbg,DebugAll,"RadioDataFile[%s] opened file '%s' [%p]",
+		c_str(),fileName,this);
+	return true;
+    }
+    if (error)
+	*error = hdrError ? 0 : m_file.error();
+    if (!hdrError) {
+	hdrError = m_file.error();
+	String tmp;
+	Thread::errorString(tmp,m_file.error());
+	hdrError.append(tmp," - ");
+    }
+    Debug(dbg,DebugNote,"RadioDataFile[%s] file '%s' %s %s failed: %s [%p]",
+	c_str(),fileName,(data ? "OUT" : "IN"),fileOper,hdrError.safe(),this);
+    terminate();
+    return false;
+}
+
+bool RadioDataFile::write(uint64_t ts, const void* buf, uint32_t len,
+    DebugEnabler* dbg, int* error)
+{
+    int e = 0;
+    if (error)
+	*error = 0;
+    else
+	error = &e;
+    if (!(buf && len))
+	return false;
+    if (m_chunkSize && (len % m_chunkSize) != 0)
+	return ioError(true,dbg,0,"Invalid buffer length");
+    m_writeBuf.resize(len + 12);
+    uint8_t* d = m_writeBuf.data(0);
+    if (m_littleEndian == m_header.m_littleEndian) {
+	*(uint32_t*)d = len;
+	*(uint64_t*)(d + 4) = ts;
+    }
+    else if (m_littleEndian) {
+	*(uint32_t*)d = htobe32(len);
+	*(uint64_t*)(d + 4) = htobe64(ts);
+    }
+    else {
+	*(uint32_t*)d = htole32(len);
+	*(uint64_t*)(d + 4) = htole64(ts);
+    }
+    ::memcpy(d + 12,buf,len);
+    int wr = m_file.writeData(m_writeBuf.data(),m_writeBuf.length());
+    if (wr != (int)m_writeBuf.length())
+	return ioError(true,dbg,error,wr >= 0 ? "Incomplete write" : 0);
+#ifdef XDEBUG
+    String sHdr, s;
+    sHdr.hexify(d,12,' ');
+    s.hexify(d + 12,wr - 12,' ');
+    Debug(dbg,DebugAll,"RadioDataFile[%s] wrote %d hdr=%s data=%s [%p]",
+	c_str(),wr,sHdr.c_str(),s.c_str(),this);
+#endif
+    return true;
+}
+
+// Read a record from file
+bool RadioDataFile::read(uint64_t& ts, DataBlock& buffer, DebugEnabler* dbg, int* error)
+{
+    int e = 0;
+    if (error)
+	*error = 0;
+    else
+	error = &e;
+    uint8_t hdr[12];
+    int rd = m_file.readData(hdr,sizeof(hdr));
+    // EOF ?
+    if (rd == 0) {
+	buffer.resize(0);
+	return true;
+    }
+    if (rd != sizeof(hdr))
+	return ioError(false,dbg,error,rd > 0 ? "Incomplete read (invalid size?)" : 0);
+    uint32_t len = 0;
+    uint32_t* u = (uint32_t*)hdr;
+    if (m_littleEndian == m_header.m_littleEndian)
+	len = *u;
+    else if (m_littleEndian)
+	len = be32toh(*u);
+    else
+	len = le32toh(*u);
+    uint64_t* p = (uint64_t*)&hdr[4];
+    if (m_littleEndian == m_header.m_littleEndian)
+	ts = *p;
+    else if (m_littleEndian)
+	len = be64toh(*p);
+    else
+	len = le64toh(*p);
+    buffer.resize(len);
+    if (!len)
+	return ioError(false,dbg,0,"Empty record");
+    rd = m_file.readData((void*)buffer.data(),len);
+    if (rd != (int)len)
+	return ioError(false,dbg,error,rd > 0 ? "Incomplete read (invalid size?)" : 0);
+#ifdef XDEBUG
+    String sHdr, s;
+    sHdr.hexify(hdr,sizeof(hdr),' ');
+    s.hexify((void*)buffer.data(),rd,' ');
+    Debug(dbg,DebugAll,"RadioDataFile[%s] read %d hdr=%s data=%s [%p]",
+	c_str(),rd + (int)sizeof(hdr),sHdr.c_str(),s.c_str(),this);
+#endif
+    return true;
+}
+
+void RadioDataFile::terminate(DebugEnabler* dbg)
+{
+    if (dbg && valid())
+	Debug(dbg,DebugAll,"RadioDataFile[%s] closing file [%p]",c_str(),this);
+    m_file.terminate();
+}
+
+// Convert endiannes
+bool RadioDataFile::fixEndian(DataBlock& buf, unsigned int bytes)
+{
+    if (!bytes)
+	return false;
+    unsigned int n = buf.length() / bytes;
+    if (bytes == 2) {
+	for (uint16_t* p = (uint16_t*)buf.data(); n; n--, p++)
+#ifdef LITTLE_ENDIAN
+	    *p = be16toh(*p);
+#else
+	    *p = le16toh(*p);
+#endif
+	return true;
+    }
+    if (bytes == 4) {
+	for (uint32_t* p = (uint32_t*)buf.data(); n; n--, p++)
+#ifdef LITTLE_ENDIAN
+	    *p = be32toh(*p);
+#else
+	    *p = le32toh(*p);
+#endif
+	return true;
+    }
+    if (bytes == 8) {
+	for (uint64_t* p = (uint64_t*)buf.data(); n; n--, p++)
+#ifdef LITTLE_ENDIAN
+	    *p = be64toh(*p);
+#else
+	    *p = le64toh(*p);
+#endif
+	return true;
+    }
+    return false;
+}
+
+bool RadioDataFile::ioError(bool send, DebugEnabler* dbg, int* error, const char* extra)
+{
+    String s = extra;
+    if (error) {
+	String tmp;
+	Thread::errorString(tmp,m_file.error());
+	tmp.printf("(%d - %s)",m_file.error(),tmp.c_str());
+	s.append(tmp," ");
+    }
+    Debug(dbg,DebugNote,"RadioDataFile[%s] file %s failed: %s [%p]",
+	c_str(),(send ? "write" : "read"),s.safe(),this);
+    if (error) {
+	*error = m_file.error();
+	if (m_dropOnError)
+	    terminate();
+    }
+    return false;
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet enc=utf-8: */

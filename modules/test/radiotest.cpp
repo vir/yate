@@ -618,7 +618,7 @@ void RadioTestModule::processRadioDataFile(NamedList& params)
 	    "Can't handle radio data file process: no section '%s' in config",s);
 	return;
     }
-    const char* file = p->getValue("file");
+    const char* file = p->getValue("input");
     if (!file) {
 	Debug(this,DebugNote,"Radio data file process sect='%s': missing file",s);
 	return;
@@ -640,7 +640,6 @@ void RadioTestModule::processRadioDataFile(NamedList& params)
 	if (desc.m_ports != 1)
 	    RADIO_FILE_ERROR("unhandled ports",desc.m_ports);
 	const char* fmt = 0;
-	const char* sep = " ";
 	unsigned int sz = 0;
 	switch (desc.m_elementType) {
 	    case RadioDataDesc::Float:
@@ -665,6 +664,13 @@ void RadioTestModule::processRadioDataFile(NamedList& params)
 		output.c_str(),fOut.error(),tmp.c_str());
 	    break;
 	}
+	const String* sepParam = p->getParam(YSTRING("separator"));
+	const char* sep = sepParam ? sepParam->c_str() : " ";
+	bool dumpData = fOut.valid() ? true : p->getBoolValue(YSTRING("dumpdata"),true);
+	unsigned int dumpStart = p->getIntValue(YSTRING("recstart"),1,1);
+	unsigned int dumpCount = p->getIntValue(YSTRING("reccount"),0,0);
+	unsigned int dumpMax = p->getIntValue(YSTRING("recsamples"),0,0);
+	const String& recFmt = (*p)[YSTRING("recformat")];
 	Debug(this,DebugAll,"Processing radio data file '%s'",file);
 	uint64_t ts = 0;
 	DataBlock buf;
@@ -672,17 +678,18 @@ void RadioTestModule::processRadioDataFile(NamedList& params)
 	String fmt4;
 	for (unsigned int i = 0; i < 4; i++)
 	    fmt4.append(fmt,sep);
-	bool dumpData = fOut.valid() ? true : p->getBoolValue(YSTRING("dumpdata"),true);
-	unsigned int dumpMax = p->getIntValue(YSTRING("dumpmax"),0,0);
 	uint64_t oldTs = 0;
 	bool first = true;
+	unsigned int sampleBytes = sz * 2;
 	while (!Thread::check(false) && d.read(ts,buf,this) && buf.length()) {
 	    n++;
-	    if ((buf.length() % sz) != 0) {
-		error.printf("record=%u len=%u - length is not a multiple of element size",
+	    if ((buf.length() % sampleBytes) != 0) {
+		error.printf("record=%u len=%u - length is not a multiple of samples",
 		    n,buf.length());
 		break;
 	    }
+	    if (n < dumpStart)
+		continue;
 	    String str;
 	    if (dumpData) {
 		if (!d.sameEndian() && !d.fixEndian(buf,sz))
@@ -700,10 +707,29 @@ void RadioTestModule::processRadioDataFile(NamedList& params)
 		if (error)
 		    break;
 	    }
+	    int64_t delta = 0;
+	    if (first)
+		first = false;
+	    else
+		delta = ts - oldTs;
+	    oldTs = ts;
+	    unsigned int samples = buf.length() / sampleBytes;
 	    if (fOut.valid()) {
 		if (str) {
-		    str += sep;
-		    int wr = fOut.writeData(str.c_str(),str.length());
+		    if (recFmt) {
+			NamedList nl("");
+			nl.addParam("timestamp",String(ts));
+			nl.addParam("data",str);
+			nl.addParam("ts-delta",String(delta));
+			nl.addParam("samples",String(samples));
+			nl.addParam("newline","\r\n");
+			nl.addParam("separator",sep);
+			str = recFmt;
+			nl.replaceParams(str);
+		    }
+		    else
+			str += sep;
+		    int wr = str ? fOut.writeData(str.c_str(),str.length()) : str.length();
 		    if (wr != (int)str.length()) {
 			String tmp;
 			Thread::errorString(tmp,fOut.error());
@@ -712,17 +738,15 @@ void RadioTestModule::processRadioDataFile(NamedList& params)
 			break;
 		    }
 		}
-		continue;
 	    }
-	    int64_t delta = 0;
-	    if (first)
-		first = false;
 	    else
-		delta = ts - oldTs;
-	    oldTs = ts;
-	    Output("%u: TS=" FMT64U " bytes=%u samples=%u delta=" FMT64 "%s",
-		n,ts,buf.length(),buf.length() / sz,delta,encloseDashes(str,true));
-	    buf.clear();
+		Output("%u: TS=" FMT64U " bytes=%u samples=%u delta=" FMT64 "%s",
+		    n,ts,buf.length(),samples,delta,encloseDashes(str,true));
+	    if (dumpCount) {
+		dumpCount--;
+		if (!dumpCount)
+		    break;
+	    }
 	}
 	break;
     }

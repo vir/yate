@@ -54,39 +54,49 @@
 [filedump]
 ; This section configures file data dump
 ; All parameters are applied on reload
-; NOTE: Dump files are closed when the condition is met
-;       (count changes to 0 or reaches 0 after set to positive numbers)
-; A subsequent re-initialize will re-write the dump file
+; This section is always handled on reload (e.g. dump settings are applied, old dump is reset)
+; Dump files are closed when the condition is met (count changes to 0 or reaches 0)
+; TX/RX data dump is done when send/recv is executed (e.g. if no recv is requested by the
+;  upper layer the RX file(s) won't change)
 
-; tx-data-count: integer: Enable or disable device send data dump (before sending it to device)
-; The number of buffers is in device buffers
+; tx-data-mode: string/boolean: Configures the device send data dump mode (before
+;  sending it to device, after applying changes on data received from upper layer)
 ; Values:
-;  0: Disable
-;  negative: Dump until stopped
-;  positive: The number of buffers to dump
-; Defaults to 0
-;tx-data-count=0
+;  Boolean false (disable): Disable data dump
+;  Boolean true (on): Enable data dump, dump forever (until changed)
+;  count: Enable data dump, dump the number of buffers set in 'tx-data-count'
+;tx-data-mode=disable
+
+; tx-data-count: integer: The number of device send data buffers to dump
+; The number of buffers is in device buffers
+; This parameter is ignored if 'tx-data-mode' is not 'count'
+;tx-data-count=10
 
 ; tx-data-file: string: File to dump data sent to device
 ; 'bordserial' is the serial of the device
 ;tx-data-file=tx-data-${boardserial}
 
-; tx-app-count: integer: Enable or disable dump of data received from upper layer
-;  (data is dumped as received, before any changes are made)
-; The number of buffers is in send requests (e.g. a buffer will be counted on each request)
+; tx-app-mode: string/boolean: Configures the send data dump mode (as received from
+;  from upper layer, before applying any changes)
 ; Values:
-;  0: Disable
-;  negative: Dump until stopped
-;  positive: The number of buffers to dump
-; Defaults to 0
-;tx-app-count=0
+;  Boolean false (disable): Disable data dump
+;  Boolean true (on): Enable data dump, dump forever (until changed)
+;  count: Enable data dump, dump the number of buffers set in 'tx-app-count'
+;tx-app-mode=disable
+
+; tx-app-count: integer: The number of send buffers to dump
+; The number of buffers is in send requests (e.g. a buffer will be counted on each request)
+; This parameter is ignored if 'tx-data-mode' is not 'count'
+;tx-app-count=10
 
 ; tx-app-file: string: File to dump data received from upper layer
 ; 'bordserial' is the serial of the device
 ;tx-app-file=tx-app-${boardserial}
 
+; rx-data-mode
 ; rx-data-count
 ; rx-data-file
+; rx-app-mode
 ; rx-app-count
 ; rx-app-file
 ; See the corresponding TX parameters

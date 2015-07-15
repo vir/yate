@@ -1,0 +1,41 @@
+; This file holds configuration for radiotest module
+
+[radiodatafile]
+; This section configures radio data file processing
+
+; fmt-float: string: Format for float samples
+;fmt-float=%+g%+gj
+
+; fmt-int: string: Format for int samples
+;fmt-int=%+d%+dj
+
+; separator: string: Samples separator
+; Defaults to space if missing
+; Set it to empty string if no separator is required
+;separator=
+
+; input: string: File to process
+; This parameter is required
+;input=
+
+; output: string: Optional file to write data
+; If missing processing result will be displayed in console/log
+;output=
+
+; recformat: string: Optional format for file record dump
+; E.g.: ${timestamp} delta=${ts-delta} samples=${samples}: ${data}${newline}
+;recformat=${data}
+
+; dumpdata: boolean: Dump record contents
+; This parameter is ignored if data is written to file (e.g. only records
+;  data is dumped to file)
+;dumpdata=true
+
+; recstart: integer: Optional record index to start processing
+;recstart=1
+
+; reccount: integer: Optional number of records to process (0: all)
+;reccount=0
+
+; recsamples: integer: Optional number of samples to dump from each record (0: all)
+;recsamples=0

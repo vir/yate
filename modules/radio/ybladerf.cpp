@@ -2514,7 +2514,24 @@ void BrfLibUsbDevice::reLoad()
     // Update dump
     static const String prefix[] = {"tx-data","tx-app","rx-data","rx-app"};
     for (unsigned int i = 0; i < 4; i++) {
-	int n = p.getIntValue(prefix[i] + "-count",0);
+	const String& mode = p[prefix[i] + "-mode"];
+	int n = 0;
+	if (mode == YSTRING("count")) {
+	    String param = prefix[i] + "-count";
+	    const String& s = p[param];
+	    if (s) {
+		n = s.toInteger(-1);
+		if (n <= 0) {
+		    Debug(m_owner,DebugConf,"%s set to '%s': disabling dump [%p]",
+			param.c_str(),s.c_str(),m_owner);
+		    n = 0;
+		}
+	    }
+	    else
+		n = 10;
+	}
+	else if (mode.toBoolean())
+	    n = -1;
 	String file;
 	if (n) {
 	    file = p[prefix[i] + "-file"];

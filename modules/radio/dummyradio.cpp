@@ -44,6 +44,9 @@ public:
 	{ devicePath = m_address; return 0; }
     virtual unsigned int initialize(const NamedList& params);
     virtual unsigned int setParams(NamedList& params, bool shareFate);
+    virtual unsigned int setDataDump(int dir = 0, int level = 0,
+	const NamedList* params = 0)
+	{ return NotSupported; }
     virtual unsigned int send(uint64_t when, float* samples, unsigned size,
 	float* powerScale);
     virtual unsigned int recv(uint64_t& when, float* samples, unsigned& size);

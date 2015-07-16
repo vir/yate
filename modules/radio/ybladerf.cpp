@@ -1335,7 +1335,7 @@ private:
 	    return status ? status : lmsWrite(addr,data | val,error);
 	}
     // Read address from LMS, clear mask and write it back
-    inline unsigned int lmsReset(uint8_t addr, uint8_t clearMask, String* error) {
+    inline unsigned int lmsReset(uint8_t addr, uint8_t clearMask, String* error = 0) {
 	    uint8_t data = 0;
 	    unsigned int status = lmsRead(addr,data,error);
 	    return status ? status : lmsWrite(addr,(data & ~clearMask),error);
@@ -1472,9 +1472,12 @@ private:
     unsigned int readComputeDcOffsetsCorr(int* corr, float* powerBalance, float* buf,
 	unsigned int samples, String* error, float& totalPower, float& rxDcOffset);
     void calibrateBBStarting(const char* what);
-    unsigned int calibrateBBTxDc(int& dcI, int& dcQ, String* error);
-    unsigned int calibrateBBTxPhase(int& corr, String* error);
-    unsigned int calibrateBBTxGain(float& corr, String* error);
+    unsigned int calibrateBBTxDc(int& dcI, int& dcQ, float* buf, unsigned int samples,
+	String* error);
+    unsigned int calibrateBBTxPhase(bool bruteForce, int& corr, float* buf, unsigned int samples,
+	String* error);
+    unsigned int calibrateBBTxGain(bool bruteForce, float& corr, float* buf, unsigned int samples,
+	String* error);
     unsigned int calibrateBB(String* error);
     // Set error string or put a debug message
     unsigned int showError(unsigned int code, const char* error, const char* prefix,
@@ -5784,7 +5787,7 @@ unsigned int BrfLibUsbDevice::dummyRead(float* buf, unsigned int samples, String
     m_rxIO.checkTs = 0;
     unsigned int status = syncTxStatus(DevStatTs,0,error);
     if (!status)
-	status = readBuffer(m_txIO.syncTs + 20 * samples,buf,samples,error);
+	status = readBuffer(m_txIO.syncTs + 3 * samples,buf,samples,error);
     m_rxIO.checkTs = oldTsCheck;
     return status;
 }
@@ -5814,12 +5817,9 @@ static inline void cxMult(const float i1, const float q1, const float i2, const 
 static void calculateDcOffsets(BrfLibUsbDevice* dev, float* input, unsigned samples,
     float& totalPower, float& rxDcOffset, float* txDcOffset = 0)
 {
-    if ((samples % 8) != 0)
-	Debug(dev->owner(),DebugFail,"Buffer samples (%u) should be multiple of 8 [%p]",
+    if ((samples % 4) != 0)
+	Debug(dev->owner(),DebugFail,"Buffer samples (%u) should be multiple of 4 [%p]",
 	    samples,dev->owner());
-
-    // number of complex samples in the buffer
-    unsigned Ns = samples / 2;
 
     // one cycle of a -pi/4 complex sinusoid
     // note that is NOT the same as the test tone cycle array
@@ -5833,24 +5833,24 @@ static void calculateDcOffsets(BrfLibUsbDevice* dev, float* input, unsigned samp
     float sumTxQ = 0.0F;
     float* ip = input;
     // note that i counts complex pairs, not floats
-    for (unsigned i = 0; i < Ns; i++) {
+    for (unsigned i = 0; i < samples; i++) {
 	const float vi = *ip++;
 	const float vq = *ip++;
 	sumE += vi * vi + vq * vq;
 	sumRxI += vi;
 	sumRxQ += vq;
 	float si, sq;
-	cxMult(vi,vq,ci[i%4],cq[i%4],si,sq);
+	cxMult(vi,vq,ci[i % 4],cq[i % 4],si,sq);
 	sumTxI += si;
 	sumTxQ += sq;
     }
-    totalPower = sumE / Ns;
-    float meanRxI = sumRxI / Ns;
-    float meanRxQ = sumRxQ / Ns;
+    totalPower = sumE / samples;
+    float meanRxI = sumRxI / samples;
+    float meanRxQ = sumRxQ / samples;
     rxDcOffset = meanRxI * meanRxI + meanRxQ * meanRxQ;
     if (txDcOffset) {
-	float meanTxI = sumTxI / Ns;
-	float meanTxQ = sumTxQ / Ns;
+	float meanTxI = sumTxI / samples;
+	float meanTxQ = sumTxQ / samples;
 	*txDcOffset = meanTxI * meanTxI+meanTxQ * meanTxQ;
     }
 }
@@ -5864,7 +5864,7 @@ unsigned int BrfLibUsbDevice::readComputeDcOffsets(uint8_t dcI, uint8_t dcQ,
     m_txIO.syncStatus.dcOffsetI = decodeDCOffs(true,dcI);
     m_txIO.syncStatus.dcOffsetQ = decodeDCOffs(true,dcQ);
     BRF_FUNC_CALL_RET(syncTxStatus(DevStatTs | DevStatDc,0,error));
-    BRF_FUNC_CALL_RET(readBuffer(m_txIO.syncTs + 10 * samples,buf,samples,error));
+    BRF_FUNC_CALL_RET(readBuffer(m_txIO.syncTs + 3 * samples,buf,samples,error));
     calculateDcOffsets(this,buf,samples,totalPower,rxDcOffset,&txDcOffset);
     return 0;
 }
@@ -5886,7 +5886,7 @@ unsigned int BrfLibUsbDevice::readComputeDcOffsetsCorr(int* corr, float* powerBa
     else
 	return showError(RadioInterface::OutOfRange,
 	    "readComputeDcOffsetsCorr: invalid params",0,0,DebugFail);
-    BRF_FUNC_CALL_RET(readBuffer(m_txIO.syncTs + 10 * samples,buf,samples,error));
+    BRF_FUNC_CALL_RET(readBuffer(m_txIO.syncTs + 3 * samples,buf,samples,error));
     calculateDcOffsets(this,buf,samples,totalPower,rxDcOffset);
     return 0;
 }
@@ -5947,7 +5947,8 @@ struct BBDirChg
     uint8_t dirNotChgMax;
 };
 
-unsigned int BrfLibUsbDevice::calibrateBBTxDc(int& dcI, int& dcQ, String* error)
+unsigned int BrfLibUsbDevice::calibrateBBTxDc(int& dcI, int& dcQ, float* buf,
+    unsigned int samples, String* error)
 {
 //#define BRF_BB_TX_DC_TRACE
     BrfDuration duration;
@@ -5955,9 +5956,6 @@ unsigned int BrfLibUsbDevice::calibrateBBTxDc(int& dcI, int& dcQ, String* error)
     calibrateBBStarting(oper);
     dcI = 128;
     dcQ = 128;
-    unsigned int samples = m_rxIO.bufSamples * m_rxIO.buffers;
-    DataBlock d(0,samplesf2bytes(samples));
-    float* buf = (float*)d.data(0);
     int tmpDcI = 0;
     int tmpDcQ = 0;
     float power = 0;
@@ -6036,7 +6034,8 @@ unsigned int BrfLibUsbDevice::calibrateBBTxDc(int& dcI, int& dcQ, String* error)
     return showError(status,e,0,error);
 }
 
-unsigned int BrfLibUsbDevice::calibrateBBTxPhase(int& corr, String* error)
+unsigned int BrfLibUsbDevice::calibrateBBTxPhase(bool bruteForce, int& corr, float* buf,
+    unsigned int samples, String* error)
 {
 //#define BRF_BB_PHASE_TRACE
     BrfDuration duration;
@@ -6044,68 +6043,92 @@ unsigned int BrfLibUsbDevice::calibrateBBTxPhase(int& corr, String* error)
     calibrateBBStarting(oper);
     m_txIO.showFpgaPhaseChange++;
     corr = 0;
-    unsigned int samples = m_rxIO.bufSamples * m_rxIO.buffers;
-    DataBlock d(0,samplesf2bytes(samples));
-    float* buf = (float*)d.data(0);
     float power = 0;
     float rxDc = 0;
-#if 0
-    unsigned int innerLoops[] = {BRF_FPGA_CORR_MAX,100,50,15};
-    unsigned int steps[] = {100,5,5,1};
-    uint8_t dirNotChgStop[] = {25,10,3,0};
-#else
-    unsigned int innerLoops[] = {BRF_FPGA_CORR_MAX,99};
-    unsigned int steps[] = {100,1};
-    uint8_t dirNotChgStop[] = {25,25};
-#endif
     String e;
     unsigned int status = dummyRead(buf,samples,&e);
-    if (!status)
-	status = readComputeDcOffsetsCorr(&corr,0,buf,samples,&e,power,rxDc);
-    float imagePower = power - rxDc;
-    float lastImage = imagePower;
+    if (bruteForce) {
+	float imagePower = (float)0xffffffffffffffff;
 #ifdef BRF_BB_PHASE_TRACE
-    Output("Starting with power=%g rxDC=%g image=%g",power,rxDc,imagePower);
+	Output("Starting BRUTE FORCE image=%g",imagePower);
+	unsigned int n = 0;
 #endif
-    for (unsigned int i = 0; !status && i < BRF_ARRAY_LEN(innerLoops); i++) {
-	int v = clampInt(corr + innerLoops[i],-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX);
-	int minV = clampInt(corr - innerLoops[i],-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX);
-#ifdef BRF_BB_PHASE_TRACE
-	Output("Loop %u: best=%d interval=[%d..%d] step=%u",i,corr,minV,v,steps[i]);
-#endif
-	BBDirChg dirChg(dirNotChgStop[i]);
-	unsigned int nMax = innerLoops[i] * 2 + 1;
-	for (unsigned int n = 0; n < nMax; n++) {
-	    status = readComputeDcOffsetsCorr(&v,0,buf,samples,&e,power,rxDc);
+	int i = status ? (BRF_FPGA_CORR_MAX + 1) : -BRF_FPGA_CORR_MAX;
+	for (; i <= BRF_FPGA_CORR_MAX; i++) {
+	    status = readComputeDcOffsetsCorr(&i,0,buf,samples,&e,power,rxDc);
 	    if (status)
 		break;
 	    float image = power - rxDc;
-	    int8_t dir = 0;
-	    updateBBResult(dir,lastImage,image,n == 0);
-	    // First loop set dir to 'equal', avoid direction change in second loop
-	    if (n == 1)
-		dirChg.lastDir = dir;
 #ifdef BRF_BB_PHASE_TRACE
-	    String dump;
-	    dump.printf("  %-5d\tpower=%.6f\trxDC=%.6f\timage=%.6f\t%s",
-		v,power,rxDc,image,dirStr(dir));
-	    if (imagePower > image)
-		dump << "\t" << corr << " -> " << v;
-	    Output("%s",dump.c_str());
+	    n++;
+	    if (n < 10)
+		Output("  %-5d\tbest=%d\tpower=%.6f\trxDC=%.6f\timage=%.6f",i,corr,power,rxDc,image);
+	    else if ((n % 500) == 0)
+		Output("  %-5d\tbest=%d",i,corr);
 #endif
-	    if (imagePower > image) {
-		imagePower = image;
-		corr = v;
+	    if (imagePower <= image)
+		continue;
+	    imagePower = image;
+	    corr = i;
+	}
+    }
+    else {
+	if (!status)
+	    status = readComputeDcOffsetsCorr(&corr,0,buf,samples,&e,power,rxDc);
+	float imagePower = power - rxDc;
+	float lastImage = imagePower;
+#if 0
+	unsigned int innerLoops[] = {BRF_FPGA_CORR_MAX,200,10};
+	unsigned int steps[] = {200,10,1};
+	uint8_t dirNotChgStop[] = {20,0,0};
+#else
+	unsigned int innerLoops[] = {BRF_FPGA_CORR_MAX,99};
+	unsigned int steps[] = {50,1};
+	uint8_t dirNotChgStop[] = {50,0};
+#endif
+#ifdef BRF_BB_PHASE_TRACE
+	Output("Starting with power=%g rxDC=%g image=%g",power,rxDc,imagePower);
+#endif
+	for (unsigned int i = 0; !status && i < BRF_ARRAY_LEN(innerLoops); i++) {
+	    int v = clampInt(corr + innerLoops[i],-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX);
+	    int minV = clampInt(corr - innerLoops[i],-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX);
+#ifdef BRF_BB_PHASE_TRACE
+	    Output("Loop %u: best=%d interval=[%d..%d] step=%u",i,corr,minV,v,steps[i]);
+#endif
+	    BBDirChg dirChg(dirNotChgStop[i]);
+	    unsigned int nMax = innerLoops[i] * 2 + 1;
+	    for (unsigned int n = 0; n < nMax; n++) {
+		status = readComputeDcOffsetsCorr(&v,0,buf,samples,&e,power,rxDc);
+		if (status)
+		    break;
+		float image = power - rxDc;
+		int8_t dir = 0;
+		updateBBResult(dir,lastImage,image,n == 0);
+		// First loop set dir to 'equal', avoid direction change in second loop
+		if (n == 1)
+		    dirChg.lastDir = dir;
+#ifdef BRF_BB_PHASE_TRACE
+		String dump;
+		dump.printf("  %-5d\tpower=%.6f\trxDC=%.6f\timage=%.6f\t%s",
+		    v,power,rxDc,image,dirStr(dir));
+		if (imagePower > image)
+		    dump << "\t" << corr << " -> " << v;
+		Output("%s",dump.c_str());
+#endif
+		if (imagePower > image) {
+		    imagePower = image;
+		    corr = v;
+		}
+		if (!dirChg.update(dir))
+		    break;
+		int tmp = v - steps[i];
+		if (tmp >= minV)
+		    v = tmp;
+		else if ((minV - tmp) < (int)steps[i])
+		    v = minV;
+		else
+		    break;
 	    }
-	    if (!dirChg.update(dir))
-		break;
-	    int tmp = v - steps[i];
-	    if (tmp >= minV)
-		v = tmp;
-	    else if ((minV - tmp) < (int)steps[i])
-		v = minV;
-	    else
-		break;
 	}
     }
     duration.stop();
@@ -6119,7 +6142,8 @@ unsigned int BrfLibUsbDevice::calibrateBBTxPhase(int& corr, String* error)
     return showError(status,e,0,error);
 }
 
-unsigned int BrfLibUsbDevice::calibrateBBTxGain(float& corr, String* error)
+unsigned int BrfLibUsbDevice::calibrateBBTxGain(bool bruteForce, float& corr, float* buf,
+    unsigned int samples, String* error)
 {
 //#define BRF_BB_GAIN_TRACE
     BrfDuration duration;
@@ -6127,55 +6151,83 @@ unsigned int BrfLibUsbDevice::calibrateBBTxGain(float& corr, String* error)
     calibrateBBStarting(oper);
     m_txIO.showPowerBalanceChange++;
     corr = 1;
-    unsigned int samples = m_rxIO.bufSamples * m_rxIO.buffers;
-    DataBlock d(0,samplesf2bytes(samples));
-    float* buf = (float*)d.data(0);
     float power = 0;
     float rxDc = 0;
-#if 0
-    float innerBounds[] = {1,0.5,0.2,0.1,0.05};
-    float innerIntervals[] = {10,20,20,20,100};
-#else
-    float innerBounds[] = {0.1,0.01,0.001};
-    float innerIntervals[] = {10,100,100};
-#endif
     String e;
     unsigned int status = dummyRead(buf,samples,&e);
-    if (!status)
-	status = readComputeDcOffsetsCorr(0,&corr,buf,samples,&e,power,rxDc);
-    float imagePower = power - rxDc;
-    float lastImage = imagePower;
+    if (bruteForce) {
+	// Brute force
+	float imagePower = (float)0xffffffffffffffff;
+	float crt = 0.9;
+	float step = 0.0005;
 #ifdef BRF_BB_GAIN_TRACE
-    Output("Starting with power=%g rxDC=%g image=%g",power,rxDc,imagePower);
+	Output("Starting BRUTE FORCE start=%g step=%g image=%g",crt,step,imagePower);
+	unsigned int n = 0;
 #endif
-    for (unsigned int i = 0; !status && i < BRF_ARRAY_LEN(innerBounds); i++) {
-	float crt = corr + innerBounds[i];
-	if (crt >= 2)
-	    crt = 1.999999;
-	unsigned int intervals = innerIntervals[i] + 1;
-	float step = innerBounds[i] * 2 / intervals;
-#ifdef BRF_BB_GAIN_TRACE
-	Output("Loop %u: best=%g corrStart=%g intervals=%u step=%g",i,corr,crt,intervals,step);
-#endif
-	BBDirChg dirChg(0);
-	for (unsigned int n = 0; n < intervals && crt > 0; n++, crt -= step) {
+	if (status)
+	    crt = 3;
+	for (; crt < 1.1; crt += step) {
 	    status = readComputeDcOffsetsCorr(0,&crt,buf,samples,&e,power,rxDc);
 	    if (status)
 		break;
 	    float image = power - rxDc;
-	    int8_t dir = 0;
-	    updateBBResult(dir,lastImage,image,n == 0);
 #ifdef BRF_BB_GAIN_TRACE
-	    String dump;
-	    dump.printf("  %.6f\tpower=%.6f\trxDC=%.6f\timage=%.6f\t%s",
-		crt,power,rxDc,image,dirStr(dir));
-	    if (imagePower > image)
-		dump << "\t" << corr << " -> " << crt;
-	    Output("%s",dump.c_str());
+	    n++;
+	    if (n < 10)
+		Output("  %g\t\tbest=%g\tpower=%.6f\trxDC=%.6f\timage=%.6f",crt,corr,power,rxDc,image);
+	    else if ((n % 30) == 0)
+		Output("  %g\tbest=%g",crt,corr);
 #endif
-	    if (imagePower > image) {
-		imagePower = image;
-		corr = crt;
+	    if (imagePower <= image)
+		continue;
+	    imagePower = image;
+	    corr = crt;
+	}
+    }
+    else {
+	if (!status)
+	    status = readComputeDcOffsetsCorr(0,&corr,buf,samples,&e,power,rxDc);
+	float imagePower = power - rxDc;
+	float lastImage = imagePower;
+#if 0
+	float innerBounds[] = {1,0.5,0.2,0.1,0.05};
+	unsigned int innerIntervals[] = {10,20,20,20,100};
+#else
+	float innerBounds[] = {0.1,0.01};
+	unsigned int innerIntervals[] = {500,100};
+#endif
+#ifdef BRF_BB_GAIN_TRACE
+	Output("Starting with power=%g rxDC=%g image=%g",power,rxDc,imagePower);
+#endif
+	for (unsigned int i = 0; !status && i < BRF_ARRAY_LEN(innerBounds); i++) {
+	    float crt = corr + innerBounds[i];
+	    if (crt >= 2)
+		crt = 1.999999;
+	    unsigned int intervals = innerIntervals[i] + 1;
+	    float step = innerBounds[i] * 2 / intervals;
+#ifdef BRF_BB_GAIN_TRACE
+	    Output("Loop %u: best=%g corrStart=%g intervals=%u step=%.5f",i,corr,crt,intervals,step);
+#endif
+	    BBDirChg dirChg(0);
+	    for (unsigned int n = 0; n < intervals && crt > 0; n++, crt -= step) {
+		status = readComputeDcOffsetsCorr(0,&crt,buf,samples,&e,power,rxDc);
+		if (status)
+		    break;
+		float image = power - rxDc;
+		int8_t dir = 0;
+		updateBBResult(dir,lastImage,image,n == 0);
+#ifdef BRF_BB_GAIN_TRACE
+		String dump;
+		dump.printf("  %.6f\tpower=%.6f\trxDC=%.6f\timage=%.6f\t%s",
+		    crt,power,rxDc,image,dirStr(dir));
+		if (imagePower > image)
+		    dump << "\t" << corr << " -> " << crt;
+		Output("%s",dump.c_str());
+#endif
+		if (imagePower > image) {
+		    imagePower = image;
+		    corr = crt;
+		}
 	    }
 	}
     }
@@ -6207,13 +6259,23 @@ unsigned int BrfLibUsbDevice::calibrateBB(String* error)
 	bool lowBand = brfIsLowBand(txOld.frequency);
 	int lp = lowBand ? LoopRfLna1 : LoopRfLna2;
 	const char* pattern = "circle";
+	const char* lmsWr = 0;
+	bool twice = true;
+	bool bruteForce = true;
+	unsigned int samples = m_rxIO.bufSamples * m_rxIO.buffers;
 	NamedList p("calibrate-bb");
 	loadCfg(false,&p);
 	if (p.c_str()) {
 	    lp = lookup(p["loopback"],s_loopback,lp);
 	    paOn = p.getBoolValue("transmit");
 	    pattern = p.getValue("txpattern",pattern);
+	    lmsWr = p.getValue("lms-write");
+	    twice = p.getBoolValue("phase-gain-twice",true);
+	    bruteForce = p.getBoolValue("phase-gain-bruteforce",true);
+	    samples = p.getIntValue("samples",samples,512);
 	}
+	if ((samples % 4) != 0)
+	    samples = 4 * (samples + 3) / 4;
 	BRF_FUNC_CALL_BREAK(internalSetLoopback(lp,&e));
 	// Set VGA
 	BRF_FUNC_CALL_BREAK(internalSetVga(true,-14,true,&e));
@@ -6226,8 +6288,13 @@ unsigned int BrfLibUsbDevice::calibrateBB(String* error)
 	if (paOn)
 	    BRF_FUNC_CALL_BREAK(selectPaLna(true,lowBand,&e));
 	setTxPattern(pattern);
-//	dumpLoopbackStatus();
-//	dumpLmsModulesStatus();
+	if (lmsWr)
+	    lmsWrite(lmsWr);
+
+	//dumpLoopbackStatus();
+	//dumpLmsModulesStatus();
+	//internalDumpPeripheral(UartDevLMS,0,128,0,16);
+
 	// Start sending thread
 	m_sendThread = (new BrfThread(this))->start();
 	if (!m_sendThread) {
@@ -6235,33 +6302,46 @@ unsigned int BrfLibUsbDevice::calibrateBB(String* error)
 	    e << "Failed to start send data thread";
 	    break;
 	}
+	
 	unsigned int Fc = 850000000;
 	m_calibration.assign("");
 	m_calibration.clearParams();
+	DataBlock d(0,samplesf2bytes(samples));
+	float* buf = (float*)d.data(0);
+	int dcI = 0;
+	int dcQ = 0;
+	int phase = 0;
+	float corrBalance = 0;
+	
+	Debug(m_owner,DebugAll,"BB calibration: samples=%u Fc=%u samplerate=%u [%p]",
+	    samples,Fc,m_txIO.sampleRate,m_owner);
+	
 	// Calibrate TX DC
 	m_txIO.syncStatus.frequency = Fc + m_txIO.sampleRate / 4;
 	m_rxIO.syncStatus.frequency = Fc;
 	BRF_FUNC_CALL_BREAK(syncTxStatus(DevStatFreq,DevStatFreq,&e));
-	int dcI = 0;
-	int dcQ = 0;
-	BRF_FUNC_CALL_BREAK(calibrateBBTxDc(dcI,dcQ,&e));
+	BRF_FUNC_CALL_BREAK(calibrateBBTxDc(dcI,dcQ,buf,samples,&e));
 	BRF_FUNC_CALL_BREAK(internalSetCorrectionIQ(true,dcI,dcQ,&e));
 	// Calibrate TX FPGA PHASE
 	m_txIO.syncStatus.frequency = Fc;
 	m_rxIO.syncStatus.frequency = Fc - m_txIO.sampleRate / 2;
 	BRF_FUNC_CALL_BREAK(syncTxStatus(DevStatFreq,DevStatFreq,&e));
-	int phase = 0;
-	BRF_FUNC_CALL_BREAK(calibrateBBTxPhase(phase,&e));
+	BRF_FUNC_CALL_BREAK(calibrateBBTxPhase(bruteForce,phase,buf,samples,&e));
 	BRF_FUNC_CALL_BREAK(internalSetFpgaCorr(true,CorrFpgaPhase,phase,&e));
 	// Calibrate TX power balance
-	float corrBalance = 0;
-	BRF_FUNC_CALL_BREAK(calibrateBBTxGain(corrBalance,&e));
+	BRF_FUNC_CALL_BREAK(calibrateBBTxGain(bruteForce,corrBalance,buf,samples,&e));
 	BRF_FUNC_CALL_BREAK(internalSetTxIQBalance(false,corrBalance));
-	//
+	if (twice) {
+	    BRF_FUNC_CALL_BREAK(calibrateBBTxPhase(bruteForce,phase,buf,samples,&e));
+	    BRF_FUNC_CALL_BREAK(internalSetFpgaCorr(true,CorrFpgaPhase,phase,&e));
+	    // Calibrate TX power balance
+	    BRF_FUNC_CALL_BREAK(calibrateBBTxGain(bruteForce,corrBalance,buf,samples,&e));
+	    BRF_FUNC_CALL_BREAK(internalSetTxIQBalance(false,corrBalance));
+	}
 	m_calibration.assign(String(Fc));
 	m_calibration.addParam("tx_dc_i",String(dcI));
 	m_calibration.addParam("tx_dc_q",String(dcQ));
-	m_calibration.addParam("tx_phase",String(phase));
+	m_calibration.addParam("tx_fpga_corr_phase",String(phase));
 	m_calibration.addParam("tx_powerbalance",String(corrBalance));
 	break;
     }

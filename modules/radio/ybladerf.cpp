@@ -1000,6 +1000,7 @@ public:
     unsigned int dumpPeripheral(uint8_t dev, uint8_t addr, uint8_t len, String* buf = 0);
     // Module reload
     void reLoad();
+    void setDataDump(int dir = 0, int level = 0, const NamedList* params = 0);
     // Initialize the device.
     // Call the reset method in order to set the device to a known state
     bool open(const NamedList& params);
@@ -1654,6 +1655,13 @@ public:
 	}
     virtual unsigned int initialize(const NamedList& params = NamedList::empty());
     virtual unsigned int setParams(NamedList& params, bool shareFate = true);
+    virtual unsigned int setDataDump(int dir = 0, int level = 0,
+	const NamedList* params = 0) {
+	    if (!m_dev)
+		return Failure;
+	    m_dev->setDataDump(dir,level,params);
+	    return 0;
+	}
     virtual unsigned int send(uint64_t when, float* samples, unsigned size,
 	float* powerScale = 0);
     virtual unsigned int recv(uint64_t& when, float* samples, unsigned& size);
@@ -2493,32 +2501,46 @@ unsigned int BrfLibUsbDevice::dumpPeripheral(uint8_t dev, uint8_t addr, uint8_t 
     return internalDumpPeripheral(dev,addr,len,buf,16);
 }
 
-// Utility used in reload
-static inline void updateDump(NamedList& lst, const char* file, unsigned int n)
-{
-    lst.clearParams();
-    if (file) {
-	lst.addParam("file",file);
-	lst.addParam("count",String(n));
-    }
-    // Signal change
-    lst.assign("1");
-}
-
 // Module reload
 void BrfLibUsbDevice::reLoad()
 {
-    NamedList p("filedump");
-    loadCfg(false,&p);
-    Lock lck(m_dbgMutex);
-    // Update dump
+    setDataDump();
+}
+
+// dir: 0=both negative=rx positive=tx
+// level: 0: both negative=app positive=device
+void BrfLibUsbDevice::setDataDump(int dir, int level, const NamedList* p)
+{
     static const String prefix[] = {"tx-data","tx-app","rx-data","rx-app"};
+
+    NamedList dummy("");
+    if (!p) {
+	Lock lck(__plugin);
+	dummy = *s_cfg.createSection(YSTRING("filedump"));
+	p = &dummy;
+    }
+    NamedList* upd[4] = {0,0,0,0};
+    if (dir >= 0) {
+	if (level >= 0)
+	    upd[0] = &m_txIO.dataDumpParams;
+	if (level <= 0)
+	    upd[1] = &m_txIO.upDumpParams;
+    }
+    if (dir <= 0) {
+	if (level >= 0)
+	    upd[2] = &m_rxIO.dataDumpParams;
+	if (level <= 0)
+	    upd[3] = &m_rxIO.upDumpParams;
+    }
+    Lock lck(m_dbgMutex);
     for (unsigned int i = 0; i < 4; i++) {
-	const String& mode = p[prefix[i] + "-mode"];
+	if (!upd[i])
+	    continue;
+	const String& mode = (*p)[prefix[i] + "-mode"];
 	int n = 0;
 	if (mode == YSTRING("count")) {
 	    String param = prefix[i] + "-count";
-	    const String& s = p[param];
+	    const String& s = (*p)[param];
 	    if (s) {
 		n = s.toInteger(-1);
 		if (n <= 0) {
@@ -2534,18 +2556,17 @@ void BrfLibUsbDevice::reLoad()
 	    n = -1;
 	String file;
 	if (n) {
-	    file = p[prefix[i] + "-file"];
+	    file = (*p)[prefix[i] + "-file"];
 	    if (!file)
 		file = prefix[i] + "-${boardserial}";
 	}
-	if (i == 0)
-	    updateDump(m_txIO.dataDumpParams,file,n);
-	else if (i == 1)
-	    updateDump(m_txIO.upDumpParams,file,n);
-	else if (i == 2)
-	    updateDump(m_rxIO.dataDumpParams,file,n);
-	else
-	    updateDump(m_rxIO.upDumpParams,file,n);
+	upd[i]->clearParams();
+	if (file) {
+	    upd[i]->addParam("file",file);
+	    upd[i]->addParam("count",String(n));
+	}
+	// Signal change
+	upd[i]->assign("1");
     }
 }
 
@@ -2635,7 +2656,7 @@ bool BrfLibUsbDevice::open(const NamedList& params)
     Debug(m_owner,DebugAll,"Opened device [%p]%s",m_owner,encloseDashes(s,true));
     txSerialize.drop();
     rxSerialize.drop();
-    reLoad();
+    setDataDump();
     return true;
 }
 
@@ -3502,6 +3523,7 @@ unsigned int BrfLibUsbDevice::recv(uint64_t& ts, float* data, unsigned int& samp
 #endif
     unsigned int samplesCopied = 0;
     unsigned int samplesLeft = samples;
+    float* cpDest = data;
     // Don't warn if requested timestamp is in the future
     bool warnTsPast = ts && (ts <= io.timestamp);
     uint64_t crtTs = ts;
@@ -3566,12 +3588,12 @@ unsigned int BrfLibUsbDevice::recv(uint64_t& ts, float* data, unsigned int& samp
 	    //s = "\r\n-----\r\n" + s + "\r\n-----";
 	    Debug(m_owner,DebugAll,"RX: buf %u/%u preparing to copy %u samples data=(%p) (end=(%p)) "
 		"start=(%p) last=(%p) [%p]%s",io.crtBuf + 1,io.buffers,avail,
-		data,data + avail,start,last,m_owner,s.safe());
+		cpDest,cpDest + avail,start,last,m_owner,s.safe());
 #endif
 	    // Copy data
 	    while (start != last) {
-		*data++ = ((float)*start++) / 2048;
-		*data++ = ((float)*start++) / 2048;
+		*cpDest++ = ((float)*start++) / 2048;
+		*cpDest++ = ((float)*start++) / 2048;
 	    }
 	    samplesCopied += avail;
 	    samplesLeft -= avail;
@@ -3580,7 +3602,7 @@ unsigned int BrfLibUsbDevice::recv(uint64_t& ts, float* data, unsigned int& samp
 		"RX: copied %u samples from buffer %u/%u status=%u/%u"
 		" remains=%u data=(%p) start=(%p) [%p]",
 		avail,io.crtBuf + 1,io.buffers,samplesCopied,samples,samplesLeft,
-		data,start,m_owner);
+		cpDest,start,m_owner);
 #endif
 	    // Advance buffer offset, advance the buffer if we used all data
 	    io.crtBufSampOffs += avail;

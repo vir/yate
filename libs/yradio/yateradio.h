@@ -577,6 +577,18 @@ public:
     virtual unsigned int setParams(NamedList& params, bool shareFate = true) = 0;
 
     /**
+     * Update (set/reset) interface data dump
+     * @param dir Direction to update. 0: both, negative: RX only, positive: TX only
+     * @param level Dump level to update. 0: both, negative: interface level (data
+     *  sent/received by the upper layer), positive: device level (data sent to or
+     *  read from radio device)
+     * @param params Optional parameters
+     * @return Error code (0 on success)
+     */
+    virtual unsigned int setDataDump(int dir = 0, int level = 0,
+	const NamedList* params = 0) = 0;
+
+    /**
      * Run internal calibration procedures and/or load calibration parmameters.
      * Any attempt to transmit or receive prior to this operation will return NotCalibrated.
      * @return Error code (0 on success)

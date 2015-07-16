@@ -1,4 +1,4 @@
-yate (5.5.1~svn6002) UNRELEASED; urgency=low
+yate (5.5.1~svn6005) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1407,8 +1407,14 @@ yate (5.5.1~svn6002) UNRELEASED; urgency=low
   * Updated to SVN revision 6002: + Added extra parameter to configure
     data dump.  + Added extra dump info to radio file process. Added
     radiotest conf sample.
+  * Updated to SVN revision 6005: + Added method used to set data dump
+    to radio interface. Fixed bug in bladerf rx data dump: preserve
+    original pointer when copying data to avoid dump wrong data.  +
+    Added capability to replace newline and tab in configured format
+    string.  + Added brute force algorithm for phase/gain correction.
+    Added more parameters for calibration.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 16 Jul 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Jul 2015 02:19:11 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

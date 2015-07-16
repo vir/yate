@@ -639,7 +639,7 @@ void RadioTestModule::processRadioDataFile(NamedList& params)
 	    RADIO_FILE_ERROR("unhandled sample length",desc.m_sampleLen);
 	if (desc.m_ports != 1)
 	    RADIO_FILE_ERROR("unhandled ports",desc.m_ports);
-	const char* fmt = 0;
+	String fmt;
 	unsigned int sz = 0;
 	switch (desc.m_elementType) {
 	    case RadioDataDesc::Float:
@@ -672,12 +672,14 @@ void RadioTestModule::processRadioDataFile(NamedList& params)
 	unsigned int dumpMax = p->getIntValue(YSTRING("recsamples"),0,0);
 	const String& recFmt = (*p)[YSTRING("recformat")];
 	Debug(this,DebugAll,"Processing radio data file '%s'",file);
+	NamedList special("");
+	special.addParam("newline","\r\n");
+	special.addParam("tab","\t");
+	special.replaceParams(fmt);
+	String fmt4 = fmt + sep + fmt + sep + fmt + sep + fmt;
 	uint64_t ts = 0;
 	DataBlock buf;
 	unsigned int n = 0;
-	String fmt4;
-	for (unsigned int i = 0; i < 4; i++)
-	    fmt4.append(fmt,sep);
 	uint64_t oldTs = 0;
 	bool first = true;
 	unsigned int sampleBytes = sz * 2;

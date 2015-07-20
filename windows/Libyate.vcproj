@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="8.00"
+	Version="8,00"
 	Name="Libyate"
 	ProjectGUID="{254C6F00-6DE5-44A6-AD44-ACABA8912381}"
 	RootNamespace="Libyate"
@@ -434,6 +434,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\engine\Math.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\engine\Message.cpp"
 				>
 				<FileConfiguration
@@ -760,6 +764,10 @@
 			</File>
 			<File
 				RelativePath="..\yateclass.h"
+				>
+			</File>
+			<File
+				RelativePath="..\yatemath.h"
 				>
 			</File>
 			<File

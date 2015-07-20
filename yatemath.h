@@ -5,7 +5,7 @@
  * Math data types
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2014 Null Team
+ * Copyright (C) 2015 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -29,10 +29,17 @@
 namespace TelEngine {
 
 #ifdef DEBUG
+#ifdef _WINDOWS
+#define YMATH_FAIL(cond,...) { \
+    if (!(cond)) \
+	Debug(DebugFail,__VA_ARGS__); \
+}
+#else
 #define YMATH_FAIL(cond,args...) { \
     if (!(cond)) \
 	Debug(DebugFail,args); \
 }
+#endif
 #else
 #ifdef _WINDOWS
 #define YMATH_FAIL do { break; } while
@@ -379,7 +386,7 @@ private:
  * Its purpose is to offer a common interface when processing lists
  * @short Base class for vector class(es)
  */
-class MathVectorBase : public GenObject
+class YATE_API MathVectorBase : public GenObject
 {
     YCLASS(MathVectorBase,GenObject)
 public:

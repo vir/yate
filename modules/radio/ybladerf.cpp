@@ -4121,7 +4121,7 @@ unsigned int BrfLibUsbDevice::internalSetFreqOffs(int val, int* newVal, String* 
 {
     val = clampInt(val,BRF_FREQ_OFFS_MIN,BRF_FREQ_OFFS_MAX,"FrequencyOffset");
     String e;
-    unsigned int status = gpioWrite(0x22,(val && 0xff) << 8,2,&e);
+    unsigned int status = gpioWrite(0x22,(val & 0xff) << 8,2,&e);
     if (status == 0) {
 	if (m_freqOffset != val) {
 	    Debug(m_owner,DebugInfo,"FrequencyOffset set to %d [%p]",val,m_owner);

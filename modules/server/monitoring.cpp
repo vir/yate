@@ -2902,7 +2902,7 @@ CallRouteQoS::CallRouteQoS(const String direction, const NamedList* cfg)
     : m_routeName(direction)
 {
     Debug(&__plugin,DebugAll,"CallRouteQoS [%p] created for route '%s',cfg='%p'",this,direction.c_str(),cfg);
-    for (int i = 0; i <= NO_CAUSE - HANGUP; i++) {
+    for (int i = 0; i < NO_CAUSE - HANGUP; i++) {
 	m_callCounters[i] = 0;
 	m_callCountersAll[i] = 0;
     }

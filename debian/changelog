@@ -1,4 +1,4 @@
-yate (5.5.1~svn6009) UNRELEASED; urgency=low
+yate (5.5.1~svn6010) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1420,8 +1420,9 @@ yate (5.5.1~svn6009) UNRELEASED; urgency=low
     mask freq offset.
   * Updated to SVN revision 6009: + Fixed bug: avoid wrting past array
     bound.
+  * Updated to SVN revision 6010: + Properly package the radio modules.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 29 Jul 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 30 Jul 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

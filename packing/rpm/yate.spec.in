@@ -5,6 +5,7 @@
 # to create a debug info package run rpmbuild --define 'debuginfo 1'
 # to suppress auto dependencies run rpmbuild --define 'nodeps 1'
 # to disable all PSTN card drivers run rpmbuild --define 'nopstn 1'
+# to disable USB support run rpmbuild --define 'nousb 1'
 # to disable SCTP support run rpmbuild --define 'nosctp 1'
 # to disable H.323 support run rpmbuild --define 'noh323 1'
 # to disable the GUI clients run rpmbuild --define 'nogui 1'
@@ -17,6 +18,7 @@
 %{!?revision:%define revision %{nil}}
 %{?nodeps:%define no_auto_deps 1}
 %{?nopstn:%define no_pstn 1}
+%{?nousb:%define no_usb 1}
 %{?nosctp:%define no_sctp 1}
 %{?noh323:%define no_h323 1}
 %{?nogui:%define no_gui 1}
@@ -105,7 +107,8 @@ for small to large scale projects.
 %{_initrddir}/yate
 %endif
 %dir %{_datadir}/yate/data
-%{_datadir}/yate/data/*
+%{_datadir}/yate/data/*MIB.txt
+%{_datadir}/yate/data/snmp_mib.conf
 %dir %{_libdir}/yate
 %{_libdir}/yate/cdrbuild.yate
 %{_libdir}/yate/cdrcombine.yate
@@ -179,6 +182,7 @@ for small to large scale projects.
 %{_libdir}/yate/sig/ss7_lnp_ansi.yate
 %{_libdir}/yate/sig/camel_map.yate
 %{_libdir}/yate/sip/sip_cnam_lnp.yate
+%{_libdir}/yate/radio/dummyradio.yate
 %dir %{_sysconfdir}/yate
 %config(noreplace) %{_sysconfdir}/yate/accfile.conf
 %config(noreplace) %{_sysconfdir}/yate/cdrbuild.conf
@@ -237,6 +241,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/ss7_lnp_ansi.conf
 %config(noreplace) %{_sysconfdir}/yate/camel_map.conf
 %config(noreplace) %{_sysconfdir}/yate/sip_cnam_lnp.conf
+%config(noreplace) %{_sysconfdir}/yate/dummyradio.conf
 
 %config %{_sysconfdir}/logrotate.d/yate
 
@@ -495,6 +500,28 @@ test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
 %endif
 
 
+%if "%{no_usb}" != "1"
+
+%package bladerf
+Summary:	Yate radio interface for the bladeRF board
+Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
+Provides:	%{name}-radio
+
+%description bladerf
+This package provides support for bladeRF radio boards http://nuand.com/
+
+%files bladerf
+%{_libdir}/yate/radio/ybladerf.yate
+%{_datadir}/yate/data/hosted*.rbf
+%config(noreplace) %{_sysconfdir}/yate/ybladerf.conf
+
+%define conf_usb %{nil}
+%else
+%define conf_usb --without-libusb
+%endif
+
+
 %package scripts
 Summary:	External scripting package for Yate
 Group:		Applications/Communication
@@ -616,12 +643,13 @@ chmod +x %{local_find_requires} %{local_find_provides}
 	--libdir=%{_libdir} --mandir=%{_mandir} --with-archlib=%{_lib} \
 	--without-amrnb \
 	--without-spandsp --without-coredumper \
-	%{conf_sctp} %{conf_h323} %{conf_pstn}
+	%{conf_sctp} %{conf_h323} %{conf_pstn} %{conf_usb}
 make %{stripped}
 
 %install
 make install DESTDIR=%{buildroot}
 rm %{buildroot}%{_sysconfdir}/yate/amrnbcodec.conf
+rm %{buildroot}%{_sysconfdir}/yate/radiotest.conf
 %if "%{systemd}" != "0"
 mkdir -p %{buildroot}%{_unitdir}
 cp -p %{_builddir}/%{name}/packing/rpm/yate.service %{buildroot}%{_unitdir}/yate.service

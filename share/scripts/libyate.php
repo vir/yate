@@ -475,8 +475,8 @@ class Yate
 	    $yate_stdout = fopen("php://stdout","w");
 	    $yate_stderr = fopen("php://stderr","w");
 	    $role = "";
+	    flush();
 	}
-	flush();
 	set_error_handler("_yate_error_handler");
 	ob_implicit_flush(1);
 	if ($async && function_exists("stream_set_blocking") && $yate_stdin)

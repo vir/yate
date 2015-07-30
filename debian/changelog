@@ -1,4 +1,4 @@
-yate (5.5.1~svn6010) UNRELEASED; urgency=low
+yate (5.5.1~svn6012) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1421,8 +1421,13 @@ yate (5.5.1~svn6010) UNRELEASED; urgency=low
   * Updated to SVN revision 6009: + Fixed bug: avoid wrting past array
     bound.
   * Updated to SVN revision 6010: + Properly package the radio modules.
+  * Updated to SVN revision 6012: + Do not flush the output when
+    connecting over a PHP socket, it is useless and causes "Headers
+    already sent" when used from a Web server.  + Added small DMA
+    transfer flag used to alter GPIO values written at address 0
+    (config). Fixes USB2 timestamps.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 30 Jul 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 31 Jul 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

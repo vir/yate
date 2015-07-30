@@ -40,6 +40,10 @@ class BrfLibUsbDevice;                   // A bladeRF device using libusb
 class BrfInterface;                      // A bladeRF radio interface
 class BrfModule;                         // The module
 
+// GPIO
+// Configure FPGA to send smaller buffers (USB 2)
+#define BRF_GPIO_SMALL_DMA_XFER (1 << 7)
+
 // SPI flash page size, in bytes
 #define BRF_FLASH_PAGE_SIZE 256
 
@@ -3616,10 +3620,10 @@ unsigned int BrfLibUsbDevice::recv(uint64_t& ts, float* data, unsigned int& samp
 	}
 	if (done || !samplesLeft)
 	    break;
-	io.resetBufPos();
 	status = syncTransfer(EpReadSamples,io.bufStart(0),io.buffer.length(),&e);
 	if (status)
 	    break;
+	io.resetBufPos();
 	if (io.dataDumpFile.valid())
 	    dumpIOBuffer(io,io.buffers);
 	io.transferred += io.buffers * io.bufSamples;
@@ -4421,6 +4425,14 @@ unsigned int BrfLibUsbDevice::gpioRead(uint8_t addr, uint32_t& value, uint8_t le
 unsigned int BrfLibUsbDevice::gpioWrite(uint8_t addr, uint32_t value, uint8_t len,
     String* error, const char* loc)
 {
+    if (addr == 0) {
+	if (m_devSpeed == LIBUSB_SPEED_SUPER)
+	    value &= ~BRF_GPIO_SMALL_DMA_XFER;
+	else if (m_devSpeed == LIBUSB_SPEED_HIGH)
+	    value |= BRF_GPIO_SMALL_DMA_XFER;
+	else
+	    Debug(m_owner,DebugGoOn,"GPIO write: unhandled speed [%p]",m_owner);
+    }
     len = clampInt(len,1,sizeof(value),"GPIO write items",DebugGoOn);
     uint8_t t[sizeof(value)];
     // Data is in little endian order
@@ -5428,8 +5440,8 @@ void BrfLibUsbDevice::ioBufCheckTs(bool tx, unsigned int nBufs)
 	io.lastTs = crt;
     }
     if (invalid)
-	Debug(m_owner,invalid ? DebugNote : DebugAll,"%s: %u buffers%s [%p]",
-	    brfDir(tx),nBufs,invalid.safe(),m_owner);
+	Debug(m_owner,invalid ? DebugNote : DebugAll,"%s buf_samples=%u: %u buffers%s [%p]",
+	    brfDir(tx),io.bufSamples,nBufs,invalid.safe(),m_owner);
 }
 
 void BrfLibUsbDevice::updateAlterData(const NamedList& params)

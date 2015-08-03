@@ -5402,8 +5402,12 @@ String& BrfLibUsbDevice::dumpCalCache(String& dest)
 unsigned int BrfLibUsbDevice::updateSpeed(String* error)
 {
     if (speed() == LIBUSB_SPEED_SUPER || speed() == LIBUSB_SPEED_HIGH) {
-	unsigned int brfBufSamples = ((speed() == LIBUSB_SPEED_SUPER) ? 512 : 256) - 4;
+	unsigned int brfBufSamples = 508;
 	unsigned int nBuffers = 4;
+	if (speed() == LIBUSB_SPEED_HIGH) {
+	    brfBufSamples = 252;
+	    nBuffers = 8;
+	}
 	m_txIO.resetSamplesBuffer(brfBufSamples,16,nBuffers);
 	m_rxIO.resetSamplesBuffer(brfBufSamples,16,nBuffers);
 	if (speed() == LIBUSB_SPEED_SUPER)

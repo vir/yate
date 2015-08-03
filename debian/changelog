@@ -1,4 +1,4 @@
-yate (5.5.1~svn6012) UNRELEASED; urgency=low
+yate (5.5.1~svn6013) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1426,8 +1426,10 @@ yate (5.5.1~svn6012) UNRELEASED; urgency=low
     already sent" when used from a Web server.  + Added small DMA
     transfer flag used to alter GPIO values written at address 0
     (config). Fixes USB2 timestamps.
+  * Updated to SVN revision 6013: + Double the number of I/O buffers on
+    USB2.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 31 Jul 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 04 Aug 2015 02:19:11 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -22,10 +22,13 @@
 
 #include <yatephone.h>
 #include <yateradio.h>
-#include <math.h>
+#include <yatemath.h>
 
 using namespace TelEngine;
 namespace { // anonymous
+
+class RadioTestRecv;
+class RadioTestModule;
 
 class RadioTestIO
 {
@@ -42,6 +45,8 @@ public:
 
 class RadioTest : public Thread, public DebugEnabler
 {
+    friend class RadioTestRecv;
+    friend class RadioTestModule;
 public:
     RadioTest(const NamedList& params, const NamedList& radioParams);
     ~RadioTest()
@@ -54,6 +59,7 @@ protected:
 	{ terminated(); }
     virtual void run();
     void terminated();
+    void initPulse();
     bool setTxData();
     void regenerateTxData();
     bool execute(const String& cmd, const String& param, bool fatal,
@@ -61,15 +67,22 @@ protected:
     bool execute(const NamedList& cmds, const char* prefix);
     bool write();
     bool read();
+    void readTerminated(RadioTestRecv* th);
+    void readStop();
+    void hardCancelRecv();
     inline void updateTs(bool tx) {
 	    uint64_t ts = 0;
-	    if ((tx ? m_radio->getTxTime(ts) : m_radio->getRxTime(ts)) == 0)
+	    if ((tx ? m_radio->getTxTime(ts) : m_radio->getRxTime(ts)) == 0) {
 		(tx ? m_tx.ts : m_rx.ts) = ts;
+		Debug(this,DebugInfo,"Updated %s ts=" FMT64U " [%p]",
+		    (tx ? "TX" : "RX"),ts,this);
+	    }
 	}
     inline float* sendBuf()
 	{ return (float*)m_sendBufData.data(0); }
 
     RadioInterface* m_radio;
+    RadioTestRecv* m_recv;
     bool m_started;
     NamedList m_init;
     NamedList m_params;
@@ -81,6 +94,9 @@ protected:
     unsigned int m_sendBufCount;
     DataBlock m_sendBufData;
     unsigned int m_sendBufSamples;
+    // Pulse
+    unsigned int m_pulse;
+    ComplexVector m_pulseData;
     // RX
     RadioTestIO m_rx;
     RadioReadBufs m_bufs;
@@ -88,6 +104,40 @@ protected:
     DataBlock m_crt;
     DataBlock m_aux;
     DataBlock m_extra;
+};
+
+class RadioTestRecv : public Thread
+{
+public:
+    inline RadioTestRecv(RadioTest* test)
+	: Thread("RadioTestRecv"), m_test(test)
+	{}
+    ~RadioTestRecv()
+	{ notify(); }
+    void cleanup()
+	{ notify(); }
+    static inline RadioTestRecv* start(RadioTest* test) {
+	    RadioTestRecv* tmp = new RadioTestRecv(test);
+	    if (tmp->startup())
+		return tmp;
+	    delete tmp;
+	    return 0;
+	}
+protected:
+    virtual void run() {
+	    if (!m_test)
+		return;
+	    while (!Thread::check(false) && m_test->read())
+		;
+	    notify();
+	}
+    inline void notify() {
+	    RadioTest* tmp = m_test;
+	    m_test = 0;
+	    if (tmp)
+		tmp->readTerminated(this);
+	}
+    RadioTest* m_test;
 };
 
 class RadioTestModule : public Module
@@ -127,6 +177,29 @@ static inline unsigned int samplesf2bytes(unsigned int samples)
 static inline unsigned int bytes2samplesf(unsigned int len)
 {
     return len / (2 * sizeof(float));
+}
+
+// Convert a string to double
+// Make sure the value is in interval [-1..1]
+static inline double getDoubleSample(const String& str, double defVal = 0)
+{
+    double d = str.toDouble(defVal);
+    if (d < -1)
+	return -1;
+    if (d > 1)
+	return 1;
+    return d;
+}
+
+static inline void getComplexSample(Complex& c, const String& str,
+    double defRe, double defIm)
+{
+    int pos = str.find(',');
+    if (pos >= 0)
+	c.set(getDoubleSample(str.substr(0,pos),defRe),
+	    getDoubleSample(str.substr(pos + 1),defIm));
+    else
+	c.set(getDoubleSample(str,defRe),defIm);
 }
 
 static String& dumpSamplesFloat(String& s, const DataBlock& buf,
@@ -216,6 +289,7 @@ static bool readSamples(DataBlock& buf, const String& list)
 RadioTest::RadioTest(const NamedList& params, const NamedList& radioParams)
     : Thread("RadioTest"),
     m_radio(0),
+    m_recv(0),
     m_started(false),
     m_init(""),
     m_params(params),
@@ -225,6 +299,7 @@ RadioTest::RadioTest(const NamedList& params, const NamedList& radioParams)
     m_phase(0),
     m_sendBufCount(0),
     m_sendBufSamples(0),
+    m_pulse(0),
     m_rx(false),
     m_skippedBuffs(0)
 {
@@ -251,6 +326,7 @@ bool RadioTest::start(const NamedList& params, const NamedList& radioParams)
 
 void RadioTest::run()
 {
+    readStop();
     m_started = true;
     m_init.clearParams();
     Debug(this,DebugInfo,"Initializing... [%p]",this);
@@ -260,7 +336,7 @@ void RadioTest::run()
 	m_tx.enabled = true;
 	if (!setTxData())
 	    break;
-	m_rx.enabled = false;//!m_params.getBoolValue("sendonly");
+	m_rx.enabled = !m_params.getBoolValue("sendonly");
 	if (m_rx.enabled) {
 	    unsigned int n = m_params.getIntValue("readsamples",256,1);
 	    m_bufs.reset(n,0);
@@ -270,6 +346,7 @@ void RadioTest::run()
 	    m_bufs.crt.samples = (float*)m_crt.data(0);
 	    m_bufs.aux.samples = (float*)m_aux.data(0);
 	    m_bufs.extra.samples = (float*)m_extra.data(0);
+	    m_init.addParam("readsamples",String(n));
 	}
 	// Create radio
 	Message m(m_radioParams);
@@ -293,16 +370,24 @@ void RadioTest::run()
 	}
 	if (!execute(m_params,"cmd:"))
 	    break;
+	if (m_rx.enabled) {
+	    m_recv = RadioTestRecv::start(this);
+	    if (!m_recv) {
+		Debug(this,DebugWarn,"Failed to start read data thread [%p]",this);
+		break;
+	    }
+	}
 	String s;
 	m_init.dump(s,"\r\n");
 	Debug(this,DebugInfo,"Starting [%p]%s",this,encloseDashes(s,true));
 	// Run
-	while (!Thread::check(false)) {
-	    if (m_tx.enabled && !write())
+	while (!Thread::check(false) && write()) {
+	    if (m_rx.enabled && !m_recv && !Thread::check(false)) {
+		Debug(this,DebugWarn,"Read data thread abnormally terminated [%p]",this);
 		break;
-	    if (m_rx.enabled && !read())
-		break;
+	    }
 	}
+	readStop();
 	break;
     }
     terminated();
@@ -310,6 +395,7 @@ void RadioTest::run()
 
 void RadioTest::terminated()
 {
+    readStop();
     s_testMutex.lock();
     if (s_test == this)
 	s_test = 0;
@@ -325,12 +411,14 @@ void RadioTest::terminated()
 	RadioTestIO& io = *(txrx[i]);
 	if (!io.enabled)
 	    continue;
-	s << "\r\n" << (io.tx ? "sent=" : "recv=") << io.transferred;
+	String prefix = io.tx ? "tx_" : "rx_";
+	s << "\r\n" << prefix << "transferred=" << io.transferred;
 	if (io.transferred) {
 	    unsigned int sec = (unsigned int)((now - io.startTime) / 1000000);
 	    if (sec)
 		s << " (avg: " << (io.transferred / sec) << " samples/sec)";
 	}
+	s << "\r\n" << prefix << "timestamp=" << io.ts;
     }
     Debug(this,DebugInfo,"Terminated [%p]%s",this,encloseDashes(s));
 }
@@ -360,6 +448,21 @@ bool RadioTest::setTxData()
 	    dataRepeat = false;
 	    dataDump = false;
 	    m_init.addParam("txpattern",pattern);
+	}
+	else if (pattern == "pulse") {
+	    unsigned int samples = m_params.getIntValue("txdata_length",10000,50);
+	    m_sendBufData.assign(0,samplesf2bytes(samples));
+	    unsigned int defVal = (samples > 2) ? (samples - 2) : 2;
+	    m_pulse = m_params.getIntValue("pulse",defVal,2,10000000);
+	    m_pulseData.resetStorage(2);
+	    getComplexSample(m_pulseData[0],m_params["pulse1"],1,1);
+	    getComplexSample(m_pulseData[1],m_params["pulse2"],-1,-1);
+	    m_newTxData = true;
+	    m_phase = 0;
+	    dataRepeat = false;
+	    dataDump = false;
+	    m_init.addParam("txpattern",pattern);
+	    m_init.addParam("pulse",String(m_pulse));
 	}
 	else {
 	    if (!readSamples(m_sendBufData,pattern)) {
@@ -399,11 +502,23 @@ void RadioTest::regenerateTxData()
     static const float s_cs8[8] = {1,s_r2,0,-s_r2,-1,-s_r2,0,s_r2};
 
     float* ip = sendBuf();
-    for (unsigned int i = 0; i < m_sendBufSamples; i++) {
-	*ip++ = 0.5 * (s_cs4[m_phase % 4] + s_cs8[m_phase % 8]);
-	*ip++ = -0.5 * (s_cs4[(m_phase + 1) % 4] + s_cs8[(m_phase + 2) % 8]);
-	m_phase++;
-    }
+    if (m_pulse)
+	for (unsigned int i = 0; i < m_sendBufSamples; i++, ip += 2, m_phase++) {
+	    unsigned int idx = m_phase % m_pulse;
+	    if (idx < m_pulseData.length()) {
+		Complex& c = m_pulseData[idx];
+		ip[0] = c.re();
+		ip[1] = c.im();
+	    }
+	    else
+		::memset(ip,0,2 * sizeof(float));
+	}
+    else
+	for (unsigned int i = 0; i < m_sendBufSamples; i++) {
+	    *ip++ = 0.5 * (s_cs4[m_phase % 4] + s_cs8[m_phase % 8]);
+	    *ip++ = -0.5 * (s_cs4[(m_phase + 1) % 4] + s_cs8[(m_phase + 2) % 8]);
+	    m_phase++;
+	}
 }
 
 bool RadioTest::execute(const String& cmd, const String& param, bool fatal,
@@ -419,6 +534,8 @@ bool RadioTest::execute(const String& cmd, const String& param, bool fatal,
 	c = m_radio->setTxFreq(param.toInteger());
     else if (cmd == YSTRING("rxfrequency"))
 	c = m_radio->setRxFreq(param.toInteger());
+    else if (cmd == YSTRING("loopback"))
+	c = m_radio->setLoopback(param);
     else if (cmd == YSTRING("calibrate"))
 	c = m_radio->autocalDCOffsets();
     else {
@@ -469,11 +586,58 @@ bool RadioTest::write()
 
 bool RadioTest::read()
 {
-    // TODO: Implement
-    Debug(this,DebugStub,"Read not implemented");
+    if (!m_rx.startTime)
+	m_rx.startTime = Time::now();
+    if (!m_rx.ts)
+	updateTs(false);
+    m_skippedBuffs = 0;
+    unsigned int code = m_radio->read(m_rx.ts,m_bufs,m_skippedBuffs);
+    if (!code) {
+	if (m_bufs.full(m_bufs.crt))
+	    m_rx.transferred += m_bufs.bufSamples();
+	return true;
+    }
+    if (code != RadioInterface::Cancelled)
+	Debug(this,DebugNote,"Recv error: %u '%s' [%p]",
+	    code,RadioInterface::errorName(code),this);
     return false;
 }
 
+void RadioTest::readTerminated(RadioTestRecv* th)
+{
+    Lock lck(s_testMutex);
+    if (m_recv == th)
+	m_recv = 0;
+}
+
+void RadioTest::readStop()
+{
+    if (!m_recv)
+	return;
+    Lock lck(s_testMutex);
+    if (!m_recv)
+	return;
+    m_recv->cancel();
+    lck.drop();
+    // Wait for 5 seconds before hard cancelling
+    unsigned int n = (5000 + Thread::idleMsec()) / Thread::idleMsec();
+    while (m_recv && n) {
+	Thread::idle();
+	n--;
+    }
+    lck.acquire(s_testMutex);
+    if (m_recv)
+	hardCancelRecv();
+}
+
+void RadioTest::hardCancelRecv()
+{
+    if (!m_recv)
+	return;
+    Debug(this,DebugWarn,"Hard cancelling read data thread (%p) [%p]",m_recv,this);
+    m_recv->cancel(true);
+    m_recv = 0;
+}
 
 //
 // RadioTestModule
@@ -572,9 +736,9 @@ bool RadioTestModule::test(const String& cmd, const NamedList& list)
     if (start || !cmd || cmd == YSTRING("stop")) {
 	// Stop the test
 	while (s_test) {
-	    if (!s_test)
-		break;
 	    s_test->cancel();
+	    if (s_test->m_recv)
+		s_test->m_recv->cancel();
 	    lck.drop();
 	    // Wait for 5 seconds before hard cancelling
 	    unsigned int n = (5000 + Thread::idleMsec()) / Thread::idleMsec();
@@ -585,13 +749,14 @@ bool RadioTestModule::test(const String& cmd, const NamedList& list)
 	    lck.acquire(s_testMutex);
 	    if (!s_test)
 		break;
+	    s_test->hardCancelRecv();
 	    Debug(this,DebugWarn,"Hard cancelling test thread (%p)",s_test);
 	    s_test->cancel(true);
 	    s_test = 0;
 	}
 	if (start) {
 	    Configuration cfg(Engine::configFile(name()));
-	    String n = list.getValue("name","general");
+	    String n = list.getValue("name","test");
 	    NamedList* sect = n ? cfg.getSection(n) : 0;
 	    if (sect)
 		RadioTest::start(*sect,*cfg.createSection("radio"));

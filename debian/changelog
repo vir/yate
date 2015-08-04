@@ -1,4 +1,4 @@
-yate (5.5.1~svn6013) UNRELEASED; urgency=low
+yate (5.5.1~svn6015) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1428,8 +1428,11 @@ yate (5.5.1~svn6013) UNRELEASED; urgency=low
     (config). Fixes USB2 timestamps.
   * Updated to SVN revision 6013: + Double the number of I/O buffers on
     USB2.
+  * Updated to SVN revision 6015: + Added new method used to set
+    loopback to radio interface.  + Added pulse pattern to radio test.
+    Implemented radio read.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 04 Aug 2015 02:19:11 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 05 Aug 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

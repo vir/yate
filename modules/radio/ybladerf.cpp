@@ -1751,6 +1751,8 @@ public:
 	{ return NotSupported; }
     virtual unsigned status(int port = -1) const
 	{ return (m_totalErr & FatalErrorMask); }
+    virtual unsigned int setLoopback(const char* name = 0)
+	{ return m_dev ? m_dev->setLoopback(name) : NotInitialized; }
 
 protected:
     BrfInterface(const char* name);
@@ -6455,7 +6457,7 @@ void BrfLibUsbDevice::computeRx(uint64_t ts)
     dcQAvg /= div;
     if (dbg)
 	Debug(m_owner,DebugInfo,
-	    "RX DC values min/avg/max I=%d/%d/%d Q=%d/%d/%d peak=%d TS=" FMT64U "[%p]",
+	    "RX DC values min/avg/max I=%d/%d/%d Q=%d/%d/%d peak=%d TS=" FMT64U " [%p]",
 	    dcIMin,dcIAvg,dcIMax,dcQMin,dcQAvg,dcQMax,peak,peakTs,m_owner);
     if (!m_rxDcAuto)
 	return;

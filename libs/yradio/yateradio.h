@@ -788,6 +788,14 @@ public:
 	{ return NotSupported; }
 
     /**
+     * Set radio loopback
+     * @param name Loopback name (NULL for none)
+     * @return Error code (0 on success)
+     */
+    virtual unsigned int setLoopback(const char* name = 0)
+	{ return NotSupported; }
+
+    /**
      * Put the radio into normal mode
      * @return Error code (0 on success)
      */

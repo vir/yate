@@ -37,6 +37,9 @@ OPENSSL_LIB := @OPENSSL_LIB@
 HAVE_ZLIB := @HAVE_ZLIB@
 ZLIB_INC := @ZLIB_INC@
 ZLIB_LIB := @ZLIB_LIB@
+HAVE_LIBUSB := @HAVE_LIBUSB@
+LIBUSB_INC := @LIBUSB_INC@
+LIBUSB_LIB := @LIBUSB_LIB@
 SED := sed
 DEFS :=
 INCLUDES := -I.. -I@top_srcdir@
@@ -87,12 +90,12 @@ PROGS := cdrbuild.yate cdrcombine.yate cdrfile.yate regexroute.yate \
 	server/cache.yate \
 	server/eventlogs.yate \
 	client/jabberclient.yate \
-	lazyrec.yate \
-	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
+	callgen.yate analyzer.yate rmanager.yate msgsniff.yate \
+	radio/dummyradio.yate
 
 LIBS :=
-DIRS := client server jabber qt4 sip
-PROGS := $(PROGS) server/overlapdial.yate
+DIRS := client server jabber qt4 sip sig radio
+PROGS := $(PROGS) server/overlapdial.yate lazyrec.yate
 
 ifneq ($(HAVE_PGSQL),no)
 PROGS := $(PROGS) server/pgsqldb.yate
@@ -197,6 +200,11 @@ ifeq (@HAVE_COREDUMPER@,yes)
 COREDUMP_INC := -DHAVE_COREDUMPER @COREDUMPER_INC@
 COREDUMP_LIB := @COREDUMPER_LIB@
 endif
+
+ifneq (@HAVE_LIBUSB@,no)
+PROGS := $(PROGS) radio/ybladerf.yate
+endif
+
 
 LOCALFLAGS =
 LOCALLIBS =
@@ -417,6 +425,12 @@ server/ysnmpagent.yate: ../libyateasn.so ../libs/ysnmp/libysnmp.a
 server/ysnmpagent.yate: LOCALFLAGS = -I@top_srcdir@/libs/yasn -I@top_srcdir@/libs/ysnmp
 server/ysnmpagent.yate: LOCALLIBS = -L../libs/ysnmp -lysnmp -lyateasn
 
+radio/ybladerf.yate radio/dummyradio.yate: ../libyateradio.so
+radio/ybladerf.yate radio/dummyradio.yate: LOCALFLAGS = -I@top_srcdir@/libs/yradio
+radio/ybladerf.yate radio/dummyradio.yate: LOCALLIBS = -lyateradio
+radio/ybladerf.yate: EXTERNFLAGS = $(LIBUSB_INC)
+radio/ybladerf.yate: EXTERNLIBS = $(LIBUSB_LIB)
+
 ../libyatesig.so ../libs/ysig/libyatesig.a: @top_srcdir@/libs/ysig/yatesig.h
 	$(MAKE) -C ../libs/ysig
 
@@ -461,3 +475,6 @@ server/ysnmpagent.yate: LOCALLIBS = -L../libs/ysnmp -lysnmp -lyateasn
 
 ../libs/ysnmp/libysnmp.a: @top_srcdir@/libs/ysnmp/yatesnmp.h
 	$(MAKE) -C ../libs/ysnmp
+
+../libyateradio.so ../libs/yradio/libyateradio.a: @top_srcdir@/libs/yradio/yateradio.h
+	$(MAKE) -C ../libs/yradio

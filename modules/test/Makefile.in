@@ -15,7 +15,7 @@ MODFLAGS:= @MODULE_LDFLAGS@
 MODSTRIP:= @MODULE_SYMBOLS@
 
 MKDEPS  := ../../config.status
-PROGS = randcall.yate msgdelay.yate jsext.yate crypto.yate
+PROGS = randcall.yate msgdelay.yate jsext.yate crypto.yate radiotest.yate
 LIBS =
 OBJS =
 
@@ -66,3 +66,7 @@ lib%.so: %.o
 
 jsext.yate: LOCALFLAGS = -I../../libs/yscript
 jsext.yate: LOCALLIBS = -lyatescript
+
+radiotest.yate: ../../libyateradio.so
+radiotest.yate: LOCALFLAGS = -I@top_srcdir@/libs/yradio
+radiotest.yate: LOCALLIBS = -lyateradio

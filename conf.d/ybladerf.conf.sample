@@ -30,6 +30,15 @@
 ; Defaults to 1 if missing or invalid
 ;tx_powerbalance=1
 
+; rxcheckts: integer: Check timestamps after reading from device
+; Put a debug message if incorrect
+; This parameter is applied on reload
+; Values:
+;   0: disable
+;   negative: forever, until changed
+;   positive: the number of times to check
+;rxcheckts=-1
+
 
 [libusb]
 ; This section configures libusb backend related data

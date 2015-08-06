@@ -1,4 +1,4 @@
-yate (5.5.1~svn6015) UNRELEASED; urgency=low
+yate (5.5.1~svn6017) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1431,8 +1431,12 @@ yate (5.5.1~svn6015) UNRELEASED; urgency=low
   * Updated to SVN revision 6015: + Added new method used to set
     loopback to radio interface.  + Added pulse pattern to radio test.
     Implemented radio read.
+  * Updated to SVN revision 6017: + Moved tx timestamp mismatch debug to
+    a lower level.  + Enable by default rx timestamps check. Apply
+    parameter on reload. Documented it. Changed invalid timestamps debug
+    message to MILD.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 05 Aug 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 07 Aug 2015 02:19:11 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

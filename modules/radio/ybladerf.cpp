@@ -3350,17 +3350,13 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	io.upDumpFile.terminate(owner());
     // Check timestamp
     if (io.timestamp != ts) {
-	if (io.timestamp) {
-	    int level = DebugInfo;
+	if (io.timestamp && m_owner->debugAt(DebugAll)) {
 	    String s;
 	    s << "(our=" << io.timestamp << " requested=" << ts << ")";
-	    if (io.crtBuf || io.crtBufSampOffs) {
-		s << ", dropping previous data";
-		level = DebugNote;
-	    }
-	    else if (io.timestamp < ts)
-		level = DebugAll;
-	    Debug(m_owner,level,"TX: timestamps don't match %s [%p]",s.c_str(),m_owner);
+	    if (io.crtBuf || io.crtBufSampOffs)
+		s << ", dropping previous data " <<
+		    (io.crtBuf * io.bufSamples + io.crtBufSampOffs) << " samples";
+	    Debug(m_owner,DebugAll,"TX: timestamps don't match %s [%p]",s.c_str(),m_owner);
 	}
 	io.resetBufPos();
 	io.timestamp = ts;

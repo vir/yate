@@ -2513,7 +2513,12 @@ unsigned int BrfLibUsbDevice::dumpPeripheral(uint8_t dev, uint8_t addr, uint8_t 
 // Module reload
 void BrfLibUsbDevice::reLoad()
 {
+    Lock lck(&__plugin);
+    NamedList* gen = s_cfg.createSection(YSTRING("general"));
+    lck.drop();
     setDataDump();
+    checkTs(true,gen->getIntValue("txcheckts",0));
+    checkTs(false,gen->getIntValue("rxcheckts",-1));
 }
 
 // dir: 0=both negative=rx positive=tx
@@ -2650,7 +2655,7 @@ bool BrfLibUsbDevice::open(const NamedList& params)
 	showBuf(false,params.getIntValue("rxbufoutput",0),
 	    params.getBoolValue("rxbufoutput_nodata"));
 	checkTs(true,params.getIntValue("txcheckts",0));
-	checkTs(false,params.getIntValue("rxcheckts",0));
+	checkTs(false,params.getIntValue("rxcheckts",-1));
 	break;
     }
     if (status) {
@@ -3350,17 +3355,13 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	io.upDumpFile.terminate(owner());
     // Check timestamp
     if (io.timestamp != ts) {
-	if (io.timestamp) {
-	    int level = DebugInfo;
+	if (io.timestamp && m_owner->debugAt(DebugAll)) {
 	    String s;
 	    s << "(our=" << io.timestamp << " requested=" << ts << ")";
-	    if (io.crtBuf || io.crtBufSampOffs) {
-		s << ", dropping previous data";
-		level = DebugNote;
-	    }
-	    else if (io.timestamp < ts)
-		level = DebugAll;
-	    Debug(m_owner,level,"TX: timestamps don't match %s [%p]",s.c_str(),m_owner);
+	    if (io.crtBuf || io.crtBufSampOffs)
+		s << ", dropping previous data " <<
+		    (io.crtBuf * io.bufSamples + io.crtBufSampOffs) << " samples";
+	    Debug(m_owner,DebugAll,"TX: timestamps don't match %s [%p]",s.c_str(),m_owner);
 	}
 	io.resetBufPos();
 	io.timestamp = ts;
@@ -5446,7 +5447,7 @@ void BrfLibUsbDevice::ioBufCheckTs(bool tx, unsigned int nBufs)
 	io.lastTs = crt;
     }
     if (invalid)
-	Debug(m_owner,invalid ? DebugNote : DebugAll,"%s buf_samples=%u: %u buffers%s [%p]",
+	Debug(m_owner,invalid ? DebugMild : DebugAll,"%s buf_samples=%u: %u buffers%s [%p]",
 	    brfDir(tx),io.bufSamples,nBufs,invalid.safe(),m_owner);
 }
 

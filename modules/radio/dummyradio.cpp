@@ -152,8 +152,8 @@ DummyInterface::DummyInterface(const char* name, const NamedList& config)
     m_divisor = 1000000 * config.getInt64Value("slowdown",1,1,1000);
     m_caps.maxPorts = 1;
     m_caps.currPorts = 1;
-    m_caps.maxTuneFreq = config.getInt64Value("maxTuneFreq",5000000000,100000000,50000000000);
-    m_caps.minTuneFreq = config.getInt64Value("minTuneFreq",500000000,250000000,5000000000);
+    m_caps.maxTuneFreq = config.getInt64Value("maxTuneFreq",5000000000LL,100000000LL,50000000000LL);
+    m_caps.minTuneFreq = config.getInt64Value("minTuneFreq",500000000LL,250000000LL,5000000000LL);
     m_caps.maxOutputPower = config.getIntValue("maxOutputPower",30,0,50);
     m_caps.minOutputPower = config.getIntValue("minOutputPower",0,-10,30);
     m_caps.maxInputSaturation = config.getIntValue("maxInputSaturation",-30,-50,0);

@@ -2597,9 +2597,11 @@ public:
      * Parse a complete block of JSON text
      * @param text JSON text to parse
      * @param mtx Pointer to the mutex that serializes this object
+     * @param stack Pointer to an execution stack, required for adding prototypes
+     * @param context Pointer to an execution context, required for adding prototypes
      * @return ExpOperation holding the content of JSON, must be dereferenced after use, NULL if parse error
      */
-    static ExpOperation* parseJSON(const char* text, Mutex* mtx = 0);
+    static ExpOperation* parseJSON(const char* text, Mutex* mtx = 0, ObjList* stack = 0, GenObject* context = 0);
 
     /**
      * Get a "null" object wrapper that will identity match another "null"

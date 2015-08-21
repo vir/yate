@@ -3028,7 +3028,7 @@ bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
     if (oper.name() == YSTRING("parse")) {
 	if (extractArgs(stack,oper,context,args) != 1)
 	    return false;
-	ExpOperation* op = JsParser::parseJSON(static_cast<ExpOperation*>(args[0])->c_str(),mutex());
+	ExpOperation* op = JsParser::parseJSON(static_cast<ExpOperation*>(args[0])->c_str(),mutex(),&stack,context);
 	if (!op)
 	    op = new ExpWrapper(0,"JSON");
 	ExpEvaluator::pushOne(stack,op);
@@ -3056,7 +3056,7 @@ bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 		    char* text = (char*)buf.data();
 		    if (f.readData(text,len) == len) {
 			text[len] = '\0';
-			op = JsParser::parseJSON(text,mutex());
+			op = JsParser::parseJSON(text,mutex(),&stack,context);
 		    }
 		}
 	    }

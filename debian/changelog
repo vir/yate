@@ -1,4 +1,4 @@
-yate (5.5.1~svn6019) UNRELEASED; urgency=low
+yate (5.5.1~svn6020) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1439,8 +1439,10 @@ yate (5.5.1~svn6019) UNRELEASED; urgency=low
     and those that don't define various byte swapping macros.  + Added
     JS method to restart the Yate engine (only if allow_abort is
     configured).
+  * Updated to SVN revision 6020: + Added prototypes to parsed JSON
+    objects and arrays.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 19 Aug 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 22 Aug 2015 02:19:11 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

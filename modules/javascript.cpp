@@ -453,6 +453,7 @@ public:
 	    params().addParam(new ExpFunction("getIntValue"));
 	    params().addParam(new ExpFunction("getBoolValue"));
 	    params().addParam(new ExpFunction("setValue"));
+	    params().addParam(new ExpFunction("addValue"));
 	    params().addParam(new ExpFunction("clearSection"));
 	    params().addParam(new ExpFunction("clearKey"));
 	    params().addParam(new ExpFunction("keys"));
@@ -2419,6 +2420,12 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 	if (extractArgs(stack,oper,context,args) != 3)
 	    return false;
 	m_config.setValue(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]),
+	    *static_cast<ExpOperation*>(args[2]));
+    }
+    else if (oper.name() == YSTRING("addValue")) {
+	if (extractArgs(stack,oper,context,args) != 3)
+	    return false;
+	m_config.addValue(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]),
 	    *static_cast<ExpOperation*>(args[2]));
     }
     else if (oper.name() == YSTRING("clearSection")) {

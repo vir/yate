@@ -453,6 +453,7 @@ public:
 	    params().addParam(new ExpFunction("getIntValue"));
 	    params().addParam(new ExpFunction("getBoolValue"));
 	    params().addParam(new ExpFunction("setValue"));
+	    params().addParam(new ExpFunction("clearSection"));
 	    params().addParam(new ExpFunction("clearKey"));
 	    params().addParam(new ExpFunction("keys"));
 	}
@@ -484,6 +485,7 @@ protected:
 	    params().addParam(new ExpFunction("getIntValue"));
 	    params().addParam(new ExpFunction("getBoolValue"));
 	    params().addParam(new ExpFunction("setValue"));
+	    params().addParam(new ExpFunction("addValue"));
 	    params().addParam(new ExpFunction("clearKey"));
 	    params().addParam(new ExpFunction("keys"));
 	}
@@ -2419,6 +2421,21 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 	m_config.setValue(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]),
 	    *static_cast<ExpOperation*>(args[2]));
     }
+    else if (oper.name() == YSTRING("clearSection")) {
+	ExpOperation* op = 0;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 0:
+		break;
+	    case 1:
+		op = static_cast<ExpOperation*>(args[0]);
+		if (JsParser::isUndefined(*op) || JsParser::isNull(*op))
+		    op = 0;
+		break;
+	    default:
+		return false;
+	}
+	m_config.clearSection(op ? (const char*)*op : 0);
+    }
     else if (oper.name() == YSTRING("clearKey")) {
 	if (extractArgs(stack,oper,context,args) != 2)
 	    return false;
@@ -2548,6 +2565,13 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
 	NamedList* sect = m_owner->config().getSection(toString());
 	if (sect)
 	    sect->setParam(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]));
+    }
+    else if (oper.name() == YSTRING("addValue")) {
+	if (extractArgs(stack,oper,context,args) != 2)
+	    return false;
+	NamedList* sect = m_owner->config().getSection(toString());
+	if (sect)
+	    sect->addParam(*static_cast<ExpOperation*>(args[0]),*static_cast<ExpOperation*>(args[1]));
     }
     else if (oper.name() == YSTRING("clearKey")) {
 	if (extractArgs(stack,oper,context,args) != 1)

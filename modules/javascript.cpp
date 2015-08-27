@@ -2388,7 +2388,19 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
     }
     else if (oper.name() == YSTRING("getIntValue")) {
 	int64_t defVal = 0;
+	int64_t minVal = LLONG_MIN;
+	int64_t maxVal = LLONG_MAX;
+	bool clamp = true;
 	switch (extractArgs(stack,oper,context,args)) {
+	    case 6:
+		clamp = static_cast<ExpOperation*>(args[5])->valBoolean(clamp);
+		// fall through
+	    case 5:
+		maxVal = static_cast<ExpOperation*>(args[4])->valInteger(maxVal);
+		// fall through
+	    case 4:
+		minVal = static_cast<ExpOperation*>(args[3])->valInteger(minVal);
+		// fall through
 	    case 3:
 		defVal = static_cast<ExpOperation*>(args[2])->valInteger();
 		// fall through
@@ -2399,7 +2411,7 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 	}
 	const String& sect = *static_cast<ExpOperation*>(args[0]);
 	const String& name = *static_cast<ExpOperation*>(args[1]);
-	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.getInt64Value(sect,name,defVal),name));
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.getInt64Value(sect,name,defVal,minVal,maxVal,clamp),name));
     }
     else if (oper.name() == YSTRING("getBoolValue")) {
 	bool defVal = false;
@@ -2534,7 +2546,19 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
     }
     else if (oper.name() == YSTRING("getIntValue")) {
 	int64_t val = 0;
+	int64_t minVal = LLONG_MIN;
+	int64_t maxVal = LLONG_MAX;
+	bool clamp = true;
 	switch (extractArgs(stack,oper,context,args)) {
+	    case 5:
+		clamp = static_cast<ExpOperation*>(args[4])->valBoolean(clamp);
+		// fall through
+	    case 4:
+		maxVal = static_cast<ExpOperation*>(args[3])->valInteger(maxVal);
+		// fall through
+	    case 3:
+		minVal = static_cast<ExpOperation*>(args[2])->valInteger(minVal);
+		// fall through
 	    case 2:
 		val = static_cast<ExpOperation*>(args[1])->valInteger();
 		// fall through
@@ -2546,7 +2570,11 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
 	const String& name = *static_cast<ExpOperation*>(args[0]);
 	NamedList* sect = m_owner->config().getSection(toString());
 	if (sect)
-	    val = sect->getInt64Value(name,val);
+	    val = sect->getInt64Value(name,val,minVal,maxVal,clamp);
+	else if (val < minVal)
+	    val = minVal;
+	else if (val > maxVal)
+	    val = maxVal;
 	ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
     }
     else if (oper.name() == YSTRING("getBoolValue")) {

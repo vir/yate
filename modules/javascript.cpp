@@ -209,7 +209,7 @@ class JsEngine : public JsObject, public DebugEnabler
 {
     YCLASS(JsEngine,JsObject)
 public:
-    inline JsEngine(Mutex* mtx)
+    inline JsEngine(Mutex* mtx, const char* name = 0)
 	: JsObject("Engine",mtx,true),
 	  m_worker(0), m_debugName("javascript")
 	{
@@ -243,6 +243,8 @@ public:
 	    params().addParam(new ExpFunction("debugEnabled"));
 	    params().addParam(new ExpFunction("debugAt"));
 	    params().addParam(new ExpFunction("setDebug"));
+	    if (name)
+		params().addParam(new ExpOperation(name,"name"));
 	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
 	    params().addParam(new ExpFunction("runParams"));
 	    params().addParam(new ExpFunction("configFile"));
@@ -259,7 +261,7 @@ public:
 	    params().addParam(new ExpFunction("btoh"));
 	    params().addParam(new ExpFunction("htob"));
 	}
-    static void initialize(ScriptContext* context);
+    static void initialize(ScriptContext* context, const char* name = 0);
     inline void resetWorker()
 	{ m_worker = 0; }
 protected:
@@ -778,7 +780,7 @@ static void contextInit(ScriptRun* runner, const char* name = 0, JsAssist* assis
     if (!ctx)
 	return;
     JsObject::initialize(ctx);
-    JsEngine::initialize(ctx);
+    JsEngine::initialize(ctx,name);
     if (assist)
 	JsChannel::initialize(ctx,assist);
     JsMessage::initialize(ctx);
@@ -1460,7 +1462,7 @@ void JsEngine::destroyed()
 	Thread::idle();
 }
 
-void JsEngine::initialize(ScriptContext* context)
+void JsEngine::initialize(ScriptContext* context, const char* name)
 {
     if (!context)
 	return;
@@ -1468,7 +1470,7 @@ void JsEngine::initialize(ScriptContext* context)
     Lock mylock(mtx);
     NamedList& params = context->params();
     if (!params.getParam(YSTRING("Engine")))
-	addObject(params,"Engine",new JsEngine(mtx));
+	addObject(params,"Engine",new JsEngine(mtx,name));
 }
 
 

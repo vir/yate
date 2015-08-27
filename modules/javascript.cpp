@@ -209,7 +209,7 @@ class JsEngine : public JsObject, public DebugEnabler
 {
     YCLASS(JsEngine,JsObject)
 public:
-    inline JsEngine(Mutex* mtx)
+    inline JsEngine(Mutex* mtx, const char* name = 0)
 	: JsObject("Engine",mtx,true),
 	  m_worker(0), m_debugName("javascript")
 	{
@@ -243,6 +243,8 @@ public:
 	    params().addParam(new ExpFunction("debugEnabled"));
 	    params().addParam(new ExpFunction("debugAt"));
 	    params().addParam(new ExpFunction("setDebug"));
+	    if (name)
+		params().addParam(new ExpOperation(name,"name"));
 	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
 	    params().addParam(new ExpFunction("runParams"));
 	    params().addParam(new ExpFunction("configFile"));
@@ -259,7 +261,7 @@ public:
 	    params().addParam(new ExpFunction("btoh"));
 	    params().addParam(new ExpFunction("htob"));
 	}
-    static void initialize(ScriptContext* context);
+    static void initialize(ScriptContext* context, const char* name = 0);
     inline void resetWorker()
 	{ m_worker = 0; }
 protected:
@@ -778,7 +780,7 @@ static void contextInit(ScriptRun* runner, const char* name = 0, JsAssist* assis
     if (!ctx)
 	return;
     JsObject::initialize(ctx);
-    JsEngine::initialize(ctx);
+    JsEngine::initialize(ctx,name);
     if (assist)
 	JsChannel::initialize(ctx,assist);
     JsMessage::initialize(ctx);
@@ -1460,7 +1462,7 @@ void JsEngine::destroyed()
 	Thread::idle();
 }
 
-void JsEngine::initialize(ScriptContext* context)
+void JsEngine::initialize(ScriptContext* context, const char* name)
 {
     if (!context)
 	return;
@@ -1468,7 +1470,7 @@ void JsEngine::initialize(ScriptContext* context)
     Lock mylock(mtx);
     NamedList& params = context->params();
     if (!params.getParam(YSTRING("Engine")))
-	addObject(params,"Engine",new JsEngine(mtx));
+	addObject(params,"Engine",new JsEngine(mtx,name));
 }
 
 
@@ -2388,7 +2390,19 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
     }
     else if (oper.name() == YSTRING("getIntValue")) {
 	int64_t defVal = 0;
+	int64_t minVal = LLONG_MIN;
+	int64_t maxVal = LLONG_MAX;
+	bool clamp = true;
 	switch (extractArgs(stack,oper,context,args)) {
+	    case 6:
+		clamp = static_cast<ExpOperation*>(args[5])->valBoolean(clamp);
+		// fall through
+	    case 5:
+		maxVal = static_cast<ExpOperation*>(args[4])->valInteger(maxVal);
+		// fall through
+	    case 4:
+		minVal = static_cast<ExpOperation*>(args[3])->valInteger(minVal);
+		// fall through
 	    case 3:
 		defVal = static_cast<ExpOperation*>(args[2])->valInteger();
 		// fall through
@@ -2399,7 +2413,7 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 	}
 	const String& sect = *static_cast<ExpOperation*>(args[0]);
 	const String& name = *static_cast<ExpOperation*>(args[1]);
-	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.getInt64Value(sect,name,defVal),name));
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_config.getInt64Value(sect,name,defVal,minVal,maxVal,clamp),name));
     }
     else if (oper.name() == YSTRING("getBoolValue")) {
 	bool defVal = false;
@@ -2534,7 +2548,19 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
     }
     else if (oper.name() == YSTRING("getIntValue")) {
 	int64_t val = 0;
+	int64_t minVal = LLONG_MIN;
+	int64_t maxVal = LLONG_MAX;
+	bool clamp = true;
 	switch (extractArgs(stack,oper,context,args)) {
+	    case 5:
+		clamp = static_cast<ExpOperation*>(args[4])->valBoolean(clamp);
+		// fall through
+	    case 4:
+		maxVal = static_cast<ExpOperation*>(args[3])->valInteger(maxVal);
+		// fall through
+	    case 3:
+		minVal = static_cast<ExpOperation*>(args[2])->valInteger(minVal);
+		// fall through
 	    case 2:
 		val = static_cast<ExpOperation*>(args[1])->valInteger();
 		// fall through
@@ -2546,7 +2572,11 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
 	const String& name = *static_cast<ExpOperation*>(args[0]);
 	NamedList* sect = m_owner->config().getSection(toString());
 	if (sect)
-	    val = sect->getInt64Value(name,val);
+	    val = sect->getInt64Value(name,val,minVal,maxVal,clamp);
+	else if (val < minVal)
+	    val = minVal;
+	else if (val > maxVal)
+	    val = maxVal;
 	ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
     }
     else if (oper.name() == YSTRING("getBoolValue")) {

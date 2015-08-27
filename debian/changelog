@@ -1,4 +1,4 @@
-yate (5.5.1~svn6022) UNRELEASED; urgency=low
+yate (5.5.1~svn6024) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1444,8 +1444,11 @@ yate (5.5.1~svn6022) UNRELEASED; urgency=low
   * Updated to SVN revision 6022: + Added clearSection() method to
     ConfigFile. Added addValue() method to ConfigSection.  + Added
     addValue() method to ConfigFile.
+  * Updated to SVN revision 6024: + Added support for JS getIntValue()
+    min/max/clamp parameters.  + Add a JS Engine.name property so
+    scripts can know how they were started.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 26 Aug 2015 02:19:11 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 28 Aug 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

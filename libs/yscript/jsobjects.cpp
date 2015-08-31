@@ -777,22 +777,24 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// New length: 4
 	// shift array
 	int32_t shift = (int32_t)oper.number();
-	for (int32_t i = length() + shift - 1; i >= shift; i--) {
-	    NamedString* ns = static_cast<NamedString*>((*params().paramList())[String(i - shift)]);
-	    if (ns) {
-		String index(i);
-		params().clearParam(index);
-		const_cast<String&>(ns->name()) = index;
+	if (shift >= 1) {
+	    for (int32_t i = length() + shift - 1; i >= shift; i--) {
+		NamedString* ns = static_cast<NamedString*>((*params().paramList())[String(i - shift)]);
+		if (ns) {
+		    String index(i);
+		    params().clearParam(index);
+		    const_cast<String&>(ns->name()) = index;
+		}
 	    }
+	    for (int32_t i = shift - 1; i >= 0; i--) {
+		ExpOperation* op = popValue(stack,context);
+		if (!op)
+		    continue;
+	        const_cast<String&>(op->name()) = i;
+		params().paramList()->insert(op);
+	    }
+	    setLength(length() + shift);
 	}
-	for (int32_t i = shift - 1; i >= 0; i--) {
-	    ExpOperation* op = popValue(stack,context);
-	    if (!op)
-		continue;
-	    const_cast<String&>(op->name()) = i;
-	    params().paramList()->insert(op);
-	}
-	setLength(length() + shift);
 	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)length()));
     }
     else if (oper.name() == YSTRING("slice"))

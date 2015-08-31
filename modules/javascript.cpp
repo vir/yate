@@ -554,6 +554,7 @@ protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 private:
     static XmlElement* getXml(const String* obj, bool take);
+    static XmlElement* buildXml(const String* name, const String* text = 0);
     XmlElement* m_xml;
     RefPointer<JsXML> m_owner;
 };
@@ -3009,26 +3010,39 @@ JsObject* JsXML::runConstructor(ObjList& stack, const ExpOperation& oper, GenObj
     JsXML* obj = 0;
     ObjList args;
     int n = extractArgs(stack,oper,context,args);
+    ExpOperation* arg1 = static_cast<ExpOperation*>(args[0]);
+    ExpOperation* arg2 = static_cast<ExpOperation*>(args[1]);
     switch (n) {
 	case 1:
 	    {
-		ExpOperation* text = static_cast<ExpOperation*>(args[0]);
-		XmlElement* xml = getXml(text,false);
+		// new XML(xmlObj), new XML("<xml>document</xml>") or new XML("element-name")
+		XmlElement* xml = buildXml(arg1);
+		if (!xml)
+		    xml = getXml(arg1,false);
 		if (!xml)
 		    return JsParser::nullObject();
 		obj = new JsXML(mutex(),xml);
 	    }
 	    break;
 	case 2:
+	    {
+		// new XML(object,"field-name") or new XML("element-name","text-content")
+		XmlElement* xml = buildXml(arg1,arg2);
+		if (xml) {
+		    obj = new JsXML(mutex(),xml);
+		    break;
+		}
+	    }
+	    // fall through
 	case 3:
 	    {
-		JsObject* jso = YOBJECT(JsObject,args[0]);
-		ExpOperation* name = static_cast<ExpOperation*>(args[1]);
-		if (!jso || !name)
+		// new XML(object,"field-name",bool)
+		JsObject* jso = YOBJECT(JsObject,arg1);
+		if (!jso || !arg2)
 		    return 0;
-		ExpOperation* tmp = static_cast<ExpOperation*>(args[2]);
-		bool take = tmp && tmp->valBoolean();
-		XmlElement* xml = getXml(jso->getField(stack,*name,context),take);
+		ExpOperation* arg3 = static_cast<ExpOperation*>(args[2]);
+		bool take = arg3 && arg3->valBoolean();
+		XmlElement* xml = getXml(jso->getField(stack,*arg2,context),take);
 		if (!xml)
 		    return JsParser::nullObject();
 		obj = new JsXML(mutex(),xml);
@@ -3069,6 +3083,16 @@ XmlElement* JsXML::getXml(const String* obj, bool take)
     if (!(parser.document() && parser.document()->root(true)))
 	return 0;
     return new XmlElement(*parser.document()->root());
+}
+
+XmlElement* JsXML::buildXml(const String* name, const String* text)
+{
+    if (TelEngine::null(name))
+	return 0;
+    static const Regexp s_elemName("^[[:alpha:]_][[:alnum:]_.-]*$");
+    if (name->startsWith("xml",false,true) || !s_elemName.matches(*name))
+	return 0;
+    return new XmlElement(name->c_str(),TelEngine::c_str(text));
 }
 
 void JsXML::initialize(ScriptContext* context)

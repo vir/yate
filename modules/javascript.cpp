@@ -3077,6 +3077,11 @@ XmlElement* JsXML::getXml(const String* obj, bool take)
 	    return new XmlElement(*xml);
 	}
     }
+    else if (!take) {
+	xml = YOBJECT(XmlElement,obj);
+	if (xml)
+	    return new XmlElement(*xml);
+    }
     XmlDomParser parser;
     if (!(parser.parse(obj->c_str()) || parser.completeText()))
 	return 0;

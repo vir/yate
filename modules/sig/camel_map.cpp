@@ -3224,7 +3224,7 @@ static const Parameter s_M_CSI[] = {
     {"gsmSCF-Address",     s_ctxtPrim_0_Tag, false, TcapXApplication::AddressString, 0},
     {"extensionContainer", s_ctxtCstr_1_Tag, true,  TcapXApplication::HexString,     0},
     {"notificationToCSE",  s_ctxtPrim_2_Tag, true,  TcapXApplication::Null,          0},
-    {"csi-Active",         s_ctxtPrim_3_Tag, true,  TcapXApplication::Null,          0},
+    {"csiActive",          s_ctxtPrim_3_Tag, true,  TcapXApplication::Null,          0},
     {"",                   s_noTag,          false, TcapXApplication::None,          0},
 };
 
@@ -3259,7 +3259,7 @@ static const Parameter s_SMS_CSI[] = {
     {"camelCapabilityHandling", s_ctxtPrim_1_Tag,   true,   TcapXApplication::Enumerated,   s_camelCapabilityHandling},
     {"extensionContainer",      s_ctxtCstr_2_Tag,   true,   TcapXApplication::HexString,    0},
     {"notificationToCSE",       s_ctxtPrim_3_Tag,   true,   TcapXApplication::Null,         0},
-    {"csi-Active",              s_ctxtPrim_4_Tag,   true,   TcapXApplication::Null,         0},
+    {"csiActive",               s_ctxtPrim_4_Tag,   true,   TcapXApplication::Null,         0},
     {"",                        s_noTag,            false,  TcapXApplication::None,         0},
 };
 
@@ -3289,7 +3289,7 @@ static const Parameter s_T_CSI[] = {
     {"extensionContainer",      s_sequenceTag,      true,   TcapXApplication::HexString,    0},
     {"camelCapabilityHandling", s_ctxtPrim_0_Tag,   true,   TcapXApplication::Enumerated,   s_camelCapabilityHandling},
     {"notificationToCSE",       s_ctxtPrim_1_Tag,   true,   TcapXApplication::Null,         0},
-    {"csi-Active",              s_ctxtPrim_2_Tag,   true,   TcapXApplication::Null,         0},
+    {"csiActive",               s_ctxtPrim_2_Tag,   true,   TcapXApplication::Null,         0},
     {"",                        s_noTag,            false,  TcapXApplication::None,         0},
 };
 
@@ -3324,7 +3324,7 @@ static const Parameter s_D_CSI[] = {
     {"camelCapabilityHandling",     s_ctxtPrim_1_Tag,   true,   TcapXApplication::Enumerated,   s_camelCapabilityHandling},
     {"extensionContainer",          s_ctxtCstr_2_Tag,   true,   TcapXApplication::HexString,    0},
     {"notificationToCSE",           s_ctxtPrim_3_Tag,   true,   TcapXApplication::Null,         0},
-    {"csi-Active",                  s_ctxtPrim_4_Tag,   true,   TcapXApplication::Null,         0},
+    {"csiActive",                   s_ctxtPrim_4_Tag,   true,   TcapXApplication::Null,         0},
     {"",                            s_noTag,            false,  TcapXApplication::None,         0},
 };
 
@@ -3586,7 +3586,7 @@ static const Parameter s_GPRS_CSISeq[] = {
     {"camelCapabilityHandling", s_ctxtPrim_1_Tag, true,  TcapXApplication::Enumerated,  s_camelCapabilityHandling},
     {"extensionContainer",      s_ctxtCstr_2_Tag, true,  TcapXApplication::HexString,   0},
     {"notificationToCSE",       s_ctxtPrim_3_Tag, true,  TcapXApplication::Null,        0},
-    {"csi-Active",              s_ctxtPrim_4_Tag, true,  TcapXApplication::Null,        0},
+    {"csiActive",               s_ctxtPrim_4_Tag, true,  TcapXApplication::Null,        0},
     {"",                        s_noTag,          false, TcapXApplication::None,        0},
 };
 

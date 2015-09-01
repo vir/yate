@@ -1,4 +1,4 @@
-yate (5.5.1~svn6028) UNRELEASED; urgency=low
+yate (5.5.1~svn6029) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1452,8 +1452,10 @@ yate (5.5.1~svn6028) UNRELEASED; urgency=low
     XML constructor that takes element name and optional text.  + Added
     support for copy constructing a JS XML.  + Renamed csi-Active to
     csiActive to maintain uniform naming.
+  * Updated to SVN revision 6029: + Added engine.command cmd_header and
+    cmd_finish parameters for proper handling of paged responses.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 01 Sep 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 02 Sep 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

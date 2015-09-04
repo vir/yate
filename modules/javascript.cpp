@@ -254,6 +254,7 @@ public:
 	    params().addParam(new ExpFunction("clearTimeout"));
 	    params().addParam(new ExpFunction("loadLibrary"));
 	    params().addParam(new ExpFunction("loadObject"));
+	    params().addParam(new ExpFunction("replaceParams"));
 	    params().addParam(new ExpFunction("atob"));
 	    params().addParam(new ExpFunction("btoa"));
 	    params().addParam(new ExpFunction("atoh"));
@@ -1314,6 +1315,28 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    }
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
+    else if (oper.name() == YSTRING("replaceParams")) {
+	ObjList args;
+	int argc = extractArgs(stack,oper,context,args);
+	if (argc < 2 || argc > 4)
+	    return false;
+	GenObject* arg0 = args[0];
+	ExpOperation* text = static_cast<ExpOperation*>(arg0);
+	NamedList* params = YOBJECT(NamedList,args[1]);
+	bool sqlEsc = (argc >= 3) && static_cast<ExpOperation*>(args[2])->valBoolean();
+	char extraEsc = 0;
+	if (argc >= 4)
+	    extraEsc = static_cast<ExpOperation*>(args[3])->at(0);
+	if (params) {
+	    String str(*text);
+	    params->replaceParams(str,sqlEsc,extraEsc);
+	    ExpEvaluator::pushOne(stack,new ExpOperation(str,text->name()));
+	}
+	else {
+	    args.remove(arg0,false);
+	    ExpEvaluator::pushOne(stack,text);
+	}
     }
     else if (oper.name() == YSTRING("restart")) {
 	ObjList args;

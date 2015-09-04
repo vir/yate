@@ -103,6 +103,8 @@ void* ScriptContext::getObject(const String& name) const
 	return const_cast<ScriptContext*>(this);
     if (name == YATOM("ExpExtender"))
 	return const_cast<ExpExtender*>(static_cast<const ExpExtender*>(this));
+    if (name == YATOM("NamedList"))
+	return const_cast<NamedList*>(&m_params);
     return RefObject::getObject(name);
 }
 

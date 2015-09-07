@@ -227,6 +227,7 @@ static bool s_init = false;
 static bool s_dynplugin = false;
 static Engine::PluginMode s_loadMode = Engine::LoadFail;
 static int s_maxworkers = 10;
+static int s_exit = -1;
 unsigned int Engine::s_congestion = 0;
 static Mutex s_congMutex(false,"Congestion");
 static bool s_debug = true;
@@ -1575,6 +1576,11 @@ int Engine::run()
 	    CapturedEvent::capturing(false);
 	}
 
+	if (s_exit >= 0) {
+	    halt(s_exit);
+	    s_exit = -1;
+	}
+
 	// Create worker thread if we didn't hear about any of them in a while
 	if (s_makeworker && (EnginePrivate::count < s_maxworkers)) {
 	    if (EnginePrivate::count)
@@ -2509,7 +2515,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 				    s_init = true;
 				    break;
 				case 'x':
-				    s_haltcode++;
+				    s_exit++;
 				    break;
 				case 'w':
 				    s_makeworker = false;

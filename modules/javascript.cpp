@@ -546,6 +546,12 @@ public:
 	}
     virtual void* getObject(const String& name) const;
     virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    virtual void initConstructor(JsFunction* construct)
+	{
+	    construct->params().addParam(new ExpOperation((int64_t)0,"PutObject"));
+	    construct->params().addParam(new ExpOperation((int64_t)1,"PutText"));
+	    construct->params().addParam(new ExpOperation((int64_t)2,"PutBoth"));
+	}
     inline JsXML* owner()
 	{ return m_owner ? (JsXML*)m_owner : this; }
     inline const XmlElement* element() const
@@ -2919,11 +2925,11 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	JsXML* x = YOBJECT(JsXML,name);
 	if (x && x->element())
 	    xml = new XmlElement(*x->element());
-	else
+	else if (!(TelEngine::null(name) || JsParser::isNull(*name)))
 	    xml = new XmlElement(name->c_str());
-	if (val)
+	if (xml && val && !JsParser::isNull(*val))
 	    xml->addText(*val);
-	if (XmlSaxParser::NoError == m_xml->addChild(xml))
+	if (xml && (XmlSaxParser::NoError == m_xml->addChild(xml)))
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(new JsXML(mutex(),xml,owner())));
 	else {
 	    TelEngine::destruct(xml);
@@ -2934,8 +2940,15 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	if (extractArgs(stack,oper,context,args) > 2)
 	    return false;
 	XmlElement* xml = 0;
-	if (m_xml)
-	    xml = m_xml->findFirstChild(static_cast<ExpOperation*>(args[0]),static_cast<ExpOperation*>(args[1]));
+	if (m_xml) {
+	    ExpOperation* name = static_cast<ExpOperation*>(args[0]);
+	    ExpOperation* ns = static_cast<ExpOperation*>(args[1]);
+	    if (name && (JsParser::isUndefined(*name) || JsParser::isNull(*name)))
+		name = 0;
+	    if (name && (JsParser::isUndefined(*ns) || JsParser::isNull(*ns)))
+		ns = 0;
+	    xml = m_xml->findFirstChild(name,ns);
+	}
 	if (xml)
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(new JsXML(mutex(),xml,owner())));
 	else
@@ -2946,6 +2959,10 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    return false;
 	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
 	ExpOperation* ns = static_cast<ExpOperation*>(args[1]);
+	if (name && (JsParser::isUndefined(*name) || JsParser::isNull(*name)))
+	    name = 0;
+	if (name && (JsParser::isUndefined(*ns) || JsParser::isNull(*ns)))
+	    ns = 0;
 	XmlElement* xml = 0;
 	if (m_xml)
 	    xml = m_xml->findFirstChild(name,ns);
@@ -2972,7 +2989,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	ExpOperation* text = static_cast<ExpOperation*>(args[0]);
 	if (!m_xml || !text)
 	    return false;
-	if (!TelEngine::null(text))
+	if (!(TelEngine::null(text) || JsParser::isNull(*text)))
 	    m_xml->addText(*text);
     }
     else if (oper.name() == YSTRING("getText")) {
@@ -2989,14 +3006,23 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	ExpOperation* text = static_cast<ExpOperation*>(args[0]);
 	if (!(m_xml && text))
 	    return false;
-	m_xml->setText(*text);
+	if (JsParser::isNull(*text))
+	    m_xml->setText("");
+	else
+	    m_xml->setText(*text);
     }
     else if (oper.name() == YSTRING("getChildText")) {
 	if (extractArgs(stack,oper,context,args) > 2)
 	    return false;
+	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
+	ExpOperation* ns = static_cast<ExpOperation*>(args[1]);
+	if (name && (JsParser::isUndefined(*name) || JsParser::isNull(*name)))
+	    name = 0;
+	if (name && (JsParser::isUndefined(*ns) || JsParser::isNull(*ns)))
+	    ns = 0;
 	XmlElement* xml = 0;
 	if (m_xml)
-	    xml = m_xml->findFirstChild(static_cast<ExpOperation*>(args[0]),static_cast<ExpOperation*>(args[1]));
+	    xml = m_xml->findFirstChild(name,ns);
 	if (xml)
 	    ExpEvaluator::pushOne(stack,new ExpOperation(xml->getText(),xml->unprefixedTag()));
 	else

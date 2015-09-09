@@ -1,4 +1,4 @@
-yate (5.5.1~svn6031) UNRELEASED; urgency=low
+yate (5.5.1~svn6032) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1458,8 +1458,12 @@ yate (5.5.1~svn6031) UNRELEASED; urgency=low
     that replaces object properties in a ${template} string.
   * Updated to SVN revision 6031: + Fixed behavior of -Dx command line,
     was stopping too early.
+  * Updated to SVN revision 6032: + Added constants for XML put methods.
+    + Refuse to create an XML child with an empty or null tag.  +
+    Consider undefined and null as missing name or namespace for finding
+    XML childs.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 08 Sep 2015 02:19:11 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 10 Sep 2015 02:19:11 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

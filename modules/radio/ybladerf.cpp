@@ -998,6 +998,7 @@ public:
 	}
     unsigned int setTxPattern(const String& pattern);
     void dumpStats(String& buf, const char* sep);
+    void dumpTimestamps(String& buf, const char* sep);
     void dumpDev(String& buf, bool info, bool state, const char* sep,
 	bool fromStatus = false, bool withHdr = true);
     void dumpBoardStatus(String& buf, const char* sep);
@@ -2414,6 +2415,38 @@ void BrfLibUsbDevice::dumpStats(String& buf, const char* sep)
     buf << sep << "RxTS=" << m_rxIO.timestamp;
     buf << sep << "TxAvg=" << dumpIOAvg(s,m_txIO,now);
     buf << sep << "RxAvg=" << dumpIOAvg(s,m_rxIO,now);
+}
+
+static inline void buildTimestampReport(String& buf, bool tx, uint64_t our, uint64_t board,
+    unsigned int code)
+{
+    if (!code) {
+	int64_t delta = (int64_t)(our - board);
+	buf.printf("%s: app=" FMT64U "\tboard=" FMT64U "\tdelta=" FMT64 "\tapp_position: %s",
+	    brfDir(tx),our,board,delta,(delta < 0 ? "past" : "future"));
+    }
+    else
+	buf << brfDir(tx) << ": failure - " << RadioInterface::errorName(code);
+}
+
+void BrfLibUsbDevice::dumpTimestamps(String& buf, const char* sep)
+{
+    BRF_RX_SERIALIZE_NONE;
+    BRF_TX_SERIALIZE_NONE;
+    uint64_t tsTx = 0;
+    uint64_t tsRx = 0;
+    uint64_t ourTx = m_txIO.timestamp;
+    uint64_t ourRx = m_rxIO.timestamp;
+    unsigned int codeTx = internalGetTimestamp(true,tsTx);
+    unsigned int codeRx = internalGetTimestamp(false,tsRx);
+    txSerialize.drop();
+    rxSerialize.drop();
+    String s;
+    String sTx;
+    String sRx;
+    buildTimestampReport(sTx,true,ourTx,tsTx,codeTx);
+    buildTimestampReport(sRx,false,ourRx,tsRx,codeRx);
+    buf.append(sTx,sep) << sep << sRx;
 }
 
 void BrfLibUsbDevice::dumpDev(String& buf, bool info, bool state, const char* sep,
@@ -7370,7 +7403,7 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	"\r\n  Set interface RX DC info output"
 	"\r\ncontrol ifc_name txpattern [pattern=]"
 	"\r\n  Set interface TX pattern"
-	"\r\ncontrol ifc_name show [info=status|statistics|boardstatus|peripheral] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]"
+	"\r\ncontrol ifc_name show [info=status|statistics|timestamps|boardstatus|peripheral] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]"
 	"\r\n  Verbose output various interface info"
 	"\r\ncontrol module_name test oper=start|stop|pause|resume|exec"
 	"\r\n  Test commands"
@@ -7578,7 +7611,7 @@ bool BrfModule::onCmdBufOutput(BrfInterface* ifc, Message& msg)
     return true;
 }
 
-// control ifc_name show [info=status|statistics|boardstatus|peripheral] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]
+// control ifc_name show [info=status|statistics|timestamps|boardstatus|peripheral] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]
 bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg)
 {
     if (!ifc->device())
@@ -7591,6 +7624,8 @@ bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg)
 	ifc->device()->dumpBoardStatus(str,"\r\n");
     else if (info == YSTRING("statistics"))
 	ifc->device()->dumpStats(str,"\r\n");
+    else if (info == YSTRING("timestamps"))
+	ifc->device()->dumpTimestamps(str,"\r\n");
     else if (info == YSTRING("peripheral")) {
 	String what = msg.getValue(YSTRING("peripheral"),"all");
 	if (what == YSTRING("all"))

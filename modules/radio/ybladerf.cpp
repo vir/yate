@@ -2731,7 +2731,12 @@ unsigned int BrfLibUsbDevice::syncTx(uint64_t ts, float* data, unsigned int samp
 {
     BRF_TX_SERIALIZE;
     BRF_CHECK_DEV("syncTx()");
-    return send(ts,data,samples,powerScale);
+    unsigned int code = send(ts,data,samples,powerScale);
+    if (code == RadioInterface::HardwareIOError) {
+	txSerialize.drop();
+	Thread::yield();
+    }
+    return code;
 }
 
 // Receive data from the Rx interface of the bladeRF device
@@ -2739,7 +2744,12 @@ unsigned int BrfLibUsbDevice::syncRx(uint64_t& ts, float* data, unsigned int& sa
 {
     BRF_RX_SERIALIZE;
     BRF_CHECK_DEV("syncRx()");
-    return recv(ts,data,samples);
+    unsigned int code = recv(ts,data,samples);
+    if (code == RadioInterface::HardwareIOError) {
+	rxSerialize.drop();
+	Thread::yield();
+    }
+    return code;
 }
 
 unsigned int BrfLibUsbDevice::setFrequency(uint32_t hz, bool tx)

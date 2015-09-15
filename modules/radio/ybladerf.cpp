@@ -676,7 +676,7 @@ class BrfDevIO : public BrfDevStatus
 public:
     inline BrfDevIO(bool tx)
 	: BrfDevStatus(tx),
-	busy(false), showBuf(0), showBufData(true), checkTs(0),
+	showBuf(0), showBufData(true), checkTs(0),
 	mutex(false,tx ? "BrfDevIoTx" : "BrfDevIoRx"),
 	showDcOffsChange(0), showFpgaPhaseChange(0), showPowerBalanceChange(0),
 	startTime(0), transferred(0),
@@ -782,7 +782,6 @@ public:
 	    }
 	}
 
-    bool busy;                           // Busy flag
     int showBuf;                         // Show buffers
     bool showBufData;                    // Display buffer data
     int checkTs;                         // Check IO buffers timestamp
@@ -1618,32 +1617,38 @@ class BrfSerialize
 {
 public:
     inline BrfSerialize(BrfLibUsbDevice* dev, bool tx, bool waitNow = true)
-	: status(0), m_device(dev), m_io(m_device->getIO(tx)), m_set(false) {
+	: status(0), m_device(dev), m_io(m_device->getIO(tx)), m_lock(0) {
 	    if (waitNow)
-		wait();
+	        wait();
 	}
     inline ~BrfSerialize()
 	{ drop(); }
-    inline void drop() {
-	    if (m_set)
-		m_set = m_io.busy = false;
-	}
+    inline void drop()
+	{ m_lock.drop(); }
     inline void wait() {
-	    while (true) {
-		Lock lck(m_io.mutex,Thread::idleUsec());
-		if ((status = m_device->cancelled()) != 0)
+	    unsigned int intervals = s_waitIntervals;
+	    for (unsigned int i = 0; i < intervals; i++) {
+		bool ok = m_lock.acquire(m_io.mutex,Thread::idleUsec());
+		if ((status = m_device->cancelled()) != 0) {
+		    drop();
 		    return;
-		if (m_io.busy || !lck.locked())
-		    continue;
-		m_set = m_io.busy = true;
-		return;
+		}
+		if (ok)
+		    return;
 	    }
+	    String tmp;
+	    tmp.printf("Failed to serialize %s for %u ms",brfDir(m_io.tx()),
+		(unsigned int)(intervals * Thread::idleMsec()));
+	    // Put a DebugFail if mutex debug was enabled
+	    status = m_device->showError(RadioInterface::Failure,tmp,0,0,
+		Lockable::wait() ? DebugFail : DebugWarn);
 	}
     unsigned int status;
+    static unsigned int s_waitIntervals;
 protected:
     BrfLibUsbDevice* m_device;
     BrfDevIO& m_io;
-    bool m_set;
+    Lock m_lock;
 };
 
 class BrfInterface : public RadioInterface
@@ -1938,6 +1943,7 @@ protected:
 static bool s_usbContextInit = false;            // USB library init flag
 INIT_PLUGIN(BrfModule);
 static Configuration s_cfg;                      // Configuration file (protected by plugin mutex)
+unsigned int BrfSerialize::s_waitIntervals = 100;// Serialize wait intervals
 static const String s_modCmds[] = {"test","help",""};
 static const String s_ifcCmds[] = {"vgagain","correction","lmswrite",
     "bufoutput","rxdcoutput","txpattern","show",""};
@@ -2431,15 +2437,15 @@ static inline void buildTimestampReport(String& buf, bool tx, uint64_t our, uint
 
 void BrfLibUsbDevice::dumpTimestamps(String& buf, const char* sep)
 {
-    BRF_RX_SERIALIZE_NONE;
     BRF_TX_SERIALIZE_NONE;
     uint64_t tsTx = 0;
-    uint64_t tsRx = 0;
     uint64_t ourTx = m_txIO.timestamp;
-    uint64_t ourRx = m_rxIO.timestamp;
     unsigned int codeTx = internalGetTimestamp(true,tsTx);
-    unsigned int codeRx = internalGetTimestamp(false,tsRx);
     txSerialize.drop();
+    BRF_RX_SERIALIZE_NONE;
+    uint64_t tsRx = 0;
+    uint64_t ourRx = m_rxIO.timestamp;
+    unsigned int codeRx = internalGetTimestamp(false,tsRx);
     rxSerialize.drop();
     String s;
     String sTx;
@@ -4404,7 +4410,8 @@ unsigned int BrfLibUsbDevice::syncTransfer(int ep, uint8_t* data, unsigned int l
 {
     LusbTransfer& t = m_usbTransfer[ep];
 #ifdef DEBUG
-    if ((ep == EpReadSamples || ep == EpSendSamples) && !getIO(ep == EpSendSamples).busy)
+    if ((ep == EpReadSamples || ep == EpSendSamples) &&
+	!getIO(ep == EpSendSamples).mutex.locked())
 	Debug(m_owner,DebugFail,"syncTransfer() %s not locked [%p]",
 	    brfDir(ep == EpSendSamples),m_owner);
     if (t.running())
@@ -7269,6 +7276,8 @@ void BrfModule::initialize()
 	installRelay(Control);
 	installRelay(RadioCreate,"radio.create",gen.getIntValue("priority",90));
     }
+    unsigned int tout = gen.getIntValue(YSTRING("serialize_wait_interval"),3000,500,10000);
+    BrfSerialize::s_waitIntervals = (tout / Thread::idleMsec()) + 1;
     lusbSetDebugLevel();
     s_lusbCtrlTransferTout = lusb.getIntValue(YSTRING("ctrl_transfer_timeout"),
 	LUSB_CTRL_TIMEOUT,200,2000);

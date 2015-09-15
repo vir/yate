@@ -1,4 +1,4 @@
-yate (5.5.1~svn6033) UNRELEASED; urgency=low
+yate (5.5.1~svn6035) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1466,8 +1466,12 @@ yate (5.5.1~svn6033) UNRELEASED; urgency=low
     an empty or null tag.  + Consider undefined and null as missing name
     or namespace for finding XML childs.  + Added timestamps display to
     show command.
+  * Updated to SVN revision 6035: + Yield when send/recv fails with
+    hardware I/O error.  + Leave tx/rx mutex locked when serializing i/o
+    (avoid race for serialize). Don't try to serialize both tx and rx to
+    obtain timestamps when dumping them.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 12 Sep 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 16 Sep 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

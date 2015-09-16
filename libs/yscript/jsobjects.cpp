@@ -34,6 +34,10 @@ public:
 	: JsObject("Object",mtx,true)
 	{
 	}
+    virtual void initConstructor(JsFunction* construct)
+	{
+	    construct->params().addParam(new ExpFunction("keys"));
+	}
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
@@ -495,6 +499,37 @@ bool JsObjectObj::runNative(ObjList& stack, const ExpOperation& oper, GenObject*
 {
     if (oper.name() == YSTRING("constructor"))
 	ExpEvaluator::pushOne(stack,new ExpWrapper(new JsObject("Object",mutex())));
+    else if (oper.name() == YSTRING("keys")) {
+	ExpOperation* op = 0;
+	GenObject* obj = 0;
+	if (oper.number() == 0) {
+	    ScriptRun* run = YOBJECT(ScriptRun,context);
+	    if (run)
+		obj = run->context();
+	    else
+		obj = context;
+	}
+	else if (oper.number() == 1) {
+	    op = popValue(stack,context);
+	    if (!op)
+		return false;
+	    obj = op;
+	}
+	else
+	    return false;
+	const NamedList* lst = YOBJECT(NamedList,obj);
+	if (lst) {
+	    NamedIterator iter(*lst);
+	    JsArray* jsa = new JsArray(context,mutex());
+	    while (const NamedString* ns = iter.get())
+		if (ns->name() != protoName())
+		    jsa->push(new ExpOperation(ns->name(),0,true));
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,"keys"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+	TelEngine::destruct(op);
+    }
     else
 	return JsObject::runNative(stack,oper,context);
     return true;

@@ -7387,8 +7387,10 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 	MimeSdpBody* sdp = createPasstroughSDP(msg);
 	if (!sdp) {
 	    m_rtpForward = false;
-	    bool startNow = msg.getBoolValue(YSTRING("rtp_start"),s_start_rtp);
-	    if (startNow && !m_rtpMedia) {
+	    bool startNow = false;
+	    if (m_rtpMedia)
+		startNow = msg.getBoolValue(YSTRING("rtp_start"),s_start_rtp);
+	    else {
 		// early RTP start but media list yet unknown - build best guess
 		String fmts;
 		plugin.parser().getAudioFormats(fmts);

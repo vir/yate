@@ -73,7 +73,7 @@ class BrfModule;                         // The module
 #define BRF_RXVGA2_GAIN_MAX     30
 #define BRF_TXVGA1_GAIN_MIN     -35
 #define BRF_TXVGA1_GAIN_MAX     -4
-#define BRF_TXVGA1_GAIN_DEF     -16
+#define BRF_TXVGA1_GAIN_DEF     -14
 #define BRF_TXVGA2_GAIN_MIN     0
 #define BRF_TXVGA2_GAIN_MAX     25
 
@@ -639,7 +639,7 @@ class BrfDevStatus
 {
 public:
     inline BrfDevStatus(bool tx)
-	: rfEnabled(false), frequency(0), vga1(0), vga2(0), lpf(0),
+	: rfEnabled(false), frequency(0), vga1(0), vga1Changed(false), vga2(0), lpf(0),
 	dcOffsetI(0), dcOffsetQ(0), fpgaCorrPhase(0), fpgaCorrGain(0),
 	powerBalance(0), lpfBw(0), sampleRate(0),
 	m_tx(tx)
@@ -656,6 +656,7 @@ public:
     unsigned int frequency;              // Used frequency
     unsigned int freqOffset;             // Used frequency offset
     int vga1;                            // VGA1 gain
+    bool vga1Changed;                    // VGA1 was set by us
     int vga2;                            // VGA2 gain
     int lpf;                             // LPF status
     int dcOffsetI;                       // Current I (in-phase) DC offset
@@ -2671,6 +2672,7 @@ bool BrfLibUsbDevice::open(const NamedList& params)
 	m_rxIO.vga1 = BRF_RXVGA1_GAIN_MAX + 1;
 	BRF_FUNC_CALL_BREAK(internalSetGain(false,BRF_RXVGA2_GAIN_MIN));
 	// Pre/post mixer TX VGA
+	m_txIO.vga1Changed = false;
 	const String& txVga1 = params["tx_vga1"];
 	if (txVga1)
 	    BRF_FUNC_CALL_BREAK(internalSetTxVga(txVga1.toInteger(BRF_TXVGA1_GAIN_DEF),true,&e));
@@ -3972,6 +3974,8 @@ unsigned int BrfLibUsbDevice::internalSetTxVga(int vga, bool preMixer, String* e
 	    data |= (uint8_t)(vga << 3);
 	}
 	BRF_FUNC_CALL_BREAK(lmsWrite(addr,data,&e));
+	if (preMixer)
+	    m_txIO.vga1Changed = true;
 	int& old = preMixer ? m_txIO.vga1 : m_txIO.vga2;
 	if (old != vga) {
 	    old = vga;
@@ -4114,7 +4118,8 @@ unsigned int BrfLibUsbDevice::internalSetGain(bool tx, int val, int* newVal, Str
 {
     int vga1 = 0;
     if (tx) {
-	vga1 = (m_txIO.vga1 >= BRF_TXVGA1_GAIN_MIN) ? m_txIO.vga1 : BRF_TXVGA1_GAIN_DEF;
+	vga1 = (m_txIO.vga1Changed && m_txIO.vga1 >= BRF_TXVGA1_GAIN_MIN) ?
+	    m_txIO.vga1 : BRF_TXVGA1_GAIN_DEF;
 	val = clampInt(val + BRF_TXVGA2_GAIN_MAX,BRF_TXVGA2_GAIN_MIN,BRF_TXVGA2_GAIN_MAX);
     }
     else {

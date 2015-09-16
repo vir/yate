@@ -1,4 +1,4 @@
-yate (5.5.1~svn6035) UNRELEASED; urgency=low
+yate (5.5.1~svn6039) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1470,8 +1470,12 @@ yate (5.5.1~svn6035) UNRELEASED; urgency=low
     hardware I/O error.  + Leave tx/rx mutex locked when serializing i/o
     (avoid race for serialize). Don't try to serialize both tx and rx to
     obtain timestamps when dumping them.
+  * Updated to SVN revision 6039: + Even if configured start RTP when
+    generating 200 OK only if INVITE had SDP.  + Fixed debug.  + Fixed
+    bug: properly check if VGA1 value was already set by us when setting
+    gain.  + Added JS Object.keys() static method.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 16 Sep 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 17 Sep 2015 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

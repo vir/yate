@@ -3051,7 +3051,7 @@ unsigned int BrfLibUsbDevice::getTimestamp(bool tx, uint64_t& ts)
 unsigned int BrfLibUsbDevice::writeLMS(uint8_t addr, uint8_t value, uint8_t* rst)
 {
     BRF_TX_SERIALIZE;
-    BRF_CHECK_DEV("getTimestamp()");
+    BRF_CHECK_DEV("writeLMS()");
     if (rst)
 	return lmsSet(addr,value,*rst);
     return lmsWrite(addr,value);

@@ -1927,11 +1927,11 @@ protected:
     void completeIfaces(String& dest, const String& partWord);
     bool onCmdControl(BrfInterface* ifc, Message& msg);
     bool onCmdStatus(String& retVal, String& line);
-    bool onCmdGain(BrfInterface* ifc, Message& msg);
-    bool onCmdCorrection(BrfInterface* ifc, Message& msg);
+    bool onCmdGain(BrfInterface* ifc, Message& msg, int tx = -1, bool preMixer = true);
+    bool onCmdCorrection(BrfInterface* ifc, Message& msg, int tx = -1, int corr = 0);
     bool onCmdLmsWrite(BrfInterface* ifc, Message& msg);
     bool onCmdBufOutput(BrfInterface* ifc, Message& msg);
-    bool onCmdShow(BrfInterface* ifc, Message& msg);
+    bool onCmdShow(BrfInterface* ifc, Message& msg, const String& what = String::empty());
     bool test(const String& cmd, NamedList& list);
     void setDebugPeripheral(const NamedList& list);
     void setSampleEnergize(const String& value);
@@ -1946,7 +1946,12 @@ INIT_PLUGIN(BrfModule);
 static Configuration s_cfg;                      // Configuration file (protected by plugin mutex)
 unsigned int BrfSerialize::s_waitIntervals = 100;// Serialize wait intervals
 static const String s_modCmds[] = {"test","help",""};
-static const String s_ifcCmds[] = {"vgagain","correction","lmswrite",
+static const String s_ifcCmds[] = {
+    "txgain1", "txgain2", "rxgain1", "rxgain2",
+    "txdci", "txdcq", "txfpgaphase", "txfpgagain",
+    "rxdci", "rxdcq", "rxfpgaphase", "rxfpgagain",
+    "showstatus", "showboardstatus", "showstatistics", "showtimestamps", "showlms",
+    "vgagain","correction","lmswrite",
     "bufoutput","rxdcoutput","txpattern","show",""};
 // libusb
 static unsigned int s_lusbCtrlTransferTout = LUSB_CTRL_TIMEOUT; // Control transfer timeout def val (in milliseconds)
@@ -7415,6 +7420,42 @@ void BrfModule::completeIfaces(String& dest, const String& partWord)
 bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 {
     static const char* s_help =
+	"\r\ncontrol ifc_name txgain1 [value=]"
+	"\r\n  Set or retrieve TX VGA 1 mixer gain"
+	"\r\ncontrol ifc_name txgain2 [value=]"
+	"\r\n  Set or retrieve TX VGA 2 mixer gain"
+	"\r\ncontrol ifc_name rxgain1 [value=]"
+	"\r\n  Set or retrieve RX VGA 1 mixer gain"
+	"\r\ncontrol ifc_name rxgain2 [value=]"
+	"\r\n  Set or retrieve RX VGA 2 mixer gain"
+	"\r\ncontrol ifc_name txdci [value=]"
+	"\r\n  Set or retrieve TX DC I correction"
+	"\r\ncontrol ifc_name txdcq [value=]"
+	"\r\n  Set or retrieve TX DC Q correction"
+	"\r\ncontrol ifc_name txfpgaphase [value=]"
+	"\r\n  Set or retrieve TX FPGA PHASE correction"
+	"\r\ncontrol ifc_name txfpgagain [value=]"
+	"\r\n  Set or retrieve TX FPGA GAIN correction"
+	"\r\ncontrol ifc_name rxdci [value=]"
+	"\r\n  Set or retrieve RX DC I correction"
+	"\r\ncontrol ifc_name rxdcq [value=]"
+	"\r\n  Set or retrieve RX DC Q correction"
+	"\r\ncontrol ifc_name rxfpgaphase [value=]"
+	"\r\n  Set or retrieve RX FPGA PHASE correction"
+	"\r\ncontrol ifc_name rxfpgagain [value=]"
+	"\r\n  Set or retrieve RX FPGA GAIN correction"
+	"\r\ncontrol ifc_name correction tx=boolean corr={dc-i|dc-q|fpga-gain|fpga-phase} [value=]"
+	"\r\n  Set or retrieve TX/RX DC I/Q or FPGA GAIN/PHASE correction"
+	"\r\ncontrol ifc_name showstatus"
+	"\r\n  Output interface status"
+	"\r\ncontrol ifc_name showboardstatus"
+	"\r\n  Output board status"
+	"\r\ncontrol ifc_name showstatistics"
+	"\r\n  Output interface statistics"
+	"\r\ncontrol ifc_name showtimestamps"
+	"\r\n  Output interface and board timestamps"
+	"\r\ncontrol ifc_name showlms [addr=] [len=]"
+	"\r\n  Output LMS registers"
 	"\r\ncontrol ifc_name vgagain tx=boolean vga={1|2} [gain=]"
 	"\r\n  Set or retrieve TX/RX VGA mixer gain"
 	"\r\ncontrol ifc_name correction tx=boolean corr={dc-i|dc-q|fpga-gain|fpga-phase} [value=]"
@@ -7429,9 +7470,9 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	"\r\n  Set interface TX pattern"
 	"\r\ncontrol ifc_name show [info=status|statistics|timestamps|boardstatus|peripheral] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]"
 	"\r\n  Verbose output various interface info"
-	"\r\ncontrol module_name test oper=start|stop|pause|resume|exec"
+	"\r\ncontrol bladerf test oper=start|stop|pause|resume|exec"
 	"\r\n  Test commands"
-	"\r\ncontrol module_name help"
+	"\r\ncontrol bladerf help"
 	"\r\n  Display control commands help";
 
     const String& cmd = msg[YSTRING("operation")];
@@ -7446,8 +7487,32 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	return false;
     }
     // Interface commands
+    if (cmd == YSTRING("txgain1"))
+	return onCmdGain(ifc,msg,1,true);
+    if (cmd == YSTRING("txgain2"))
+	return onCmdGain(ifc,msg,1,false);
+    if (cmd == YSTRING("rxgain1"))
+	return onCmdGain(ifc,msg,0,true);
+    if (cmd == YSTRING("rxgain2"))
+	return onCmdGain(ifc,msg,0,false);
     if (cmd == YSTRING("vgagain"))
 	return onCmdGain(ifc,msg);
+    if (cmd == YSTRING("txdci"))
+	return onCmdCorrection(ifc,msg,1,BrfLibUsbDevice::CorrLmsI);
+    if (cmd == YSTRING("txdcq"))
+	return onCmdCorrection(ifc,msg,1,BrfLibUsbDevice::CorrLmsQ);
+    if (cmd == YSTRING("txfpgaphase"))
+	return onCmdCorrection(ifc,msg,1,BrfLibUsbDevice::CorrFpgaPhase);
+    if (cmd == YSTRING("txfpgagain"))
+	return onCmdCorrection(ifc,msg,1,BrfLibUsbDevice::CorrFpgaGain);
+    if (cmd == YSTRING("rxdci"))
+	return onCmdCorrection(ifc,msg,0,BrfLibUsbDevice::CorrLmsI);
+    if (cmd == YSTRING("rxdcq"))
+	return onCmdCorrection(ifc,msg,0,BrfLibUsbDevice::CorrLmsQ);
+    if (cmd == YSTRING("rxfpgaphase"))
+	return onCmdCorrection(ifc,msg,0,BrfLibUsbDevice::CorrFpgaPhase);
+    if (cmd == YSTRING("rxfpgagain"))
+	return onCmdCorrection(ifc,msg,0,BrfLibUsbDevice::CorrFpgaGain);
     if (cmd == YSTRING("correction"))
 	return onCmdCorrection(ifc,msg);
     if (cmd == YSTRING("lmswrite"))
@@ -7466,9 +7531,19 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	ifc->device()->setTxPattern(msg[YSTRING("pattern")]);
 	return true;
     }
+    if (cmd == YSTRING("showstatus"))
+	return onCmdShow(ifc,msg,YSTRING("status"));
+    if (cmd == YSTRING("showboardstatus"))
+	return onCmdShow(ifc,msg,YSTRING("boardstatus"));
+    if (cmd == YSTRING("showstatistics"))
+	return onCmdShow(ifc,msg,YSTRING("statistics"));
+    if (cmd == YSTRING("showtimestamps"))
+	return onCmdShow(ifc,msg,YSTRING("timestamps"));
+    if (cmd == YSTRING("showlms"))
+	return onCmdShow(ifc,msg,YSTRING("lms"));
     if (cmd == YSTRING("show"))
 	return onCmdShow(ifc,msg);
-    return true;
+    return false;
 }
 
 bool BrfModule::onCmdStatus(String& retVal, String& line)
@@ -7536,22 +7611,29 @@ bool BrfModule::onCmdStatus(String& retVal, String& line)
     bDest = tmpGetBParamStr.toBoolean();
 
 // control ifc_name vgagain tx=boolean mixer={1|2} [value=]
-bool BrfModule::onCmdGain(BrfInterface* ifc, Message& msg)
+// control ifc_name {tx|rx}vga{1|2}gain [value=]
+bool BrfModule::onCmdGain(BrfInterface* ifc, Message& msg, int tx, bool preMixer)
 {
     if (!ifc->device())
 	return retMsgError(msg,"No device");
-    bool tx = true;
-    BRF_GET_BOOL_PARAM(tx,"tx");
-    const String& what = msg[YSTRING("vga")];
-    bool preMixer = (what == YSTRING("1"));
-    if (!preMixer && what != YSTRING("2"))
-	return retParamError(msg,"vga");
+    const String* value = 0;
+    if (tx >= 0)
+	value = msg.getParam(YSTRING("value"));
+    else {
+	bool tmpTx = true;
+	BRF_GET_BOOL_PARAM(tmpTx,"tx");
+	const String& what = msg[YSTRING("vga")];
+	preMixer = (what == YSTRING("1"));
+	if (!preMixer && what != YSTRING("2"))
+	    return retParamError(msg,"vga");
+	tx = tmpTx ? 1 : 0;
+	value = msg.getParam(YSTRING("gain"));
+    }
     unsigned int code = 0;
     int crt = 0;
-    const String& value = msg[YSTRING("gain")];
-    if (value)
-	code = tx ? ifc->device()->setTxVga(value.toInteger(),preMixer) :
-	    ifc->device()->setRxVga(value.toInteger(),preMixer);
+    if (!TelEngine::null(value))
+	code = tx ? ifc->device()->setTxVga(value->toInteger(),preMixer) :
+	    ifc->device()->setRxVga(value->toInteger(),preMixer);
     if (!code)
    	code = tx ? ifc->device()->getTxVga(crt,preMixer) :
 	    ifc->device()->getRxVga(crt,preMixer);
@@ -7563,34 +7645,41 @@ bool BrfModule::onCmdGain(BrfInterface* ifc, Message& msg)
 }
 
 // control ifc_name correction tx=boolean corr={dc-i/dc-q/fpga-gain/fpga-phase} [value=]
-bool BrfModule::onCmdCorrection(BrfInterface* ifc, Message& msg)
+bool BrfModule::onCmdCorrection(BrfInterface* ifc, Message& msg, int tx, int corr)
 {
     if (!ifc->device())
 	return retMsgError(msg,"No device");
-    bool tx = true;
-    BRF_GET_BOOL_PARAM(tx,"tx");
-    const String& corr = msg[YSTRING("corr")];
-    if (!corr)
-	return retParamError(msg,"corr");
+    if (tx < 0) {
+	bool tmpTx = true;
+	BRF_GET_BOOL_PARAM(tmpTx,"tx");
+	const String& corrStr = msg[YSTRING("corr")];
+	if (corrStr == YSTRING("dc-i"))
+	    corr = BrfLibUsbDevice::CorrLmsI;
+	else if (corrStr == YSTRING("dc-q"))
+	    corr = BrfLibUsbDevice::CorrLmsQ;
+	else if (corrStr == YSTRING("fpga-phase"))
+	    corr = BrfLibUsbDevice::CorrFpgaPhase;
+	else if (corrStr == YSTRING("fpga-gain"))
+	    corr = BrfLibUsbDevice::CorrFpgaGain;
+	else
+	    return retParamError(msg,"corr");
+	tx = tmpTx ? 1 : 0;
+    }
     const String& value = msg[YSTRING("value")];
     unsigned int code = 0;
     int16_t crt = 0;
-    bool i = (corr == YSTRING("dc-i"));
-    if (i || (corr == YSTRING("dc-q"))) {
+    if (corr == BrfLibUsbDevice::CorrLmsI || corr == BrfLibUsbDevice::CorrLmsQ) {
+	bool i = (corr == BrfLibUsbDevice::CorrLmsI);
 	if (value)
 	    code = ifc->device()->setDcOffset(tx,i,value.toInteger());
 	if (!code)
 	    code = ifc->device()->getDcOffset(tx,i,crt);
     }
     else {
-	int c = (corr == YSTRING("fpga-phase")) ? BrfLibUsbDevice::CorrFpgaPhase:
-	    BrfLibUsbDevice::CorrFpgaGain;
-	if (c == BrfLibUsbDevice::CorrFpgaGain && corr != YSTRING("fpga-gain"))
-	    return retParamError(msg,"corr");
 	if (value)
-	    code = ifc->device()->setFpgaCorr(tx,c,value.toInteger());
+	    code = ifc->device()->setFpgaCorr(tx,corr,value.toInteger());
 	if (!code)
-	    code = ifc->device()->getFpgaCorr(tx,c,crt);
+	    code = ifc->device()->getFpgaCorr(tx,corr,crt);
     }
     if (code)
 	return retValFailure(msg,code);
@@ -7636,11 +7725,15 @@ bool BrfModule::onCmdBufOutput(BrfInterface* ifc, Message& msg)
 }
 
 // control ifc_name show [info=status|statistics|timestamps|boardstatus|peripheral] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]
-bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg)
+bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg, const String& what)
 {
     if (!ifc->device())
 	return retMsgError(msg,"No device");
-    String info = msg.getValue(YSTRING("info"),"status");
+    String info;
+    if (what)
+	info = what;
+    else
+	info = msg.getValue(YSTRING("info"),"status");
     String str;
     if (info == YSTRING("status"))
 	ifc->device()->dumpDev(str,true,true,"\r\n");
@@ -7650,13 +7743,18 @@ bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg)
 	ifc->device()->dumpStats(str,"\r\n");
     else if (info == YSTRING("timestamps"))
 	ifc->device()->dumpTimestamps(str,"\r\n");
-    else if (info == YSTRING("peripheral")) {
-	String what = msg.getValue(YSTRING("peripheral"),"all");
-	if (what == YSTRING("all"))
-	    what = "lms,gpio,vctcxo,si5338";
+    else if (info == YSTRING("peripheral") || info == YSTRING("lms")) {
+	String peripheralList;
+	if (what)
+	    peripheralList = what;
+	else {
+	    peripheralList = msg.getValue(YSTRING("peripheral"),"all");
+	    if (peripheralList == YSTRING("all"))
+		peripheralList = "lms,gpio,vctcxo,si5338";
+	}
 	uint8_t addr = (uint8_t)msg.getIntValue("addr",0,0);
 	uint8_t len = (uint8_t)msg.getIntValue("len",128,1);
-	ObjList* lst = what.split(',');
+	ObjList* lst = peripheralList.split(',');
 	for (ObjList* o = lst->skipNull(); o; o = o->skipNext()) {
 	    String* s = static_cast<String*>(o->get());
 	    s->toUpper();

@@ -1,4 +1,4 @@
-yate (5.5.1~svn6039) UNRELEASED; urgency=low
+yate (5.5.1~svn6041) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1474,8 +1474,11 @@ yate (5.5.1~svn6039) UNRELEASED; urgency=low
     generating 200 OK only if INVITE had SDP.  + Fixed debug.  + Fixed
     bug: properly check if VGA1 value was already set by us when setting
     gain.  + Added JS Object.keys() static method.
+  * Updated to SVN revision 6041: + Added shorter versions of
+    correction, vgagain and show commands.  + Fixed help string
+    contents.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 17 Sep 2015 02:19:13 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 18 Sep 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

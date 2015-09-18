@@ -1627,25 +1627,15 @@ public:
     inline void drop()
 	{ m_lock.drop(); }
     inline void wait() {
-	    unsigned int intervals = s_waitIntervals;
-	    for (unsigned int i = 0; i < intervals; i++) {
-		bool ok = m_lock.acquire(m_io.mutex,Thread::idleUsec());
-		if ((status = m_device->cancelled()) != 0) {
+	    if (m_lock.acquire(m_io.mutex)) {
+		if ((status = m_device->cancelled()) != 0)
 		    drop();
-		    return;
-		}
-		if (ok)
-		    return;
 	    }
-	    String tmp;
-	    tmp.printf("Failed to serialize %s for %u ms",brfDir(m_io.tx()),
-		(unsigned int)(intervals * Thread::idleMsec()));
-	    // Put a DebugFail if mutex debug was enabled
-	    status = m_device->showError(RadioInterface::Failure,tmp,0,0,
-		Lockable::wait() ? DebugFail : DebugWarn);
+	    else
+		status = m_device->showError(RadioInterface::Failure,
+		    "Failed to serialize",brfDir(m_io.tx()),0,DebugWarn);
 	}
     unsigned int status;
-    static unsigned int s_waitIntervals;
 protected:
     BrfLibUsbDevice* m_device;
     BrfDevIO& m_io;
@@ -1944,7 +1934,6 @@ protected:
 static bool s_usbContextInit = false;            // USB library init flag
 INIT_PLUGIN(BrfModule);
 static Configuration s_cfg;                      // Configuration file (protected by plugin mutex)
-unsigned int BrfSerialize::s_waitIntervals = 100;// Serialize wait intervals
 static const String s_modCmds[] = {"test","help",""};
 static const String s_ifcCmds[] = {
     "txgain1", "txgain2", "rxgain1", "rxgain2",
@@ -7286,8 +7275,6 @@ void BrfModule::initialize()
 	installRelay(Control);
 	installRelay(RadioCreate,"radio.create",gen.getIntValue("priority",90));
     }
-    unsigned int tout = gen.getIntValue(YSTRING("serialize_wait_interval"),3000,500,10000);
-    BrfSerialize::s_waitIntervals = (tout / Thread::idleMsec()) + 1;
     lusbSetDebugLevel();
     s_lusbCtrlTransferTout = lusb.getIntValue(YSTRING("ctrl_transfer_timeout"),
 	LUSB_CTRL_TIMEOUT,200,2000);
@@ -7770,9 +7757,12 @@ bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg, const String& what)
     }
     else
 	return retParamError(msg,"info");
-    if (str)
-	Output("Interface '%s' info=%s [%p]%s",
-	    ifc->debugName(),info.c_str(),ifc,encloseDashes(str,true));
+    if (str) {
+	char buf[50];
+	Debugger::formatTime(buf);
+	Output("Interface '%s' info=%s time=%s [%p]%s",
+	    ifc->debugName(),info.c_str(),buf,ifc,encloseDashes(str,true));
+    }
     return true;
 }
 

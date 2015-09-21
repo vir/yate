@@ -531,11 +531,13 @@ public:
 	InvalidPort = (1 << 15),         // Invalid port number
 	Pending = (1 << 16),             // Operation is pending
 	Cancelled = (1 << 17),           // Operation cancelled
+	Timeout = (1 << 18),             // Operation timeout
 	// Masks
 	// Errors requiring radio or port shutdown
 	FatalErrorMask = HardwareIOError | RFHardwareFail | EnvironmentalFault | Failure,
 	// Errors that can be cleared
-	ClearErrorMask = TooEarly | TooLate | NotExact | DataLost | Saturation | InvalidPort,
+	ClearErrorMask = TooEarly | TooLate | NotExact | DataLost | Saturation |
+	    InvalidPort | Timeout,
 	// Errors that are specific to a single call
 	LocalErrorMask = NotInitialized | NotCalibrated | TooEarly | TooLate | OutOfRange |
 	    NotExact | DataLost | Saturation | RFHardwareChange | InvalidPort,

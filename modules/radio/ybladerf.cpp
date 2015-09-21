@@ -1150,23 +1150,16 @@ public:
 	    buf << prefix << "(" << code << " '" << ::libusb_error_name(code) << "')";
 	    return buf;
 	}
-    static inline void appendLusbError(String* buf, int code, const char* prefix = 0) {
-	    if (buf)
-		appendLusbError(*buf,code,prefix);
-	}
+    static unsigned int lusb2ifaceError(int code);
     // Utility: check libusb result against LIBUSB_SUCCESS
-    // Print libusb result to string on failure and return indicated code
+    // Print libusb result to string on failure and return radio iface code
     static inline unsigned int lusbCheckSuccess(int code, String* error,
 	const char* prefix = 0) {
-	    if (code == LIBUSB_SUCCESS)
+	    if (code == LIBUSB_TRANSFER_COMPLETED || code == LIBUSB_SUCCESS)
 		return 0;
-	    if (code != LIBUSB_TRANSFER_CANCELLED) {
-		appendLusbError(error,code,prefix);
-		return RadioInterface::HardwareIOError;
-	    }
 	    if (error)
-		*error = RadioInterface::errorName(RadioInterface::Cancelled);
-	    return RadioInterface::Cancelled;
+		appendLusbError(*error,code,prefix);
+	    return lusb2ifaceError(code);
 	}
     // Retrieve UART addr for FPGA correction
     static inline int fpgaCorrAddr(bool tx, int corr, String& what) {
@@ -3241,6 +3234,49 @@ void BrfLibUsbDevice::unpackRegs(Si5338MultiSynth& synth)
     synth.b = (uint32_t)tmp;
 }
 
+unsigned int BrfLibUsbDevice::lusb2ifaceError(int code)
+{
+    switch (code) {
+	case LIBUSB_ERROR_ACCESS:        // Access denied (insufficient permissions)
+	case LIBUSB_TRANSFER_ERROR:      // Transfer failed
+	case LIBUSB_ERROR_BUSY:          // Resource busy
+	case LIBUSB_ERROR_INVALID_PARAM: // Invalid parameter
+	case LIBUSB_ERROR_NO_MEM:        // Insufficient memory
+	case LIBUSB_ERROR_OTHER:         // Unknown error
+	    return RadioInterface::Failure;
+	case LIBUSB_ERROR_TIMEOUT:       // Operation timed out
+	case LIBUSB_TRANSFER_TIMED_OUT:  // Transfer timed out
+	    return RadioInterface::Timeout;
+	case LIBUSB_ERROR_INTERRUPTED:   // System call interrupted (perhaps due to signal)
+	case LIBUSB_TRANSFER_CANCELLED:  // Transfer was cancelled
+	    return RadioInterface::Cancelled;
+	case LIBUSB_TRANSFER_STALL:      // For bulk/interrupt endpoints: halt condition detected (endpoint stalled)
+                                         // For control endpoints: control request not supported
+	    return RadioInterface::HardwareIOError;
+	case LIBUSB_ERROR_NOT_FOUND:     // Entity not found
+	case LIBUSB_ERROR_NO_DEVICE:     // No such device (it may have been disconnected)
+	case LIBUSB_TRANSFER_NO_DEVICE:  // Device was disconnected
+	    return RadioInterface::HardwareIOError;
+	case LIBUSB_ERROR_IO:            // Input/output error
+	case LIBUSB_ERROR_PIPE:          // Pipe error
+	    return RadioInterface::HardwareIOError;
+	case LIBUSB_ERROR_OVERFLOW:      // Overflow
+	case LIBUSB_TRANSFER_OVERFLOW:   // Device sent more data than requested
+	    return RadioInterface::Failure;
+	case LIBUSB_ERROR_NOT_SUPPORTED: // Operation not supported or unimplemented on this platform
+	    return RadioInterface::NotSupported;
+	case LIBUSB_SUCCESS:             // Success (no error)
+	    return RadioInterface::NoError;
+#if LIBUSB_TRANSFER_COMPLETED != LIBUSB_SUCCESS
+	case LIBUSB_TRANSFER_COMPLETED:  // Transfer completed without error
+                                         // Note that this does not indicate that the entire amount of
+                                         //   requested data was transferred.
+	    return RadioInterface::NoError;
+#endif
+    }
+    return RadioInterface::Failure;
+}
+
 unsigned int BrfLibUsbDevice::setStatus(const BrfDevStatus& stat, unsigned int flags,
     String* error)
 {
@@ -4378,7 +4414,7 @@ unsigned int BrfLibUsbDevice::lusbCtrlTransfer(uint8_t reqType, int8_t request,
 	return 0;
     String e;
     unsigned int status = (code < 0) ? lusbCheckSuccess(code,&e) :
-	RadioInterface::HardwareIOError;
+	RadioInterface::Failure;
     return showError(status,e,"Incomplete USB CTRL transfer",error);
 }
 
@@ -4399,7 +4435,7 @@ unsigned int BrfLibUsbDevice::lusbBulkTransfer(uint8_t endpoint, uint8_t* data,
 	return 0;
     String e;
     unsigned int status = (code < 0) ? lusbCheckSuccess(code,&e) :
-	RadioInterface::HardwareIOError;
+	RadioInterface::Failure;
     return showError(status,e,"Incomplete USB BULK transfer",error);
 }
 
@@ -4716,9 +4752,8 @@ unsigned int BrfLibUsbDevice::updateDeviceList(String* error)
 	return 0;
     }
     String e;
-    appendLusbError(e,n);
-    return showError(RadioInterface::HardwareIOError,e,
-	"Failed to enumerate USB devices",error);
+    unsigned int status = lusbCheckSuccess(n,&e);
+    return showError(status,e,"Failed to enumerate USB devices",error);
 }
 
 // Enable/disable RF and sample circulation on both RX and TX sides
@@ -5321,7 +5356,7 @@ void BrfLibUsbDevice::getDevStrDesc(String& data, uint8_t index, const char* wha
     data.clear();
     String tmp;
     Debug(m_owner,DebugInfo,"Failed to retrieve device %s %s [%p]",
-	what,appendLusbError(tmp,len).c_str(), m_owner);
+	what,appendLusbError(tmp,len).c_str(),m_owner);
 }
 
 // Read pages from device using control transfer

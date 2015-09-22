@@ -39,6 +39,14 @@
 ;   positive: the number of times to check
 ;rxcheckts=-1
 
+; rx_ts_past_error_interval: integer: Interval (in milliseconds) for allowed late timestamps
+;  when reading from device. I.e. how many old samples in a row we accept when reading
+; This value is used to make sure we are returning from device read (with error): avoid
+;  reading forever if we have a faulty device
+; Allowed interval [50..10000]
+; Defaults to 200
+;rx_ts_past_error_interval=200
+
 
 [libusb]
 ; This section configures libusb backend related data

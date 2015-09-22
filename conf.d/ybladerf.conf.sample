@@ -47,6 +47,12 @@
 ; Defaults to 200
 ;rx_ts_past_error_interval=200
 
+; warn_clamped: integer: Threshold for sent clamped samples warning
+; This parameter is a percent: clamped_samples/requested_samples
+; Allowed interval [0..100]
+; Defaults to 0 (always warn if there is at least 1 sample clamped)
+;warn_clamped=0
+
 
 [libusb]
 ; This section configures libusb backend related data

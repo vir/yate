@@ -1007,7 +1007,7 @@ public:
     void dumpBoardStatus(String& buf, const char* sep);
     unsigned int dumpPeripheral(uint8_t dev, uint8_t addr, uint8_t len, String* buf = 0);
     // Module reload
-    void reLoad();
+    void reLoad(const NamedList* params = 0);
     void setDataDump(int dir = 0, int level = 0, const NamedList* params = 0);
     // Initialize the device.
     // Call the reset method in order to set the device to a known state
@@ -1587,6 +1587,7 @@ private:
     uint64_t m_rxResyncCandidate;        // RX: timestamp resync value
     unsigned int m_rxTsPastIntervalMs;   // RX: allowed timestamp in the past interval in 1 read operation
     unsigned int m_rxTsPastSamples;      // RX: How many samples in the past to allow in 1 read operation
+    float m_warnClamped;                 // TX: Warn clamped threshold (percent)
     // TX power scale
     bool m_calibrated;
     float m_txPowerBalance;
@@ -2302,6 +2303,7 @@ BrfLibUsbDevice::BrfLibUsbDevice(BrfInterface* owner)
     m_rxResyncCandidate(0),
     m_rxTsPastIntervalMs(200),
     m_rxTsPastSamples(0),
+    m_warnClamped(0),
     m_calibrated(false),
     m_txPowerBalance(1),
     m_txPowerBalanceChanged(false),
@@ -2562,15 +2564,19 @@ unsigned int BrfLibUsbDevice::dumpPeripheral(uint8_t dev, uint8_t addr, uint8_t 
 }
 
 // Module reload
-void BrfLibUsbDevice::reLoad()
+void BrfLibUsbDevice::reLoad(const NamedList* params)
 {
-    Lock lck(&__plugin);
-    NamedList* gen = s_cfg.createSection(YSTRING("general"));
-    lck.drop();
+    NamedList dummy("");
+    if (!params) {
+	Lock lck(&__plugin);
+	dummy = *s_cfg.createSection(YSTRING("general"));
+	params = &dummy;
+    }
+    m_warnClamped = (float)params->getIntValue(YSTRING("warn_clamped"),0,0,100);
     setDataDump();
-    checkTs(true,gen->getIntValue("txcheckts",0));
-    checkTs(false,gen->getIntValue("rxcheckts",-1));
-    updateAlterData(*gen);
+    checkTs(true,params->getIntValue(YSTRING("txcheckts"),0));
+    checkTs(false,params->getIntValue(YSTRING("rxcheckts"),-1));
+    updateAlterData(*params);
 }
 
 // dir: 0=both negative=rx positive=tx
@@ -2709,8 +2715,6 @@ bool BrfLibUsbDevice::open(const NamedList& params)
 	    params.getBoolValue("txbufoutput_nodata"));
 	showBuf(false,params.getIntValue("rxbufoutput",0),
 	    params.getBoolValue("rxbufoutput_nodata"));
-	checkTs(true,params.getIntValue("txcheckts",0));
-	checkTs(false,params.getIntValue("rxcheckts",-1));
 	break;
     }
     if (status) {
@@ -2719,13 +2723,12 @@ bool BrfLibUsbDevice::open(const NamedList& params)
 	doClose();
 	return false;
     }
-    updateAlterData(params);
     String s;
     internalDumpDev(s,true,false,"\r\n",true);
     Debug(m_owner,DebugAll,"Opened device [%p]%s",m_owner,encloseDashes(s,true));
     txSerialize.drop();
     rxSerialize.drop();
-    setDataDump();
+    reLoad(&params);
     return true;
 }
 
@@ -3499,6 +3502,7 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
     unsigned int clamped = 0;
     String e;
     unsigned int status = lusbSetAltInterface(BRF_ALTSET_RF_LINK,&e);
+    unsigned int reqSend = samples;
     while (!status) {
 	while (samples && io.crtBuf < io.buffers) {
 	    unsigned int avail = 0;
@@ -3568,9 +3572,11 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	io.transferred += nBuf * io.bufSamples;
     }
     if (status == 0) {
-	if (clamped)
-	    Debug(m_owner,DebugNote,"Output buffer clamped %u times [%p]",
-		clamped,m_owner);
+	if (clamped) {
+	    float percent = 100 * (float)clamped / reqSend;
+	    Debug(m_owner,(percent < m_warnClamped) ? DebugAll : DebugNote,
+		"Output buffer clamped %u/%u (%.2f%%) [%p]",clamped,reqSend,percent,m_owner);
+	}
 	if (samples)
 	    Debug(DebugFail,"Exiting with non 0 samples");
     }

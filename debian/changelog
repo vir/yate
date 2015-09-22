@@ -1,4 +1,4 @@
-yate (5.5.1~svn6044) UNRELEASED; urgency=low
+yate (5.5.1~svn6046) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1482,8 +1482,14 @@ yate (5.5.1~svn6044) UNRELEASED; urgency=low
   * Updated to SVN revision 6044: + Added Timeout error code to
     RadioInterface.  + Properly translate libusb errors to
     RadioInterface codes.
+  * Updated to SVN revision 6046: + Implemented timestamp resync. Added
+    configurable option for allowed interval with timestamps in the past
+    to make sure we are returning from read. Implemented capability to
+    alter rx timestamps (for debug purposes).  + Implemented
+    configurable option for TX clamped samples debug threshold.
+    Simplified parameters reload.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 22 Sep 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 23 Sep 2015 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -39,6 +39,20 @@
 ;   positive: the number of times to check
 ;rxcheckts=-1
 
+; rx_ts_past_error_interval: integer: Interval (in milliseconds) for allowed late timestamps
+;  when reading from device. I.e. how many old samples in a row we accept when reading
+; This value is used to make sure we are returning from device read (with error): avoid
+;  reading forever if we have a faulty device
+; Allowed interval [50..10000]
+; Defaults to 200
+;rx_ts_past_error_interval=200
+
+; warn_clamped: integer: Threshold for sent clamped samples warning
+; This parameter is a percent: clamped_samples/requested_samples
+; Allowed interval [0..100]
+; Defaults to 0 (always warn if there is at least 1 sample clamped)
+;warn_clamped=0
+
 
 [libusb]
 ; This section configures libusb backend related data

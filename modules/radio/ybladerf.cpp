@@ -2704,6 +2704,10 @@ bool BrfLibUsbDevice::open(const NamedList& params)
 	status = internalSetFpgaCorr(true,CorrFpgaPhase,tmpInt,&e,DebugConf);
 	if (status)
 	    break;
+	tmpInt = clampIntParam(params,"tx_fpga_corr_gain",0,-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX);
+	status = internalSetFpgaCorr(true,CorrFpgaGain,tmpInt,&e,DebugConf);
+	if (status)
+	    break;
 	// Make sure we have the correct values for status
 	BRF_FUNC_CALL_BREAK(updateStatus(&e));
 	// Set tx I/Q balance

@@ -25,6 +25,11 @@
 ; Defaults to 0 if missing or invalid
 ;tx_fpga_corr_phase=0
 
+; tx_fpga_corr_gain: integer: TX FPGA GAIN correction
+; Interval allowed: [-4096..4096]
+; Defaults to 0 if missing or invalid
+;tx_fpga_corr_gain=0
+
 ; tx_powerbalance: float: TX I/Q power balance
 ; Interval allowed: (0..2)
 ; Defaults to 1 if missing or invalid

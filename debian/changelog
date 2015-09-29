@@ -1,4 +1,4 @@
-yate (5.5.1~svn6047) UNRELEASED; urgency=low
+yate (5.5.1~svn6048) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1490,8 +1490,10 @@ yate (5.5.1~svn6047) UNRELEASED; urgency=low
     Simplified parameters reload.
   * Updated to SVN revision 6047: + Added option to set TX FPGA GAIN
     from config.
+  * Updated to SVN revision 6048: + Fixed error code interpretation for
+    phaseB, phaseD and phaseE spandsp callback methods.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 26 Sep 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 30 Sep 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -405,19 +405,18 @@ bool FaxWrapper::newPage()
 // Called on intermediate states
 void FaxWrapper::phaseB(int result)
 {
-    Debug(this,DebugInfo,"Phase B code 0x%X: %s [%p]",
+    Debug(this,DebugInfo,"Phase B message 0x%X: %s [%p]",
 	result,t30_frametype(result),this);
 }
 
 // Called after transferring a page
 void FaxWrapper::phaseD(int result)
 {
-    const char* err = t30_completion_code_to_str(result);
-    Debug(this,DebugInfo,"Phase D code 0x%X: %s [%p]",
+    const char* err = t30_frametype(result);
+    Debug(this,DebugInfo,"Phase D message 0x%X: %s [%p]",
 	result,err,this);
     lock();
-    if (T30_ERR_OK != result)
-	m_error = err;
+    m_error = err;
     m_new = true;
     unlock();
     FaxChan* chan = YOBJECT(FaxChan,m_chan);
@@ -429,7 +428,7 @@ void FaxWrapper::phaseD(int result)
 void FaxWrapper::phaseE(int result)
 {
     const char* err = t30_completion_code_to_str(result);
-    Debug(this,DebugInfo,"Phase E code 0x%X: %s [%p]",
+    Debug(this,DebugInfo,"Phase E state 0x%X: %s [%p]",
 	result,err,this);
     m_error = (T30_ERR_OK == result) ? "eof" : err;
     m_eof = true;

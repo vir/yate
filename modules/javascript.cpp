@@ -3338,8 +3338,30 @@ String JsJSON::strEscape(const char* str)
     String s("\"");
     char c;
     while (str && (c = *str++)) {
-	if (c == '\"' || c == '\\')
-	    s += "\\";
+	switch (c) {
+	    case '\"':
+	    case '\\':
+		s += "\\";
+		break;
+	    case '\b':
+		s += "\\b";
+		continue;
+	    case '\f':
+		s += "\\f";
+		continue;
+	    case '\n':
+		s += "\\n";
+		continue;
+	    case '\r':
+		s += "\\r";
+		continue;
+	    case '\t':
+		s += "\\t";
+		continue;
+	    case '\v':
+		s += "\\v";
+		continue;
+	}
 	s += c;
     }
     s += "\"";

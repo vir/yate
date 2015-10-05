@@ -60,6 +60,7 @@ namespace { // anonymous
 #define FAX_DATA_CHUNK 320
 #define T38_DATA_CHUNK 160
 #define T38_TIMER_MSEC 20
+#define CALL_END_DELAY 300
 
 class FaxWrapper;
 
@@ -109,10 +110,23 @@ public:
     void phaseB(int result);
     void phaseD(int result);
     void phaseE(int result);
+    void endDocument(int result);
     inline t30_state_t* t30() const
 	{ return m_t30; }
     inline bool eof() const
 	{ return m_eof; }
+    inline bool haveEndpoint() const
+	{ return m_source || m_consumer; }
+    inline void reset(bool source)
+	{
+	    if (source)
+		m_source = 0;
+	    else
+		m_consumer = 0;
+	    if (!haveEndpoint())
+		m_chan = 0;
+	    check();
+	}
 protected:
     FaxWrapper();
     void init(t30_state_t* t30, const char* ident, const char* file, bool sender);
@@ -125,6 +139,7 @@ protected:
     CallEndpoint* m_chan;
     bool m_eof;
     bool m_new;
+    bool m_lastPageSent;
 };
 
 // An audio fax terminal, sends or receives a local file
@@ -254,10 +269,8 @@ FaxSource::FaxSource(FaxWrapper* wrapper, const char* format)
 FaxSource::~FaxSource()
 {
     DDebug(m_wrap,DebugAll,"FaxSource::~FaxSource() [%p]",this);
-    if (m_wrap && (m_wrap->m_source == this)) {
-	m_wrap->m_source = 0;
-	m_wrap->check();
-    }
+    if (m_wrap && (m_wrap->m_source == this))
+	m_wrap->reset(true);
     m_wrap = 0;
 }
 
@@ -273,10 +286,8 @@ FaxConsumer::FaxConsumer(FaxWrapper* wrapper, const char* format)
 FaxConsumer::~FaxConsumer()
 {
     DDebug(m_wrap,DebugAll,"FaxConsumer::~FaxConsumer() [%p]",this);
-    if (m_wrap && (m_wrap->m_consumer == this)) {
-	m_wrap->m_consumer = 0;
-	m_wrap->check();
-    }
+    if (m_wrap && (m_wrap->m_consumer == this))
+	m_wrap->reset(false);
     m_wrap = 0;
 }
 
@@ -309,11 +320,17 @@ static void phase_e_handler(t30_state_t* s, void* user_data, int result)
 	static_cast<FaxWrapper*>(user_data)->phaseE(result);
 }
 
+static int document_handler(t30_state_t* s, void* user_data, int result)
+{
+    if (user_data)
+	static_cast<FaxWrapper*>(user_data)->endDocument(result);
+    return 0;
+}
 
 FaxWrapper::FaxWrapper()
     : Mutex(true,"FaxWrapper"),
       m_t30(0), m_source(0), m_consumer(0), m_chan(0),
-      m_eof(false), m_new(false)
+      m_eof(false), m_new(false), m_lastPageSent(false)
 {
     debugChain(&plugin);
     debugName(plugin.debugName());
@@ -353,6 +370,7 @@ void FaxWrapper::init(t30_state_t* t30, const char* ident, const char* file, boo
     t30_set_phase_e_handler(t30,phase_e_handler,this);
     t30_set_phase_d_handler(t30,phase_d_handler,this);
     t30_set_phase_b_handler(t30,phase_b_handler,this);
+    t30_set_document_handler(t30,document_handler,(void*)this);
     m_t30 = t30;
     if (!file)
 	return;
@@ -388,7 +406,7 @@ bool FaxWrapper::startup(CallEndpoint* chan)
 // Disconnect the channel if we can assume it's still there
 void FaxWrapper::cleanup()
 {
-    if (m_chan && (m_source || m_consumer))
+    if (m_chan && haveEndpoint())
 	m_chan->disconnect(m_error);
 }
 
@@ -418,6 +436,8 @@ void FaxWrapper::phaseD(int result)
     lock();
     m_error = err;
     m_new = true;
+    if (m_lastPageSent)
+	m_error = "eof";
     unlock();
     FaxChan* chan = YOBJECT(FaxChan,m_chan);
     if (chan)
@@ -437,6 +457,11 @@ void FaxWrapper::phaseE(int result)
 	chan->updateInfo(t30(),m_error);
 }
 
+void FaxWrapper::endDocument(int result)
+{
+    Debug(this,DebugInfo,"End document result 0x%X [%p]",result,this);
+    m_lastPageSent = true;
+}
 
 // Constructor for the analog fax terminal
 FaxTerminal::FaxTerminal(const char *file, const char *ident, bool sender, bool iscaller, const Message& msg)
@@ -461,7 +486,8 @@ FaxTerminal::~FaxTerminal()
 void FaxTerminal::run()
 {
     u_int64_t tpos = Time::now();
-    while ((m_source || m_consumer) && !m_eof) {
+    int waitSentEnd = 10; // Run few cicles more to make sure that all data is sent
+    while (haveEndpoint() && waitSentEnd > 0) {
 	int r = txBlock();
 	if (r < 0)
 	    break;
@@ -472,7 +498,17 @@ void FaxTerminal::run()
 	    dly = 30000;
 	if (dly > 0)
 	    Thread::usleep(dly,true);
+	if (m_eof)
+	    waitSentEnd--;
     }
+    FaxChan* chan = YOBJECT(FaxChan,m_chan);
+    if (!chan || chan->isCaller())
+	return;
+    // Sleep a little bit to delay the call end message. In this way we give to 
+    // the remote endpoint the chance to process all the send data.
+    u_int64_t msec = Time::msecNow() + CALL_END_DELAY;
+    while (haveEndpoint() && msec > Time::msecNow() && !Engine::exiting())
+	Thread::idle();
 }
 
 // Build and send encoded audio data blocks
@@ -543,12 +579,23 @@ T38Terminal::~T38Terminal()
 // Run the terminal
 void T38Terminal::run()
 {
-    while ((m_source || m_consumer) && !m_eof) {
+    int waitSentEnd = 10; //  Run few cicles more to make sure that all data is sent
+    while (haveEndpoint() && waitSentEnd > 0) {
 	// the fake number of samples is just to compute timeouts
 	if (t38_terminal_send_timeout(&m_t38,T38_DATA_CHUNK))
 	    break;
 	Thread::msleep(T38_TIMER_MSEC);
+	if (m_eof)
+	    waitSentEnd--;
     }
+    FaxChan* chan = YOBJECT(FaxChan,m_chan);
+    if (!chan || chan->isCaller())
+	return;
+    // Sleep a little bit to delay the call end message. In this way we give to
+    // the remote endpoint the chance to process all the send data.
+    u_int64_t msec = Time::msecNow() + CALL_END_DELAY;
+    while (haveEndpoint() && msec > Time::msecNow() && !Engine::exiting())
+	Thread::idle();
 }
 
 // Static callback that sends out T.38 data

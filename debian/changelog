@@ -1,4 +1,4 @@
-yate (5.5.1~svn6050) UNRELEASED; urgency=low
+yate (5.5.1~svn6053) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1498,8 +1498,16 @@ yate (5.5.1~svn6050) UNRELEASED; urgency=low
     allow searching a field in an array of objects.  + Fixed fromIndex
     behavior for indexOf() and lastIndexOf().  + Added JS
     Array.lastIndexOf() method.
+  * Updated to SVN revision 6053: + Fixed fromIndex behavior for
+    indexOf() and lastIndexOf().  + Added JS Array.lastIndexOf() method.
+    + Bug fix! Avoid changing the type in setParams.  + Set 'eof' as
+    termination reason when document ended callback was called.  + Reset
+    the channel when the endpoint was detached.  + Delay call
+    termination when we had received the fax to give some time to the
+    remote endpoint to finish it's work.  + Optimized sample scale and
+    division.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 02 Oct 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 06 Oct 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

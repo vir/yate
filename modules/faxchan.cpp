@@ -760,6 +760,7 @@ void FaxChan::setParams(Message& msg, Type type, int t38version)
 		msg.setParam("t38version",ver);
 		msg.setParam("osdp_image_T38FaxVersion",ver);
 	    }
+	    break;
 	case Switch:
 	    if (Unknown == m_type)
 		m_type = type;

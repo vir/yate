@@ -476,7 +476,8 @@ static int16_t s_sampleEnergize = 2047;
 // Energize a number. Refer the input value to the requested energy
 static inline int16_t sampleScale(float value, float scale)
 {
-    return (int16_t)::round(value * scale);
+    value *= scale;
+    return (int16_t)((value >= 0.0F) ? (value + 0.5F) : (value - 0.5F));
 }
 static inline int16_t energize(float value, float scale, int16_t refVal, unsigned int& clamp)
 {
@@ -3752,9 +3753,10 @@ unsigned int BrfLibUsbDevice::recv(uint64_t& ts, float* data, unsigned int& samp
 		nSamplesInPast = 0;
 	    int16_t* last = start + avail * 2;
 	    // Copy data
+	    static const float s_mul = 1.0 / 2048;
 	    while (start != last) {
-		*cpDest++ = ((float)*start++) / 2048;
-		*cpDest++ = ((float)*start++) / 2048;
+		*cpDest++ = *start++ * s_mul;
+		*cpDest++ = *start++ * s_mul;
 	    }
 	    samplesCopied += avail;
 	    samplesLeft -= avail;

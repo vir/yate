@@ -74,3 +74,22 @@
 ; minFilterBandwidth: integer: Minimum settable filter bandwidth (Hz)
 ; Valid values 100000 - 5000000, default 1500000
 ;minFilterBandwidth=1500000
+
+; profiling: boolean: True if a profiling tool is running
+; Disable some time related capabilities
+;profiling=no
+
+; sample_energize: integer: Optional value used to energize sent data
+; Interval allowed: [0..10000]. 0: disabled
+;sample_energize=0
+
+; rx_file_raw: string: Optional path to file containg raw data (float) to be returned
+;  when receive is requested
+;rx_file_raw=
+
+; rx_buf_chunk: integer: Optional RX data chunk size
+; This value will be used to allign upper layer timestamp and return aligned data from
+;  configured rx_file_raw file
+; This parameter will be ignored if non 0 and rx_file_raw file samples count is not a
+;  a multiple of rx_buf_chunk samples
+;rx_buf_chunk=0

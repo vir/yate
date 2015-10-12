@@ -44,6 +44,16 @@
 ;   positive: the number of times to check
 ;rxcheckts=-1
 
+; tx_min_buffers: integer: Minimum number of buffers (USB frames) to send
+; This option is used to accumulate data before sending it (avoid short write operations)
+; Minimum allowed value is 1
+; Defaults to the number of allocated buffers
+;tx_min_buffers=
+
+; silence_time: integer: Interval (in milliseconds) to silence timestamp related debug messages
+; Allowed interval [0..60000]
+;silence_time=5000
+
 ; rx_ts_past_error_interval: integer: Interval (in milliseconds) for allowed late timestamps
 ;  when reading from device. I.e. how many old samples in a row we accept when reading
 ; This value is used to make sure we are returning from device read (with error): avoid

@@ -72,10 +72,8 @@ public:
 	{ time = getTS(); return 0; }
     virtual unsigned int getRxTime(uint64_t& time) const
 	{ time = getTS(); return 0; }
-    virtual unsigned int getTime(uint64_t& time) const
-	{ time = getTS(); return 0; }
     virtual unsigned int setTxPower(const unsigned dBm);
-    virtual unsigned int setPorts(unsigned ports) const
+    virtual unsigned int setPorts(unsigned ports)
 	{ return NotSupported; }
     virtual unsigned status(int port = -1) const
 	{ return (m_totalErr & FatalErrorMask); }
@@ -119,8 +117,6 @@ private:
     unsigned int m_freqStep;
     unsigned int m_sampleStep;
     unsigned int m_filterStep;
-    unsigned int m_rxLatency;
-    unsigned int m_txLatency;
     uint64_t m_rxSamp;
     uint64_t m_txSamp;
     DataBlock m_rxDataBuf;               // RX data
@@ -214,21 +210,19 @@ DummyInterface::DummyInterface(const char* name, const NamedList& config)
     m_caps.currPorts = 1;
     m_caps.maxTuneFreq = config.getInt64Value("maxTuneFreq",5000000000LL,100000000LL,50000000000LL);
     m_caps.minTuneFreq = config.getInt64Value("minTuneFreq",500000000LL,250000000LL,5000000000LL);
-    m_caps.maxOutputPower = config.getIntValue("maxOutputPower",30,0,50);
-    m_caps.minOutputPower = config.getIntValue("minOutputPower",0,-10,30);
-    m_caps.maxInputSaturation = config.getIntValue("maxInputSaturation",-30,-50,0);
-    m_caps.minInputSaturation = config.getIntValue("minInputSaturation",-50,-80,-30);
     m_caps.maxSampleRate = config.getIntValue("maxSampleRate",20000000,5000000,50000000);
     m_caps.minSampleRate = config.getIntValue("minSamplerate",250000,50000,5000000);
     m_caps.maxFilterBandwidth = config.getIntValue("maxFilterBandwidth",5000000,5000000,50000000);
     m_caps.minFilterBandwidth = config.getIntValue("minFilterBandwidth",1500000,100000,5000000);
+    if (config.getParam("rx_latency") || config.getParam("tx_latency"))
+	Debug(this,DebugConf,"rx_latency/tx_latency are obsolete, please use rxLatency/txLatency");
+    m_caps.rxLatency = config.getIntValue("rxLatency",10000,0,50000);
+    m_caps.txLatency = config.getIntValue("txLatency",10000,0,50000);
     m_freqError = config.getIntValue("freq_error",0,-10000,10000);
     m_freqStep = config.getIntValue("freq_step",1,1,10000000);
     m_sampleError = config.getIntValue("sample_error",0,-1000,1000);
     m_sampleStep = config.getIntValue("sample_step",1,1,1000);
     m_filterStep = config.getIntValue("filter_step",250000,100000,5000000);
-    m_rxLatency = config.getIntValue("rx_latency",10000,0,50000);
-    m_txLatency = config.getIntValue("tx_latency",10000,0,100000);
     m_radioCaps = &m_caps;
     m_profiling = config.getBoolValue("profiling",false);
     m_sampleEnergize = config.getIntValue("sample_energize",0,0,10000);
@@ -345,18 +339,18 @@ uint64_t DummyInterface::getRxUsec(uint64_t ts) const
 {
     if (!(m_startTime && m_sample))
 	return 0;
-    if (ts < m_rxLatency)
+    if (ts < m_caps.rxLatency)
 	return m_startTime;
-    return (ts - m_rxLatency) * m_divisor / m_sample + m_startTime;
+    return (ts - m_caps.rxLatency) * m_divisor / m_sample + m_startTime;
 }
 
 uint64_t DummyInterface::getTxUsec(uint64_t ts) const
 {
     if (!(m_startTime && m_sample))
 	return 0;
-    if (ts < m_txLatency)
+    if (ts < m_caps.txLatency)
 	return m_startTime;
-    return (ts - m_txLatency) * m_divisor / m_sample + m_startTime;
+    return (ts - m_caps.txLatency) * m_divisor / m_sample + m_startTime;
 }
 
 unsigned int DummyInterface::send(uint64_t when, float* samples, unsigned size, float* powerScale)
@@ -447,7 +441,7 @@ unsigned int DummyInterface::setFilter(uint64_t hz)
 unsigned int DummyInterface::setTxPower(const unsigned dBm)
 {
     Debug(this,DebugCall,"setTxPower(%u) [%p]",dBm,this);
-    return ((dBm >= m_caps.minOutputPower && dBm <= m_caps.minOutputPower) ? NoError : NotExact) | status();
+    return status();
 }
 
 void DummyInterface::destroyed()

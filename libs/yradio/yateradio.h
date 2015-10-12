@@ -314,60 +314,16 @@ public:
      */
     RadioCapability();
 
-    // Application-level parameters
-    // Hardware
-    unsigned maxPorts;                   // the maximum allowed ports
-    unsigned currPorts;                  // the currently available ports
-    // Tuning
-    uint64_t maxTuneFreq;                // maximum allowed tuning frequency, Hz
-    uint64_t minTuneFreq;                // minimum allowed tuning frequency, Hz
-    // Output power
-    float maxOutputPower;                // maximum allowed output power, dBm
-    float minOutputPower;                // minimum allowed output power, dBm
-    // Input gain (saturation point)
-    float maxInputSaturation;            // maximum selectable saturation point, dBm
-    float minInputSaturation;            // minimum selectable saturation point, dBm
-    // Sample rate
-    unsigned maxSampleRate;              // max in Hz
-    unsigned minSampleRate;              // min in Hz
-    // Anti-alias filter bandwidth
-    unsigned maxFilterBandwidth;         // max in Hz
-    unsigned minFilterBandwidth;         // min in Hz
-    // Calibration parameters
-    // Tx Gain Control
-    int txGain1MaxVal;                   // max allowed value
-    int txGain1MinVal;                   // min allowed value
-    float txGain1StepSize;               // control step size in dB
-    int txGain2MaxVal;                   // max allowed value
-    int txGain2MinVal;                   // min allowed value
-    float txGain2StepSize;               // control step size in dB
-    // Rx Gain Control
-    int rxGain1MaxVal;                   // max allowed value
-    int rxGain1MinVal;                   // min allowed value
-    float rxGain1StepSize;               // control step size in dB
-    int rxGain2MaxVal;                   // max allowed value
-    int rxGain2MinVal;                   // min allowed value
-    float rxGain2StepSize;               // control step size in dB
-    // Freq Cal Control
-    unsigned freqCalControlMaxVal;       // maximum value of frequency control parameter
-    unsigned freqCalControlMinVal;       // minimum value of frequency control parameter
-    float freqCalControlStepSize;        // avg step size in Hz
-    // IQ Offset Control
-    unsigned iqOffsetMaxVal;             // max allowed value
-    unsigned iqOffsetMinVal;             // min allowed value
-    float iqOffsetStepSize;              // control step size as fraction of full scale
-    // IQ Gain Balance Control
-    unsigned iqBalanceMaxVal;            // max allowed value
-    unsigned iqBalanceMinVal;            // min allowed value
-    float iqBalanceStepSize;             // control step size in dB of I/Q
-    // IQ Delay Control
-    unsigned iqDelayMaxVal;              // max allowed value
-    unsigned iqDelayMinVal;              // min allowed value
-    float iqDelayStepSize;               // control step size in fractions of a sample
-    // Phase control
-    unsigned phaseCalMaxVal;             // max allowed value
-    unsigned phaseCalMinVal;             // min allowed value
-    float phaseCalStepSize;              // control step size in radians
+    unsigned maxPorts;                   // Available number of ports
+    unsigned currPorts;                  // Number of used (available) ports
+    uint64_t maxTuneFreq;                // Maximum allowed tuning frequency (in Hz)
+    uint64_t minTuneFreq;                // Minimum allowed tuning frequency (in Hz)
+    unsigned maxSampleRate;              // Maximum allowed sampling rate (in Hz)
+    unsigned minSampleRate;              // Minimum allowed sampling rate (in Hz)
+    unsigned maxFilterBandwidth;         // Maximum allowed anti-alias filter bandwidth (in Hz)
+    unsigned minFilterBandwidth;         // Minimum allowed anti-alias filter bandwidth (in Hz)
+    unsigned rxLatency;                  // Estimated radio latency (in samples)
+    unsigned txLatency;                  // Estimated transmit latency (in samples)
 };
 
 
@@ -567,7 +523,15 @@ public:
     virtual unsigned int initialize(const NamedList& params = NamedList::empty()) = 0;
 
     /**
-     * Set multiple intrface parameters.
+     * Set radio loopback
+     * @param name Loopback name (NULL for none)
+     * @return Error code (0 on success)
+     */
+    virtual unsigned int setLoopback(const char* name = 0)
+	{ return NotSupported; }
+
+    /**
+     * Set multiple interface parameters.
      * Each command must start with 'cmd:' to allow the code to detect unhandled commands.
      * Command sub-params should not start with the prefix
      * @param params Parameters list
@@ -591,8 +555,7 @@ public:
 	const NamedList* params = 0) = 0;
 
     /**
-     * Run internal calibration procedures and/or load calibration parmameters.
-     * Any attempt to transmit or receive prior to this operation will return NotCalibrated.
+     * Run internal calibration procedures and/or load calibration parmameters
      * @return Error code (0 on success)
      */
     virtual unsigned int calibrate()
@@ -603,7 +566,7 @@ public:
      * @param count The number of ports to be used
      * @return Error code (0 on success)
      */
-    virtual unsigned int setPorts(unsigned count) const = 0;
+    virtual unsigned int setPorts(unsigned count) = 0;
 
     /**
      * Return any persistent error codes.
@@ -666,13 +629,6 @@ public:
      */
     virtual unsigned int read(uint64_t& when, RadioReadBufs& bufs,
 	unsigned int& skippedBufs);
-
-    /**
-     * Get the current radio time at the MSFE converter
-     * @param when Destination buffer for requested radio time
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getTime(uint64_t& when) const = 0;
 
     /**
      * Get the time of the data currently being received from the radio
@@ -762,132 +718,35 @@ public:
     virtual unsigned int getRxFreq(uint64_t& hz) const = 0;
 
     /**
-     * Set the input gain reference level in dBm.
-     * This sets the satuation point of the receiver in dBm.
-     * @param dBm Input gain value
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setRxSaturationPoint(int dBm)
-	{ return NotSupported; }
-
-    /**
-     * Get the current rx gain reference level in dBm
-     * @param dBm Receive gain value
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getRxSaturationPoint(int& dBm) const
-	{ return NotSupported; }
-
-    /**
-     * Get the expected receiver noise floor in dBm.
-     * This takes into account all noise sources in the receiver:
-     * - thermal + noise figure
-     * - quantization noise
-     * @param dBm Receiver noise floor value
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getExpectedNoiseFloor(int& dBm) const
-	{ return NotSupported; }
-
-    /**
-     * Set radio loopback
-     * @param name Loopback name (NULL for none)
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setLoopback(const char* name = 0)
-	{ return NotSupported; }
-
-    /**
-     * Put the radio into normal mode
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setRadioNormal()
-	{ return NotSupported; }
-
-    /**
-     * Set software loopback inside the interface class
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setSRadioLoopbackSW()
-	{ return NotSupported; }
-
-    /**
-     * Set hardware loopback inside the radio, pre-mixer
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setRadioLoopbackBaseband()
-	{ return NotSupported; }
-
-    /**
-     * Set hardware loopback inside the radio, post-mixer
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setRadioLoopbackRF()
-	{ return NotSupported; }
-
-    /**
-     * Turn off modulation, and/or send DC
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setRadioUnmodulated(float i = 0.0F, float q = 0.0F)
-	{ return NotSupported; }
-
-    virtual unsigned int getPowerConsumption(float& watts) const
-	{ return NotSupported; }
-
-    virtual unsigned int getPowerOutput(float& dBm, unsigned port) const
-	{ return NotSupported; }
-
-    virtual unsigned int getVswr(float& dB, unsigned port) const
-	{ return NotSupported; }
-
-    virtual unsigned int getTemperature(float& degrees) const
-	{ return NotSupported; }
-
-    /**
-     * Calibration. Set the transmit pre-mixer gain in dB wrt max
+     * Set the transmit pre-mixer gain in dB wrt max
      * @return Error code (0 on success)
      */
     virtual unsigned int setTxGain1(int val, unsigned port)
 	{ return NotSupported; }
 
     /**
-     * Calibration. Set the transmit post-mixer gain in dB wrt max
+     * Set the transmit post-mixer gain in dB wrt max
      * @return Error code (0 on success)
      */
     virtual unsigned int setTxGain2(int val, unsigned port)
 	{ return NotSupported; }
 
     /**
-     * Calibration. Automatic tx gain setting
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int autocalTxGain() const
-	{ return NotSupported; }
-
-    /**
-     * Calibration. Set the receive pre-mixer gain in dB wrt max
+     * Set the receive pre-mixer gain in dB wrt max
      * @return Error code (0 on success)
      */
     virtual unsigned int setRxGain1(int val, unsigned port)
 	{ return NotSupported; }
 
     /**
-     * Calibration. Set the receive post-mixer gain in dB wrt max
+     * Set the receive post-mixer gain in dB wrt max
      * @return Error code (0 on success)
      */
     virtual unsigned int setRxGain2(int val, unsigned port)
 	{ return NotSupported; }
 
     /**
-     * Calibration. Automatic rx gain setting
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int autocalRxGain() const
-	{ return NotSupported; }
-
-    /**
-     * Calibration. Automatic tx/rx gain setting
+     * Automatic tx/rx gain setting
      * Set post mixer value. Return a value to be used by upper layer
      * @param tx Direction
      * @param val Value to set
@@ -897,194 +756,6 @@ public:
      */
     virtual unsigned int setGain(bool tx, int val, unsigned int port,
 	int* newVal = 0) const
-	{ return NotSupported; }
-
-    // Frequency calibration.
-    // The "val" here is a integer tuning control
-    // on a scale that is specific to the hardware.
-    // There are readback and write methodss to support a closed-loop search.
-    // There is also a method to report the mean freq control step size.
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getFreqCal(int& val) const 
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setFreqCal(int val)
-	{ return NotSupported; }
-
-    /**
-     * For automatic frequency calibration, the radio is presented
-     * with a carrier at a calibrated feqeuency.
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int autoCalFreq(uint64_t refFreqHz)
-	{ return NotSupported; }
-
-    /**
-     * Calibration. Automatic TX/RX DC calibration
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int autocalDCOffsets()
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getTxIOffsetCal(int& val, unsigned port) const
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getTxQOffsetCal(int& val, unsigned port) const
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getRxIOffsetCal(int& val, unsigned port) const
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getRxQOffsetCal(int& val, unsigned port) const
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setTxIOffsetCal(int val, unsigned port) const
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setTxQOffsetCal(int val, unsigned port) const
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setRxIOffsetCal(int val, unsigned port) const
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setRxQOffsetCal(int val, unsigned port) const
-	{ return NotSupported; }
-
-    /**
-     * Automatic IQ offset calibration, if the hardware supports it.
-     * @param port Port number, -1 for all ports
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int autocalIQOffset(int port = -1)
-	{ return NotSupported; }
-
-    // The balance control is a single gain ratio expressed in dB
-    // The "val" here is a integer balance control
-    // on a scale that is specific to the hardware.
-    // There are readback and write methods to support a closed-loop search.
-    // There is also a method to report the mean control step size.
-    // This calibration is done on each port.
-    //
-    // This can be implemented in software if the hardware does not support it.
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getIQBalanceCal(int& val, unsigned port) const
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setIQBalanceCal(int val, unsigned port)
-	{ return NotSupported; }
-
-    /**
-     * Automatic IQ balance calibration, if the hardware supports it.
-     * @param port Port number, or -1 for all ports
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int autoCalIQBalance(int port = -1)
-	{ return NotSupported; }
-
-    // The phase offset control calibrates relative phase across ports.
-    // The "val" here is a integer balance control
-    // on a scale that is specific to the hardware.
-    // There are readback and write methods to support a closed-loop search.
-    // There is also a method to report the mean control step size.
-    // This calibration is done on each port.
-    //
-    // This can be implemented in software if the hardware does not support it.
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getTxPhaseCal(int& val, unsigned port) const 
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getRxPhaseCal(int& val, unsigned port) const 
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setTxPhaseCal(int val, unsigned port)
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setRxPhaseCal(int val, unsigned port)
-	{ return NotSupported; }
-
-    /**
-     * Automatic phase calibration across all ports, if the hardware supports it.
-     * A set offset will also be added to all ports.
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int autoCalPhase(float baseRadians = 0.0F)
-	{ return NotSupported; }
-
-    // The I-Q delay control calibrates relative I-Q timing across ports.
-    // The "val" here is a integer balance control
-    // on a scale that is specific to the hardware.
-    // There are readback and write methods to support a closed-loop search.
-    // There is also a method to report the mean control step size.
-    // This calibration is done on each port.
-    //
-    // This can be implemented in software if the hardware does not support it.
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int getIQDelayCal(int& val, unsigned port) const
-	{ return NotSupported; }
-
-    /**
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int setIQDelayCal(int val, unsigned port)
-	{ return NotSupported; }
-
-    /**
-     * Automatic IQ balance calibration, if the hardware supports it.
-     * @param port Port number, or -1 for all ports
-     * @return Error code (0 on success)
-     */
-    virtual unsigned int autoCalIQDelay(int port = -1)
 	{ return NotSupported; }
 
     /**

@@ -25,14 +25,6 @@
 ; Valid values 100000 - 5000000, default 250000
 ;filter_step=250000
 
-; rx_latency: integer: Simulated receiver latency (samples)
-; Valid values 0 - 50000, default 10000
-;rx_latency=10000
-
-; tx_latency: integer: Simulated transmitter latency (samples)
-; Valid values 0 - 50000, default 10000
-;tx_latency=10000
-
 ; The following parameters correspond to members of the RadioCapability structure
 
 ; maxTuneFreq: integer: Maximum tunable frequency (Hz)
@@ -42,22 +34,6 @@
 ; minTuneFreq: integer: Minimum tunable frequency (Hz)
 ; Default values 250000000 - 5000000000, default 500000000
 ;minTuneFreq=500000000
-
-; maxOutputPower: integer: Maximum settable output power (dBm)
-; Valid values 0 - 50, default 30
-;maxOutputPower=30
-
-; minOutputPower: integer: Minimum settable output power (dBm)
-; Valid values -10 - 30, default 0
-;minOutputPower=0
-
-; maxInputSaturation: integer: Maximum settable receiver saturation level (dBm)
-; Valid values -50 - 0, default -30
-;maxInputSaturation=-30
-
-; minInputSaturation: integer: Minimum settable receiver saturation level (dBm)
-; Valid values -80 - -30, default -50
-;minInputSaturation=-50
 
 ; maxSampleRate: integer: Maximum settable sample rate (Hz)
 ; valid values 5000000 - 50000000, default 20000000
@@ -74,6 +50,14 @@
 ; minFilterBandwidth: integer: Minimum settable filter bandwidth (Hz)
 ; Valid values 100000 - 5000000, default 1500000
 ;minFilterBandwidth=1500000
+
+; rxLatency: integer: Simulated receiver latency (samples)
+; Valid values 0 - 50000, default 10000
+;rxLatency=10000
+
+; txLatency: integer: Simulated transmitter latency (samples)
+; Valid values 0 - 50000, default 10000
+;txLatency=10000
 
 ; profiling: boolean: True if a profiling tool is running
 ; Disable some time related capabilities

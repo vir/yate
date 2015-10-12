@@ -537,7 +537,7 @@ bool RadioTest::execute(const String& cmd, const String& param, bool fatal,
     else if (cmd == YSTRING("loopback"))
 	c = m_radio->setLoopback(param);
     else if (cmd == YSTRING("calibrate"))
-	c = m_radio->autocalDCOffsets();
+	c = m_radio->calibrate();
     else {
 	Debug(this,DebugNote,"Unhandled command '%s' [%p]",cmd.c_str(),this);
 	return true;

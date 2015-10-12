@@ -56,7 +56,8 @@ class BrfModule;                         // The module
 #define BRF_USB_CMD_RF_TX                     5
 #define BRF_USB_CMD_READ_CAL_CACHE          110
 
-#define BRF_SAMPLERATE_MIN      80000u
+#define BRF_SAMPLERATE_MIN 80000u
+#define BRF_SAMPLERATE_MAX 0xffffffffu
 
 // Frequency bounds
 #define BRF_FREQUENCY_MIN 232500000u
@@ -355,10 +356,12 @@ static inline void ver2str(String& dest, uint32_t ver)
 }
 
 // Code is expecting this array to have 15 elements
+#define BRF_FILTER_BW_MIN 1500000u
+#define BRF_FILTER_BW_MAX 20000000u
 static uint32_t s_bandSet[] = {
-    1500000u, 1750000u, 2500000u, 2750000u, 3000000u,
-    3840000u, 5000000u, 5500000u, 6000000u, 7000000u,
-    8750000u, 10000000u,12000000u,14000000u,20000000u
+    BRF_FILTER_BW_MIN, 1750000u, 2500000u, 2750000u, 3000000u,
+    3840000u,          5000000u, 5500000u, 6000000u, 7000000u,
+    8750000u,          10000000u,12000000u,14000000u,BRF_FILTER_BW_MAX
 };
 
 #if 0
@@ -436,6 +439,19 @@ static const uint8_t s_rxvga1_get[121] = {
     17, 17, 18, 18, 18, 18, 19, 19, 19, 20, 20, 21, 21, 22, 22, 22, 23, 24, 24,
     25, 25, 26, 27, 28, 29, 30
 };
+
+// Init radio caps with default values
+static void initRadioCaps(RadioCapability& caps)
+{
+    caps.maxPorts = 1;
+    caps.currPorts = 1;
+    caps.maxTuneFreq = BRF_FREQUENCY_MAX;
+    caps.minTuneFreq = BRF_FREQUENCY_MIN;
+    caps.maxSampleRate = BRF_SAMPLERATE_MAX;
+    caps.minSampleRate = BRF_SAMPLERATE_MIN;
+    caps.maxFilterBandwidth = BRF_FILTER_BW_MAX;
+    caps.minFilterBandwidth = BRF_FILTER_BW_MIN;
+}
 
 // Utility macros (call methods)
 #define BRF_FUNC_CALL_(result,func,cond,instr) { \
@@ -949,6 +965,10 @@ public:
 	{ return m_owner; }
     inline libusb_device_handle* handle() const
 	{ return m_devHandle; }
+    inline RadioCapability& capabilities()
+	{ return m_radioCaps; }
+    inline bool validPort(unsigned int port) const
+	{ return port < m_radioCaps.currPorts; }
     inline int speed() const
 	{ return m_devSpeed; }
     inline int bus() const
@@ -1447,7 +1467,7 @@ private:
 	const char* desc = 0, String* error = 0);
     String& dumpCalCache(String& dest);
     // Update speed related data
-    unsigned int updateSpeed(String* error = 0);
+    unsigned int updateSpeed(const NamedList& params, String* error = 0);
     // Compute Rx avg values, autocorrect offsets if configured
     void computeRx(uint64_t ts);
     // Check io timestamps
@@ -1559,6 +1579,7 @@ private:
     libusb_device_handle* m_devHandle;   // Device handle
     libusb_device* m_dev;                // Pointer to used device (in m_list)
     // Device info
+    RadioCapability m_radioCaps;
     int m_devBus;                        // Device bus
     int m_devAddr;                       // Device address
     int m_devSpeed;                      // Device speed
@@ -1589,6 +1610,9 @@ private:
     unsigned int m_rxTsPastIntervalMs;   // RX: allowed timestamp in the past interval in 1 read operation
     unsigned int m_rxTsPastSamples;      // RX: How many samples in the past to allow in 1 read operation
     float m_warnClamped;                 // TX: Warn clamped threshold (percent)
+    unsigned int m_minBufsSend;          // Minimum buffers to send
+    unsigned int m_silenceTimeMs;        // Silence timestamp related debug messages (in millseconds)
+    uint64_t m_silenceTs;                // Silence timestamp related debug messages
     // TX power scale
     bool m_calibrated;
     float m_txPowerBalance;
@@ -1701,61 +1725,26 @@ public:
 	{ return setTxGain(val,port,true); }
     virtual unsigned int setTxGain2(int val, unsigned port)
 	{ return setTxGain(val,port,false); }
-    // Calibration. Automatic tx/rx gain setting
-    // Set pre and post mixer value
-    unsigned int setGain(bool tx, int val, unsigned int port,
-	int* newValue = 0) const;
-    virtual unsigned int autocalDCOffsets()
-	{ return m_dev->calibrate(); }
-    unsigned int setOffsetCal(bool tx, bool Q, int val, unsigned port) const;
-    unsigned int getOffsetCal(bool tx, bool Q, int& val, unsigned port) const;
-    virtual unsigned int getTxIOffsetCal(int& val, unsigned port) const
-	{ return getOffsetCal(true,false,val,port); }
-    virtual unsigned int getTxQOffsetCal(int& val, unsigned port) const
-	{ return getOffsetCal(true,true,val,port); }
-    virtual unsigned int getRxIOffsetCal(int& val, unsigned port) const
-	{ return getOffsetCal(false,false,val,port); }
-    virtual unsigned int getRxQOffsetCal(int& val, unsigned port) const
-	{ return getOffsetCal(false,true,val,port); }
-    virtual unsigned int setTxIOffsetCal(int val, unsigned port) const
-	{ return setOffsetCal(true,false,val,port); }
-    virtual unsigned int setTxQOffsetCal(int val, unsigned port) const
-	{ return setOffsetCal(true,true,val,port); }
-    virtual unsigned int setRxIOffsetCal(int val, unsigned port) const
-	{ return setOffsetCal(false,false,val,port); }
-    virtual unsigned int setRxQOffsetCal(int val, unsigned port) const
-	{ return setOffsetCal(false,true,val,port); }
-    unsigned int getPhaseCal(bool tx, int& val, unsigned port) const;
-    unsigned int setPhaseCal(bool tx, int val, unsigned port);
-    virtual unsigned int getTxPhaseCal(int& val, unsigned port) const
-	{ return getPhaseCal(true,val,port); }
-    virtual unsigned int getRxPhaseCal(int& val, unsigned port) const
-	{ return getPhaseCal(false,val,port); }
-    virtual unsigned int setTxPhaseCal(unsigned val, unsigned port)
-	{ return setPhaseCal(true,val,port); }
-    virtual unsigned int setRxPhaseCal(unsigned val, unsigned port)
-	{ return setPhaseCal(true,val,port); }
     virtual unsigned int getTxTime(uint64_t& time) const
 	{ return m_dev->getTimestamp(true,time); }
     virtual unsigned int getRxTime(uint64_t& time) const
 	{ return m_dev->getTimestamp(false,time); }
-    virtual unsigned int getTime(uint64_t& time) const
-	{ return NotSupported; }
     virtual unsigned int setTxPower(const unsigned dBm)
 	{ return setTxGain2(dBm,0); }
-    virtual unsigned int getFreqCal(int& val) const {
-	    val = m_txFreqCorr;
-	    return 0;
+    virtual unsigned int setPorts(unsigned ports) {
+	    if (ports == m_radioCaps->currPorts)
+		return 0;
+	    return ports ? NotSupported : OutOfRange;
 	}
-    virtual unsigned int setFreqCal(int val);
-    virtual unsigned int getIQDelayCal(int& val, unsigned port = 0) const
-	{ return NotSupported; }
-    virtual unsigned int setPorts(unsigned ports) const
-	{ return NotSupported; }
+    // Set pre and post mixer value
+    unsigned int setGain(bool tx, int val, unsigned int port,
+	int* newValue = 0) const;
     virtual unsigned status(int port = -1) const
 	{ return (m_totalErr & FatalErrorMask); }
     virtual unsigned int setLoopback(const char* name = 0)
 	{ return m_dev ? m_dev->setLoopback(name) : NotInitialized; }
+    virtual unsigned int calibrate()
+	{ return m_dev->calibrate(); }
 
 protected:
     BrfInterface(const char* name);
@@ -2305,6 +2294,9 @@ BrfLibUsbDevice::BrfLibUsbDevice(BrfInterface* owner)
     m_rxTsPastIntervalMs(200),
     m_rxTsPastSamples(0),
     m_warnClamped(0),
+    m_minBufsSend(1),
+    m_silenceTimeMs(0),
+    m_silenceTs(0),
     m_calibrated(false),
     m_txPowerBalance(1),
     m_txPowerBalanceChanged(false),
@@ -2341,6 +2333,7 @@ BrfLibUsbDevice::BrfLibUsbDevice(BrfInterface* owner)
     m_txIO.vga2 = BRF_TXVGA2_GAIN_MIN - 1;
     m_txIO.dcOffsetI = BRF_RX_DC_OFFSET_MAX + 1;
     m_txIO.dcOffsetQ = BRF_RX_DC_OFFSET_MAX + 1;
+    initRadioCaps(m_radioCaps);
 }
 
 BrfLibUsbDevice::~BrfLibUsbDevice()
@@ -2449,7 +2442,7 @@ void BrfLibUsbDevice::dumpTimestamps(String& buf, const char* sep)
 {
     BRF_TX_SERIALIZE_NONE;
     uint64_t tsTx = 0;
-    uint64_t ourTx = m_txIO.timestamp;
+    uint64_t ourTx = m_txIO.lastTs;
     unsigned int codeTx = internalGetTimestamp(true,tsTx);
     txSerialize.drop();
     BRF_RX_SERIALIZE_NONE;
@@ -2655,7 +2648,7 @@ bool BrfLibUsbDevice::open(const NamedList& params)
     while (true) {
 	BRF_FUNC_CALL_BREAK(resetUsb(&e));
 	BRF_FUNC_CALL_BREAK(openDevice(true,&e));
-	BRF_FUNC_CALL_BREAK(updateSpeed(&e));
+	BRF_FUNC_CALL_BREAK(updateSpeed(params,&e));
 	m_calCache.clear();
 	readCalCache();
 	status = updateFpga(params);
@@ -2720,6 +2713,7 @@ bool BrfLibUsbDevice::open(const NamedList& params)
 	    params.getBoolValue("txbufoutput_nodata"));
 	showBuf(false,params.getIntValue("rxbufoutput",0),
 	    params.getBoolValue("rxbufoutput_nodata"));
+	m_silenceTimeMs = clampIntParam(params,"silence_time",5000,0,60000);
 	break;
     }
     if (status) {
@@ -3535,13 +3529,7 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 		io.advanceBuffer();
 	}
 	unsigned int nBuf = io.crtBuf;
-	unsigned int oldBufSampOffs = 0;
-	if (nBuf && io.crtBufSampOffs) {
-	    if (io.crtBufSampOffs == 0)
-		nBuf++;
-	    else
-		oldBufSampOffs = io.crtBufSampOffs;
-	}
+	unsigned int oldBufSampOffs = nBuf ? io.crtBufSampOffs : 0;
 	if (m_txIO.syncFlags || m_rxIO.syncFlags) {
 	    if ((m_txIO.syncFlags & ~DevStatTs) != 0)
 		setStatus(m_txIO.syncStatus,m_txIO.syncFlags);
@@ -3552,10 +3540,12 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	    m_txIO.syncFlags = 0;
 	    m_rxIO.syncFlags = 0;
 	}
-	if (!nBuf)
+	if (nBuf < m_minBufsSend)
 	    break;
 	if (checkDbgInt(io.checkTs))
 	    ioBufCheckTs(true,nBuf);
+	else
+	    io.lastTs = io.timestamp;
 	unsigned int nPrint = checkDbgInt(io.showBuf,nBuf);
 	if (nPrint)
 	    printIOBuffer(true,"SEND",-1,nPrint);
@@ -3567,7 +3557,7 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	// Copy partial buffer from end
 	if (oldBufSampOffs) {
 #ifdef DEBUG_DEVICE_TX
-	    Debug(DebugAll,"TX: copying buffer %u to start [%p]",nBuf,m_owner);
+	    Debug(m_owner,DebugMild,"TX: copying buffer %u to start [%p]",nBuf,m_owner);
 #endif
 	    ::memcpy(io.bufStart(0),io.bufStart(nBuf),io.hdrLen + samplesi2bytes(oldBufSampOffs));
 	    io.crtBufSampOffs = oldBufSampOffs;
@@ -3678,14 +3668,14 @@ unsigned int BrfLibUsbDevice::recv(uint64_t& ts, float* data, unsigned int& samp
 #endif
 	    if (resync) {
 		if ((resync > -1000 && resync < 1000) || bufTs == m_rxResyncCandidate) {
-		    Debug(m_owner,DebugNote,
+		    Debug(m_owner,bufTs > m_silenceTs ? DebugNote : DebugAll,
 			"RX: timestamp adjusted by " FMT64 " to " FMT64U " [%p]",
 			resync,bufTs,m_owner);
 		    m_rxTimestamp = bufTs;
 		    m_rxResyncCandidate = 0;
 		}
 		else {
-		    Debug(m_owner,DebugWarn,
+		    Debug(m_owner,bufTs > m_silenceTs ? DebugWarn : DebugAll,
 			"RX: timestamp jumped by " FMT64 " to " FMT64U " in buffer %u/%u [%p]",
 			resync,m_rxTimestamp,io.crtBuf + 1,io.buffers,m_owner);
 		    m_rxResyncCandidate = bufTs;
@@ -3882,9 +3872,13 @@ unsigned int BrfLibUsbDevice::internalSetSampleRate(bool tx, uint32_t value,
 	    Debug(m_owner,DebugInfo,"%s samplerate set to %u [%p]",
 		brfDir(tx),value,m_owner);
 	}
-	// Calculate RX samples allowed to be in the past
-	if (!tx)
-	    m_rxTsPastSamples = m_rxTsPastIntervalMs * ((value + 999) / 1000);
+	if (!tx) {
+	    unsigned int samplesMs = (value + 999) / 1000;
+	    // Calculate RX samples allowed to be in the past
+	    m_rxTsPastSamples = m_rxTsPastIntervalMs * samplesMs;
+	    // Calculate RX timestamp silence
+	    m_silenceTs = m_silenceTimeMs * samplesMs;
+	}
 	return 0;
     }
     e.printf(1024,"Failed to set %s samplerate %u: %s",brfDir(tx),value,e.c_str());
@@ -5575,7 +5569,7 @@ String& BrfLibUsbDevice::dumpCalCache(String& dest)
 }
 
 // Update speed related data
-unsigned int BrfLibUsbDevice::updateSpeed(String* error)
+unsigned int BrfLibUsbDevice::updateSpeed(const NamedList& params, String* error)
 {
     if (speed() == LIBUSB_SPEED_SUPER || speed() == LIBUSB_SPEED_HIGH) {
 	unsigned int brfBufSamples = 508;
@@ -5585,13 +5579,25 @@ unsigned int BrfLibUsbDevice::updateSpeed(String* error)
 	    nBuffers = 8;
 	}
 	m_txIO.resetSamplesBuffer(brfBufSamples,16,nBuffers);
+	if (m_minBufsSend > nBuffers)
+	    m_minBufsSend = nBuffers;
 	m_rxIO.resetSamplesBuffer(brfBufSamples,16,nBuffers);
-	if (speed() == LIBUSB_SPEED_SUPER)
+	m_minBufsSend = clampIntParam(params,"tx_min_buffers",nBuffers,1,nBuffers);
+	if (speed() == LIBUSB_SPEED_SUPER) {
+	    m_radioCaps.rxLatency = clampIntParam(params,"rx_latency_super",4000,0,150000);
+	    m_radioCaps.txLatency = clampIntParam(params,"tx_latency_super",10000,0,150000);
 	    m_ctrlTransferPage = BRF_FLASH_PAGE_SIZE;
-	else
+	}
+	else {
+	    m_radioCaps.rxLatency = clampIntParam(params,"rx_latency_high",7000,0,150000);
+	    m_radioCaps.txLatency = clampIntParam(params,"tx_latency_high",20000,0,150000);
 	    m_ctrlTransferPage = 64;
+	}
 	return 0;
     }
+    m_minBufsSend = 1;
+    m_radioCaps.rxLatency = 0;
+    m_radioCaps.txLatency = 0;
     m_ctrlTransferPage = 0;
     String e;
     e << "Unsupported USB speed " << m_devSpeed;
@@ -7119,6 +7125,7 @@ BrfInterface::~BrfInterface()
 BrfLibUsbDevice* BrfInterface::init()
 {
     m_dev = BrfLibUsbDevice::create(this);
+    m_radioCaps = &m_dev->capabilities();
     Debug(this,DebugAll,"Created device (%p) [%p]",m_dev,this);
     return m_dev;
 }
@@ -7167,8 +7174,8 @@ unsigned int BrfInterface::setParams(NamedList& params, bool shareFate)
 	    METH_CALL_1(setSampleRate,(uint64_t)ns->toInt64());
 	if (cmd == YSTRING("setFilter"))
 	    METH_CALL_1(setFilter,(uint64_t)ns->toInt64());
-	if (cmd == "autocalDCOffsets")
-	    METH_CALL(autocalDCOffsets);
+	if (cmd == "calibrate")
+	    METH_CALL(calibrate);
 	Debug(this,DebugNote,"setParams: unhandled cmd '%s' [%p]",cmd.c_str(),this);
 	SETPARAMS_HANDLE_CODE(NotSupported);
     }
@@ -7319,6 +7326,8 @@ unsigned int BrfInterface::setRxGain(int val, unsigned port, bool preMixer)
 {
     XDebug(this,DebugAll,"BrfInterface::setRxGain(%d,%u,VGA%c) [%p]",
 	val,port,mixer(preMixer),this);
+    if (!m_dev->validPort(port))
+	return OutOfRange;
     unsigned int status = m_dev->enableRxVga(true,preMixer);
     if (status)
 	return status;
@@ -7340,6 +7349,8 @@ unsigned int BrfInterface::setTxGain(int val, unsigned port, bool preMixer)
 {
     XDebug(this,DebugAll,"BrfInterface::setTxGain(%d,%u,VGA%c) [%p]",
 	val,port,mixer(preMixer),this);
+    if (!m_dev->validPort(port))
+	return OutOfRange;
     unsigned int status = m_dev->setTxVga(val,preMixer);
     if (status)
 	return status;
@@ -7359,50 +7370,9 @@ unsigned int BrfInterface::setTxGain(int val, unsigned port, bool preMixer)
 unsigned int BrfInterface::setGain(bool tx, int val, unsigned int port,
     int* newVal) const
 {
+    if (!m_dev->validPort(port))
+	return OutOfRange;
     return m_dev->setGain(tx,val,newVal);
-}
-
-unsigned int BrfInterface::setOffsetCal(bool tx, bool Q, int val, unsigned port) const
-{
-    return m_dev->setDcOffset(tx,!Q,val);
-}
-
-unsigned int BrfInterface::getOffsetCal(bool tx, bool Q, int& val, unsigned port) const
-{
-    int16_t tmp = 0;
-    unsigned int status = m_dev->getDcOffset(tx,!Q,tmp);
-    if (status == 0)
-	val = tmp;
-    return status;
-}
-
-unsigned int BrfInterface::getPhaseCal(bool tx, int& val, unsigned port) const
-{
-    int16_t tmp = 0;
-    unsigned int status = m_dev->getFpgaCorr(tx,BrfLibUsbDevice::CorrFpgaPhase,tmp);
-    if (status == 0)
-	val = tmp;
-    return status;
-}
-
-unsigned int BrfInterface::setPhaseCal(bool tx, int val, unsigned port)
-{
-    return m_dev->setFpgaCorr(tx,BrfLibUsbDevice::CorrFpgaPhase,val);
-}
-
-unsigned int BrfInterface::setFreqCal(int val)
-{
-    uint64_t freq = 0;
-    unsigned int status = getTxFreq(freq);
-    if (status != NoError)
-	return status;
-    freq += val;
-    status = setTxFreq(freq);
-    if (status == NoError)
-	m_txFreqCorr = freq;
-    else
-	Debug(this,DebugNote,"Failed to set calibrated frequency %d [%p]",val,this);
-    return status;
 }
 
 void BrfInterface::destroyed()

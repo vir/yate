@@ -1,4 +1,4 @@
-yate (5.5.1~svn6053) UNRELEASED; urgency=low
+yate (5.5.1~svn6055) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1506,8 +1506,12 @@ yate (5.5.1~svn6053) UNRELEASED; urgency=low
     termination when we had received the fax to give some time to the
     remote endpoint to finish it's work.  + Optimized sample scale and
     division.
+  * Updated to SVN revision 6055: + Implemented recv. Check for thread
+    cancel when sleeping.  + Removed unused RadioInterface methods and
+    data. BladeRF driver is now advertising radio caps and is
+    accumulating data to send to avoid short write operations.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 06 Oct 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 13 Oct 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -1,4 +1,4 @@
-yate (5.5.1~svn6055) UNRELEASED; urgency=low
+yate (5.5.1~svn6056) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1510,8 +1510,10 @@ yate (5.5.1~svn6055) UNRELEASED; urgency=low
     cancel when sleeping.  + Removed unused RadioInterface methods and
     data. BladeRF driver is now advertising radio caps and is
     accumulating data to send to avoid short write operations.
+  * Updated to SVN revision 6056: + Added SIP-T capable version of the
+    sample voicemail leaving script.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 13 Oct 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 16 Oct 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

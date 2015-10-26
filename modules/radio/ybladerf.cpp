@@ -151,7 +151,7 @@ static const BrfCalDesc s_calModuleDesc[] = {
     // BRF_CALIBRATE_LPF_TUNING
     {0x20,0x00,1,0},
     // BRF_CALIBRATE_LPF_BANDWIDTH
-    {0,0,0,0},
+    {0,0,1,0},
     // BRF_CALIBRATE_TX_LPF
     {0x02,0x30,2,s_calRxTxLpfNames},
     // BRF_CALIBRATE_RX_LPF
@@ -597,6 +597,15 @@ public:
     int rxVga1;
     int rxVga2;
     uint8_t rxVga2GainAB;
+    // LPF_BANDWIDTH
+    uint8_t txVGA2PwAmp;
+    uint8_t txPPL;
+    uint8_t enLPFCAL;
+    uint8_t clkLPFCAL;
+    uint8_t nInt;
+    uint8_t nFrac1;
+    uint8_t nFrac2;
+    uint8_t nFrac3;
 };
 
 // libusb transfer
@@ -1484,6 +1493,8 @@ private:
 	uint8_t& dcReg, String& error);
     unsigned int dcCalProcPost(const BrfCalData& bak, uint8_t subMod, uint8_t dcReg,
 	String& error);
+    unsigned int calLPFBandwidth(const BrfCalData& bak, uint8_t subMod, uint8_t dcCnt,
+			   uint8_t& dcReg, String& error);
     // Read data, ignore any buffer related errors
     unsigned int dummyRead(float* buf, unsigned int samples, String* error);
     unsigned int readBuffer(uint64_t ts, float* buf, unsigned int samples,
@@ -5740,6 +5751,54 @@ void BrfLibUsbDevice::rxAlterData(bool first)
 #endif
 }
 
+unsigned int BrfLibUsbDevice::calLPFBandwidth(const BrfCalData& bak, uint8_t subMod,
+			     uint8_t dcCnt, uint8_t& dcReg, String& e)
+{
+#ifdef DEBUG_DEVICE_AUTOCAL
+    Debugger d(DebugAll,"CAL PROC"," submod=%u dcCnt=0x%x [%p]",subMod,dcCnt,m_owner);
+#endif
+    uint8_t data = 0;
+    unsigned int status = 0;
+    // Programing and Calibration Guide 4.5
+    // PLL Reference Clock Frequency == 40MHz?
+    if (s_freqRefClock != 40000000) {
+	// Power down TxVGA2 -- (is optional)
+	BRF_FUNC_CALL_RET(lmsSet(0x44,0x0c,0x0c,&e));
+	// Enable TxPPL Register 0x14 set bit 4 to 1
+	BRF_FUNC_CALL_RET(lmsSet(0x14,0x08,&e));
+
+	// Produce 320 MHz
+	// TODO FIXME The values are hard codded for 38.4 MHz as reference clock
+	BRF_FUNC_CALL_RET(lmsWrite(0x10,0x42,&e));
+	BRF_FUNC_CALL_RET(lmsWrite(0x11,0xaa,&e));
+	BRF_FUNC_CALL_RET(lmsWrite(0x12,0xaa,&e));
+	BRF_FUNC_CALL_RET(lmsWrite(0x13,0xaa,&e));
+	// TopSPI:CLKSEL_LPFCAL = 0
+	BRF_FUNC_CALL_RET(lmsReset(0x06,0x08,&e));
+	// Power up LPF tuning clock generation block TOPSPI:PD_CLKLPFCAL = 0
+	BRF_FUNC_CALL_RET(lmsReset(0x06,0x04,&e));
+    }
+
+    BRF_FUNC_CALL_RET(lmsRead(0x54,data,&e));
+    BRF_FUNC_CALL_RET(lmsSet(0x07,(data >> 2) & 0x0f,0x0f,&e));
+    // TopSPI:En_CAL_LPFCAL=1(enable)
+    BRF_FUNC_CALL_RET(lmsSet(0x07,0x80,&e));
+    // TopSPI:RST_CAL_LPFCAL=1 (RST active)
+    BRF_FUNC_CALL_RET(lmsSet(0x06,0x01,&e));
+    // Reset signal used at the beginning of calibration cycle.
+    // Reset signal needs to be longer than 100ns
+    Thread::msleep(1);
+    // TopSPI:RST_CAL_LPFCAL=0 (RST inactive)
+    BRF_FUNC_CALL_RET(lmsReset(0x06,0x01,&e));
+    // RCCAL = TopSPI::RCCAL_LPFCAL
+    BRF_FUNC_CALL_RET(lmsRead(0x01,data,&e));
+    dcReg = data >> 5;
+    BRF_FUNC_CALL_RET(lmsSet(0x56,dcReg << 4,0x70,&e));
+    DDebug(m_owner,DebugAll,"%s calibrated submodule %u -> %u [%p]",
+	   bak.modName(),subMod,dcReg,m_owner);
+    return 0;
+}
+
 unsigned int BrfLibUsbDevice::calibrateAuto(String* error)
 {
 #ifdef DEBUG_DEVICE_AUTOCAL
@@ -5752,11 +5811,6 @@ unsigned int BrfLibUsbDevice::calibrateAuto(String* error)
     ::memset(calVal,-1,sizeof(calVal));
     BrfDuration duration;
     for (int m = BRF_CALIBRATE_FIRST; !status && m <= BRF_CALIBRATE_LAST; m++) {
-	if (m == BRF_CALIBRATE_LPF_BANDWIDTH) {
-	    DDebug(m_owner,DebugStub,"%s auto calibration not implemented [%p]",
-		calModName(m),m_owner);
-	    continue;
-	}
 	BrfCalData bak(m);
 #ifdef DEBUG_DEVICE_AUTOCAL
 	Debugger d(DebugAll,"AUTOCALIBRATION"," module: %s [%p]",bak.modName(),m_owner);
@@ -5771,7 +5825,10 @@ unsigned int BrfLibUsbDevice::calibrateAuto(String* error)
 	    status = dcCalProcPrepare(bak,subMod,e);
 	    if (!status) {
 		uint8_t dcReg = 0;
-		status = dcCalProc(bak,subMod,31,dcReg,e);
+		if (m == BRF_CALIBRATE_LPF_BANDWIDTH)
+		   status = calLPFBandwidth(bak,subMod,31,dcReg,e);
+		else
+		    status = dcCalProc(bak,subMod,31,dcReg,e);
 		if (!status) {
 		    calVal[m][subMod] = dcReg;
 		    status = dcCalProcPost(bak,subMod,dcReg,e);
@@ -5848,6 +5905,18 @@ unsigned int BrfLibUsbDevice::calBackupRestore(BrfCalData& bak, bool backup,
 		bak.modName(),this);
 	    break;
 	}
+	if (bak.module == BRF_CALIBRATE_LPF_BANDWIDTH) {
+	    BRF_FUNC_CALL_BREAK(lms(backup,0x06,bak.clkLPFCAL,&e));
+	    BRF_FUNC_CALL_BREAK(lms(backup,0x07,bak.enLPFCAL,&e));
+	    BRF_FUNC_CALL_BREAK(lms(backup,0x14,bak.txPPL,&e));
+	    BRF_FUNC_CALL_BREAK(lms(backup,0x44,bak.txVGA2PwAmp,&e));
+
+	    BRF_FUNC_CALL_BREAK(lms(backup,0x10,bak.nInt,&e));
+	    BRF_FUNC_CALL_BREAK(lms(backup,0x11,bak.nFrac1,&e));
+	    BRF_FUNC_CALL_BREAK(lms(backup,0x12,bak.nFrac2,&e));
+	    BRF_FUNC_CALL_BREAK(lms(backup,0x13,bak.nFrac3,&e));
+	    break;
+	}
 	status = setUnhandled(e,bak.module,"module");
 	break;
     }
@@ -5879,7 +5948,8 @@ unsigned int BrfLibUsbDevice::calInitFinal(BrfCalData& bak, bool init, String* e
 	    status = lmsWrite(0x09,bak.clkEn | bak.desc->clkEnMask,&e);
 	if (status)
 	    break;
-	if (bak.module == BRF_CALIBRATE_LPF_TUNING) {
+	if (bak.module == BRF_CALIBRATE_LPF_TUNING || 
+		bak.module == BRF_CALIBRATE_LPF_BANDWIDTH) {
 	    DDebug(m_owner,DebugAll,"calInitFinal(%s): nothing to do for %s [%p]",
 		what,bak.modName(),this);
 	    break;
@@ -5895,7 +5965,13 @@ unsigned int BrfLibUsbDevice::calInitFinal(BrfCalData& bak, bool init, String* e
 	    else {
 		// FAQ 5.26 (rev 1.0r13) DC comparators should be
 		//  powered up before calibration and then powered down after it
-		BRF_FUNC_CALL_BREAK(lmsChangeMask(0x5f,0x80,init,&e));
+		BRF_FUNC_CALL_BREAK(lmsChangeMask(0x5f,0x80,!init,&e));
+		if (init) {
+		    BRF_FUNC_CALL_BREAK(lmsSet(0x56,0x04,&e));
+		}
+		else {
+		    BRF_FUNC_CALL_BREAK(lmsReset(0x56,0x04,&e));
+		}
 	    }
 	    // Done for finalize
 	    if (!init)
@@ -5922,12 +5998,14 @@ unsigned int BrfLibUsbDevice::calInitFinal(BrfCalData& bak, bool init, String* e
 	    // PD_DCOCMP_LPF (DC offset comparator of DC offset cancellation)
 	    // It must be powered down (bit set to 1) when calibrating
 	    if (init) {
-		BRF_FUNC_CALL_BREAK(lmsSet(0x36,0x80,&e));
+		//BRF_FUNC_CALL_BREAK(lmsSet(0x36,0x80,&e));
+		BRF_FUNC_CALL_BREAK(lmsSet(0x36,0x04,&e));
 		BRF_FUNC_CALL_BREAK(lmsReset(0x3f,0x80,&e));
 	    }
 	    else {
+		//BRF_FUNC_CALL_BREAK(lmsReset(0x36,0x80,&e));
+		BRF_FUNC_CALL_BREAK(lmsReset(0x36,0x04,&e));
 		BRF_FUNC_CALL_BREAK(lmsSet(0x3f,0x80,&e));
-		BRF_FUNC_CALL_BREAK(lmsReset(0x36,0x80,&e));
 	    }
 	    break;
 	}
@@ -6017,6 +6095,7 @@ unsigned int BrfLibUsbDevice::dcCalProc(const BrfCalData& bak, uint8_t subMod,
 	    // Read DC_REG
 	    BRF_FUNC_CALL_RET(lmsRead(bak.desc->addr,data,&e));
 	    dcReg = (data & 0x3f);
+	    break;
 	}
 	if (dcReg == 0xff)
 	    return setError(RadioInterface::Failure,&e,"Calibration loop timeout");
@@ -6046,7 +6125,7 @@ unsigned int BrfLibUsbDevice::dcCalProcPost(const BrfCalData& bak, uint8_t subMo
     unsigned int status = 0;
     if (bak.module == BRF_CALIBRATE_LPF_TUNING) {
 	// Set DC_REG in TX/RX LPF DCO_DACCAL
-	uint8_t addr[] = {0x35,0x55};
+	uint8_t addr[] = {0x55,0x35};
 	for (uint8_t i = 0; !status && i < sizeof(addr); i++)
 	    status = lmsSet(addr[i],dcReg,0x3f,&e);
 	if (status)

@@ -1976,8 +1976,15 @@ void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* co
 		JsArray* jsa = new JsArray(context,mutex());
 		for (int r = 1; r <= rows; r++) {
 		    GenObject* o = arr->get(idx,r);
-		    if (o)
-			jsa->push(new ExpOperation(o->toString(),0,true));
+		    if (o) {
+			const DataBlock* d = YOBJECT(DataBlock,o);
+			if (d) {
+			    String x;
+			    jsa->push(new ExpOperation(x.hexify(d->data(),d->length()),0,false));
+			}
+			else
+			    jsa->push(new ExpOperation(o->toString(),0,true));
+		    }
 		    else
 			jsa->push(JsParser::nullClone());
 		}
@@ -1995,8 +2002,15 @@ void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* co
 		JsArray* jsa = new JsArray(context,mutex());
 		for (int r = 1; r <= rows; r++) {
 		    GenObject* o = arr->get(c,r);
-		    if (o)
-			jsa->push(new ExpOperation(o->toString(),*name,true));
+		    if (o) {
+			const DataBlock* d = YOBJECT(DataBlock,o);
+			if (d) {
+			    String x;
+			    jsa->push(new ExpOperation(x.hexify(d->data(),d->length()),*name,false));
+			}
+			else
+			    jsa->push(new ExpOperation(o->toString(),*name,true));
+		    }
 		    else
 			jsa->push(JsParser::nullClone());
 		}
@@ -2026,8 +2040,15 @@ void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* conte
 			if (TelEngine::null(name))
 			    continue;
 			GenObject* o = arr->get(c,idx);
-			if (o)
-			    jso->params().setParam(new ExpOperation(o->toString(),*name,true));
+			if (o) {
+			    const DataBlock* d = YOBJECT(DataBlock,o);
+			    if (d) {
+				String x;
+				jso->params().setParam(new ExpOperation(x.hexify(d->data(),d->length()),*name,false));
+			    }
+			    else
+				jso->params().setParam(new ExpOperation(o->toString(),*name,true));
+			}
 			else
 			    jso->params().setParam((JsParser::nullClone(*name)));
 		    }
@@ -2046,8 +2067,15 @@ void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* conte
 		    if (TelEngine::null(name))
 			continue;
 		    GenObject* o = arr->get(c,r);
-		    if (o)
-			jso->params().setParam(new ExpOperation(o->toString(),*name,true));
+		    if (o) {
+			const DataBlock* d = YOBJECT(DataBlock,o);
+			if (d) {
+			    String x;
+			    jso->params().setParam(new ExpOperation(x.hexify(d->data(),d->length()),*name,false));
+			}
+			else
+			    jso->params().setParam(new ExpOperation(o->toString(),*name,true));
+		    }
 		    else
 			jso->params().setParam((JsParser::nullClone(*name)));
 		}

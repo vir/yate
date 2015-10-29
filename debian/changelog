@@ -1,4 +1,4 @@
-yate (5.5.1~svn6057) UNRELEASED; urgency=low
+yate (5.5.1~svn6058) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1514,8 +1514,10 @@ yate (5.5.1~svn6057) UNRELEASED; urgency=low
     sample voicemail leaving script.
   * Updated to SVN revision 6057: + Added LPF_BANDWIDTH auto
     calibration.
+  * Updated to SVN revision 6058: + Convert binary database message
+    results to hexadecimal strings.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 27 Oct 2015 02:19:13 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 30 Oct 2015 02:19:12 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

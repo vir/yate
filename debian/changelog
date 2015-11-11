@@ -1,4 +1,4 @@
-yate (5.5.1~svn6058) UNRELEASED; urgency=low
+yate (5.5.1~svn6061) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1516,8 +1516,12 @@ yate (5.5.1~svn6058) UNRELEASED; urgency=low
     calibration.
   * Updated to SVN revision 6058: + Convert binary database message
     results to hexadecimal strings.
+  * Updated to SVN revision 6061: + Fixed a race condition between
+    attaching data source and sending progress/answer.  + Added a
+    setting for the number of message workers to create at start.  +
+    Added support for specifying the mode to mkdir.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 30 Oct 2015 02:19:12 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 12 Nov 2015 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

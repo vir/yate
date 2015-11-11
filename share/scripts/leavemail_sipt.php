@@ -162,12 +162,12 @@ function setState($newstate)
 
     switch ($newstate) {
 	case "novmail":
+	    /* Play the prompt in early media, don't answer call */
 	    $m = new Yate("chan.attach");
 	    $m->params["source"] = "wave/play/$vm_base/novmail.slin";
 	    $m->params["notify"] = $ourcallid;
+	    $m->params["action"] = "progress";
 	    $m->Dispatch();
-	    /* Play the prompt in early media, don't answer call */
-	    sendProgress(true);
 	    break;
 	case "greeting":
 	    $m = new Yate("chan.attach");
@@ -176,16 +176,14 @@ function setState($newstate)
 	    else
 		$m->params["source"] = "wave/play/$vm_base/greeting.slin";
 	    $m->params["notify"] = $ourcallid;
+	    $m->params["action"] = $answer ? "answer" : "progress";
 	    $m->Dispatch();
-	    if ($answer)
-		sendAnswer();
-	    else
-		sendProgress(true);
 	    break;
 	case "beep":
 	    $m = new Yate("chan.attach");
 	    $m->params["source"] = "wave/play/$vm_base/beep.slin";
 	    $m->params["notify"] = $ourcallid;
+	    $m->params["action"] = "answer";
 	    $m->Dispatch();
 	    /* Answer the call at this point if not answered earlier */
 	    sendAnswer();
@@ -286,6 +284,21 @@ while ($state != "") {
 	    break;
 	case "answer":
 	    // Yate::Debug("PHP Answered: " . $ev->name . " id: " . $ev->id);
+	    if ($ev->name == "chan.attach") {
+		/* Perform whatever action was requested after the media is actually attached */
+		switch ($ev->GetValue("action")) {
+		    case "answer":
+			sendAnswer();
+			break;
+		    case "progress":
+			sendProgress(true);
+			break;
+		    case null:
+			break;
+		    default:
+			Yate::Output("Unsupported action: " . $ev->GetValue("action"));
+		}
+	    }
 	    break;
 	case "installed":
 	    // Yate::Debug("PHP Installed: " . $ev->name);

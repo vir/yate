@@ -1454,7 +1454,7 @@ bool File::md5(const char* name, String& buffer, int* error)
 }
 
 // Create a folder (directory)
-bool File::mkDir(const char* path, int* error)
+bool File::mkDir(const char* path, int* error, int mode)
 {
     if (!fileNameOk(path,error))
 	return false;
@@ -1462,7 +1462,7 @@ bool File::mkDir(const char* path, int* error)
     if (::CreateDirectoryA(path,NULL))
 	return true;
 #else
-    if (0 == ::mkdir(path,(mode_t)-1))
+    if (0 == ::mkdir(path,(mode_t)mode))
 	return true;
 #endif
     return getLastError(error);

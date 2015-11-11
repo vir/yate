@@ -226,6 +226,7 @@ static bool s_createusr = true;
 static bool s_init = false;
 static bool s_dynplugin = false;
 static Engine::PluginMode s_loadMode = Engine::LoadFail;
+static int s_minworkers = 1;
 static int s_maxworkers = 10;
 static int s_exit = -1;
 unsigned int Engine::s_congestion = 0;
@@ -1428,7 +1429,8 @@ int Engine::engineInit()
     const char *modPath = s_cfg.getValue("general","modpath");
     if (modPath)
 	s_modpath = modPath;
-    s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers);
+    s_minworkers = s_cfg.getIntValue("general","minworkers",s_minworkers,1,25);
+    s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers,s_minworkers);
     s_maxevents = s_cfg.getIntValue("general","maxevents",s_maxevents);
     s_restarts = s_cfg.getIntValue("general","restarts");
     m_dispatcher.warnTime(1000*(u_int64_t)s_cfg.getIntValue("general","warntime"));
@@ -1455,6 +1457,7 @@ int Engine::engineInit()
 #ifndef _WINDOWS
     s_params.addParam("lastsignal",String(s_childsig));
 #endif
+    s_params.addParam("minworkers",String(s_minworkers));
     s_params.addParam("maxworkers",String(s_maxworkers));
     s_params.addParam("maxevents",String(s_maxevents));
     if (track)
@@ -1583,13 +1586,15 @@ int Engine::run()
 
 	// Create worker thread if we didn't hear about any of them in a while
 	if (s_makeworker && (EnginePrivate::count < s_maxworkers)) {
+	    int build = s_minworkers - EnginePrivate::count;
 	    if (EnginePrivate::count)
-		Alarm("engine","performance",(EnginePrivate::count < 4) ? DebugMild : DebugWarn,
+		Alarm("engine","performance",(build > -3) ? DebugMild : DebugWarn,
 		    "Creating new message dispatching thread (%d running)",EnginePrivate::count);
 	    else
-		Debug(DebugInfo,"Creating first message dispatching thread");
-	    EnginePrivate *prv = new EnginePrivate;
-	    prv->startup();
+		Debug(DebugInfo,"Creating first %d message dispatching threads",build);
+	    do {
+		(new EnginePrivate)->startup();
+	    } while (--build > 0);
 	}
 	else
 	    s_makeworker = true;

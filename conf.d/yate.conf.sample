@@ -19,6 +19,9 @@
 ; nodename: string: Name of this node in a cluster
 ;nodename=
 
+: minworkers: int: Minimum / initial number of engine worker threads
+;minworkers=1
+
 ; maxworkers: int: Maximum number of worker threads the engine can create
 ;maxworkers=10
 

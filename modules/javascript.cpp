@@ -2290,12 +2290,23 @@ bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	TelEngine::destruct(newName);
     }
     else if (oper.name() == YSTRING("mkdir")) {
-	if (oper.number() != 1)
-	    return false;
-	ExpOperation* op = popValue(stack,context);
+	int mode = -1;
+	ExpOperation* op = 0;
+	switch (oper.number()) {
+	    case 2:
+		op = popValue(stack,context);
+		if (op && op->isInteger())
+		    mode = op->number();
+		// fall through
+	    case 1:
+		op = popValue(stack,context);
+		break;
+	    default:
+		return false;
+	}
 	if (!op)
 	    return false;
-	ExpEvaluator::pushOne(stack,new ExpOperation(File::mkDir(*op)));
+	ExpEvaluator::pushOne(stack,new ExpOperation(File::mkDir(*op,0,mode)));
 	TelEngine::destruct(op);
     }
     else if (oper.name() == YSTRING("rmdir")) {

@@ -6730,9 +6730,10 @@ public:
      * Create a folder (directory). It only creates the last directory in the path
      * @param path The folder path
      * @param error Optional pointer to error code to be filled on failure
+     * @param mode Optional file mode, ignored on some platforms
      * @return True on success
      */
-    static bool mkDir(const char* path, int* error = 0);
+    static bool mkDir(const char* path, int* error = 0, int mode = -1);
 
     /**
      * Remove an empty folder (directory)

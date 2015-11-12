@@ -4624,6 +4624,8 @@ bool JsModule::received(Message& msg, int id, ChanAssist* assist)
 
 ChanAssist* JsModule::create(Message& msg, const String& id)
 {
+    if ((msg == YSTRING("chan.startup")) && (msg[YSTRING("direction")] == YSTRING("outgoing")))
+	return 0;
     lock();
     ScriptRun* runner = m_assistCode.createRunner(0,NATIVE_TITLE);
     unlock();

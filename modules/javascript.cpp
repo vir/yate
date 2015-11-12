@@ -47,6 +47,7 @@ public:
     bool unload();
     virtual bool received(Message& msg, int id);
     virtual bool received(Message& msg, int id, ChanAssist* assist);
+    void msgPostExecute(const Message& msg, bool handled);
     inline JsParser& parser()
 	{ return m_assistCode; }
 protected:
@@ -55,7 +56,9 @@ protected:
     virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
 private:
     bool evalContext(String& retVal, const String& cmd, ScriptContext* context = 0);
+    void clearPostHook();
     JsParser m_assistCode;
+    MessagePostHook* m_postHook;
 };
 
 INIT_PLUGIN(JsModule);
@@ -85,6 +88,7 @@ public:
     virtual bool msgPreroute(Message& msg);
     virtual bool msgRoute(Message& msg);
     virtual bool msgDisconnect(Message& msg, const String& reason);
+    void msgPostExecute(const Message& msg, bool handled);
     bool init();
     inline State state() const
 	{ return m_state; }
@@ -101,7 +105,7 @@ public:
     Message* getMsg(ScriptRun* runner) const;
     static const char* stateName(State st);
 private:
-    bool runFunction(const String& name, Message& msg);
+    bool runFunction(const String& name, Message& msg, bool* handled = 0);
     bool runScript(Message* msg, State newState);
     bool setMsg(Message* msg);
     void clearMsg(bool fromChannel);
@@ -733,6 +737,13 @@ private:
     Resolver::Type m_type;
     GenObject* m_context;
     RefPointer<JsDNS> m_dns;
+};
+
+class JsPostExecute : public MessagePostHook
+{
+public:
+    virtual void dispatched(const Message& msg, bool handled)
+	{ if (msg == YSTRING("call.execute")) __plugin.msgPostExecute(msg,handled); }
 };
 
 static String s_basePath;
@@ -1610,8 +1621,10 @@ bool JsMessage::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* c
     XDebug(&__plugin,DebugAll,"JsMessage::runAssign '%s'='%s'",oper.name().c_str(),oper.c_str());
     if (ScriptContext::hasField(stack,oper.name(),context))
 	return JsObject::runAssign(stack,oper,context);
-    if (!m_message)
+    if (frozen() || !m_message) {
+	Debug(&__plugin,DebugWarn,"Message is frozen or missing");
 	return false;
+    }
     if (JsParser::isUndefined(oper))
 	m_message->clearParam(oper.name());
     else
@@ -1648,7 +1661,7 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    ExpOperation* op = popValue(stack,context);
 		    if (!op)
 			return false;
-		    if (m_message)
+		    if (m_message && !frozen())
 			m_message->retValue() = *op;
 		    TelEngine::destruct(op);
 		}
@@ -1700,7 +1713,7 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	if (oper.number() != 0)
 	    return false;
 	bool ok = false;
-	if (m_owned) {
+	if (m_owned && !frozen()) {
 	    Message* m = m_message;
 	    clearMsg();
 	    if (m)
@@ -1715,7 +1728,7 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	ObjList args;
 	extractArgs(stack,oper,context,args);
 	bool ok = false;
-	if (m_owned && m_message) {
+	if (m_owned && m_message && !frozen()) {
 	    Message* m = m_message;
 	    clearMsg();
 	    ExpOperation* async = static_cast<ExpOperation*>(args[0]);
@@ -4134,12 +4147,12 @@ bool JsAssist::runScript(Message* msg, State newState)
     return handled;
 }
 
-bool JsAssist::runFunction(const String& name, Message& msg)
+bool JsAssist::runFunction(const String& name, Message& msg, bool* handled)
 {
     if (!(m_runner && m_runner->callable(name)))
 	return false;
-    DDebug(&__plugin,DebugInfo,"Running function %s(message) in '%s' state %s",
-	name.c_str(),id().c_str(),stateName());
+    DDebug(&__plugin,DebugInfo,"Running function %s(message%s) in '%s' state %s",
+	name.c_str(),(handled ? ",handled" : ""),id().c_str(),stateName());
 #ifdef DEBUG
     u_int64_t tm = Time::now();
 #endif
@@ -4151,6 +4164,10 @@ bool JsAssist::runFunction(const String& name, Message& msg)
     jm->ref();
     ObjList args;
     args.append(new ExpWrapper(jm,"message"));
+    if (handled) {
+	jm->freeze();
+	args.append(new ExpOperation(*handled,"handled"));
+    }
     ScriptRun::Status rval = runner->call(name,args);
     jm->clearMsg();
     bool ok = false;
@@ -4209,6 +4226,11 @@ bool JsAssist::msgRoute(Message& msg)
 bool JsAssist::msgDisconnect(Message& msg, const String& reason)
 {
     return runFunction("onDisconnected",msg) || runScript(&msg,ReRoute);
+}
+
+void JsAssist::msgPostExecute(const Message& msg, bool handled)
+{
+    runFunction("onPostExecute",const_cast<Message&>(msg),&handled);
 }
 
 
@@ -4365,7 +4387,8 @@ static const char* s_cmdsLine = "  javascript {info|eval[=context] instructions.
 
 
 JsModule::JsModule()
-    : ChanAssistList("javascript",true)
+    : ChanAssistList("javascript",true),
+      m_postHook(0)
 {
     Output("Loaded module Javascript");
 }
@@ -4373,6 +4396,27 @@ JsModule::JsModule()
 JsModule::~JsModule()
 {
     Output("Unloading module Javascript");
+    clearPostHook();
+}
+
+void JsModule::clearPostHook()
+{
+    if (m_postHook) {
+	Engine::self()->setHook(m_postHook,true);
+	TelEngine::destruct(m_postHook);
+    }
+}
+
+void JsModule::msgPostExecute(const Message& msg, bool handled)
+{
+    const String& id = msg[YSTRING("id")];
+    if (id.null())
+	return;
+    lock();
+    RefPointer <JsAssist> ja = static_cast<JsAssist*>(find(id));
+    unlock();
+    if (ja)
+	ja->msgPostExecute(msg,handled);
 }
 
 void JsModule::statusParams(String& str)
@@ -4611,6 +4655,7 @@ bool JsModule::received(Message& msg, int id)
 	    break;
 	case Halt:
 	    s_engineStop = true;
+	    clearPostHook();
 	    JsGlobal::unloadAll();
 	    return false;
     } // switch (id)
@@ -4641,6 +4686,7 @@ ChanAssist* JsModule::create(Message& msg, const String& id)
 
 bool JsModule::unload()
 {
+    clearPostHook();
     uninstallRelays();
     return true;
 }
@@ -4651,6 +4697,8 @@ void JsModule::initialize()
     ChanAssistList::initialize();
     setup();
     installRelay(Help);
+    if (!m_postHook)
+	Engine::self()->setHook(m_postHook = new JsPostExecute);
     Configuration cfg(Engine::configFile("javascript"));
     String tmp = Engine::sharedPath();
     tmp << Engine::pathSeparator() << "scripts";

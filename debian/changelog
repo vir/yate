@@ -1,4 +1,4 @@
-yate (5.5.1~svn6063) UNRELEASED; urgency=low
+yate (5.5.1~svn6064) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1523,8 +1523,10 @@ yate (5.5.1~svn6063) UNRELEASED; urgency=low
   * Updated to SVN revision 6063: + Make sure a JsAssist is not created
     for outbound call legs.  + Added onPostExecute hook that gets called
     by channel scripts when call.execute returns.
+  * Updated to SVN revision 6064: + Slow down the consumer waiting loop
+    as to not burn too much CPU.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 13 Nov 2015 02:19:13 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 14 Nov 2015 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

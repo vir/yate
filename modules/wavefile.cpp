@@ -362,11 +362,19 @@ void WaveSource::run()
     // internally reference if used for override or replace purpose
     bool noChan = (0 == m_chan);
     // wait until at least one consumer is attached
+    unsigned int fast = 4;
     while (!r) {
 	lock();
 	r = m_consumers.count();
 	unlock();
-	Thread::yield();
+	if (r)
+	    ;
+	else if (fast) {
+	    --fast;
+	    Thread::yield();
+	}
+	else
+	    Thread::idle();
 	if (!looping(noChan)) {
 	    notify(0,"replaced");
 	    return;

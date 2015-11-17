@@ -3824,7 +3824,7 @@ bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 		// there may be a race between chan.disconnected and call.drop so set in both
 		Message* msg = ja->getMsg(runner);
 		if (msg)
-		    msg->setParam("reason",*op);
+		    msg->setParam((ja->state() == JsAssist::Routing) ? "error" : "reason",*op);
 	    }
 	    ja->end();
 	    Engine::enqueue(m);

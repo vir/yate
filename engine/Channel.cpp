@@ -1809,4 +1809,58 @@ void Router::cleanup()
     destruct(m_msg);
 }
 
+
+void CallAccount::pickAccountParams(const NamedList& params)
+{
+    NamedIterator iter(params);
+    Lock mylock(m_mutex);
+    m_inbParams.clearParams();
+    m_outParams.clearParams();
+    m_regParams.clearParams();
+    while (const NamedString* n = iter.get()) {
+	if (n->name().length() <= 4)
+	    continue;
+	String name = n->name().substr(4).trimSpaces();
+	if (n->name().startsWith("reg:"))
+	    m_regParams.setParam(name,*n);
+	else if (n->name().startsWith("inb:"))
+	    m_inbParams.setParam(name,*n);
+	else if (n->name().startsWith("out:"))
+	    m_outParams.setParam(name,*n);
+    }
+}
+
+void CallAccount::setInboundParams(NamedList& params)
+{
+    Lock mylock(m_mutex);
+    NamedIterator iter(m_inbParams);
+    while (const NamedString* n = iter.get()) {
+	String tmp(*n);
+	params.replaceParams(tmp);
+	params.setParam(n->name(),tmp);
+    }
+}
+
+void CallAccount::setOutboundParams(NamedList& params)
+{
+    Lock mylock(m_mutex);
+    NamedIterator iter(m_outParams);
+    while (const NamedString* n = iter.get()) {
+	String tmp(*n);
+	params.replaceParams(tmp);
+	params.setParam(n->name(),tmp);
+    }
+}
+
+void CallAccount::setRegisterParams(NamedList& params)
+{
+    Lock mylock(m_mutex);
+    NamedIterator iter(m_regParams);
+    while (const NamedString* n = iter.get()) {
+	String tmp(*n);
+	params.replaceParams(tmp);
+	params.setParam(n->name(),tmp);
+    }
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

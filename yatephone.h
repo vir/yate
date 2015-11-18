@@ -2472,6 +2472,76 @@ protected:
 };
 
 /**
+ * This helper class holds generic account parameters that are applied to calls
+ * @short Settings for an account handling calls
+ */
+class YATE_API CallAccount
+{
+    YNOCOPY(CallAccount);
+private:
+    Mutex* m_mutex;
+    NamedList m_inbParams;
+    NamedList m_outParams;
+    NamedList m_regParams;
+
+public:
+    /**
+     * Make a copy of the inbound and outbound parameter templates
+     * @param params List of parameters to copy from
+     */
+    void pickAccountParams(const NamedList& params);
+
+
+    /**
+     * Patch the inbound call parameters
+     * @param params List of parameters to be patched
+     */
+    void setInboundParams(NamedList& params);
+
+    /**
+     * Patch the outbound call parameters
+     * @param params List of parameters to be patched
+     */
+    void setOutboundParams(NamedList& params);
+
+    /**
+     * Patch registration parameters
+     * @param params List of parameters to be patched
+     */
+    void setRegisterParams(NamedList& params);
+
+    /**
+     * Accessor for the inbound call parameters list
+     * @return Reference to the inbound call parameters
+     */
+    inline const NamedList& inboundParams() const
+	{ return m_inbParams; }
+
+    /**
+     * Accessor for the outbound call parameters list
+     * @return Reference to the outbound call parameters
+     */
+    inline const NamedList& outboundParams() const
+	{ return m_outParams; }
+
+    /**
+     * Accessor for the registration parameters list
+     * @return Reference to the registration parameters
+     */
+    inline const NamedList& registerParams() const
+	{ return m_regParams; }
+
+protected:
+    /**
+     * Constructor
+     * @param mutex The mutex that is used to lock object's variables
+     */
+    inline CallAccount(Mutex* mutex)
+	: m_mutex(mutex), m_inbParams(""), m_outParams(""), m_regParams("")
+	{ }
+};
+
+/**
  * Find if a string appears to be an E164 phone number
  * @param str String to check
  * @return True if str appears to be a valid E164 number

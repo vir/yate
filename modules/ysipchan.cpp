@@ -663,7 +663,7 @@ private:
     bool m_foreignAuth;
 };
 
-class YateSIPLine : public String, public Mutex, public YateSIPPartyHolder
+class YateSIPLine : public String, public Mutex, public CallAccount, public YateSIPPartyHolder
 {
     YCLASS(YateSIPLine,String)
 public:
@@ -5910,6 +5910,8 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
     if (reason)
 	m->addParam("reason",reason);
+    if (line)
+	line->setInboundParams(*m);
     m_route = m;
     Message* s = message("chan.startup");
     s->addParam("caller",m_uri.getUser());
@@ -5931,10 +5933,17 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_honorDtmfDetect(s_honorDtmfDetect),
       m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0), m_revert("")
 {
-    m_ipv6 = msg.getBoolValue(YSTRING("ipv6_support"),s_ipv6);
-    setSdpDebug(this,this);
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
+    m_line = msg.getValue(YSTRING("line"));
+    YateSIPLine* line = 0;
+    if (m_line) {
+	line = plugin.findLine(m_line);
+	if (line)
+	    line->setOutboundParams(msg);
+    }
+    m_ipv6 = msg.getBoolValue(YSTRING("ipv6_support"),s_ipv6);
+    setSdpDebug(this,this);
     m_targetid = target;
     setReason();
     m_checkAllowInfo = msg.getBoolValue(YSTRING("ocheck_allow_info"),m_checkAllowInfo);
@@ -5954,20 +5963,15 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     setRfc2833(msg.getParam(YSTRING("rfc2833")));
     m_rtpForward = msg.getBoolValue(YSTRING("rtp_forward"));
     m_user = msg.getValue(YSTRING("user"));
-    m_line = msg.getValue(YSTRING("line"));
     String tmp;
-    YateSIPLine* line = 0;
-    if (m_line) {
-	line = plugin.findLine(m_line);
-	if (line) {
-	    if (uri.find('@') < 0 && !uri.startsWith("tel:")) {
-		if (!uri.startsWith("sip:"))
-		    tmp = "sip:";
-		tmp << uri << "@";
-		SocketAddr::appendAddr(tmp,line->domain());
-	    }
-	    m_externalAddr = line->getLocalAddr();
+    if (line) {
+	if (uri.find('@') < 0 && !uri.startsWith("tel:")) {
+	    if (!uri.startsWith("sip:"))
+		tmp = "sip:";
+	    tmp << uri << "@";
+	    SocketAddr::appendAddr(tmp,line->domain());
 	}
+	m_externalAddr = line->getLocalAddr();
     }
     if (tmp.null()) {
 	if (!(uri.startsWith("tel:") || uri.startsWith("sip:"))) {
@@ -8066,7 +8070,7 @@ bool YateSIPConnection::sendTone(Message& msg, const char* tone, int meth, bool&
 
 
 YateSIPLine::YateSIPLine(const String& name)
-    : String(name), Mutex(true,"YateSIPLine"),
+    : String(name), Mutex(true,"YateSIPLine"), CallAccount(this),
       m_resend(0), m_keepalive(0), m_interval(0), m_alive(0),
       m_flags(-1), m_trans(-1), m_tr(0), m_marked(false), m_valid(false),
       m_localPort(0), m_partyPort(0), m_localDetect(false),
@@ -8172,6 +8176,7 @@ SIPMessage* YateSIPLine::buildRegister(int expires)
 	    *hl = display + " " + *hl;
 	}
     }
+    copySipHeaders(*m,registerParams());
     return m;
 }
 
@@ -8432,6 +8437,7 @@ bool YateSIPLine::update(const Message& msg)
 	setParty();
 	return true;
     }
+    pickAccountParams(msg);
     bool chg = updateProto(msg);
     bool transChg = chg;
     transChg = updateLocalAddr(msg) || transChg;

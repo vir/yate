@@ -74,16 +74,25 @@
 
 ; debug_level: libusb debug level
 ; Default to 0 (no debug messages)
+; Currently libusb defines the follwing levels:
+;  1: ERROR, 2: WARNING, 3: INFO, 4: DEBUG
 ;debug_level=0
 
+; sync_transfer_timeout: integer: Sync transfer timeout in milliseconds
+; This parameter is applied on device creation
+; This parameter is used when transferring radio data (samples)
+; Allowed interval: [20 .. 500]
+; Defaults to 50
+;sync_transfer_timeout=50
+
 ; ctrl_transfer_timeout: integer: Control transfer timeout in milliseconds
-; This parmeter is applied on device creation
+; This parameter is applied on device creation
 ; Allowed interval: [200 .. 2000]
 ; Defaults to 500
 ;ctrl_transfer_timeout=500
 
 ; bulk_transfer_timeout: integer: Bulk transfer timeout in milliseconds
-; This parmeter is applied on device creation
+; This parameter is applied on device creation
 ; Allowed interval: [200 .. 2000]
 ; Defaults to 500
 ;bulk_transfer_timeout=500

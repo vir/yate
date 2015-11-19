@@ -189,6 +189,7 @@ static inline double brfRxDcOffset(double val)
 #define BRF_FPGA_CORR_MAX 4096
 
 // libusb defaults
+#define LUSB_SYNC_TIMEOUT 50           // Sync transfer timeout def val (in milliseconds)
 #define LUSB_CTRL_TIMEOUT 500          // Control transfer timeout def val (in milliseconds)
 #define LUSB_BULK_TIMEOUT 500          // Bulk transfer timeout def val (in milliseconds)
 
@@ -1559,7 +1560,7 @@ private:
 	String* error = 0) {
 	    m_txIO.syncFlags = flagsTx;
 	    m_rxIO.syncFlags = flagsRx;
-	    unsigned int intervals = (m_bulkTout / Thread::idleMsec()) + 1;
+	    unsigned int intervals = (m_syncTout / Thread::idleMsec()) + 1;
 	    unsigned int status = 0;
 	    while (m_txIO.syncFlags || m_rxIO.syncFlags) {
 		Thread::idle();
@@ -1603,6 +1604,7 @@ private:
     DataBlock m_calCache;
     //
     NamedList m_calibration;             // Calibration parameters
+    unsigned int m_syncTout;             // Sync transfer timeout (in milliseconds)
     unsigned int m_ctrlTout;             // Control transfer timeout (in milliseconds)
     unsigned int m_bulkTout;             // Bulk transfer timeout (in milliseconds)
     int m_altSetting;
@@ -1949,6 +1951,7 @@ static const String s_ifcCmds[] = {
     "vgagain","correction","lmswrite",
     "bufoutput","rxdcoutput","txpattern","show",""};
 // libusb
+static unsigned int s_lusbSyncTransferTout = LUSB_SYNC_TIMEOUT; // Sync transfer timeout def val (in milliseconds)
 static unsigned int s_lusbCtrlTransferTout = LUSB_CTRL_TIMEOUT; // Control transfer timeout def val (in milliseconds)
 static unsigned int s_lusbBulkTransferTout = LUSB_BULK_TIMEOUT; // Bulk transfer timeout def val (in milliseconds)
 
@@ -2110,7 +2113,13 @@ static void lusbTransferCb(libusb_transfer* transfer)
     if (!t)
 	return;
     Lock lck(t);
-    t->status = BrfLibUsbDevice::lusbCheckSuccess(transfer->status,&t->error);
+    if (transfer->status == LIBUSB_TRANSFER_COMPLETED &&
+	transfer->length != transfer->actual_length) {
+	t->status = RadioInterface::HardwareIOError;
+	t->error.printf("Incomplete transfer %u/%u",transfer->actual_length,transfer->length);
+    }
+    else
+	t->status = BrfLibUsbDevice::lusbCheckSuccess(transfer->status,&t->error);
     t->running(false);
 }
 
@@ -2288,6 +2297,7 @@ BrfLibUsbDevice::BrfLibUsbDevice(BrfInterface* owner)
     m_devSpeed(LIBUSB_SPEED_HIGH),
     m_ctrlTransferPage(0),
     m_calibration(""),
+    m_syncTout(s_lusbSyncTransferTout),
     m_ctrlTout(s_lusbCtrlTransferTout),
     m_bulkTout(s_lusbBulkTransferTout),
     m_altSetting(BRF_ALTSET_INVALID),
@@ -4561,7 +4571,7 @@ unsigned int BrfLibUsbDevice::syncTransfer(int ep, uint8_t* data, unsigned int l
     t.running(true);
     unsigned int cStatus = 0;
     bool checkCancelled = !m_closingDevice;
-    if (t.fillBulk(data,len,m_bulkTout) && t.submit()) {
+    if (t.fillBulk(data,len,m_syncTout) && t.submit()) {
 	while (t.running()) {
 	    struct timeval tv;
 	    tv.tv_usec = 3 * Thread::idleUsec();
@@ -7526,6 +7536,8 @@ void BrfModule::initialize()
 	installRelay(RadioCreate,"radio.create",gen.getIntValue("priority",90));
     }
     lusbSetDebugLevel();
+    s_lusbSyncTransferTout = lusb.getIntValue(YSTRING("sync_transfer_timeout"),
+	LUSB_SYNC_TIMEOUT,20,500);
     s_lusbCtrlTransferTout = lusb.getIntValue(YSTRING("ctrl_transfer_timeout"),
 	LUSB_CTRL_TIMEOUT,200,2000);
     s_lusbBulkTransferTout = lusb.getIntValue(YSTRING("bulk_transfer_timeout"),

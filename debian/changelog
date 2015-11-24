@@ -1,4 +1,4 @@
-yate (5.5.1~svn6067) UNRELEASED; urgency=low
+yate (5.5.1~svn6071) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1534,8 +1534,14 @@ yate (5.5.1~svn6067) UNRELEASED; urgency=low
     account parameters for calls and registration.  + Added new,
     shorter, timeout for samples transfer. Properly handle incomplete
     transfers.
+  * Updated to SVN revision 6071: + Allow setting extra parameters in JS
+    Channel.hangup()  + Support adding an ISUP body when rejecting a SIP
+    call from routing.  + Do not overwrite an existing ISUP protocol
+    type, it can be more specific than local knowledge.  + Fixed bug:
+    check vsnprintf result in String::printf(). Update held string
+    length after printf.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 20 Nov 2015 02:19:13 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 25 Nov 2015 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

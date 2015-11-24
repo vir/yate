@@ -1012,7 +1012,7 @@ private:
     // Build the body of a SIP message from an engine message
     // Encode an ISUP message from parameters received in msg if enabled to process them
     // Build a multipart/mixed body if more then one body is going to be sent
-    MimeBody* buildSIPBody(Message& msg, MimeSdpBody* sdp = 0);
+    MimeBody* buildSIPBody(Message& msg, MimeSdpBody* sdp = 0, const char* prefixName = 0);
     // Build the body of a hangup SIP message
     MimeBody* buildSIPBody();
     // Update NAT address from params or transport
@@ -2063,17 +2063,20 @@ static bool doDecodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* 
 // Build the body of a SIP message from an engine message
 // Encode an ISUP message from parameters received in msg if enabled to process them
 // Build a multipart/mixed body if more then one body is going to be sent
-static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdpBody* sdp)
+static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg,
+    MimeSdpBody* sdp, const char* prefixName = 0)
 {
     MimeBinaryBody* isup = 0;
 
     // Build isup
     while (s_sipt_isup) {
-	String prefix = msg.getValue(YSTRING("message-prefix"));
+	static const String s_stdPrefix("message-prefix");
+	String prefix = msg.getValue(prefixName ? prefixName : s_stdPrefix.c_str());
 	if (!msg.getParam(prefix + "message-type"))
 	    break;
 
-	// Remember the message's name and user data
+	// Remember the message's name, prefix and user data
+	String pre;
 	String name = msg;
 	RefObject* userdata = msg.userData();
 	if (userdata)
@@ -2081,6 +2084,10 @@ static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdp
 
 	DataBlock* data = 0;
 	msg = "isup.encode";
+	if (prefixName) {
+	    pre = msg.getValue(s_stdPrefix);
+	    msg.setParam(s_stdPrefix,prefix);
+	}
 	if (Engine::dispatch(msg)) {
 	    NamedString* ns = msg.getParam(YATOM("rawdata"));
 	    if (ns) {
@@ -2107,6 +2114,12 @@ static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdp
 
 	// Restore message
 	msg = name;
+	if (prefixName) {
+	    if (pre)
+		msg.setParam(s_stdPrefix,pre);
+	    else
+		msg.clearParam(s_stdPrefix);
+	}
 	msg.userData(userdata);
 	TelEngine::destruct(userdata);
 	break;
@@ -7778,6 +7791,7 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 	else if (msg) {
 	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),code,reason);
 	    copySipHeaders(*m,*msg);
+	    m->setBody(buildSIPBody(const_cast<Message&>(*msg),0,"message-iprefix"));
 	    m_tr->setResponse(m);
 	    m->deref();
 	}
@@ -7962,9 +7976,9 @@ bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
 }
 
 // Build the body of a SIP message from an engine message
-MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
+MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp, const char* prefixName)
 {
-    return doBuildSIPBody(this,msg,sdp);
+    return doBuildSIPBody(this,msg,sdp,prefixName);
 }
 
 // Build the body of a hangup SIP message from disconnect parameters
@@ -7974,7 +7988,7 @@ MimeBody* YateSIPConnection::buildSIPBody()
     paramMutex().lock();
     msg.copyParams(parameters());
     paramMutex().unlock();
-    return doBuildSIPBody(this,msg,0);
+    return doBuildSIPBody(this,msg,0,"message-prefix");
 }
 
 // Update NAT address from params or transport

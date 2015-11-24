@@ -961,6 +961,20 @@ static bool extractStackArgs(int minArgc, JsObject* obj,
     return false;
 }
 
+// Copy parameters from one list to another skipping those starting with two underlines
+static void copyObjParams(NamedList& dest, const NamedList* src)
+{
+    if (!src)
+	return;
+    unsigned int n = src->length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* p = src->getParam(i);
+	if (p && !p->name().startsWith("__"))
+	    dest.setParam(p->name(),*p);
+    }
+}
+
+
 bool JsEngAsync::run()
 {
     switch (m_oper) {
@@ -3811,25 +3825,56 @@ bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	}
     }
     else if (oper.name() == YSTRING("hangup")) {
-	if (oper.number() > 1)
-	    return false;
-	ScriptRun* runner = YOBJECT(ScriptRun,context);
+	bool peer = false;
+	ExpOperation* params = 0;
+	switch (oper.number()) {
+	    case 3:
+		params = popValue(stack,context);
+		peer = params && params->valBoolean();
+		// fall through
+	    case 2:
+		params = popValue(stack,context);
+		// fall through
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
 	ExpOperation* op = popValue(stack,context);
+	ScriptRun* runner = YOBJECT(ScriptRun,context);
 	RefPointer<JsAssist> ja = m_assist;
 	if (ja) {
+	    NamedList* lst = YOBJECT(NamedList,params);
+	    if (!lst) {
+		ScriptContext* ctx = YOBJECT(ScriptContext,params);
+		if (ctx)
+		    lst = &ctx->params();
+	    }
+	    String id;
+	    if (peer) {
+		RefPointer<CallEndpoint> cp = ja->locate();
+		if (cp)
+		    cp->getPeerId(id);
+	    }
+	    if (!id)
+		id = ja->id();
 	    Message* m = new Message("call.drop");
-	    m->addParam("id",ja->id());
+	    m->addParam("id",id);
+	    copyObjParams(*m,lst);
 	    if (op && !op->null()) {
 		m->addParam("reason",*op);
 		// there may be a race between chan.disconnected and call.drop so set in both
 		Message* msg = ja->getMsg(runner);
-		if (msg)
+		if (msg) {
 		    msg->setParam((ja->state() == JsAssist::Routing) ? "error" : "reason",*op);
+		    copyObjParams(*msg,lst);
+		}
 	    }
 	    ja->end();
 	    Engine::enqueue(m);
 	}
 	TelEngine::destruct(op);
+	TelEngine::destruct(params);
 	if (runner)
 	    runner->pause();
     }
@@ -3897,14 +3942,7 @@ void JsChannel::callToRoute(ObjList& stack, const ExpOperation& oper, GenObject*
 	Debug(&__plugin,DebugWarn,"JsChannel::callToRoute(): Invalid target!");
 	return;
     }
-    if (params) {
-	unsigned int n = params->length();
-	for (unsigned int i = 0; i < n; i++) {
-	    const NamedString* p = params->getParam(i);
-	    if (p && !p->name().startsWith("__"))
-		msg->setParam(p->name(),*p);
-	}
-    }
+    copyObjParams(*msg,params);
     msg->retValue() = oper;
     m_assist->handled();
     runner->pause();
@@ -3943,14 +3981,7 @@ void JsChannel::callToReRoute(ObjList& stack, const ExpOperation& oper, GenObjec
 		m->addParam(p->name(),*p);
 	}
     }
-    if (params) {
-	unsigned int n = params->length();
-	for (unsigned int i = 0; i < n; i++) {
-	    const NamedString* p = params->getParam(i);
-	    if (p && !p->name().startsWith("__"))
-		m->setParam(p->name(),*p);
-	}
-    }
+    copyObjParams(*m,params);
     Engine::enqueue(m);
     m_assist->handled();
     runner->pause();

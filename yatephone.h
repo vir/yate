@@ -1422,6 +1422,7 @@ protected:
 	Help       = 0x00000010,
 	Halt       = 0x00000020,
 	Route	   = 0x00000040,
+	Stop	   = 0x00000080,
 	// Driver messages
 	Execute    = 0x00000100,
 	Drop       = 0x00000200,

@@ -1040,6 +1040,7 @@ TokenDict Module::s_messages[] = {
     { "engine.command",  Module::Command },
     { "engine.help",     Module::Help },
     { "engine.halt",     Module::Halt },
+    { "engine.stop",     Module::Stop },
     { "call.route",      Module::Route },
     { "call.execute",    Module::Execute },
     { "call.drop",       Module::Drop },

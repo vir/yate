@@ -620,7 +620,7 @@ The devel package must still be installed separately.
 #
 %{__cat} <<EOF >%{local_find_requires}
 #! /bin/sh
-grep -v '\.yate$' | %{__find_requires} | grep -v '^perl'
+grep -v '\.yate$' | %{__find_requires} | grep -v '^perl' | grep -v 'libyate\.php'
 exit 0
 EOF
 #

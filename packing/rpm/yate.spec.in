@@ -614,6 +614,13 @@ The devel package must still be installed separately.
 %prep
 %setup -q -n %{name}
 
+# older rpmbuild uses these macro basic regexps
+%define _provides_exceptions pear(libyate\\|devel(libyate
+%define _requires_exceptions pear(libyate\\|devel(libyate\\|devel(libQt
+# newer rpmbuild needs these global extended regexps
+%global __provides_exclude pear\\(libyate|devel\\(libyate
+%global __requires_exclude pear\\(libyate|devel\\(libyate|devel\\(libQt
+#
 %if "%{no_auto_deps}" == "1"
 %define local_find_requires %{_builddir}/%{name}/local-find-requires
 %define local_find_provides %{_builddir}/%{name}/local-find-provides
@@ -666,6 +673,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Thu Nov 26 2015 Paul Chitescu <paulc@voip.null.ro>
+- More tweaking to suppress unwanted dependencies in newer RPM
+
 * Tue Apr 07 2015 Marian Podgoreanu <marian@voip.null.ro>
 - Renamed GSM Layer 3 radio library
 

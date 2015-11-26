@@ -1024,7 +1024,7 @@ String& String::append(double value, unsigned int decimals)
     return operator+=(buf);
 }
 
-static char* string_printf(unsigned int length, const char* format, va_list& va)
+static char* string_printf(unsigned int& length, const char* format, va_list& va)
 {
     if (TelEngine::null(format) || !length)
 	return 0;
@@ -1033,8 +1033,41 @@ static char* string_printf(unsigned int length, const char* format, va_list& va)
 	Debug("String",DebugFail,"malloc(%d) returned NULL!",length);
 	return 0;
     }
+    // Remember vsnprintf:
+    // standard:
+    //  - buffer size and returned value include the terminating NULL char
+    //  - returns -1 on error
+    // Windows:
+    //  - it doesn't write terminating NULL if there is no space
+    //  - returns -1 on error or buffer length is less than number of bytes to write
+    //  - returned value doesn't include the terminating NULL char (even if it was written to output)
+    buf[length] = 0;
+#ifdef _WINDOWS
+    errno = 0;
     int len = ::vsnprintf(buf,length,format,va);
-    buf[len] = 0;
+#else
+    int len = ::vsnprintf(buf,length + 1,format,va);
+#endif
+    if (len < 0) {
+#ifdef _WINDOWS
+	if (errno == ERANGE) {
+	    XDebug("String",DebugGoOn,"string_printf() incomplete write");
+	    buf[length] = 0;
+	    length = 0;
+	    return buf;
+	}
+#endif
+	::free(buf);
+	Debug("String",DebugGoOn,"string_printf(): vsnprintf() failed!");
+	return 0;
+    }
+    if (len < (int)length)
+	length = len;
+#ifdef XDEBUG
+    else if (len > (int)length || buf[len])
+	Debug("String",DebugGoOn,"string_printf() incomplete write");
+#endif
+    buf[length] = 0;
     return buf;
 }
 
@@ -1050,6 +1083,7 @@ String& String::printf(unsigned int length, const char* format,  ...)
     }
     char* old = m_string;
     m_string = buf;
+    m_length = length;
     ::free(old);
     changed();
     return *this;
@@ -1068,6 +1102,7 @@ String& String::printf(const char* format, ...)
     }
     char* old = m_string;
     m_string = buf;
+    m_length = len;
     ::free(old);
     changed();
     return *this;

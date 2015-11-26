@@ -2558,7 +2558,7 @@ void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* co
 	    temp = new NamedString(op->name(),*ns);
 	object->params().setParam(temp);
     }
-    if (object->frozen())
+    if (object->frozen() || object->params().getParam(JsObject::protoName()))
 	return;
     JsArray* arr = YOBJECT(JsArray,object);
     if (arr) {
@@ -2586,7 +2586,6 @@ void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* co
     objCtr = YOBJECT(JsFunction,ctx->params().getParam(YSTRING("Array")));
     if (objCtr)
 	arrayProto = YOBJECT(JsArray,objCtr->params().getParam(YSTRING("prototype")));
-
 
     resolveObjectParams(object,stack,context,ctx,objProto,arrayProto);
 }
@@ -3566,7 +3565,7 @@ ScriptRun::Status JsParser::eval(const String& text, ExpOperation** result, Scri
 }
 
 // Parse JSON using native methods
-ExpOperation* JsParser::parseJSON(const char* text, Mutex* mtx)
+ExpOperation* JsParser::parseJSON(const char* text, Mutex* mtx, ObjList* stack, GenObject* context)
 {
     if (!text)
 	return 0;
@@ -3575,6 +3574,8 @@ ExpOperation* JsParser::parseJSON(const char* text, Mutex* mtx)
     ParsePoint pp(text,code);
     if (code->parseSimple(pp,true,mtx))
 	ret = code->popOpcode();
+    if (stack)
+	code->resolveObjectParams(YOBJECT(JsObject,ret),*stack,context);
     TelEngine::destruct(code);
     return ret;
 }

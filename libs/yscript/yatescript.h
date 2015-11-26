@@ -1141,9 +1141,10 @@ public:
 
     /**
      * Retrieve the numeric value of the operation
-     * @return Number contained in operation, zero if not a number
+     * @param defVal Default to return if not a number
+     * @return Number contained in operation
      */
-    virtual int64_t valInteger() const;
+    virtual int64_t valInteger(int64_t defVal = 0) const;
 
     /**
      * Convert to number
@@ -1153,9 +1154,10 @@ public:
 
     /**
      * Retrieve the boolean value of the operation
+     * @param defVal Default to return if not a boolean
      * @return True if the operation is to be interpreted as true value
      */
-    virtual bool valBoolean() const;
+    virtual bool valBoolean(bool defVal = false) const;
 
     /**
      * Retrieve the name of the type of the value of this operation
@@ -1214,9 +1216,10 @@ public:
 
     /**
      * Retrieve the boolean value of the function (not of its result)
+     * @param defVal Parameter ignored
      * @return Always true
      */
-    virtual bool valBoolean() const
+    virtual bool valBoolean(bool defVal = false) const
 	{ return true; }
 
     /**
@@ -1271,9 +1274,10 @@ public:
 
     /**
      * Retrieve the boolean value of the operation
+     * @param defVal Parameter ignored
      * @return True if the wrapped object is to be interpreted as true value
      */
-    virtual bool valBoolean() const;
+    virtual bool valBoolean(bool defVal = false) const;
 
     /**
      * Retrieve the name of the type of the value of this operation
@@ -2597,9 +2601,11 @@ public:
      * Parse a complete block of JSON text
      * @param text JSON text to parse
      * @param mtx Pointer to the mutex that serializes this object
+     * @param stack Pointer to an execution stack, required for adding prototypes
+     * @param context Pointer to an execution context, required for adding prototypes
      * @return ExpOperation holding the content of JSON, must be dereferenced after use, NULL if parse error
      */
-    static ExpOperation* parseJSON(const char* text, Mutex* mtx = 0);
+    static ExpOperation* parseJSON(const char* text, Mutex* mtx = 0, ObjList* stack = 0, GenObject* context = 0);
 
     /**
      * Get a "null" object wrapper that will identity match another "null"

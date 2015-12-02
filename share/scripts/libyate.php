@@ -342,9 +342,9 @@ class Yate
      */
     static function GetEvent()
     {
-	global $yate_stdin, $yate_socket;
+	global $yate_stdin, $yate_socket, $yate_buffer;
 	if ($yate_socket) {
-	    $line = @socket_read($yate_socket,8192,PHP_NORMAL_READ);
+	    $line = @socket_read($yate_socket,$yate_buffer,PHP_NORMAL_READ);
 	    // check for error
 	    if ($line == false)
 		return false;
@@ -358,7 +358,7 @@ class Yate
 	    // check for EOF
 	    if (feof($yate_stdin))
 		return false;
-	    $line=fgets($yate_stdin,8192);
+	    $line=fgets($yate_stdin,$yate_buffer);
 	    // check for async read no data
 	    if ($line == false)
 		return true;
@@ -437,16 +437,21 @@ class Yate
      * @param $role Role of this connection - "global" or "channel"
      * @return True if initialization succeeded, false if failed
      */
-    static function Init($async = false, $addr = "", $port = 0, $role = "")
+    static function Init($async = false, $addr = "", $port = 0, $role = "", $buffer = 8192)
     {
 	global $yate_stdin, $yate_stdout, $yate_stderr;
-	global $yate_socket, $yate_debug, $yate_output;
+	global $yate_socket, $yate_buffer, $yate_debug, $yate_output;
 	$yate_debug = false;
 	$yate_stdin = false;
 	$yate_stdout = false;
 	$yate_stderr = false;
 	$yate_output = false;
 	$yate_socket = false;
+	if ($buffer < 2048)
+	    $buffer = 2048;
+	else if ($buffer > 65536)
+	    $buffer = 65536;
+	$yate_buffer = $buffer;
 	if ($addr) {
 	    $ok = false;
 	    if (!function_exists("socket_create")) {

@@ -43,8 +43,12 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-// Maximum length of an incoming line
-#define MAX_INCOMING_LINE 8192
+// Minimum length of the incoming line buffer
+#define MIN_INCOMING_LINE 2048
+// Default length of the incoming line buffer
+#define DEF_INCOMING_LINE 8192
+// Maximum length of the incoming line buffer
+#define MAX_INCOMING_LINE 65536
 
 // Default message timeout in milliseconds
 #define MSG_TIMEOUT 10000
@@ -269,6 +273,7 @@ private:
     int m_timeout;
     bool m_timebomb;
     bool m_restart;
+    DataBlock m_buffer;
     String m_script, m_args;
     ObjList m_waiting;
     ObjList m_relays;
@@ -768,7 +773,7 @@ ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, 
       m_chan(chan), m_watcher(0),
       m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
-      m_script(script), m_args(args), m_trackName(s_trackName)
+      m_buffer(0,DEF_INCOMING_LINE), m_script(script), m_args(args), m_trackName(s_trackName)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",\"%s\") [%p]",script,args,this);
     m_script.trimBlanks();
@@ -786,7 +791,7 @@ ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, i
       m_chan(chan), m_watcher(0),
       m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
-      m_script(name), m_trackName(s_trackName)
+      m_buffer(0,DEF_INCOMING_LINE), m_script(name), m_trackName(s_trackName)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",%p,%p) [%p]",name,io,chan,this);
     m_script.trimBlanks();
@@ -1128,14 +1133,14 @@ void ExtModReceiver::run()
     }
     if (m_in && !m_in->setBlocking(false))
 	Debug("ExtModule",DebugWarn,"Failed to set nonblocking mode, expect trouble [%p]",this);
-    char buffer[MAX_INCOMING_LINE];
     int posinbuf = 0;
     bool invalid = true;
     DDebug(DebugAll,"ExtModReceiver::run() entering loop [%p]",this);
     for (;;) {
 	use();
 	lock();
-	int readsize = m_in ? m_in->readData(buffer+posinbuf,sizeof(buffer)-posinbuf-1) : 0;
+	char* buffer = static_cast<char*>(m_buffer.data());
+	int readsize = m_in ? m_in->readData(buffer+posinbuf,m_buffer.length()-posinbuf-1) : 0;
 	unlock();
 	if (unuse())
 	    return;
@@ -1173,15 +1178,22 @@ void ExtModReceiver::run()
 	    *eoline = 0;
 	    if ((eoline > buffer) && (eoline[-1] == '\r'))
 		eoline[-1] = 0;
+	    readsize = eoline-buffer+1;
 	    if (buffer[0]) {
 		invalid = invalid && (buffer[0] != '%' || buffer[1] != '%');
 		use();
 		bool goOut = processLine(buffer);
 		if (unuse() || goOut)
 		    return;
+		if (totalsize >= (int)m_buffer.length()) {
+		    Debug("ExtModule",DebugWarn,"Lost data shrinking read buffer to %u, closing [%p]",
+			m_buffer.length(),this);
+		    return;
+		}
 	    }
-	    totalsize -= eoline-buffer+1;
-	    ::memmove(buffer,eoline+1,totalsize+1);
+	    totalsize -= readsize;
+	    buffer = static_cast<char*>(m_buffer.data());
+	    ::memmove(buffer,buffer+readsize,totalsize+1);
 	}
 	posinbuf = totalsize;
     }
@@ -1466,6 +1478,16 @@ bool ExtModReceiver::processLine(const char* line)
 	    else if (id == "timebomb") {
 		m_timebomb = val.toBoolean(m_timebomb);
 		val = m_timebomb;
+		ok = true;
+	    }
+	    else if (id == "bufsize") {
+		unsigned int len = val.toInteger(m_buffer.length(),0,
+		    MIN_INCOMING_LINE,MAX_INCOMING_LINE);
+		if (len > m_buffer.length())
+		    m_buffer.append(DataBlock(0,len - m_buffer.length()));
+		else if (len < m_buffer.length())
+		    m_buffer.assign(m_buffer.data(),len);
+		val = m_buffer.length();
 		ok = true;
 	    }
 	    else if (id == "restart") {

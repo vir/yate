@@ -1,4 +1,4 @@
-yate (5.5.1~svn6075) UNRELEASED; urgency=low
+yate (5.5.1~svn6076) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1547,8 +1547,11 @@ yate (5.5.1~svn6075) UNRELEASED; urgency=low
     dependency filtering for newer versions of rpmbuild.
   * Updated to SVN revision 6075: + Added support for resizing the
     extmodule read buffer.
+  * Updated to SVN revision 6076: + Add a XmlElement::findNextChild()
+    which uses a const String reference as a parameter for the child
+    name.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 03 Dec 2015 02:19:13 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 08 Dec 2015 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

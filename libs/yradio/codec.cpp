@@ -3133,7 +3133,7 @@ const IEParam s_ie_EndDef = MAKE_IE_PARAM(NoType, Skip, 0, "", 0, 0, 0, s_type_U
 
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.12 IMSI detach indication
 static const IEParam s_mmIMSIDetachIndParams[] = {
-    MAKE_IE_PARAM(V,      XmlElem,    0, "MobileStationClassmark",      false,       8,  true, s_type_MSClassmark1),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "MSClassmark1",                false,       8,  true, s_type_MSClassmark1),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
     s_ie_EndDef,
 };
@@ -3163,9 +3163,9 @@ static const IEParam s_mmLocationUpdateReqParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "LocationUpdatingType",        false,       4,  true, s_type_LocUpdType),
     MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4, false, s_type_CiphKeySN),
     MAKE_IE_PARAM(V,      XmlElem,    0, "LAI",                         false,   5 * 8,  true, s_type_LAI),
-    MAKE_IE_PARAM(V,      XmlElem,    0, "MobileStationClassmark",      false,       8,  true, s_type_MSClassmark1),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "MSClassmark1",                false,       8,  true, s_type_MSClassmark1),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x33, "MobileStationClassmark2",      true,   5 * 8,  true, s_type_MSClassmark2),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x33, "MSClassmark2",                 true,   5 * 8,  true, s_type_MSClassmark2),
     MAKE_IE_PARAM(TV,     XmlElem, 0xC0, "AdditionalUpdateParameters",   true,       8,  true, s_type_AdditUpdParams),
     MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "DeviceProperties",             true,       8,  true, s_type_DevProperties),
     MAKE_IE_PARAM(TV,     XmlElem, 0xE0, "MSNetworkFeatureSupport",      true,       8,  true, s_type_MSNetFeatSupp),
@@ -3221,7 +3221,7 @@ static const IEParam s_mmTMSIReallocCmdParams[] = {
 static const IEParam s_mmCMServiceReqParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "CMServiceType",               false,       4,  true, s_type_CMServType),
     MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4, false, s_type_CiphKeySN),
-    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileStationClassmark2",     false,   4 * 8,  true, s_type_MSClassmark2),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "MSClassmark2",                false,   4 * 8,  true, s_type_MSClassmark2),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
     MAKE_IE_PARAM(TV,     XmlElem, 0x80, "Priority",                     true,       8,  true, s_type_PrioLevel),
     MAKE_IE_PARAM(TV,     XmlElem, 0xC0, "AdditionalUpdateParameters",   true,       8,  true, s_type_AdditUpdParams),
@@ -3239,7 +3239,7 @@ static const IEParam s_mmCMServicePromptParams[] = {
 static const IEParam s_mmCMReEstablishReqParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4,  true, s_type_CiphKeySN),
     MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",              false,       4, false, s_type_Undef),
-    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileStationClassmark2",     false,   4 * 8,  true, s_type_MSClassmark2),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "MSClassmark2",                false,   4 * 8,  true, s_type_MSClassmark2),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
     MAKE_IE_PARAM(TV,     XmlElem, 0x13, "LAI",                          true,   6 * 8,  true, s_type_LAI),
     MAKE_IE_PARAM(TV,     XmlElem, 0xD0, "DeviceProperties",             true,       8,  true, s_type_DevProperties),
@@ -3702,8 +3702,8 @@ static const IEParam s_epsAttachRequestParams[] = {
     MAKE_IE_PARAM(TLV,    XmlElem, 0x31,"MSNetworkCapability",                      true, 10 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TV,     XmlElem, 0x13,"OldLocationAreaIdentification",            true,  6 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TV,     XmlElem, 0x90,"TMSIStatus",                               true,      8,  true, s_type_TMSIStatus),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x11,"MobileStationClassmark2",                  true,  5 * 8,  true, s_type_MSClassmark2),
-    MAKE_IE_PARAM(TLV,    XmlElem, 0x20,"MobileStationClassmark3",                  true, 34 * 8,  true, s_type_Undef),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x11,"MSClassmark2",                             true,  5 * 8,  true, s_type_MSClassmark2),
+    MAKE_IE_PARAM(TLV,    XmlElem, 0x20,"MSClassmark3",                             true, 34 * 8,  true, s_type_Undef),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x40,"SupportedCodecs",                          true,      0,  true, s_type_Undef),
     MAKE_IE_PARAM(TV,     XmlElem, 0xF0,"AdditionalUpdateType",                     true,      8,  true, s_type_AdditionalUpdateType),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x5D,"VoiceDomainPreferenceAndUEsUsageSetting",  true,  3 * 8,  true, s_type_VoicePreference),
@@ -3789,7 +3789,7 @@ static const RL3Message s_smsMsgs[] = {
 static const IEParam s_rrPagingRespParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4,  true, s_type_CiphKeySN),
     MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",              false,       4, false, s_type_Undef),
-    MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileStationClassmark2",     false,   4 * 8,  true, s_type_MSClassmark2),
+    MAKE_IE_PARAM(LV,     XmlElem,    0, "MSClassmark2",                false,   4 * 8,  true, s_type_MSClassmark2),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
     MAKE_IE_PARAM(TV,     XmlElem, 0xC0, "AdditionalUpdateParameters",   true,       8,  true, s_type_AdditUpdParams),
     s_ie_EndDef,

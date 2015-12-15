@@ -218,7 +218,8 @@ public:
     };
     static ExtModReceiver* build(const char *script, const char *args, bool ref = false,
 	File* ain = 0, File* aout = 0, ExtModChan *chan = 0);
-    static ExtModReceiver* build(const char* name, Stream* io, ExtModChan* chan = 0, int role = RoleUnknown);
+    static ExtModReceiver* build(const char* name, Stream* io, ExtModChan* chan = 0,
+	int role = RoleUnknown, const char* conn = 0);
     static ExtModReceiver* find(const String& script);
     ~ExtModReceiver();
     virtual bool received(Message& msg, int id);
@@ -250,7 +251,8 @@ public:
 private:
     ExtModReceiver(const char* script, const char* args,
 	File* ain, File* aout, ExtModChan* chan);
-    ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, int role);
+    ExtModReceiver(const char* name, Stream* io, ExtModChan* chan,
+	int role, const char* conn);
     bool create(const char* script, const char* args);
     void closeIn();
     void closeOut();
@@ -258,6 +260,7 @@ private:
     bool outputLineInternal(const char* line, int len);
     int m_role;
     bool m_dead;
+    bool m_quit;
     int m_use;
     pid_t m_pid;
     Stream* m_in;
@@ -273,6 +276,7 @@ private:
     int m_timeout;
     bool m_timebomb;
     bool m_restart;
+    bool m_scripted;
     DataBlock m_buffer;
     String m_script, m_args;
     ObjList m_waiting;
@@ -714,7 +718,7 @@ void MsgWatcher::clear()
 
 
 ExtModReceiver* ExtModReceiver::build(const char* script, const char* args, bool ref,
-				      File* ain, File* aout, ExtModChan* chan)
+    File* ain, File* aout, ExtModChan* chan)
 {
     ExtModReceiver* recv = new ExtModReceiver(script,args,ain,aout,chan);
     if (ref) {
@@ -728,9 +732,10 @@ ExtModReceiver* ExtModReceiver::build(const char* script, const char* args, bool
     return recv->start() ? recv : 0;
 }
 
-ExtModReceiver* ExtModReceiver::build(const char* name, Stream* io, ExtModChan* chan, int role)
+ExtModReceiver* ExtModReceiver::build(const char* name, Stream* io, ExtModChan* chan,
+    int role, const char* conn)
 {
-    ExtModReceiver* recv = new ExtModReceiver(name,io,chan,role);
+    ExtModReceiver* recv = new ExtModReceiver(name,io,chan,role,conn);
     return recv->start() ? recv : 0;
 }
 
@@ -768,11 +773,11 @@ bool ExtModReceiver::unuse()
 
 ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, File* aout, ExtModChan* chan)
     : Mutex(true,"ExtModReceiver"),
-      m_role(RoleUnknown), m_dead(false), m_use(1), m_pid(-1),
+      m_role(RoleUnknown), m_dead(false), m_quit(false), m_use(1), m_pid(-1),
       m_in(0), m_out(0), m_ain(ain), m_aout(aout),
       m_chan(chan), m_watcher(0),
       m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
-      m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
+      m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false), m_scripted(false),
       m_buffer(0,DEF_INCOMING_LINE), m_script(script), m_args(args), m_trackName(s_trackName)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",\"%s\") [%p]",script,args,this);
@@ -784,17 +789,18 @@ ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, 
     s_mutex.unlock();
 }
 
-ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, int role)
+ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, int role, const char* conn)
     : Mutex(true,"ExtModReceiver"),
-      m_role(role), m_dead(false), m_use(1), m_pid(-1),
+      m_role(role), m_dead(false), m_quit(false), m_use(1), m_pid(-1),
       m_in(io), m_out(io), m_ain(0), m_aout(0),
       m_chan(chan), m_watcher(0),
       m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
-      m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
-      m_buffer(0,DEF_INCOMING_LINE), m_script(name), m_trackName(s_trackName)
+      m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false), m_scripted(false),
+      m_buffer(0,DEF_INCOMING_LINE), m_script(name), m_args(conn), m_trackName(s_trackName)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",%p,%p) [%p]",name,io,chan,this);
     m_script.trimBlanks();
+    m_args.trimBlanks();
     if (chan)
 	m_role = RoleChannel;
     s_mutex.lock();
@@ -917,6 +923,7 @@ void ExtModReceiver::die(bool clearChan)
     if (m_dead)
 	return;
     m_dead = true;
+    m_quit = true;
     use();
 
     RefPointer<ExtModChan> chan = m_chan;
@@ -925,7 +932,7 @@ void ExtModReceiver::die(bool clearChan)
 	chan->setRecv(0);
     mylock.drop();
 
-    if (m_role == RoleGlobal)
+    if (m_scripted && (m_role == RoleGlobal))
 	Output("Unloading external module '%s' '%s'",m_script.c_str(),m_args.safe());
     // Give the external script a chance to die gracefully
     closeOut();
@@ -959,7 +966,7 @@ void ExtModReceiver::die(bool clearChan)
 
 bool ExtModReceiver::received(Message &msg, int id)
 {
-    if (m_dead)
+    if (m_dead || m_quit)
 	return false;
     lock();
     // check if we are no longer running
@@ -1087,6 +1094,7 @@ bool ExtModReceiver::create(const char *script, const char *args)
     close(ext2yate[1]);
     close(yate2ext[0]);
     closeAudio();
+    m_scripted = true;
     m_pid = pid;
     return true;
 #endif
@@ -1140,7 +1148,7 @@ void ExtModReceiver::run()
 	use();
 	lock();
 	char* buffer = static_cast<char*>(m_buffer.data());
-	int readsize = m_in ? m_in->readData(buffer+posinbuf,m_buffer.length()-posinbuf-1) : 0;
+	int readsize = m_in ? m_in->readData(buffer+posinbuf,m_buffer.length()-posinbuf) : 0;
 	unlock();
 	if (unuse())
 	    return;
@@ -1163,11 +1171,17 @@ void ExtModReceiver::run()
 		Thread::idle();
 		continue;
 	    }
-	    Debug("ExtModule",DebugWarn,"Read error %d on %p [%p]",errno,m_in,this);
+	    if (!m_quit)
+		Debug("ExtModule",DebugWarn,"Read error %d on %p [%p]",errno,m_in,this);
 	    break;
 	}
 	XDebug(DebugAll,"ExtModReceiver::run() read %d",readsize);
 	int totalsize = readsize + posinbuf;
+	if (totalsize >= (int)m_buffer.length()) {
+	    Debug("ExtModule",DebugWarn,"Overflow reading in buffer of length %u, closing [%p]",
+		m_buffer.length(),this);
+	    return;
+	}
 	buffer[totalsize]=0;
 	for (;;) {
 	    char *eoline = ::strchr(buffer,'\n');
@@ -1218,8 +1232,9 @@ bool ExtModReceiver::outputLine(const char* line)
 	    break;
 	}
 	if (tout && tout < Time::now()) {
-	    Alarm("extmodule","performance",DebugWarn,"Timeout %d msec for %d characters [%p]",
-		m_timeout,len,this);
+	    if (!m_quit)
+		Alarm("extmodule","performance",DebugWarn,"Timeout %d msec for %d characters [%p]",
+		    m_timeout,len,this);
 	    unuse();
 	    return false;
 	}
@@ -1301,6 +1316,8 @@ bool ExtModReceiver::processLine(const char* line)
 {
     if (m_dead)
 	return false;
+    if (m_quit)
+	return true;
     DDebug("ExtModReceiver",DebugAll,"processLine '%s'", line);
     String id(line);
     if (m_role == RoleUnknown) {
@@ -1491,7 +1508,7 @@ bool ExtModReceiver::processLine(const char* line)
 		ok = true;
 	    }
 	    else if (id == "restart") {
-		m_restart = (RoleGlobal == m_role) && val.toBoolean(m_restart);
+		m_restart = m_scripted && (RoleGlobal == m_role) && val.toBoolean(m_restart);
 		val = m_restart;
 		ok = true;
 	    }
@@ -1549,6 +1566,7 @@ bool ExtModReceiver::processLine(const char* line)
 	}
     }
     else if (id == "%%>quit") {
+	m_quit = true;
 	outputLine("%%<quit");
 	return true;
     }
@@ -1904,7 +1922,7 @@ void ExtListener::run()
 	    case ExtModReceiver::RoleUnknown:
 	    case ExtModReceiver::RoleGlobal:
 	    case ExtModReceiver::RoleChannel:
-		ExtModReceiver::build(m_name,skt,0,m_role);
+		ExtModReceiver::build(m_name,skt,0,m_role,tmp);
 		break;
 	    default:
 		Debug(DebugWarn,"Listener '%s' hit invalid role %d",m_name.c_str(),m_role);

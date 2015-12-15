@@ -419,6 +419,16 @@ class Yate
 		$ev->type="setlocal";
 		$ev->handled=Yate::Str2bool($part[3]);
 		break;
+	    case "%%<quit":
+		if ($yate_socket) {
+		    socket_close($yate_socket);
+		    $yate_socket = false;
+		}
+		else if ($yate_stdin) {
+		    fclose($yate_stdin);
+		    $yate_stdin = false;
+		}
+		return false;
 	    case "Error in":
 		/* We are already in error so better stay quiet */
 		break;
@@ -489,6 +499,26 @@ class Yate
 	if ($role)
 	    _yate_print("%%>connect:$role\n");
 	return true;
+    }
+
+    /**
+     * Send a quit command to the External Module
+     * @param close Set to true to close the communication immediately
+     */
+    static function Quit($close = false)
+    {
+	global $yate_stdin, $yate_socket;
+	_yate_print("%%>quit\n");
+	if ($close) {
+	    if ($yate_socket) {
+		socket_close($yate_socket);
+		$yate_socket = false;
+	    }
+	    else if ($yate_stdin) {
+		fclose($yate_stdin);
+		$yate_stdin = false;
+	    }
+	}
     }
 
 }

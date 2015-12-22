@@ -1,4 +1,4 @@
-yate (5.5.1~svn6078) UNRELEASED; urgency=low
+yate (5.5.1~svn6079) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1556,8 +1556,12 @@ yate (5.5.1~svn6078) UNRELEASED; urgency=low
     library.  + Add address in status information for inbound
     connections.  + Allow restarting external modules only if we started
     them.
+  * Updated to SVN revision 6079: + Add address in status information
+    for inbound connections.  + Allow restarting external modules only
+    if we started them.  + Shortened ciphering key seq no parameter
+    name.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 16 Dec 2015 02:19:36 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 23 Dec 2015 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

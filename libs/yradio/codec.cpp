@@ -3161,7 +3161,7 @@ static const IEParam s_mmLocationUpdateRejParams[] = {
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.15 Location updating request
 static const IEParam s_mmLocationUpdateReqParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "LocationUpdatingType",        false,       4,  true, s_type_LocUpdType),
-    MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4, false, s_type_CiphKeySN),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "CKSN",                        false,       4, false, s_type_CiphKeySN),
     MAKE_IE_PARAM(V,      XmlElem,    0, "LAI",                         false,   5 * 8,  true, s_type_LAI),
     MAKE_IE_PARAM(V,      XmlElem,    0, "MSClassmark1",                false,       8,  true, s_type_MSClassmark1),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
@@ -3174,7 +3174,7 @@ static const IEParam s_mmLocationUpdateReqParams[] = {
 
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.2 Authentication request
 static const IEParam s_mmAuthReqParams[] = {
-    MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4,  true, s_type_CiphKeySN),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "CKSN",                        false,       4,  true, s_type_CiphKeySN),
     MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",              false,       4, false, s_type_Undef),
     MAKE_IE_PARAM(V,      XmlElem,    0, "rand",                        false,  16 * 8, false, s_type_Hex),
     MAKE_IE_PARAM(TLV,    XmlElem, 0x20, "autn",                         true,  18 * 8, false, s_type_Hex),
@@ -3220,7 +3220,7 @@ static const IEParam s_mmTMSIReallocCmdParams[] = {
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.9 CM service request
 static const IEParam s_mmCMServiceReqParams[] = {
     MAKE_IE_PARAM(V,      XmlElem,    0, "CMServiceType",               false,       4,  true, s_type_CMServType),
-    MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4, false, s_type_CiphKeySN),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "CKSN",                        false,       4, false, s_type_CiphKeySN),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MSClassmark2",                false,   4 * 8,  true, s_type_MSClassmark2),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
     MAKE_IE_PARAM(TV,     XmlElem, 0x80, "Priority",                     true,       8,  true, s_type_PrioLevel),
@@ -3237,7 +3237,7 @@ static const IEParam s_mmCMServicePromptParams[] = {
 
 // reference: ETSI TS 124 008 V11.6.0, section 9.2.4 CM Re-establishment request
 static const IEParam s_mmCMReEstablishReqParams[] = {
-    MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4,  true, s_type_CiphKeySN),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "CKSN",                        false,       4,  true, s_type_CiphKeySN),
     MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",              false,       4, false, s_type_Undef),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MSClassmark2",                false,   4 * 8,  true, s_type_MSClassmark2),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),
@@ -3787,7 +3787,7 @@ static const RL3Message s_smsMsgs[] = {
 
 // reference ETSI TS 144 018 V11.5.0, section 9.1.25 Paging response
 static const IEParam s_rrPagingRespParams[] = {
-    MAKE_IE_PARAM(V,      XmlElem,    0, "CipheringKeySequenceNumber",  false,       4,  true, s_type_CiphKeySN),
+    MAKE_IE_PARAM(V,      XmlElem,    0, "CKSN",                        false,       4,  true, s_type_CiphKeySN),
     MAKE_IE_PARAM(V,      Skip,       0, "SpareHalfOctet",              false,       4, false, s_type_Undef),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MSClassmark2",                false,   4 * 8,  true, s_type_MSClassmark2),
     MAKE_IE_PARAM(LV,     XmlElem,    0, "MobileIdentity",              false,   9 * 8,  true, s_type_MobileIdent),

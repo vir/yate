@@ -149,6 +149,8 @@ using namespace TelEngine;
 #define RUNDELAY_MAX 60000000
 // Amount we decerease delay towards minimum each time child proves sanity
 #define RUNDELAY_DEC 20000
+// Maximum supervised initial delay
+#define INITDELAY_MAX 60000
 // Size of log relay buffer in bytes
 #define MAX_LOGBUFF 4096
 
@@ -1035,7 +1037,7 @@ static void copystream(int dest, int src)
     rotatelogs();
 }
 
-static int supervise(void)
+static int supervise(int initDelay)
 {
     s_superpid = ::getpid();
     ::fprintf(stderr,"Supervisor (%u) is starting\n",s_superpid);
@@ -1047,6 +1049,11 @@ static int supervise(void)
     ::signal(SIGUSR1,superhandler);
     ::signal(SIGUSR2,superhandler);
     ::signal(SIGALRM,SIG_IGN);
+    if (initDelay > 0) {
+	::fprintf(stderr,"Supervisor (%d) delaying initial start by %u.%02u seconds\n",
+		s_superpid,(initDelay + 5) / 1000,((initDelay + 5) / 10) % 100);
+	::usleep(initDelay * 1000);
+    }
     int retcode = 0;
     while (s_runagain) {
 	int wdogfd[2];
@@ -2305,7 +2312,7 @@ static void usage(bool client, FILE* f)
 "   --remove       Remove the Windows service\n"
 #else
 "   -d             Daemonify, suppress output unless logged\n"
-"   -s             Supervised, restart if crashes or locks up\n"
+"   -s[=msec]      Supervised, restart if crashes or locks up, optionally sleeps initially\n"
 "   -r             Enable rotation of log file (needs -s and -l)\n"
 #endif
     ,s_cfgfile.safe()
@@ -2338,7 +2345,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
     int service = 0;
 #else
     bool daemonic = false;
-    bool supervised = false;
+    int supervised = 0;
 #endif
     bool client = (mode == Client);
     Debugger::Formatting tstamp = Debugger::TextLSep;
@@ -2431,7 +2438,15 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 			daemonic = true;
 			break;
 		    case 's':
-			supervised = true;
+			supervised = -1;
+			if ('=' == pc[1]) {
+			    long int ms = ::strtol(pc+2,0,0);
+			    if (ms > INITDELAY_MAX)
+				supervised = INITDELAY_MAX;
+			    else if (ms > 0)
+				supervised = ms;
+			    pc = 0;
+			}
 			break;
 		    case 'r':
 			s_logrotator = true;
@@ -2747,7 +2762,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
     int retcode = -1;
 #ifndef _WINDOWS
     if (supervised)
-	retcode = supervise();
+	retcode = supervise(supervised);
     if (retcode >= 0)
 	return retcode;
 #endif

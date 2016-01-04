@@ -220,6 +220,7 @@ NamedList Engine::s_params("");
 Engine::RunMode Engine::s_mode = Engine::Stopped;
 Engine::CallAccept Engine::s_accept = Engine::Accept;
 Engine* Engine::s_self = 0;
+bool Engine::s_started = false;
 int Engine::s_haltcode = -1;
 int EnginePrivate::count = 0;
 static String s_cfgpath(CFG_PATH);
@@ -1514,6 +1515,7 @@ int Engine::engineInit()
     ::signal(SIGTERM,sighandler);
     Debug(DebugAll,"Engine dispatching start message");
     dispatch("engine.start",true);
+    s_started = true;
     internalStatisticsStart();
     setStatus(SERVICE_RUNNING);
 #ifndef _WINDOWS

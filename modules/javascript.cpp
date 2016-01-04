@@ -37,7 +37,8 @@ class JsModule : public ChanAssistList
 {
 public:
     enum {
-	Preroute = AssistPrivate
+	Preroute = AssistPrivate,
+	EngStart,
     };
     JsModule();
     virtual ~JsModule();
@@ -59,6 +60,7 @@ private:
     void clearPostHook();
     JsParser m_assistCode;
     MessagePostHook* m_postHook;
+    bool m_started;
 };
 
 INIT_PLUGIN(JsModule);
@@ -134,6 +136,7 @@ public:
     static void reloadDynamic();
     static bool initScript(const String& scriptName, const String& fileName, bool relPath = true, bool fromCfg = true);
     static bool reloadScript(const String& scriptName);
+    static void loadScripts(const NamedList* sect);
     inline static ObjList& globals()
 	{ return s_globals; }
     inline static void unloadAll()
@@ -247,6 +250,7 @@ public:
 	    params().addParam(new ExpFunction("debugEnabled"));
 	    params().addParam(new ExpFunction("debugAt"));
 	    params().addParam(new ExpFunction("setDebug"));
+	    params().addParam(new ExpFunction("started"));
 	    if (name)
 		params().addParam(new ExpOperation(name,"name"));
 	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
@@ -1388,6 +1392,11 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	else
 	    Debug(&__plugin,DebugNote,"Engine restart is disabled by allow_abort configuration");
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
+    else if (oper.name() == YSTRING("started")) {
+	if (oper.number() != 0)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(Engine::started()));
     }
     else if (oper.name() == YSTRING("atob")) {
 	// str = Engine.atob(b64_str)
@@ -4392,6 +4401,21 @@ bool JsGlobal::reloadScript(const String& scriptName)
     return script->runMain();
 }
 
+void JsGlobal::loadScripts(const NamedList* sect)
+{
+    if (!sect)
+	return;
+    unsigned int len = sect->length();
+    for (unsigned int i=0; i<len; i++) {
+	const NamedString *n = sect->getParam(i);
+	if (!n)
+	    continue;
+	String tmp = *n;
+	Engine::runParams().replaceParams(tmp);
+	JsGlobal::initScript(n->name(),tmp);
+    }
+}
+
 bool JsGlobal::runMain()
 {
     ScriptRun* runner = m_jsCode.createRunner(m_context);
@@ -4419,7 +4443,7 @@ static const char* s_cmdsLine = "  javascript {info|eval[=context] instructions.
 
 JsModule::JsModule()
     : ChanAssistList("javascript",true),
-      m_postHook(0)
+      m_postHook(0), m_started(Engine::started())
 {
     Output("Loaded module Javascript");
 }
@@ -4689,6 +4713,13 @@ bool JsModule::received(Message& msg, int id)
 	    clearPostHook();
 	    JsGlobal::unloadAll();
 	    return false;
+	case EngStart:
+	    if (!m_started) {
+		m_started = true;
+		Configuration cfg(Engine::configFile("javascript"));
+		JsGlobal::loadScripts(cfg.getSection("late_scripts"));
+	    }
+	    return false;
     } // switch (id)
     return ChanAssistList::received(msg,id);
 }
@@ -4770,18 +4801,9 @@ void JsModule::initialize()
     }
     JsGlobal::markUnused();
     unlock();
-    NamedList* sect = cfg.getSection("scripts");
-    if (sect) {
-	unsigned int len = sect->length();
-	for (unsigned int i=0; i<len; i++) {
-	    NamedString *n = sect->getParam(i);
-	    if (n) {
-		tmp = *n;
-		Engine::runParams().replaceParams(tmp);
-		JsGlobal::initScript(n->name(),tmp);
-	    }
-	}
-    }
+    JsGlobal::loadScripts(cfg.getSection("scripts"));
+    if (m_started)
+	JsGlobal::loadScripts(cfg.getSection("late_scripts"));
     JsGlobal::reloadDynamic();
     JsGlobal::freeUnused();
 }
@@ -4794,6 +4816,7 @@ void JsModule::init(int priority)
     installRelay(Ringing,priority);
     installRelay(Answered,priority);
     Engine::install(new MessageRelay("call.preroute",this,Preroute,priority,name()));
+    Engine::install(new MessageRelay("engine.start",this,EngStart,150,name()));
 }
 
 }; // anonymous namespace

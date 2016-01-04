@@ -1,4 +1,4 @@
-yate (5.5.1~svn6080) UNRELEASED; urgency=low
+yate (5.5.1~svn6081) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1562,8 +1562,12 @@ yate (5.5.1~svn6080) UNRELEASED; urgency=low
     name.
   * Updated to SVN revision 6080: + Added command line option to have
     supervisor sleep after creating PID file but before starting child.
+  * Updated to SVN revision 6081: + Added separate javascript.conf
+    section that loads scripts after the engine.start message.  + Added
+    API method for checking if the Engine has finished starting up,
+    expose it to JS.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Mon, 28 Dec 2015 02:19:13 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 05 Jan 2016 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

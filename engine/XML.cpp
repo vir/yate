@@ -1222,7 +1222,7 @@ void XmlDomParser::endElement(const String& name)
     }
     if (m_current->getName() != name) {
 	setError(ReadingEndTag);
-	DDebug(this,DebugNote,
+	Debug(this,DebugNote,
 	    "Received end element for %s, but the expected one is for %s [%p]",
 	    name.c_str(),m_current->getName().c_str(),this);
 	return;

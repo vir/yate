@@ -37,17 +37,6 @@ namespace { // anonymous
 
 enum
 {
-    RadChanStart,
-    RadChanStop,
-    RadCallAnswered,
-    RadCallAuth,
-    RadCallExecute,
-    RadCallRinging,
-    RadUserLogin
-};
-
-enum
-{
     NoError = 0,
     AcctSuccess = NoError,
     AuthSuccess = NoError,
@@ -363,11 +352,15 @@ class RadiusClient : public GenObject
 public:
     RadiusClient()
 	: m_socket(0), m_authPort(0), m_acctPort(0),
-	  m_timeout(2000), m_retries(2)
+	  m_timeout(2000), m_retries(2), m_cisco(s_cisco), m_quintum(s_quintum)
 	{ }
     virtual ~RadiusClient();
     inline const String& server() const
 	{ return m_server; }
+    inline bool addCisco() const
+	{ return m_cisco; }
+    inline bool addQuintum() const
+	{ return m_quintum; }
     bool setRadServer(const char* host, int authport, int acctport, const char* secret, int timeoutms = 4000, int retries = 2);
     bool setRadServer(const NamedList& sect);
     bool addSocket();
@@ -395,6 +388,7 @@ private:
     String m_server,m_secret,m_section;
     unsigned int m_authPort,m_acctPort;
     int m_timeout, m_retries;
+    bool m_cisco, m_quintum;
     DataBlock m_authdata;
 };
 
@@ -410,6 +404,8 @@ protected:
 
 INIT_PLUGIN(RadiusModule);
 
+static const String s_fmtCisco("cisco_format");
+static const String s_fmtQuintum("quintum_format");
 
 class AuthHandler : public MessageHandler
 {
@@ -1269,6 +1265,9 @@ bool RadiusClient::prepareAttributes(NamedList& params, bool forAcct, String* us
 	    NamedString* pair = sect->getParam(i2);
 	    if (!pair || pair->null())
 		continue;
+	    // ignore format control keys
+	    if ((pair->name() == s_fmtCisco) || (pair->name() == s_fmtQuintum))
+		continue;
 	    // ignore keys like rad_SOMETHING or SOMETHING:SOMETHING
 	    if (pair->name().startsWith("rad_",false) ||
 		(pair->name().find(':') >= 0))
@@ -1318,6 +1317,8 @@ bool RadiusClient::prepareAttributes(NamedList& params, bool forAcct, String* us
 
     Debug(&__plugin,DebugInfo,"Using sections [%s] and [%s] for %s",
 	m_section.c_str(),servName.c_str(),forAcct ? "accounting" : "authentication");
+    m_cisco = nasSect->getBoolValue(s_fmtCisco,servSect->getBoolValue(s_fmtCisco,s_cisco));
+    m_quintum = nasSect->getBoolValue(s_fmtQuintum,servSect->getBoolValue(s_fmtQuintum,s_quintum));
     addAttribute("User-Name",username);
     addAttribute("Calling-Station-Id",caller);
     addAttribute("Called-Station-Id",called);
@@ -1412,9 +1413,9 @@ bool AuthHandler::received(Message& msg)
     int sep = address.find(':');
     if (sep >= 0)
 	address = address.substr(0,sep);
-    if (s_cisco)
+    if (radclient.addCisco())
 	radclient.addAttribute("h323-remote-address",address);
-    if (s_quintum)
+    if (radclient.addQuintum())
 	radclient.addAttribute("Quintum-h323-remote-address",address);
     String billid = msg.getValue("billid");
     if (billid) {
@@ -1512,6 +1513,8 @@ bool AcctHandler::received(Message& msg)
     RadiusClient radclient;
     if (!radclient.prepareAttributes(msg))
 	return false;
+    bool cisco = msg.getBoolValue(s_fmtCisco,radclient.addCisco());
+    bool quintum = msg.getBoolValue(s_fmtQuintum,radclient.addQuintum());
 
     // create a Cisco-compatible conference ID
     MD5 cid(billid);
@@ -1528,12 +1531,12 @@ bool AcctHandler::received(Message& msg)
 
     radclient.addAttribute("Acct-Session-Id",sid.hexDigest());
     radclient.addAttribute("Acct-Status-Type",acctStat);
-    if (s_cisco) {
+    if (cisco) {
 	radclient.addAttribute("h323-call-origin",dir);
 	radclient.addAttribute("h323-conf-id",confid);
 	radclient.addAttribute("h323-remote-address",address);
     }
-    if (s_quintum) {
+    if (quintum) {
 	radclient.addAttribute("Quintum-h323-call-origin",dir);
 	radclient.addAttribute("Quintum-h323-conf-id",confid);
 	radclient.addAttribute("Quintum-h323-remote-address",address);
@@ -1543,51 +1546,50 @@ bool AcctHandler::received(Message& msg)
     if (address.null())
 	address = s_localAddr.host();
     tmp << billid << "@" << address;
-    if (s_cisco)
+    if (cisco)
 	radclient.addAttribute("Cisco-AVPair",tmp);
-    if (s_quintum)
+    if (quintum)
 	radclient.addAttribute("Quintum-AVPair",tmp);
 
     double t = msg.getDoubleValue("time");
-    ciscoTime(t,tmp);
-    if (s_cisco)
-	radclient.addAttribute("h323-setup-time",tmp);
-    if (s_quintum)
-	radclient.addAttribute("Quintum-h323-setup-time",tmp);
-    if (acctStat != Acct_Start) {
-	double d = msg.getDoubleValue("duration",-1);
-	if (d >= 0.0) {
-	    double d1 = msg.getDoubleValue("billtime");
-	    if (d1 > 0.0) {
-		ciscoTime(t+d-d1,tmp);
-		if (s_cisco)
-		    radclient.addAttribute("h323-connect-time",tmp);
-		if (s_quintum)
-		    radclient.addAttribute("Quintum-h323-connect-time",tmp);
-	    }
+    if (cisco || quintum) {
+	ciscoTime(t,tmp);
+	if (cisco)
+	    radclient.addAttribute("h323-setup-time",tmp);
+	if (quintum)
+	    radclient.addAttribute("Quintum-h323-setup-time",tmp);
+    }
+    double duration = msg.getDoubleValue("duration",-1);
+    double billtime = msg.getDoubleValue("billtime");
+    if ((cisco || quintum) && (Acct_Start != acctStat) && (duration >= 0.0)) {
+	if (billtime > 0.0) {
+	    ciscoTime(t+duration-billtime,tmp);
+	    if (cisco)
+		radclient.addAttribute("h323-connect-time",tmp);
+	    if (quintum)
+		radclient.addAttribute("Quintum-h323-connect-time",tmp);
 	}
     }
 
-    if (acctStat == Acct_Stop) {
-	double d = msg.getDoubleValue("duration",-1);
-	if (d >= 0.0) {
-	    ciscoTime(t+d,tmp);
-	    if (s_cisco)
+    if (Acct_Stop == acctStat) {
+	if ((cisco || quintum) && (duration >= 0.0)) {
+	    ciscoTime(t+duration,tmp);
+	    if (cisco)
 		radclient.addAttribute("h323-disconnect-time",tmp);
-	    if (s_quintum)
+	    if (quintum)
 		radclient.addAttribute("Quintum-h323-disconnect-time",tmp);
 	}
 
-	radclient.addAttribute("Acct-Session-Time",(int)msg.getDoubleValue("billtime"));
+	radclient.addAttribute("Acct-Session-Time",(int)billtime);
 	int cause = lookup(msg.getValue("status"),dict_errors,-1,10);
 	if (cause >= 0)
 	    radclient.addAttribute("Acct-Terminate-Cause",cause);
 	String tmp = msg.getValue("reason");
 	if (tmp) {
 	    tmp = "disconnect-text=" + tmp;
-	    if (s_cisco)
+	    if (cisco)
 		radclient.addAttribute("Cisco-AVPair",tmp);
-	    if (s_quintum)
+	    if (quintum)
 		radclient.addAttribute("Quintum-AVPair",tmp);
 	}
     }
@@ -1655,8 +1657,8 @@ void RadiusModule::initialize()
     s_pb_enabled = s_cfg.getBoolValue("portabill","enabled",false);
     s_pb_parallel = s_cfg.getBoolValue("portabill","parallel",false);
     s_pb_simplify = s_cfg.getBoolValue("portabill","simplify",false);
-    s_cisco = s_cfg.getBoolValue("general","cisco_format",true);
-    s_quintum = s_cfg.getBoolValue("general","quintum_format",true);
+    s_cisco = s_cfg.getBoolValue("general",s_fmtCisco,true);
+    s_quintum = s_cfg.getBoolValue("general",s_fmtQuintum,true);
     s_pb_stoperror = s_cfg.getValue("portabill","stoperror","busy");
     s_pb_maxcall = s_cfg.getValue("portabill","maxcall");
     s_cfgMutex.unlock();

@@ -28,13 +28,14 @@
 ; print_attributes: bool: Print returned attributes on debug level ALL
 ;print_attributes=false
 
-; cisco_attributes: bool: Set hardcoded attributes in Cisco format
-;cisco_attributes=true
+; cisco_format: bool: Add hardcoded attributes in Cisco format
+;cisco_format=true
 
-; quintum_attributes: bool: Set hardcoded attributes in Quintum format
+; quintum_format: bool: Add hardcoded attributes in Quintum format
+;quintum_format=true
+
 ; NOTE: The Cisco and Quintum attributes can be enabled both at the same time
 ; and the hardcoded attributes will be added as Cisco and Quintum attributes
-; quintum_attributes=false
 
 
 [portabill]

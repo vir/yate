@@ -1,4 +1,4 @@
-yate (5.5.1~svn6082) UNRELEASED; urgency=low
+yate (5.5.1~svn6083) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1569,8 +1569,11 @@ yate (5.5.1~svn6082) UNRELEASED; urgency=low
   * Updated to SVN revision 6082: + Added API method for checking if the
     Engine has finished starting up, expose it to JS.  + Changed xml
     parse error from DDebug to Debug.
+  * Updated to SVN revision 6083: + Fixed comments in sample config
+    file.  + Made Cisco and Quintum voice attributes configurable per
+    section.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 09 Jan 2016 02:19:13 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 13 Jan 2016 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

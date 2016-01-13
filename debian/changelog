@@ -1,3 +1,9 @@
+yate (5.5.1~vir2016011302) UNRELEASED; urgency=medium
+
+  * Fixed faxhan module packaging
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Wed, 13 Jan 2016 23:28:05 +0300
+
 yate (5.5.1~vir2016011301) UNRELEASED; urgency=medium
 
   * Fixed spandsp include file location on debian

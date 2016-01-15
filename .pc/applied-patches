@@ -30,3 +30,4 @@ cdrbuild_defer_incoming
 queue_out_multi_params_disp
 extmodule_nonblocking_mode
 rmanager_tcp_nodelay_fix
+configure_spandsp_location_debian

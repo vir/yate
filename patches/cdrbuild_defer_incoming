@@ -1,0 +1,52 @@
+Description: Added 'defer_incoming' to cdrbuild.conf
+Author: vir@ctm.ru
+---
+Defer cdr initialization from chan.startup until next message.
+This eliminates extra empty CDRs per each authenticated SIP call.
+Index: yate/conf.d/cdrbuild.conf.sample
+===================================================================
+--- yate.orig/conf.d/cdrbuild.conf.sample	2016-01-14 16:34:53.000000000 +0300
++++ yate/conf.d/cdrbuild.conf.sample	2016-01-15 16:12:48.000000000 +0300
+@@ -28,6 +28,10 @@
+ ; This parameter can be overridden in call.progress message by a 'ringing' parameter
+ ;ring_on_progress=no
+ 
++; defer_incoming: bool: Defer 'initialize' cdr generation until 'call.route'
++; message is received.
++;defer_incoming=no
++
+ 
+ [parameters]
+ ; Each line consists of name=bool where name is the name of the parameter being
+Index: yate/modules/cdrbuild.cpp
+===================================================================
+--- yate.orig/modules/cdrbuild.cpp	2016-01-14 16:34:53.000000000 +0300
++++ yate/modules/cdrbuild.cpp	2016-01-15 16:22:49.000000000 +0300
+@@ -198,6 +198,7 @@
+ static bool s_cdrStatus = false;
+ static bool s_statusAnswer = true;
+ static bool s_ringOnProgress = false;
++static bool s_deferIncoming = false;
+ static unsigned int s_statusUpdate = 60000;
+ static StatusThread* s_updaterThread = 0;
+ 
+@@ -559,6 +560,9 @@
+     if (!b) {
+ 	switch (type) {
+ 	    case CdrStart:
++		if(s_deferIncoming && YSTRING("incoming") == msg.getValue(YSTRING("direction")))
++		    break;
++		/* else fall thrugh and create cdr */
+ 	    case CdrCall:
+ 	    case CdrAnswer:
+ 		{
+@@ -883,7 +887,8 @@
+ 	s_statusUpdate = 600000;
+     else
+ 	s_statusUpdate = sUpdate * 1000;
+-    s_ringOnProgress = cfg.getBoolValue("general","ring_on_progress",false);;
++    s_ringOnProgress = cfg.getBoolValue("general","ring_on_progress",false);
++    s_deferIncoming = cfg.getBoolValue("general","defer_incoming",false);
+ 
+     if (s_cdrStatus && !s_updaterThread) {
+ 	s_updaterThread = new StatusThread();

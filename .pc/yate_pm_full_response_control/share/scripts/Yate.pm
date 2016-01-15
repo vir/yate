@@ -37,7 +37,7 @@ BEGIN {
     use Data::Dumper;
 
     # Set version && disable output buffering.
-    our $VERSION = '0.25';
+    our $VERSION = '0.22';
     $ |= 1;
 }
 
@@ -520,11 +520,7 @@ sub dispatch($) {
     foreach (@{$self->{'_handlers'}->{$self->header('name')}}) {
 	my $return = $_->($self);
 
-	if(ref($return) eq 'ARRAY') {
-	    $self->error('Invalid array returned from ' . $self->header('name') . ' event handler') unless @$return == 2;
-	    $self->return_message(@$return);
-	    return 1;
-	} elsif (defined($return) && lc($return) ne 'false' && $return ne '0') {
+	if (defined($return) && lc($return) ne 'false' && $return ne '0') {
 	    $self->return_message('true', $return);
 
 	    return 1;
@@ -828,11 +824,6 @@ handlers installed with C<install>). A message will be send to the
 Engine with all the parameters and of course the return value. If you
 wish to process a message, but not to send anything back to the Engine
 return ''.
-
-If you want full control over message's return values, uou can use
-array reference as your handler return value. Array must contain
-exactly two elements: 'handled' value ('true' or 'false') and
-message 'retvalue' text.
 
 Handlers will have only one argument and that is the current Yate
 object itself. You can access headers and parameters by C<header> and

@@ -20,3 +20,4 @@ sipfeatures_presence_event_package
 extmodule_scriptname_variable
 yate_pm_full_response_control
 yate_pm_quit_and_any_variable
+yate_pm_no_colors_if_not_on_tty

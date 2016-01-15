@@ -698,12 +698,7 @@ sub dump($) {
 # Dump message to STDERR.
 sub dumpmsg($;) {
     my $self = shift; local $_;
-    my($cc1, $cc2) = ('', '');
-    if(-t STDERR) { # Add ANSI colors only on TTY
-	$cc1 = "\x1B\[1m";
-	$cc0 = "\x1B\[0m";
-    }
-    my $msg = "Message ".$self->{headers}{name}.(@_?" [ ${cc1}@_${cc0} ]":'').":\n";
+    my $msg = "Message ".$self->{headers}{name}.(@_?" [ \x1B\[1m@_\x1B\[0m ]":'').":\n";
     $msg .= " H: ".join(', ', map({ $_.' => '.$self->{headers}{$_} } sort keys %{$self->{headers}}))."\n";
     foreach(sort keys %{$self->{params}}) {
 	$msg .= "   $_ => ".$self->{params}{$_}."\n";

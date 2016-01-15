@@ -24,3 +24,4 @@ yate_pm_no_colors_if_not_on_tty
 extmodule_dumparray_variable
 subscription_handlers_prio
 sdp_separate_local_remote_attrs
+socket_multicast_binding

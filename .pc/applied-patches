@@ -25,3 +25,4 @@ extmodule_dumparray_variable
 subscription_handlers_prio
 sdp_separate_local_remote_attrs
 socket_multicast_binding
+vp8_vp9_h263_codecs_fix

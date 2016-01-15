@@ -227,11 +227,6 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 			    line >> annexB;
 			else if (line.startSkip("octet-align=",false))
 			    amrOctet = (0 != line.toInteger(0));
-			else if(payload.length()) {
-			    String key("fmtp-");
-			    key << payload;
-			    params.append(new NamedString(key,line));
-			}
 		    }
 		}
 		else if (first) {

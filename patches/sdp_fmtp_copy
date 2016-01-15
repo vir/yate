@@ -1,0 +1,52 @@
+Description: Copy unknown fmtp lines between SDPMedia and SDP
+Author: vir@ctm.ru
+---
+Index: yate/libs/ysdp/parser.cpp
+===================================================================
+--- yate.orig/libs/ysdp/parser.cpp	2016-01-14 16:34:53.000000000 +0300
++++ yate/libs/ysdp/parser.cpp	2016-01-15 12:12:03.000000000 +0300
+@@ -227,6 +227,11 @@
+ 			    line >> annexB;
+ 			else if (line.startSkip("octet-align=",false))
+ 			    amrOctet = (0 != line.toInteger(0));
++			else if(payload.length()) {
++			    String key("fmtp-");
++			    key << payload;
++			    params.append(new NamedString(key,line));
++			}
+ 		    }
+ 		}
+ 		else if (first) {
+Index: yate/libs/ysdp/session.cpp
+===================================================================
+--- yate.orig/libs/ysdp/session.cpp	2016-01-14 16:34:53.000000000 +0300
++++ yate/libs/ysdp/session.cpp	2016-01-15 12:13:42.000000000 +0300
+@@ -483,6 +483,19 @@
+ 			    *temp << payload << " octet-align=1";
+ 			    dest = dest->append(temp);
+ 			}
++
++			if(s->length()) {
++			    String key("fmtp-");
++			    key << *s;
++			    for(unsigned int i = 0; i < m->length(); ++i) {
++				const NamedString *ns = m->getParam(i);
++				if(ns && ns->name() == key) {
++				    temp = new String("fmtp:");
++				    *temp << payload << " " << *ns;
++				    rtpmap.append(temp);
++				}
++			    }
++			}
+ 		    }
+ 		}
+ 	    }
+@@ -528,6 +541,8 @@
+ 		const NamedString* param = m->getParam(i);
+ 		if (param) {
+ 		    String tmp = param->name();
++		    if (tmp.startsWith("fmtp-"))
++			continue;
+ 		    if (*param)
+ 			tmp << ":" << *param;
+ 		    sdp->addLine("a",tmp);

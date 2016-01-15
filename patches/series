@@ -5,3 +5,4 @@ cisco_fax_rtp_format_switch
 yate_pm_connect_method
 regexroute_without_caller_called
 yate_pm_better_tcp_connection
+sdp_fmtp_copy

@@ -483,19 +483,6 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 			    *temp << payload << " octet-align=1";
 			    dest = dest->append(temp);
 			}
-
-			if(s->length()) {
-			    String key("fmtp-");
-			    key << *s;
-			    for(unsigned int i = 0; i < m->length(); ++i) {
-				const NamedString *ns = m->getParam(i);
-				if(ns && ns->name() == key) {
-				    temp = new String("fmtp:");
-				    *temp << payload << " " << *ns;
-				    rtpmap.append(temp);
-				}
-			    }
-			}
 		    }
 		}
 	    }
@@ -541,8 +528,6 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 		const NamedString* param = m->getParam(i);
 		if (param) {
 		    String tmp = param->name();
-		    if (tmp.startsWith("fmtp-"))
-			continue;
 		    if (*param)
 			tmp << ":" << *param;
 		    sdp->addLine("a",tmp);

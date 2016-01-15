@@ -1,0 +1,39 @@
+This branch ('patches') stores changes from 'master' branch,
+expressed an quilt-managed serie of patch files.
+
+
+### Adding new patch ###
+
+quilt new my_cool_patch_name
+quilt add file/affected/bu/patch one/more/file and/another/one
+git show XXXXXXXXXXXXXX | patch -p1                    <-- apply changes from 'master'
+quilt refresh
+quilt header --dep3 -e                                 <-- fill in patch description
+git status                                             <-- look for added files
+git add .pc/my_cool_patch_name/ patches/my_cool_patch_name
+git commit -a -m "Added patch 'my_cool_patch_name'"
+git clean -f                                           <-- remove junk (*.rej)
+
+
+### Fixing broken patch ###
+
+quild pop                                              <-- intil we get to our broken patch
+vim .........                                          <-- change some files
+quild refresh                                          <-- actually modify patch
+quild push -a
+git status                                             <-- check if we have to 'git add' something
+git commit -a -m "Fixed patch 'my_broken_patch' (smth wrong)"
+
+### Rebasing patches to new upstream release ###
+
+?????
+Something like this:
+ * unapply all patches
+ * git commit -a
+ * git merge upstream
+ * git apply all patches
+ * git commit -a
+ * squash commits into one to save some space?
+Or may be i have to change workflow to store unpatched source files?
+
+

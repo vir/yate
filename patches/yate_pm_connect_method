@@ -1,0 +1,51 @@
+Description: Added connect() method to Yate perl module
+Author: vir@ctm.ru
+---
+Index: yate/share/scripts/Yate.pm
+===================================================================
+--- yate.orig/share/scripts/Yate.pm	2016-01-14 16:34:53.000000000 +0300
++++ yate/share/scripts/Yate.pm	2016-01-15 11:17:43.000000000 +0300
+@@ -296,6 +296,21 @@
+     }
+ }
+ 
++# Connect to a Yate listener and redirect STD(IN+OUT) to connected socket
++sub connect($$;$$$)
++{
++	my $self = shift;
++	my $addr = shift || die "Nowhere to connect()";
++	my $role = shift || 'global';
++	my $domain = ($addr=~/^[\w\.\-]+\:\d+$/)?'INET':'UNIX';
++	eval "require IO::Socket::$domain" or die "Yate::connect: $@";
++	my $sock = eval "new IO::Socket::$domain(\$addr)" or die "Yate::connect: $!";
++	open STDOUT, '>&', $sock or die "Can't reopen STDOUT to socket: $!";
++	open STDIN, '<&', $sock or die "Can't reopen STDIN from socket: $!";
++	$self->{socket} = $sock;
++	$self->print(join(':', "%%>connect", map({ $self->escape($_) } $role, @_)));
++}
++
+ # Wait for messages on STDIN (default behaviour).
+ sub listen($) {
+     my ($self) = @_;
+@@ -724,6 +739,7 @@
+     }
+ 
+     my $message = new Yate();
++    #$message->connect('127.0.0.1:42428');
+     # call.route, call.execute or any other event.
+     $message->install('call.route', \&call_route_handler);
+     # This processes events from other modules like conference.cpp.
+@@ -816,6 +832,13 @@
+ 
+ The methods always return undef.
+ 
++=head2 connect
++
++    $message->connect($addr, [$role, [$id, [$type]]])
++
++connects socket to Yate server's listener, redirects STDIN and STDOUT
++to that socket and sends %%connect message, then returns.
++
+ =head2 listen
+ 
+     $message->listen()

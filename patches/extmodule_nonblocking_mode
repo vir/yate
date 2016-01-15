@@ -5,8 +5,8 @@ If local variable 'nonblocking' is true, extmodule will not wait for script to a
 This dangerous option can lead to severe problems if external script is not prepared to process incoming messages very quickly, but it can improve system preformance in case when external script does not need to reply to message or modify it's parameters.
 Index: yate/docs/extmodule.html
 ===================================================================
---- yate.orig/docs/extmodule.html	2016-01-15 16:35:16.000000000 +0300
-+++ yate/docs/extmodule.html	2016-01-15 16:38:23.000000000 +0300
+--- yate.orig/docs/extmodule.html	2016-01-15 16:54:37.000000000 +0300
++++ yate/docs/extmodule.html	2016-01-15 16:54:37.000000000 +0300
 @@ -213,6 +213,8 @@
  restart (bool) - Restart this global module if it terminates unexpectedly. Must be turned off to allow normal termination<br />
  runid (bool,readonly) - Unique ID of the current running instance (See <code>runId()</code> in <a href="api/TelEngine__Engine.htm">API docs</a><br />
@@ -18,8 +18,8 @@ Index: yate/docs/extmodule.html
  engine.release (string,readonly) - Release type and number, like &quot;beta2&quot;<br />
 Index: yate/modules/extmodule.cpp
 ===================================================================
---- yate.orig/modules/extmodule.cpp	2016-01-15 15:53:53.000000000 +0300
-+++ yate/modules/extmodule.cpp	2016-01-15 16:39:49.000000000 +0300
+--- yate.orig/modules/extmodule.cpp	2016-01-15 16:54:37.000000000 +0300
++++ yate/modules/extmodule.cpp	2016-01-15 16:54:37.000000000 +0300
 @@ -285,6 +285,7 @@
      String m_trackName;
      String m_reason;
@@ -74,9 +74,9 @@ Index: yate/modules/extmodule.cpp
  	    String out("%%<setlocal:");
 Index: yate/share/scripts/Yate.pm
 ===================================================================
---- yate.orig/share/scripts/Yate.pm	2016-01-15 15:53:41.000000000 +0300
-+++ yate/share/scripts/Yate.pm	2016-01-15 16:38:23.000000000 +0300
-@@ -139,6 +139,10 @@
+--- yate.orig/share/scripts/Yate.pm	2016-01-15 16:54:37.000000000 +0300
++++ yate/share/scripts/Yate.pm	2016-01-15 16:54:37.000000000 +0300
+@@ -141,6 +141,10 @@
  
      if ($self->header('success') eq 'true') {
  	$self->debug('Changed local parameter ' . $self->header('name') . ' to ' . $self->header('value') . '.') if ($self->{'Debug'} == 1);
@@ -87,7 +87,7 @@ Index: yate/share/scripts/Yate.pm
      } else {
  	$self->error('Cannot change local parameter ' . $self->header('name') . ' to ' . $self->header('value') . '.');
      }
-@@ -523,6 +527,7 @@
+@@ -525,6 +529,7 @@
      foreach (@{$self->{'_handlers'}->{$self->header('name')}}) {
  	my $return = $_->($self);
  
@@ -95,7 +95,7 @@ Index: yate/share/scripts/Yate.pm
  	if(ref($return) eq 'ARRAY') {
  	    $self->error('Invalid array returned from ' . $self->header('name') . ' event handler') unless @$return == 2;
  	    $self->return_message(@$return);
-@@ -533,6 +538,7 @@
+@@ -535,6 +540,7 @@
  	    return 1;
  	}
      }

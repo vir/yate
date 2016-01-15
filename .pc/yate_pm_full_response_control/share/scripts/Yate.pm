@@ -62,6 +62,8 @@ sub new($;@) {
     # Accept only 'Debug' as additional parameter.
     my $self = {
 	'Debug' => 0,
+	'stdin' => IO::Handle->new_from_fd(fileno(STDIN), 'r'),
+	'stdout' => IO::Handle->new_from_fd(fileno(STDOUT), 'w'),
 	@_,
     };
 

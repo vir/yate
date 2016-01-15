@@ -3,9 +3,9 @@ Author: vir@ctm.ru
 ---
 Index: yate/share/scripts/Yate.pm
 ===================================================================
---- yate.orig/share/scripts/Yate.pm	2016-01-15 15:30:03.000000000 +0300
-+++ yate/share/scripts/Yate.pm	2016-01-15 15:53:41.000000000 +0300
-@@ -698,7 +698,12 @@
+--- yate.orig/share/scripts/Yate.pm	2016-01-15 16:53:52.000000000 +0300
++++ yate/share/scripts/Yate.pm	2016-01-15 16:53:52.000000000 +0300
+@@ -700,7 +700,12 @@
  # Dump message to STDERR.
  sub dumpmsg($;) {
      my $self = shift; local $_;

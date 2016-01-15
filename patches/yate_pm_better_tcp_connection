@@ -9,7 +9,7 @@ Better TCP extmodule connection support:
 Index: yate/share/scripts/Yate.pm
 ===================================================================
 --- yate.orig/share/scripts/Yate.pm	2016-01-15 11:17:43.000000000 +0300
-+++ yate/share/scripts/Yate.pm	2016-01-15 11:57:33.000000000 +0300
++++ yate/share/scripts/Yate.pm	2016-01-15 16:51:24.000000000 +0300
 @@ -27,6 +27,8 @@
  
  use strict;
@@ -19,7 +19,16 @@ Index: yate/share/scripts/Yate.pm
  
  # Executed before everything.
  BEGIN {
-@@ -296,26 +298,31 @@
+@@ -60,6 +62,8 @@
+     # Accept only 'Debug' as additional parameter.
+     my $self = {
+ 	'Debug' => 0,
++	'stdin' => IO::Handle->new_from_fd(fileno(STDIN), 'r'),
++	'stdout' => IO::Handle->new_from_fd(fileno(STDOUT), 'w'),
+ 	@_,
+     };
+ 
+@@ -296,26 +300,31 @@
      }
  }
  
@@ -65,7 +74,7 @@ Index: yate/share/scripts/Yate.pm
  	# Get rid of \n at the end.
  	chomp($line);
  
-@@ -324,6 +331,7 @@
+@@ -324,6 +333,7 @@
  	    $self->dispatch();
  	}
      }
@@ -73,7 +82,7 @@ Index: yate/share/scripts/Yate.pm
  }
  
  # Parses messages and splits it to parts.
-@@ -592,7 +600,7 @@
+@@ -592,7 +602,7 @@
      if ($message) {
  	$self->debug('Printing ' . $message) if ($self->{'Debug'} == 1);
  
@@ -82,7 +91,7 @@ Index: yate/share/scripts/Yate.pm
      }
  }
  
-@@ -692,6 +700,17 @@
+@@ -692,6 +702,17 @@
      $self->debug(Dumper($self));
  }
  
@@ -100,7 +109,7 @@ Index: yate/share/scripts/Yate.pm
  # Old subroutines. We keep it for backwards compatibillity.
  sub retval($$) {
      my $self = shift;
-@@ -707,8 +726,6 @@
+@@ -707,8 +728,6 @@
  
  1;
  
@@ -109,7 +118,7 @@ Index: yate/share/scripts/Yate.pm
  __END__
  
  =head1 NAME
-@@ -836,8 +853,9 @@
+@@ -836,8 +855,9 @@
  
      $message->connect($addr, [$role, [$id, [$type]]])
  
@@ -121,7 +130,7 @@ Index: yate/share/scripts/Yate.pm
  
  =head2 listen
  
-@@ -930,6 +948,12 @@
+@@ -930,6 +950,12 @@
  
  Dumps all the information about the current Yate object.
  
@@ -134,7 +143,7 @@ Index: yate/share/scripts/Yate.pm
  =head2 escape
  
      $message->escape($string, $special_char)
-@@ -1107,3 +1131,6 @@
+@@ -1107,3 +1133,6 @@
  more information, see http://www.fsf.org/licenses/gpl.txt
  
  =cut

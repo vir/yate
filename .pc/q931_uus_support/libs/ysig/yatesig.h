@@ -13894,7 +13894,6 @@ private:
     bool processNotification(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
     bool processCalledNo(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
     bool processCallingNo(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
-    bool processUserUser(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
 
     // IE parameters
     String m_display;                    // Display: The data
@@ -13921,8 +13920,6 @@ private:
     String m_channelSelect;              // ChannelID: Channel select
     String m_channels;                   // ChannelID: Channel list or slot map
     String m_restart;                    // Restart: The class of restarting circuits
-    String m_uuprotocol;                 // UserToUser protocol
-    String m_uuinformation;              // UserToUser information (up to 128 bytes)
 };
 
 /**

@@ -17,3 +17,4 @@ ysigchan_dtmfinband_force_support
 h264_video_support
 register_conf_unregister_expired
 sipfeatures_presence_event_package
+extmodule_scriptname_variable

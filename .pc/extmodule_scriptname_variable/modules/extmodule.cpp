@@ -1343,10 +1343,6 @@ bool ExtModReceiver::processLine(const char* line)
 		role.c_str(),chan.c_str(),type.c_str());
 	    if (role == "global") {
 		m_role = RoleGlobal;
-		if(! chan.null()) {
-		    Debug(DebugMild,"Renamed external '%s' to '%s'",m_script.safe(),chan.c_str());
-		    m_script = chan;
-		}
 		return false;
 	    }
 	    else if (role == "channel") {
@@ -1474,14 +1470,6 @@ bool ExtModReceiver::processLine(const char* line)
 		else
 		    m_chan->setId(val);
 		ok = true;
-	    }
-	    else if (id == "scriptname") {
-		if (val.null())
-		    val = m_script;
-		else {
-		    Debug(DebugMild,"Renamed external '%s' to '%s'",m_script.safe(),val.c_str());
-		    m_script = val;
-		}
 	    }
 	    else if (m_chan && (id == "disconnected")) {
 		m_chan->setDisconn(val.toBoolean(m_chan->disconn()));

@@ -1,0 +1,83 @@
+Description: Support name-value resuts for routing query
+Author: vir@ctm.ru
+---
+This patch allows one to use 'transposed' routing query result.
+It is required to build complex callforks.
+Index: yate/conf.d/register.conf.sample
+===================================================================
+--- yate.orig/conf.d/register.conf.sample	2016-01-14 16:34:53.000000000 +0300
++++ yate/conf.d/register.conf.sample	2016-01-15 13:37:28.000000000 +0300
+@@ -118,6 +118,8 @@
+ ;query=SELECT location,(CASE WHEN location IS NULL THEN 'offline' ELSE NULL END) AS error FROM users WHERE username='${called}'
+ ;result=location
+ ;priority=120
++; namevaluepairs: boolean: true if query returns name-value pairs instead of usual format
++;namevaluepairs=no
+ 
+ 
+ [call.cdr]
+Index: yate/modules/server/register.cpp
+===================================================================
+--- yate.orig/modules/server/register.cpp	2016-01-14 16:34:53.000000000 +0300
++++ yate/modules/server/register.cpp	2016-01-15 13:37:28.000000000 +0300
+@@ -63,8 +63,10 @@
+     virtual void chkConfig();
+ 
+ protected:
++    bool copyParams(Message &msg, Array *a, const String& resultName);
+     void indirectQuery(String& query);
+     int m_type;
++    bool m_queryReturnsNameValuePairs;
+     String m_query;
+     String m_result;
+     String m_account;
+@@ -269,11 +271,32 @@
+ // copy parameters from multiple SQL result rows to a Message
+ // returns true if resultName was found in columns
+ 
+-static bool copyParams(Message &msg, Array *a, const String& resultName)
++bool AAAHandler::copyParams(Message &msg, Array *a, const String& resultName)
+ {
+     if (!a)
+ 	return false;
+     bool ok = false;
++    if(m_queryReturnsNameValuePairs) {
++	if(a->getColumns() != 2) {
++	    Debug(&module,DebugWarn,"Query returned %d columns, not 2.",a->getColumns());
++	    return false;
++	}
++	for (int j=1;j<a->getRows();j++) {
++	    const String* name = YOBJECT(String,a->get(0, j));
++	    if (!(name && *name)) {
++		Debug(&module,DebugWarn,"No field name in row %d, skipping remaining rows.",j);
++		break;
++	    }
++	    bool res = (*name == resultName);
++	    ok = ok || res;
++	    const String* s = YOBJECT(String,a->get(1,j));
++	    if (res)
++		msg.retValue() = s;
++	    else
++		msg.setParam(*name,s?s->c_str():"");
++	}
++	return ok;
++    }
+     FallBackRoute* fallback = 0;
+     for (int j=1; j <a->getRows();j++) {
+ 	Message* m = (j <= 1) ? &msg : new Message(msg);
+@@ -320,6 +343,7 @@
+ 
+ AAAHandler::AAAHandler(const char* hname, int type, int prio)
+     : MessageHandler(hname,prio),m_type(type)
++    , m_queryReturnsNameValuePairs(false)
+ {
+ }
+ 
+@@ -342,6 +366,7 @@
+ bool AAAHandler::loadQuery()
+ {
+     m_query = s_cfg.getValue(name(),"query");
++    m_queryReturnsNameValuePairs = s_cfg.getBoolValue(name(), "namevaluepairs", false);
+     indirectQuery(m_query);
+     return !m_query.null();
+ }

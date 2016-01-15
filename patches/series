@@ -9,3 +9,4 @@ sdp_fmtp_copy
 q931_uus_support
 h263-1998_payload_mapping
 subscription_caps_update_query
+register_module_routing_query_name_vaule_pairs

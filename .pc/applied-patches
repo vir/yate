@@ -19,3 +19,4 @@ register_conf_unregister_expired
 sipfeatures_presence_event_package
 extmodule_scriptname_variable
 yate_pm_full_response_control
+yate_pm_quit_and_any_variable

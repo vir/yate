@@ -326,9 +326,6 @@ sub listen($) {
 	# Get rid of \n at the end.
 	chomp($line);
 
-	# Handle quit
-	last if $line eq '%%<quit';
-
 	# Message received. Parse && dispatch (if parse succeeds).
 	if ($self->parse_message($line) == 1) {
 	    $self->dispatch();
@@ -674,18 +671,30 @@ sub setlocal($$$) {
 	return 0;
     }
 
+    if ($name eq 'timeout') {
+	if ($value = '' || $value =~ /[^0-9]/) {
+	    $self->error('Called setlocal with invalid parameters (value is not a number).');
+
+	    return 0;
+	}
+    } elsif ($name eq 'disconnected' || $name eq 'timebomb' || $name eq 'reenter' || $name eq 'selfwatch') {
+	if ($value ne 'true' && $value ne 'false') {
+	    $self->error('Called setlocal with invalid parameters (value is not a boolean (true/false)).');
+
+	    return 0;
+	}
+    } elsif ($name ne 'id') {
+	$self->error('Called setlocal with invalid name (' . $name . ').');
+
+	return 0;
+    }
+
     # Format is %%>setlocal:name:value.
     $self->print(sprintf('%%%%>setlocal:%s:%s',
 	$self->escape($name, ':'),
 	$self->escape($value, ':')));
 
     return 1;
-}
-
-# Send quit message
-sub quit
-{
-    shift->print("%%>quit");
 }
 
 # Dump itself to STDERR.
@@ -985,12 +994,6 @@ file instead of sending to the Engine.
 
 Methods are depricated. See C<install> or SYNOPSYS for more
 information.
-
-=head2 quit
-
-    $message->quit()
-
-Tell Yate that we are done.
 
 =head1 INTERNAL METHODS
 

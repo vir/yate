@@ -1,0 +1,68 @@
+Description: Removed variable name check in setlocal. Added 'quit' method.
+Author: vir@ctm.ru
+---
+Index: yate/share/scripts/Yate.pm
+===================================================================
+--- yate.orig/share/scripts/Yate.pm	2016-01-15 15:13:41.000000000 +0300
++++ yate/share/scripts/Yate.pm	2016-01-15 15:30:03.000000000 +0300
+@@ -326,6 +326,9 @@
+ 	# Get rid of \n at the end.
+ 	chomp($line);
+ 
++	# Handle quit
++	last if $line eq '%%<quit';
++
+ 	# Message received. Parse && dispatch (if parse succeeds).
+ 	if ($self->parse_message($line) == 1) {
+ 	    $self->dispatch();
+@@ -671,24 +674,6 @@
+ 	return 0;
+     }
+ 
+-    if ($name eq 'timeout') {
+-	if ($value = '' || $value =~ /[^0-9]/) {
+-	    $self->error('Called setlocal with invalid parameters (value is not a number).');
+-
+-	    return 0;
+-	}
+-    } elsif ($name eq 'disconnected' || $name eq 'timebomb' || $name eq 'reenter' || $name eq 'selfwatch') {
+-	if ($value ne 'true' && $value ne 'false') {
+-	    $self->error('Called setlocal with invalid parameters (value is not a boolean (true/false)).');
+-
+-	    return 0;
+-	}
+-    } elsif ($name ne 'id') {
+-	$self->error('Called setlocal with invalid name (' . $name . ').');
+-
+-	return 0;
+-    }
+-
+     # Format is %%>setlocal:name:value.
+     $self->print(sprintf('%%%%>setlocal:%s:%s',
+ 	$self->escape($name, ':'),
+@@ -697,6 +682,12 @@
+     return 1;
+ }
+ 
++# Send quit message
++sub quit
++{
++    shift->print("%%>quit");
++}
++
+ # Dump itself to STDERR.
+ sub dump($) {
+     my ($self) = @_;
+@@ -995,6 +986,12 @@
+ Methods are depricated. See C<install> or SYNOPSYS for more
+ information.
+ 
++=head2 quit
++
++    $message->quit()
++
++Tell Yate that we are done.
++
+ =head1 INTERNAL METHODS
+ 
+ =head2 _install

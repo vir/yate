@@ -14,3 +14,4 @@ namedlist_tohstore
 pgsql_async_notifications
 msgsniff_negative_filter
 ysigchan_dtmfinband_force_support
+h264_video_support

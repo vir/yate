@@ -1,0 +1,16 @@
+Description: Fix TCP_NODELAY on rmanager connection
+Author: vir@ctm.ru
+---
+Index: yate/modules/rmanager.cpp
+===================================================================
+--- yate.orig/modules/rmanager.cpp	2016-01-14 16:34:53.000000000 +0300
++++ yate/modules/rmanager.cpp	2016-01-15 16:46:59.000000000 +0300
+@@ -469,7 +469,7 @@
+     // For the sake of responsiveness try to turn off the tcp assembly timer
+     int arg = 1;
+     if (cfg().getBoolValue("interactive",false) &&
+-	!m_socket->setOption(SOL_SOCKET, TCP_NODELAY, &arg, sizeof(arg)))
++	!m_socket->setOption(IPPROTO_TCP, TCP_NODELAY, &arg, sizeof(arg)))
+ 	Debug("RManager",DebugMild, "Failed to set tcp socket to TCP_NODELAY mode: %s", strerror(m_socket->error()));
+ 
+     if (cfg().getValue("userpass")) {

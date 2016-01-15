@@ -1,0 +1,115 @@
+Description: Minor IAX protocol fixes
+Author: vir@ctm.ru
+---
+Index: yate/conf.d/yiaxchan.conf.sample
+===================================================================
+--- yate.orig/conf.d/yiaxchan.conf.sample	2016-01-14 23:40:36.000000000 +0300
++++ yate/conf.d/yiaxchan.conf.sample	2016-01-14 23:44:21.000000000 +0300
+@@ -290,6 +290,44 @@
+ ; lpc10: bool: LPC 10
+ ;lpc10=enable
+ 
++; ilbc30: bool: ilbc30
++;ilbc30=enable
++
++; speex: bool: SpeeX
++;speex=enable
++
++; g723: bool: g723
++;g723=enable
++
++; g729: bool: g729
++;g729=enable
++
++; adpcm: bool: adpcm
++;adpcm=enable
++
++; g726: bool: G.726 RFC3551
++;g726=enable
++
++; slin: bool: slin
++;slin=enable
++
++; g722: bool: g722
++;g722=enable
++
++; amr: bool: amr
++;amr=enable
++
++; h261: bool: H.261
++;h261=enable
++
++; h263: bool: H.263
++;h263=enable
++
++; h263p: bool: H.263+
++;h263p=enable
++
++; h264: bool: H.264
++;h264=enable
+ 
+ ;[listener listener_name]
+ ; This section configures an extra listener to use
+Index: yate/libs/yiax/frame.cpp
+===================================================================
+--- yate.orig/libs/yiax/frame.cpp	2016-01-14 23:40:36.000000000 +0300
++++ yate/libs/yiax/frame.cpp	2016-01-14 23:44:22.000000000 +0300
+@@ -474,6 +474,7 @@
+ 	    case IAXInfoElement::CALLINGTNS:
+ 	    case IAXInfoElement::FIRMWAREVER:
+ 	    case IAXInfoElement::RR_DELAY:
++	    case IAXInfoElement::ENCRYPTION:
+ 		if (data[i] != 2) {
+ 		    i = 0xFFFF;
+ 		    break;
+@@ -487,7 +488,6 @@
+ 	    case IAXInfoElement::CALLINGPRES:
+ 	    case IAXInfoElement::CALLINGTON:
+ 	    case IAXInfoElement::CAUSECODE:
+-	    case IAXInfoElement::ENCRYPTION:
+ 		if (data[i] != 1) {
+ 		    i = 0xFFFF;
+ 		    break;
+Index: yate/libs/yiax/yateiax.h
+===================================================================
+--- yate.orig/libs/yiax/yateiax.h	2016-01-14 23:40:36.000000000 +0300
++++ yate/libs/yiax/yateiax.h	2016-01-14 23:44:22.000000000 +0300
+@@ -132,21 +132,21 @@
+         MUSICONHOLD = 0x1a,      // Text
+         TRANSFERID = 0x1b,       // DW
+         RDNIS = 0x1c,            // Text
+-        PROVISIONING = 0x1d,     // BIN
+-        AESPROVISIONING = 0x1e,  // BIN
++        PROVISIONING = 0x1d,     // BIN *
++        AESPROVISIONING = 0x1e,  // BIN *
+         DATETIME = 0x1f,         // DW
+-        DEVICETYPE = 0x20,       // Text
+-        SERVICEIDENT = 0x21,     // BIN
+-        FIRMWAREVER = 0x22,      // W
+-        FWBLOCKDESC = 0x23,      // DW
+-        FWBLOCKDATA = 0x24,      // BIN
+-        PROVVER = 0x25,          // DW
++        DEVICETYPE = 0x20,       // Text *
++        SERVICEIDENT = 0x21,     // BIN *
++        FIRMWAREVER = 0x22,      // W *
++        FWBLOCKDESC = 0x23,      // DW *
++        FWBLOCKDATA = 0x24,      // BIN *
++        PROVVER = 0x25,          // DW *
+         CALLINGPRES = 0x26,      // B
+         CALLINGTON = 0x27,       // B
+         CALLINGTNS = 0x28,       // W
+         SAMPLINGRATE = 0x29,     // DW
+         CAUSECODE = 0x2a,        // B
+-        ENCRYPTION = 0x2b,       // B
++        ENCRYPTION = 0x2b,       // W (it is B in rfc, but W on iana and in real life)
+         ENKEY = 0x2c,            // BIN
+         CODEC_PREFS = 0x2d,      // Text
+         RR_JITTER = 0x2e,        // DW
+@@ -155,6 +155,7 @@
+         RR_DELAY = 0x31,         // W
+         RR_DROPPED = 0x32,       // DW
+         RR_OOO = 0x33,           // DW
++        OSPTOKEN = 0x34,         // ?
+         CALLTOKEN = 0x36,        // BIN
+         CAPABILITY2 = 0x37,      // BIN		1 byte version + array
+         FORMAT2 = 0x38,          // BIN		1 byte version + array

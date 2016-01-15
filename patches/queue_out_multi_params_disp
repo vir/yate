@@ -1,0 +1,22 @@
+Description: Allow multiple parameters to be set when dispatching queued call
+Author: vir@ctm.ru
+---
+Index: yate/share/scripts/queue_out.php
+===================================================================
+--- yate.orig/share/scripts/queue_out.php	2016-01-14 16:34:53.000000000 +0300
++++ yate/share/scripts/queue_out.php	2016-01-15 16:25:23.000000000 +0300
+@@ -74,7 +74,13 @@
+ 		    $m->params["id"] = $ourcallid;
+ 		    $m->params["caller"] = $caller;
+ 		    $m->params["called"] = $ev->GetValue("called");
+-		    $m->params["callto"] = $ev->GetValue("direct");
++		    $direct = $ev->GetValue("direct");
++		    if ($direct[0] == '{') {
++			foreach(json_decode($json) as $k => $v)
++			    $m->params[$k] = $v;
++		    } else {
++			$m->params["callto"] = $direct;
++		    }
+ 		    $m->params["billid"] = $ev->GetValue("billid");
+ 		    $m->params["maxcall"] = $ev->GetValue("maxcall");
+ 		    $m->params["cdrtrack"] = "false";

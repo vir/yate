@@ -147,7 +147,6 @@ private:
     bool m_hungup;                       // Hang up flag
     String m_reason;                     // Hangup reason
     bool m_inband;                       // True to try to send in-band tones
-    bool m_forceInband;                  // True to always send in-band tones
     bool m_ringback;                     // Always provide ringback media
     bool m_rtpForward;                   // Forward RTP
     bool m_sdpForward;                   // Forward SDP (only of rtp forward is enabled)
@@ -424,8 +423,6 @@ public:
 	{ return m_controller; }
     inline bool inband() const
 	{ return m_inband; }
-    inline bool forceInband() const
-	{ return m_forceInband; }
     inline bool ringback() const
 	{ return m_ringback; }
     // Set exiting flag for call controller and timeout for the thread
@@ -475,7 +472,6 @@ protected:
     SignallingCallControl* m_controller; // Call controller, if any
     bool m_init;                         // True if already initialized
     bool m_inband;                       // True to send in-band tones through this trunk
-    bool m_forceInband;                  // True to always send in-band tones
     bool m_ringback;                     // Always provide ringback media
 private:
     Type m_type;                         // Trunk type
@@ -1113,7 +1109,6 @@ SigChannel::SigChannel(const char* caller, const char* called)
     m_hungup(true),
     m_reason("noconn"),
     m_inband(false),
-    m_forceInband(false),
     m_ringback(false),
     m_rtpForward(false),
     m_sdpForward(false),
@@ -1225,7 +1220,6 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
 	return false;
     // Data
     m_inband = msg.getBoolValue("dtmfinband",trunk->inband());
-    m_forceInband = trunk->forceInband();
     m_ringback = msg.getBoolValue("ringback",trunk->ringback());
     // Make the call
     SignallingMessage* sigMsg = new SignallingMessage;
@@ -1419,10 +1413,9 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
     }
     // Try to send: through the circuit, in band or through the signalling protocol
     SignallingCircuit* cic = getCircuit();
-    if (cic && !m_forceInband) {
+    if (cic) {
 	NamedList params("");
 	params.addParam("tone",tone);
-	params.addParam("dial",String::boolText(msg.getBoolValue("dial", false)));
 	if (cic->sendEvent(SignallingCircuitEvent::Dtmf,&params))
 	    return true;
     }
@@ -3430,7 +3423,6 @@ SigTrunk::SigTrunk(const char* name, Type type)
       m_controller(0),
       m_init(false),
       m_inband(false),
-      m_forceInband(false),
       m_ringback(false),
       m_type(type),
       m_thread(0)
@@ -3462,12 +3454,7 @@ void SigTrunk::setExiting(unsigned int msec)
 bool SigTrunk::initialize(NamedList& params)
 {
     // Reload common parameters
-    if(YSTRING("force") == params.getValue("dtmfinband", s_cfg.getValue("general","dtmfinband","false")))
-	m_inband = m_forceInband = true;
-    else {
-	m_inband = params.getBoolValue("dtmfinband",s_cfg.getBoolValue("general","dtmfinband",false));
-	m_forceInband = false;
-    }
+    m_inband = params.getBoolValue("dtmfinband",s_cfg.getBoolValue("general","dtmfinband",false));
     m_ringback = params.getBoolValue("ringback",s_cfg.getBoolValue("general","ringback",false));
 
     // Check error:

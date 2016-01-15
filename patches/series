@@ -12,3 +12,4 @@ subscription_caps_update_query
 register_module_routing_query_name_vaule_pairs
 namedlist_tohstore
 pgsql_async_notifications
+msgsniff_negative_filter

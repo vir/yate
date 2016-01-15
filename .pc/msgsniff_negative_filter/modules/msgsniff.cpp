@@ -67,20 +67,7 @@ public:
 static bool s_active = true;
 static bool s_timer = false;
 static Regexp s_filter;
-static bool s_filtermatch = true;
 static Mutex s_mutex(false,"FilterSniff");
-
-static void setFilterRegex(const String& str)
-{
-    if (str.endsWith("^")) {
-	// reverse match on final ^ (makes no sense in a regexp)
-	s_filtermatch = false;
-	s_filter = str.substr(0,str.length()-1);
-    } else {
-	s_filtermatch = true;
-	s_filter = str;
-    }
-}
 
 static void dumpParams(const Message &msg, String& par)
 {
@@ -119,7 +106,7 @@ bool SniffHandler::received(Message &msg)
 		(line >> s_timer).trimSpaces();
 	    if (line.startSkip("filter")) {
 		s_mutex.lock();
-		setFilterRegex(line);
+		s_filter = line;
 		s_mutex.unlock();
 	    }
 	    msg.retValue() << "Message sniffer: " << (s_active ? "on" : "off");
@@ -127,8 +114,6 @@ bool SniffHandler::received(Message &msg)
 		msg.retValue() << ", timer: " << (s_timer ? "on" : "off");
 	    if (s_active && s_filter)
 		msg.retValue() << ", filter: " << s_filter;
-	    if( s_active && s_filter && s_filtermatch == false)
-		msg.retValue() << " (inverted)";
 	    msg.retValue() << "\r\n";
 	    return true;
 	}
@@ -147,7 +132,7 @@ bool SniffHandler::received(Message &msg)
     if (!s_active)
 	return false;
     Lock lock(s_mutex);
-    if (s_filter && !(s_filter.matches(msg) == s_filtermatch))
+    if (s_filter && !s_filter.matches(msg))
 	return false;
     lock.drop();
     String par;
@@ -171,7 +156,7 @@ void HookHandler::dispatched(const Message& msg, bool handled)
     if (!s_active || (!s_timer && (msg == YSTRING("engine.timer"))))
 	return;
     Lock lock(s_mutex);
-    if (s_filter && !(s_filter.matches(msg) == s_filtermatch))
+    if (s_filter && !s_filter.matches(msg))
 	return;
     lock.drop();
     u_int64_t dt = Time::now() - msg.msgTime().usec();
@@ -211,7 +196,7 @@ void MsgSniff::initialize()
 	m_first = false;
 	s_active = Engine::config().getBoolValue("general","msgsniff",false);
 	s_mutex.lock();
-	setFilterRegex(Engine::config().getValue("general","filtersniff"));
+	s_filter = Engine::config().getValue("general","filtersniff");
 	s_mutex.unlock();
 	Engine::install(new SniffHandler);
 	Engine::self()->setHook(new HookHandler);

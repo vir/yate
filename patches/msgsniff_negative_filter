@@ -1,0 +1,89 @@
+Description: Added "negative" mode for message sniffer filter
+Author: vir@ctm.ru
+---
+This patch enables message sniffer dump all messages except matched by filter.
+Match is negated by adding caret sign ('^') at very end of filter regexp.
+Index: yate/conf.d/yate.conf.sample
+===================================================================
+--- yate.orig/conf.d/yate.conf.sample	2016-01-14 16:34:53.000000000 +0300
++++ yate/conf.d/yate.conf.sample	2016-01-15 14:23:13.000000000 +0300
+@@ -64,6 +64,8 @@
+ ; If empty it will match all messages except engine.timer which is never displayed
+ ; Example for a filter matching all chan.Anything messages and engine.halt:
+ ;  filtersniff=^\(chan\.\|engine\.halt$\)
++; To act on non-matching expressions add a ^ at end of the regexp.
++;  filtersniff=^\(database\|call\.cdr\|user\.auth\|user\.register\|module\.update\|chan\.rtp\)$^
+ ;filtersniff=
+ 
+ 
+Index: yate/modules/msgsniff.cpp
+===================================================================
+--- yate.orig/modules/msgsniff.cpp	2016-01-14 16:34:53.000000000 +0300
++++ yate/modules/msgsniff.cpp	2016-01-15 14:23:13.000000000 +0300
+@@ -67,8 +67,21 @@
+ static bool s_active = true;
+ static bool s_timer = false;
+ static Regexp s_filter;
++static bool s_filtermatch = true;
+ static Mutex s_mutex(false,"FilterSniff");
+ 
++static void setFilterRegex(const String& str)
++{
++    if (str.endsWith("^")) {
++	// reverse match on final ^ (makes no sense in a regexp)
++	s_filtermatch = false;
++	s_filter = str.substr(0,str.length()-1);
++    } else {
++	s_filtermatch = true;
++	s_filter = str;
++    }
++}
++
+ static void dumpParams(const Message &msg, String& par)
+ {
+     unsigned n = msg.length();
+@@ -106,7 +119,7 @@
+ 		(line >> s_timer).trimSpaces();
+ 	    if (line.startSkip("filter")) {
+ 		s_mutex.lock();
+-		s_filter = line;
++		setFilterRegex(line);
+ 		s_mutex.unlock();
+ 	    }
+ 	    msg.retValue() << "Message sniffer: " << (s_active ? "on" : "off");
+@@ -114,6 +127,8 @@
+ 		msg.retValue() << ", timer: " << (s_timer ? "on" : "off");
+ 	    if (s_active && s_filter)
+ 		msg.retValue() << ", filter: " << s_filter;
++	    if( s_active && s_filter && s_filtermatch == false)
++		msg.retValue() << " (inverted)";
+ 	    msg.retValue() << "\r\n";
+ 	    return true;
+ 	}
+@@ -132,7 +147,7 @@
+     if (!s_active)
+ 	return false;
+     Lock lock(s_mutex);
+-    if (s_filter && !s_filter.matches(msg))
++    if (s_filter && !(s_filter.matches(msg) == s_filtermatch))
+ 	return false;
+     lock.drop();
+     String par;
+@@ -156,7 +171,7 @@
+     if (!s_active || (!s_timer && (msg == YSTRING("engine.timer"))))
+ 	return;
+     Lock lock(s_mutex);
+-    if (s_filter && !s_filter.matches(msg))
++    if (s_filter && !(s_filter.matches(msg) == s_filtermatch))
+ 	return;
+     lock.drop();
+     u_int64_t dt = Time::now() - msg.msgTime().usec();
+@@ -196,7 +211,7 @@
+ 	m_first = false;
+ 	s_active = Engine::config().getBoolValue("general","msgsniff",false);
+ 	s_mutex.lock();
+-	s_filter = Engine::config().getValue("general","filtersniff");
++	setFilterRegex(Engine::config().getValue("general","filtersniff"));
+ 	s_mutex.unlock();
+ 	Engine::install(new SniffHandler);
+ 	Engine::self()->setHook(new HookHandler);

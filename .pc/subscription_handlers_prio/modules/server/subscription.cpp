@@ -1768,7 +1768,7 @@ void SubscriptionModule::initialize()
 	for (const TokenDict* d = s_msgHandler; d->token; d++) {
 	    if (d->value == SubMessageHandler::CallCdr && !m_userEventQuery)
 		continue;
-	    SubMessageHandler* h = new SubMessageHandler(d->value, cfg.getIntValue("priorities",d->token, 80));
+	    SubMessageHandler* h = new SubMessageHandler(d->value);
 	    Engine::install(h);
 	    m_handlers.append(h);
 	}

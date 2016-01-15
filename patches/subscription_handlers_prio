@@ -1,0 +1,32 @@
+Description: Allow setting priorities for all handlers in subscription.conf
+Author: vir@ctm.ru
+---
+Index: yate/conf.d/subscription.conf.sample
+===================================================================
+--- yate.orig/conf.d/subscription.conf.sample	2016-01-15 13:29:58.000000000 +0300
++++ yate/conf.d/subscription.conf.sample	2016-01-15 15:50:09.000000000 +0300
+@@ -59,3 +59,11 @@
+ ; Defaults to 100
+ ; This parameter is not applied on reload
+ ;call.route=100
++;resource.subscribe=80
++;resource.notify=80
++;user.roster=80
++;user.update=80
++;engine.start=80
++;call.cdr=80
++;mwi=80
++
+Index: yate/modules/server/subscription.cpp
+===================================================================
+--- yate.orig/modules/server/subscription.cpp	2016-01-15 13:31:10.000000000 +0300
++++ yate/modules/server/subscription.cpp	2016-01-15 15:50:09.000000000 +0300
+@@ -1768,7 +1768,7 @@
+ 	for (const TokenDict* d = s_msgHandler; d->token; d++) {
+ 	    if (d->value == SubMessageHandler::CallCdr && !m_userEventQuery)
+ 		continue;
+-	    SubMessageHandler* h = new SubMessageHandler(d->value);
++	    SubMessageHandler* h = new SubMessageHandler(d->value, cfg.getIntValue("priorities",d->token, 80));
+ 	    Engine::install(h);
+ 	    m_handlers.append(h);
+ 	}

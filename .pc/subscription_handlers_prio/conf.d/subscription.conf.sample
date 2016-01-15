@@ -59,11 +59,3 @@
 ; Defaults to 100
 ; This parameter is not applied on reload
 ;call.route=100
-;resource.subscribe=80
-;resource.notify=80
-;user.roster=80
-;user.update=80
-;engine.start=80
-;call.cdr=80
-;mwi=80
-

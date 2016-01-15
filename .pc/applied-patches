@@ -22,3 +22,4 @@ yate_pm_full_response_control
 yate_pm_quit_and_any_variable
 yate_pm_no_colors_if_not_on_tty
 extmodule_dumparray_variable
+subscription_handlers_prio

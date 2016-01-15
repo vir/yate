@@ -54,9 +54,7 @@ public:
     // Return number of rows, -1 for non-retryable errors and -2 to retry
     int queryDb(const char* query, Message* dest);
     virtual void destruct();
-protected:
-    // Called when new connection is established
-    virtual void justConnected() { }
+private:
     // Init DB connection
     bool initDbInternal(int retry);
     // Perform the query, fill the message with data
@@ -66,22 +64,6 @@ protected:
     PgAccount* m_account;
     bool m_busy;
     PGconn* m_conn;
-};
-
-// A notification listener connection
-class PgListenConn : public PgConn, private Thread
-{
-public:
-    PgListenConn(PgAccount* account, String listen);
-    bool start();
-    void finish();
-protected:
-    virtual void justConnected();
-    virtual void run();
-    void sendNotificationMsg(String notify, int pid, String payload);
-    void sendListenCommands();
-private:
-    String m_listen_channels;
 };
 
 // Database account holding the connection(s)
@@ -124,7 +106,6 @@ private:
     u_int64_t m_timeout;
     PgConn* m_connPool;
     unsigned int m_connPoolSize;
-    PgListenConn* m_notifyListener;
     // stat counters
     Mutex* m_statsMutex;
     unsigned int m_totalQueries;
@@ -182,10 +163,8 @@ bool PgConn::initDb()
 	return true;
     int retry = m_account->m_retry;
     for (int i = 0; i < retry; i++) {
-	if (initDbInternal(i + 1)) {
-	    justConnected();
+	if (initDbInternal(i + 1))
 	    return true;
-	}
 	Thread::yield();
 	if (testDb())
 	    return true;
@@ -429,90 +408,6 @@ int PgConn::queryDbInternal(const char* query, Message* dest)
     return -2;
 }
 
-//
-// PgListenConn
-//
-PgListenConn::PgListenConn(PgAccount* account, String listen)
-    : PgConn(account)
-    , Thread("PgListenConn")
-    , m_listen_channels(listen)
-{
-    XDebug(&module,DebugAll,"PgListenConn::PgListenConn(%p, %s)", account, listen.c_str());
-}
-bool PgListenConn::start()
-{
-    bool r = initDb();
-    if(r)
-	r = startup();
-    return r;
-}
-void PgListenConn::finish()
-{
-    cancel();
-    while(running())
-	yield();
-}
-void PgListenConn::justConnected()
-{
-    sendListenCommands();
-}
-void PgListenConn::run()
-{
-    while(!check()) {
-	if(!initDb())
-	    continue;
-	Socket sock(PQsocket(m_conn));
-	if(sock.canSelect()) {
-	    bool rd = false;
-	    if (sock.select(&rd,0,0) && rd) {
-		if(!PQconsumeInput(m_conn)) {
-		    Debug(&module,DebugWarn,"%s failed: %s [%p]",
-			c_str(),PQerrorMessage(m_conn),m_account);
-		    dropDb();
-		}
-		PGnotify* n = PQnotifies(m_conn);
-		if(n) {
-		    sendNotificationMsg(n->relname, n->be_pid, n->extra);
-		    PQfreemem(n);
-		}
-	    }
-	    else
-		if (!sock.canRetry())
-		    dropDb();
-	}
-	sock.detach();
-    }
-}
-void PgListenConn::sendNotificationMsg(String notify, int pid, String payload)
-{
-    Message* m = new Message("database.notify");
-    m->setParam("account",m_account->toString());
-    m->setParam("dbtype","pgsqldb");
-    m->setParam("notify",notify);
-    m->setParam("backend",String(pid));
-    m->setParam("payload",payload);
-    Engine::enqueue(m);
-}
-void PgListenConn::sendListenCommands()
-{
-    ObjList *strs = m_listen_channels.split(',');
-    for (ObjList *p = strs; p; p=p->next()) {
-	String *s = static_cast<String*>(p->get());
-	if(!s)
-	    continue;
-	s->trimBlanks();
-	if(s->null())
-	    continue;
-	String cmd = "LISTEN ";
-	cmd << *s;
-	if(0 != queryDb(cmd, NULL)) {
-	    dropDb();
-	    break;
-	}
-    }
-    strs->destruct();
-}
-
 
 //
 // PgAccount
@@ -521,7 +416,6 @@ PgAccount::PgAccount(const NamedList& sect)
     : Mutex(true,"PgAccount"),
       m_name(sect),
       m_connPool(0), m_connPoolSize(0),
-      m_notifyListener(0),
       m_statsMutex(&s_conmutex),
       m_totalQueries(0), m_failedQueries(0),
       m_errorQueries(0), m_queryTime(0)
@@ -553,11 +447,6 @@ PgAccount::PgAccount(const NamedList& sect)
 	m_connPool[i].m_account = this;
 	m_connPool[i].assign(m_name + "." + String(i + 1));
     }
-    String listen = sect.getValue("listen");
-    if(!listen.null()) {
-	m_notifyListener = new PgListenConn(this, listen);
-	m_notifyListener->assign(m_name + ".notify");
-    }
     Debug(&module,DebugInfo,"Database account '%s' created poolsize=%u [%p]",
 	m_name.c_str(),m_connPoolSize,this);
 }
@@ -568,8 +457,6 @@ bool PgAccount::initDb()
     bool ok = false;
     for (unsigned int i = 0; i < m_connPoolSize; i++)
 	ok = m_connPool[i].initDb() || ok;
-    if(m_notifyListener)
-	m_notifyListener->start();
     return ok;
 }
 
@@ -579,7 +466,6 @@ void PgAccount::destroyed()
     s_accounts.remove(this,false);
     s_conmutex.unlock();
     dropDb();
-    //delete m_notifyListener;
     if (m_connPool)
 	delete[] m_connPool;
     m_connPoolSize = 0;
@@ -591,8 +477,6 @@ void PgAccount::dropDb()
 {
     for (unsigned int i = 0; i < m_connPoolSize; i++)
 	m_connPool[i].dropDb();
-    if(m_notifyListener)
-	m_notifyListener->finish();
 }
 
 static bool failure(Message* m)

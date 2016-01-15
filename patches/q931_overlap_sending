@@ -1,0 +1,210 @@
+Description: Overlap dialing (Overlap Sending) support added
+Author: vir@ctm.ru
+---
+Index: yate/libs/ysig/q931.cpp
+===================================================================
+--- yate.orig/libs/ysig/q931.cpp	2016-01-15 11:02:56.000000000 +0300
++++ yate/libs/ysig/q931.cpp	2016-01-15 11:00:43.000000000 +0300
+@@ -793,14 +793,20 @@
+     bool retVal = false;
+     switch (event->type()) {
+ 	case SignallingEvent::Progress:
++	    if(state() == OverlapSend) {
++		changeState(CallPresent);
++		retVal = sendCallProceeding(event->message());
++		break;
++	    }
+ 	    retVal = sendProgress(event->message());
+ 	    break;
+ 	case SignallingEvent::Ringing:
+ 	    retVal = sendAlerting(event->message());
+ 	    break;
+ 	case SignallingEvent::Accept:
+-	    if (m_overlap) {
+-		sendSetupAck();
++	    if (m_overlap && state() != OverlapSend) {
++		sendSetupAck(event->message());
++		changeState(OverlapSend);
+ 		m_overlap = false;
+ 		break;
+ 	    }
+@@ -844,6 +850,7 @@
+ 	    retVal = sendInfo(event->message());
+ 	    break;
+ 	case SignallingEvent::NewCall:
++	    m_overlap = event->message()->params().getBoolValue("overlapped", false);
+ 	    retVal = sendSetup(event->message());
+ 	    break;
+ 	default:
+@@ -1281,7 +1288,7 @@
+     else if (q931() && q931()->primaryRate())
+ 	return releaseComplete("congestion");
+     // *** CalledNo /CallingNo
+-    m_overlap = !m_data.processCalledNo(msg,false);
++    m_overlap = !m_data.processCalledNo(msg,false) && q931()->m_overlapEnabled;
+     m_data.processCallingNo(msg,false);
+     // *** Display
+     m_data.processDisplay(msg,false);
+@@ -1296,7 +1303,8 @@
+     msg->params().setParam("callerscreening",m_data.m_callerScreening);
+     msg->params().setParam("callednumtype",m_data.m_calledType);
+     msg->params().setParam("callednumplan",m_data.m_calledPlan);
+-    msg->params().setParam("overlapped",String::boolText(m_overlap));
++    if(q931()->m_overlapEnabled)
++	msg->params().setParam("overlapped",String::boolText(m_overlap));
+     return new SignallingEvent(SignallingEvent::NewCall,msg,this);
+ }
+ 
+@@ -1308,10 +1316,13 @@
+ 	return 0;
+     if (!m_data.processChannelID(msg,false))
+ 	return errorWrongIE(msg,ISDNQ931IE::ChannelID,true);
+-    // We don't implement overlap sending. So, just complete the number sending
+-    SignallingMessage* m = new SignallingMessage;
+-    m->params().addParam("complete",String::boolText(true));
+-    sendInfo(m);
++    if(m_overlap) {
++	changeState(OverlapSend);
++    } else { // We are not using overlap sending. So, just complete the number sending
++	SignallingMessage* m = new SignallingMessage;
++	m->params().addParam("complete",String::boolText(true));
++	sendInfo(m);
++    }
+     return 0;
+ }
+ 
+@@ -1578,8 +1589,12 @@
+     m_data.processDisplay(msg,true,&q931()->parserData());
+     // Check tones or ringing
+     const char* tone = sigMsg->params().getValue(YSTRING("tone"));
+-    if (tone)
+-	msg->appendIEValue(ISDNQ931IE::Keypad,"keypad",tone);
++    if (tone) {
++	if(state() == OverlapSend)
++	    msg->appendIEValue(ISDNQ931IE::CalledNo,"number",tone);
++	else
++	    msg->appendIEValue(ISDNQ931IE::Keypad,"keypad",tone);
++    }
+     return q931()->sendMessage(msg,callTei());
+ }
+ 
+@@ -1596,7 +1611,8 @@
+ 	    SignallingUtils::appendFlag(m_data.m_progress,"in-band-info");
+     }
+     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Progress,this);
+-    m_data.processProgress(msg,true);
++    if(!m_data.processProgress(msg,true))
++	return false;
+     return q931()->sendMessage(msg,callTei());
+ }
+ 
+@@ -1651,8 +1667,7 @@
+     MSG_CHECK_SEND(ISDNQ931Message::Setup)
+     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Setup,this);
+     while (true) {
+-	// TODO: fix it (don't send?) if overlapp dialing is used
+-	if (q931()->parserData().flag(ISDNQ931::ForceSendComplete))
++	if (q931()->parserData().flag(ISDNQ931::ForceSendComplete) && !m_overlap)
+ 	    msg->appendSafe(new ISDNQ931IE(ISDNQ931IE::SendComplete));
+ 	// BearerCaps
+ 	m_data.m_transferCapability = "speech";
+@@ -1707,7 +1722,8 @@
+ 	m_data.m_calledType = sigMsg->params().getValue(YSTRING("callednumtype"));
+ 	m_data.m_calledPlan = sigMsg->params().getValue(YSTRING("callednumplan"));
+ 	m_data.m_calledNo = sigMsg->params().getValue(YSTRING("called"));
+-	m_data.processCalledNo(msg,true);
++	if(!(m_overlap && !m_data.m_calledNo))
++	    m_data.processCalledNo(msg,true);
+ 	// Send
+ 	changeState(CallInitiated);
+ 	if (m_net && !q931()->primaryRate()) {
+@@ -1735,22 +1751,29 @@
+     return q931()->sendMessage(msg,callTei());
+ }
+ 
+-bool ISDNQ931Call::sendSetupAck()
++// Send SETUP ACKNOWLEDGE. See Q.931 1.1.15
++// IE: ChannelID, Progress, Display, Signal
++bool ISDNQ931Call::sendSetupAck(SignallingMessage* sigMsg)
+ {
+     MSG_CHECK_SEND(ISDNQ931Message::SetupAck)
+     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::SetupAck,this);
+     if (!m_channelIDSent) {
+-	m_data.m_channelType = "B";
+-	if (m_circuit)
+-	    m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
+-	if (!m_data.m_channelSelect) {
+-	    Debug(q931(),DebugNote,"Call(%u,%u). No voice channel available [%p]",
+-		Q931_CALL_ID,this);
+-	    return sendReleaseComplete("congestion");
++	if(! q931()->primaryRate()) {
++	    m_data.m_channelType = "B";
++	    if (m_circuit)
++		m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
++	    if (!m_data.m_channelSelect) {
++		Debug(q931(),DebugNote,"Call(%u,%u). No voice channel available [%p]",
++		    Q931_CALL_ID,this);
++		return sendReleaseComplete("congestion");
++	    }
+ 	}
+ 	m_data.processChannelID(msg,true,&q931()->parserData());
+ 	m_channelIDSent = true;
+     }
++    if(sigMsg->params().getBoolValue("media",true)) {
++	msg->appendIEValue(ISDNQ931IE::Progress,"description","in-band-info");
++    }
+     return q931()->sendMessage(msg,callTei());
+ }
+ 
+@@ -2423,6 +2446,7 @@
+     m_format = params.getValue(YSTRING("format"));
+     if (0xffff == lookup(m_format,Q931Parser::s_dict_bearerProto1,0xffff))
+ 	m_format = "alaw";
++    m_overlapEnabled = params.getBoolValue("overlap", true);
+     // Debug
+     setDebug(params.getBoolValue(YSTRING("print-messages"),false),
+ 	params.getBoolValue(YSTRING("extended-debug"),false));
+Index: yate/libs/ysig/yatesig.h
+===================================================================
+--- yate.orig/libs/ysig/yatesig.h	2016-01-15 11:02:56.000000000 +0300
++++ yate/libs/ysig/yatesig.h	2016-01-15 11:00:43.000000000 +0300
+@@ -14153,7 +14153,7 @@
+     bool sendReleaseComplete(const char* reason = 0, const char* diag = 0, u_int8_t tei = 0);
+     bool sendSetup(SignallingMessage* sigMsg);
+     bool sendSuspendRej(const char* reason = 0, SignallingMessage* sigMsg = 0);
+-    bool sendSetupAck();
++    bool sendSetupAck(SignallingMessage* sigMsg);
+     // Errors on processing received messages
+     // Missing mandatory IE
+     // @param release True to send release complete and generate a release event
+@@ -14774,6 +14774,7 @@
+     u_int32_t m_callRefMask;             // Call reference mask
+     ISDNQ931ParserData m_parserData;     // Parser settings
+     ISDNQ931IEData m_data;               // Process IEs
++    bool m_overlapEnabled;               // Overlap send/recv enabled   
+     // Timers & counters
+     SignallingTimer m_l2DownTimer;       // T309: Layer 2 is down timeout
+     SignallingTimer m_recvSgmTimer;      // T314: Receive segment timeout
+Index: yate/modules/server/ysigchan.cpp
+===================================================================
+--- yate.orig/modules/server/ysigchan.cpp	2016-01-15 11:02:56.000000000 +0300
++++ yate/modules/server/ysigchan.cpp	2016-01-15 11:00:43.000000000 +0300
+@@ -1088,8 +1088,10 @@
+     // Parameters to be copied to call.preroute
+     static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn,overlapped";
+     plugin.copySigMsgParams(*m_route,event,&params);
++#if 0
+     if (m_route->getBoolValue("overlapped") && !m_route->getValue("called"))
+ 	m_route->setParam("called","off-hook");
++#endif
+     if (event->message()) {
+ 	const String* pres = event->message()->params().getParam("callerpres");
+ 	if (pres && (*pres == "restricted"))
+@@ -1238,6 +1240,7 @@
+     sigMsg->params().copyParam(msg,"callednumplan");
+     sigMsg->params().copyParam(msg,"inn");
+     sigMsg->params().copyParam(msg,"calledpointcode");
++    sigMsg->params().copyParam(msg,"overlapped");
+     // Copy RTP parameters
+     if (msg.getBoolValue("rtp_forward")) {
+ 	NamedList* tmp = new NamedList("rtp");

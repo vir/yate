@@ -1088,10 +1088,8 @@ SigChannel::SigChannel(SignallingEvent* event)
     // Parameters to be copied to call.preroute
     static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn,overlapped";
     plugin.copySigMsgParams(*m_route,event,&params);
-#if 0
     if (m_route->getBoolValue("overlapped") && !m_route->getValue("called"))
 	m_route->setParam("called","off-hook");
-#endif
     if (event->message()) {
 	const String* pres = event->message()->params().getParam("callerpres");
 	if (pres && (*pres == "restricted"))
@@ -1240,7 +1238,6 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
     sigMsg->params().copyParam(msg,"callednumplan");
     sigMsg->params().copyParam(msg,"inn");
     sigMsg->params().copyParam(msg,"calledpointcode");
-    sigMsg->params().copyParam(msg,"overlapped");
     // Copy RTP parameters
     if (msg.getBoolValue("rtp_forward")) {
 	NamedList* tmp = new NamedList("rtp");

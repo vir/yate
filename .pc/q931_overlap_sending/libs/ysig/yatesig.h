@@ -14153,7 +14153,7 @@ private:
     bool sendReleaseComplete(const char* reason = 0, const char* diag = 0, u_int8_t tei = 0);
     bool sendSetup(SignallingMessage* sigMsg);
     bool sendSuspendRej(const char* reason = 0, SignallingMessage* sigMsg = 0);
-    bool sendSetupAck(SignallingMessage* sigMsg);
+    bool sendSetupAck();
     // Errors on processing received messages
     // Missing mandatory IE
     // @param release True to send release complete and generate a release event
@@ -14774,7 +14774,6 @@ private:
     u_int32_t m_callRefMask;             // Call reference mask
     ISDNQ931ParserData m_parserData;     // Parser settings
     ISDNQ931IEData m_data;               // Process IEs
-    bool m_overlapEnabled;               // Overlap send/recv enabled   
     // Timers & counters
     SignallingTimer m_l2DownTimer;       // T309: Layer 2 is down timeout
     SignallingTimer m_recvSgmTimer;      // T314: Receive segment timeout

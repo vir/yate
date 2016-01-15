@@ -139,10 +139,6 @@ sub handle_setlocal($) {
 
     if ($self->header('success') eq 'true') {
 	$self->debug('Changed local parameter ' . $self->header('name') . ' to ' . $self->header('value') . '.') if ($self->{'Debug'} == 1);
-	if ($self->header('name') eq 'nonblocking') {
-	    $self->{_nonblocking} = $self->header('value') eq 'true';
-	}
-
     } else {
 	$self->error('Cannot change local parameter ' . $self->header('name') . ' to ' . $self->header('value') . '.');
     }
@@ -527,7 +523,6 @@ sub dispatch($) {
     foreach (@{$self->{'_handlers'}->{$self->header('name')}}) {
 	my $return = $_->($self);
 
-	next if $self->{_nonblocking};
 	if(ref($return) eq 'ARRAY') {
 	    $self->error('Invalid array returned from ' . $self->header('name') . ' event handler') unless @$return == 2;
 	    $self->return_message(@$return);
@@ -538,7 +533,6 @@ sub dispatch($) {
 	    return 1;
 	}
     }
-    return 1 if $self->{_nonblocking};
 
     $self->return_message('false', '');
     $self->error('Could not dispatch event ' . $self->header('name') . '.') if ($self->{'Debug'} == 1);

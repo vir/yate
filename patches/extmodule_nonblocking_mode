@@ -1,0 +1,105 @@
+Description: Added non-blocking mode for external scripts
+Author: vir@ctm.ru
+---
+If local variable 'nonblocking' is true, extmodule will not wait for script to acknoledge message.
+This dangerous option can lead to severe problems if external script is not prepared to process incoming messages very quickly, but it can improve system preformance in case when external script does not need to reply to message or modify it's parameters.
+Index: yate/docs/extmodule.html
+===================================================================
+--- yate.orig/docs/extmodule.html	2016-01-15 16:35:16.000000000 +0300
++++ yate/docs/extmodule.html	2016-01-15 16:38:23.000000000 +0300
+@@ -213,6 +213,8 @@
+ restart (bool) - Restart this global module if it terminates unexpectedly. Must be turned off to allow normal termination<br />
+ runid (bool,readonly) - Unique ID of the current running instance (See <code>runId()</code> in <a href="api/TelEngine__Engine.htm">API docs</a><br />
+ dumparray (bool) - Enable arrays parsing into message result when received from database query<br />
++nonblocking (bool) - Enable non-blocking, passive mode. External application will not be able to alter any messages or respond to them and it is not required to respond to every message with <code>%%&lt;message</code><br />
++
+ <b>Engine read-only run parameters:</b><br />
+ engine.version (string,readonly) - Version of the engine, like &quot;2.0.1&quot;<br />
+ engine.release (string,readonly) - Release type and number, like &quot;beta2&quot;<br />
+Index: yate/modules/extmodule.cpp
+===================================================================
+--- yate.orig/modules/extmodule.cpp	2016-01-15 15:53:53.000000000 +0300
++++ yate/modules/extmodule.cpp	2016-01-15 16:39:49.000000000 +0300
+@@ -285,6 +285,7 @@
+     String m_trackName;
+     String m_reason;
+     bool m_dumparray;
++    bool m_nonBlock;
+ };
+ 
+ class ExtThread : public Thread
+@@ -815,7 +816,7 @@
+       m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
+       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false), m_scripted(false),
+       m_buffer(0,DEF_INCOMING_LINE), m_script(script), m_args(args), m_trackName(s_trackName),
+-      m_dumparray(false)
++      m_dumparray(false), m_nonBlock(false)
+ {
+     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",\"%s\") [%p]",script,args,this);
+     m_script.trimBlanks();
+@@ -833,7 +834,8 @@
+       m_chan(chan), m_watcher(0),
+       m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
+       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false), m_scripted(false),
+-      m_buffer(0,DEF_INCOMING_LINE), m_script(name), m_args(conn), m_trackName(s_trackName)
++      m_buffer(0,DEF_INCOMING_LINE), m_script(name), m_args(conn), m_trackName(s_trackName),
++      m_nonBlock(false)
+ {
+     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",%p,%p) [%p]",name,io,chan,this);
+     m_script.trimBlanks();
+@@ -1024,6 +1026,12 @@
+     u_int64_t tout = (m_timeout > 0) ? Time::now() + 1000 * m_timeout : 0;
+     MsgHolder h(msg);
+     if (outputLine(msg.encode(h.m_id))) {
++	if (m_nonBlock) {
++	    DDebug(DebugAll,"ExtMod queued non-blocking message %p '%s' [%p]",&msg,msg.c_str(),this);
++	    unlock();
++	    unuse();
++	    return false;
++	}
+ 	m_waiting.append(&h)->setDelete(false);
+ 	DDebug(DebugAll,"ExtMod queued message %p '%s' [%p]",&msg,msg.c_str(),this);
+     }
+@@ -1611,6 +1619,11 @@
+ 		val = m_dumparray;
+ 		ok = true;
+ 	    }
++	    else if (id == "nonblocking") {
++		m_nonBlock = val.toBoolean(m_nonBlock);
++		val = m_nonBlock;
++		ok = true;
++	    }
+ 	    DDebug("ExtModReceiver",DebugAll,"Set '%s'='%s' %s",
+ 		id.c_str(),val.c_str(),ok ? "ok" : "failed");
+ 	    String out("%%<setlocal:");
+Index: yate/share/scripts/Yate.pm
+===================================================================
+--- yate.orig/share/scripts/Yate.pm	2016-01-15 15:53:41.000000000 +0300
++++ yate/share/scripts/Yate.pm	2016-01-15 16:38:23.000000000 +0300
+@@ -139,6 +139,10 @@
+ 
+     if ($self->header('success') eq 'true') {
+ 	$self->debug('Changed local parameter ' . $self->header('name') . ' to ' . $self->header('value') . '.') if ($self->{'Debug'} == 1);
++	if ($self->header('name') eq 'nonblocking') {
++	    $self->{_nonblocking} = $self->header('value') eq 'true';
++	}
++
+     } else {
+ 	$self->error('Cannot change local parameter ' . $self->header('name') . ' to ' . $self->header('value') . '.');
+     }
+@@ -523,6 +527,7 @@
+     foreach (@{$self->{'_handlers'}->{$self->header('name')}}) {
+ 	my $return = $_->($self);
+ 
++	next if $self->{_nonblocking};
+ 	if(ref($return) eq 'ARRAY') {
+ 	    $self->error('Invalid array returned from ' . $self->header('name') . ' event handler') unless @$return == 2;
+ 	    $self->return_message(@$return);
+@@ -533,6 +538,7 @@
+ 	    return 1;
+ 	}
+     }
++    return 1 if $self->{_nonblocking};
+ 
+     $self->return_message('false', '');
+     $self->error('Could not dispatch event ' . $self->header('name') . '.') if ($self->{'Debug'} == 1);

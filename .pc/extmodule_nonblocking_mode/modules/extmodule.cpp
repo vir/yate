@@ -285,7 +285,6 @@ private:
     String m_trackName;
     String m_reason;
     bool m_dumparray;
-    bool m_nonBlock;
 };
 
 class ExtThread : public Thread
@@ -816,7 +815,7 @@ ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, 
       m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false), m_scripted(false),
       m_buffer(0,DEF_INCOMING_LINE), m_script(script), m_args(args), m_trackName(s_trackName),
-      m_dumparray(false), m_nonBlock(false)
+      m_dumparray(false)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",\"%s\") [%p]",script,args,this);
     m_script.trimBlanks();
@@ -834,8 +833,7 @@ ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, i
       m_chan(chan), m_watcher(0),
       m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false), m_scripted(false),
-      m_buffer(0,DEF_INCOMING_LINE), m_script(name), m_args(conn), m_trackName(s_trackName),
-      m_nonBlock(false)
+      m_buffer(0,DEF_INCOMING_LINE), m_script(name), m_args(conn), m_trackName(s_trackName)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",%p,%p) [%p]",name,io,chan,this);
     m_script.trimBlanks();
@@ -1026,12 +1024,6 @@ bool ExtModReceiver::received(Message &msg, int id)
     u_int64_t tout = (m_timeout > 0) ? Time::now() + 1000 * m_timeout : 0;
     MsgHolder h(msg);
     if (outputLine(msg.encode(h.m_id))) {
-	if (m_nonBlock) {
-	    DDebug(DebugAll,"ExtMod queued non-blocking message %p '%s' [%p]",&msg,msg.c_str(),this);
-	    unlock();
-	    unuse();
-	    return false;
-	}
 	m_waiting.append(&h)->setDelete(false);
 	DDebug(DebugAll,"ExtMod queued message %p '%s' [%p]",&msg,msg.c_str(),this);
     }
@@ -1617,11 +1609,6 @@ bool ExtModReceiver::processLine(const char* line)
 	    else if (id == "dumparray") {
 		m_dumparray = val.toBoolean(m_dumparray);
 		val = m_dumparray;
-		ok = true;
-	    }
-	    else if (id == "nonblocking") {
-		m_nonBlock = val.toBoolean(m_nonBlock);
-		val = m_nonBlock;
 		ok = true;
 	    }
 	    DDebug("ExtModReceiver",DebugAll,"Set '%s'='%s' %s",

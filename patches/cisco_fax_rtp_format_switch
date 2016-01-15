@@ -1,0 +1,98 @@
+Description: Survive cisco's rtp format switching (fax)
+Author: vir@ctm.ru
+---
+Index: yate/libs/yrtp/session.cpp
+===================================================================
+--- yate.orig/libs/yrtp/session.cpp	2016-01-15 11:11:10.000000000 +0300
++++ yate/libs/yrtp/session.cpp	2016-01-15 11:11:55.000000000 +0300
+@@ -177,7 +177,7 @@
+     }
+ 
+     if (ss != m_ssrc) {
+-	rtpNewSSRC(ss,marker);
++	rtpNewSSRC(ss,typ,marker);
+ 	// check if the SSRC is still unchanged
+ 	if (ss != m_ssrc) {
+ 	    if (m_warn) {
+@@ -317,10 +317,10 @@
+ 	m_session->rtpNewPayload(payload,timestamp);
+ }
+ 
+-void RTPReceiver::rtpNewSSRC(u_int32_t newSsrc, bool marker)
++void RTPReceiver::rtpNewSSRC(u_int32_t newSsrc, int newPayload, bool marker)
+ {
+     if (m_session)
+-	m_session->rtpNewSSRC(newSsrc,marker);
++	m_session->rtpNewSSRC(newSsrc,newPayload,marker);
+ }
+ 
+ bool RTPReceiver::decodeEvent(bool marker, unsigned int timestamp, const void* data, int len)
+@@ -748,10 +748,10 @@
+ 	payload,timestamp,this);
+ }
+ 
+-void RTPSession::rtpNewSSRC(u_int32_t newSsrc,bool marker)
++void RTPSession::rtpNewSSRC(u_int32_t newSsrc,int newPayload,bool marker)
+ {
+-    XDebug(DebugAll,"RTPSession::rtpNewSSRC(%08X,%s) [%p]",
+-	newSsrc,String::boolText(marker),this);
++    XDebug(DebugAll,"RTPSession::rtpNewSSRC(%08X,%d,%s) [%p]",
++	newSsrc,newPayload,String::boolText(marker),this);
+ }
+ 
+ RTPSender* RTPSession::createSender()
+Index: yate/libs/yrtp/yatertp.h
+===================================================================
+--- yate.orig/libs/yrtp/yatertp.h	2016-01-15 11:11:10.000000000 +0300
++++ yate/libs/yrtp/yatertp.h	2016-01-15 11:11:55.000000000 +0300
+@@ -693,9 +693,10 @@
+     *  just before processing further. This is a good opportunity to
+     *  change the SSRC and continue
+     * @param newSsrc SSRC received in packet
++    * @param newPayload Payload received in packet
+     * @param marker True if marker bit is set in the RTP packet
+     */
+-    virtual void rtpNewSSRC(u_int32_t newSsrc, bool marker);
++    virtual void rtpNewSSRC(u_int32_t newSsrc, int newPayload, bool marker);
+ 
+     /**
+      * Retrieve the statistical data from this receiver in a NamedList. Reset all the data.
+@@ -1061,9 +1062,10 @@
+     *  just before processing further. This is a good opportunity to
+     *  change the SSRC and continue
+     * @param newSsrc SSRC received in packet
++    * @param newPayload Payload received in packet
+     * @param marker True if marker bit is set in the RTP packet
+     */
+-    virtual void rtpNewSSRC(u_int32_t newSsrc, bool marker);
++    virtual void rtpNewSSRC(u_int32_t newSsrc, int newPayload, bool marker);
+ 
+     /**
+      * Create a new RTP sender for this session.
+Index: yate/modules/yrtpchan.cpp
+===================================================================
+--- yate.orig/modules/yrtpchan.cpp	2016-01-14 16:34:53.000000000 +0300
++++ yate/modules/yrtpchan.cpp	2016-01-15 11:13:09.000000000 +0300
+@@ -208,7 +208,7 @@
+     virtual bool rtpRecvEvent(int event, char key, int duration,
+ 	int volume, unsigned int timestamp);
+     virtual void rtpNewPayload(int payload, unsigned int timestamp);
+-    virtual void rtpNewSSRC(u_int32_t newSsrc, bool marker);
++    virtual void rtpNewSSRC(u_int32_t newSsrc, int newPayload, bool marker);
+     virtual Cipher* createCipher(const String& name, Cipher::Direction dir);
+     virtual bool checkCipher(const String& name);
+     inline void resync()
+@@ -1034,8 +1034,12 @@
+     }
+ }
+ 
+-void YRTPSession::rtpNewSSRC(u_int32_t newSsrc, bool marker)
++void YRTPSession::rtpNewSSRC(u_int32_t newSsrc, int newPayload, bool marker)
+ {
++    if(newSsrc == 0 && newPayload == 96) {
++	Debug(&splugin,DebugInfo,"Ignoring cisco's strange ssrc and payload changes in wrapper %p",m_wrap);
++	return;
++    }
+     if ((m_anyssrc || m_resync) && receiver()) {
+ 	m_resync = false;
+ 	Debug(&splugin,DebugInfo,"Changing SSRC from %08X to %08X in wrapper %p",

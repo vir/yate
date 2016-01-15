@@ -56,6 +56,7 @@ const TokenDict SDPParser::s_payloads[] = {
     { "h261",         31 },
     { "h263",         34 },
     { "h263p",       107 }, // it is usually 103 tough
+    { "h264",         97 },
     { "mpv",          32 },
     { "mp2t",         33 },
     { "mp4v",         98 },

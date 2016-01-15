@@ -55,7 +55,6 @@ const TokenDict SDPParser::s_payloads[] = {
     { "mjpeg",        26 },
     { "h261",         31 },
     { "h263",         34 },
-    { "h263p",       107 }, // it is usually 103 tough
     { "mpv",          32 },
     { "mp2t",         33 },
     { "mp4v",         98 },
@@ -88,7 +87,6 @@ const TokenDict SDPParser::s_rtpmap[] = {
     { "JPEG/90000",   26 },
     { "H261/90000",   31 },
     { "H263/90000",   34 },
-    { "H263-1998/90000", 107 },
     { "MPV/90000",    32 },
     { "MP2T/90000",   33 },
     { "MP4V-ES/90000",98 },

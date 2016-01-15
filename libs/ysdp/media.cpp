@@ -28,12 +28,11 @@ namespace TelEngine {
  */
 SDPMedia::SDPMedia(const char* media, const char* transport, const char* formats,
     int rport, int lport)
-    : String(media),
+    : NamedList(media),
     m_audio(true), m_video(false), m_modified(false), m_securable(true),
     m_localChanged(false),
     m_transport(transport), m_formats(formats),
-    m_rfc2833(String::boolText(false)),
-    m_lAttrs(media), m_rAttrs(media), m_fmtps(media)
+    m_rfc2833(String::boolText(false))
 {
     DDebug(DebugAll,"SDPMedia::SDPMedia('%s','%s','%s',%d,%d) [%p]",
 	media,transport,formats,rport,lport,this);
@@ -150,48 +149,27 @@ void SDPMedia::update(const NamedList& msg, bool pickFormat)
 }
 
 // Add or replace a parameter by name and value, set the modified flag
-void SDPMedia::parameter(bool remote, const char* name, const char* value, bool append)
+void SDPMedia::parameter(const char* name, const char* value, bool append)
 {
     if (!name)
 	return;
-    NamedList& nl = remote ? m_rAttrs : m_lAttrs;
     m_modified = true;
     if (append)
-	nl.addParam(name,value);
+	addParam(name,value);
     else
-	nl.setParam(name,value);
+	setParam(name,value);
 }
 
 // Add or replace a parameter, set the modified flag
-void SDPMedia::parameter(bool remote, NamedString* param, bool append)
+void SDPMedia::parameter(NamedString* param, bool append)
 {
     if (!param)
 	return;
-    NamedList& nl = remote ? m_rAttrs : m_lAttrs;
     m_modified = true;
     if (append)
-	nl.addParam(param);
+	addParam(param);
     else
-	nl.setParam(param);
-}
-
-// Set or reset format parameter
-void SDPMedia::fmtp(const char* format, const char* parameter)
-{
-    if(parameter)
-	m_fmtps.setParam(format, parameter);
-    else
-	m_fmtps.clearParam(format);
-    m_modified = true;
-}
-
-// Set format parameter
-void SDPMedia::fmtp(NamedString* parameter)
-{
-    if(! parameter)
-	return;
-    m_fmtps.setParam(parameter);
-    m_modified = true;
+	setParam(param);
 }
 
 void SDPMedia::crypto(const char* desc, bool remote)
@@ -203,17 +181,6 @@ void SDPMedia::crypto(const char* desc, bool remote)
     }
     if (remote && !desc)
 	m_securable = false;
-}
-
-// Append all paramters from one named list to another, inserting keys prefix
-static void putNamedList(NamedList& dst, const NamedList& src, String prefix)
-{
-    unsigned int n = src.length();
-    for (unsigned int i = 0; i < n; i++) {
-	const NamedString* param = src.getParam(i);
-	if (param)
-	    dst.addParam(prefix + param->name(),*param);
-    }
 }
 
 // Put the list of net media in a parameter list
@@ -231,11 +198,16 @@ void SDPMedia::putMedia(NamedList& msg, bool putPort)
     if (remoteCrypto())
 	msg.addParam("crypto" + suffix(),remoteCrypto());
     // must handle encryption differently
-    const char* enc = m_rAttrs.getValue("encryption");
+    const char* enc = getValue("encryption");
     if (enc)
 	msg.addParam("encryption" + suffix(),enc);
-    putNamedList(msg, m_rAttrs, "sdp" + suffix() + "_");
-    putNamedList(msg, m_fmtps, "fmtp_");
+    clearParam("encryption");
+    unsigned int n = length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* param = getParam(i);
+	if (param)
+	    msg.addParam("sdp" + suffix() + "_" + param->name(),*param);
+    }
 }
 
 };   // namespace TelEngine

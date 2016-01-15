@@ -198,7 +198,6 @@ static bool s_cdrUpdates = true;
 static bool s_cdrStatus = false;
 static bool s_statusAnswer = true;
 static bool s_ringOnProgress = false;
-static bool s_deferIncoming = false;
 static unsigned int s_statusUpdate = 60000;
 static StatusThread* s_updaterThread = 0;
 
@@ -560,9 +559,6 @@ bool CdrHandler::received(Message &msg)
     if (!b) {
 	switch (type) {
 	    case CdrStart:
-		if(s_deferIncoming && YSTRING("incoming") == msg.getValue(YSTRING("direction")))
-		    break;
-		/* else fall thrugh and create cdr */
 	    case CdrCall:
 	    case CdrAnswer:
 		{
@@ -887,8 +883,7 @@ void CdrBuildPlugin::initialize()
 	s_statusUpdate = 600000;
     else
 	s_statusUpdate = sUpdate * 1000;
-    s_ringOnProgress = cfg.getBoolValue("general","ring_on_progress",false);
-    s_deferIncoming = cfg.getBoolValue("general","defer_incoming",false);
+    s_ringOnProgress = cfg.getBoolValue("general","ring_on_progress",false);;
 
     if (s_cdrStatus && !s_updaterThread) {
 	s_updaterThread = new StatusThread();

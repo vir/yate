@@ -13894,7 +13894,6 @@ private:
     bool processNotification(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
     bool processCalledNo(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
     bool processCallingNo(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
-    bool processUserUser(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
 
     // IE parameters
     String m_display;                    // Display: The data
@@ -13921,8 +13920,6 @@ private:
     String m_channelSelect;              // ChannelID: Channel select
     String m_channels;                   // ChannelID: Channel list or slot map
     String m_restart;                    // Restart: The class of restarting circuits
-    String m_uuprotocol;                 // UserToUser protocol
-    String m_uuinformation;              // UserToUser information (up to 128 bytes)
 };
 
 /**
@@ -14156,7 +14153,7 @@ private:
     bool sendReleaseComplete(const char* reason = 0, const char* diag = 0, u_int8_t tei = 0);
     bool sendSetup(SignallingMessage* sigMsg);
     bool sendSuspendRej(const char* reason = 0, SignallingMessage* sigMsg = 0);
-    bool sendSetupAck(SignallingMessage* sigMsg);
+    bool sendSetupAck();
     // Errors on processing received messages
     // Missing mandatory IE
     // @param release True to send release complete and generate a release event
@@ -14777,7 +14774,6 @@ private:
     u_int32_t m_callRefMask;             // Call reference mask
     ISDNQ931ParserData m_parserData;     // Parser settings
     ISDNQ931IEData m_data;               // Process IEs
-    bool m_overlapEnabled;               // Overlap send/recv enabled   
     // Timers & counters
     SignallingTimer m_l2DownTimer;       // T309: Layer 2 is down timeout
     SignallingTimer m_recvSgmTimer;      // T314: Receive segment timeout

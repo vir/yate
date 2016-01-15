@@ -1742,26 +1742,7 @@ bool Socket::canSelect() const
 
 bool Socket::bind(struct sockaddr* addr, socklen_t addrlen)
 {
-    if(addr && addr->sa_family == AF_INET && (((unsigned char*)&((sockaddr_in*)addr)->sin_addr)[0] & 0xF0) == 224) { // multicast address
-	const int optval = 1;
-	setsockopt(m_handle, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
-#ifdef _WINDOWS
-	// bind to INADDR_ANY on windows for multicast to work
-	sockaddr_in tmp(*(sockaddr_in*)addr);
-	tmp.sin_addr.s_addr = htonl(INADDR_ANY);
-	int r = ::bind(m_handle, &tmp, sizeof(tmp));
-#else
-	int r = ::bind(m_handle, addr, addrlen);
-#endif
-	if(0 != r)
-	    return checkError(r);
-	struct ip_mreq mreq;
-	::bzero(&mreq, sizeof(mreq));
-	mreq.imr_multiaddr = ((sockaddr_in*)addr)->sin_addr;
-	mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-	return checkError(::setsockopt(m_handle, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)));
-    } else
-	return checkError(::bind(m_handle,addr,addrlen));
+    return checkError(::bind(m_handle,addr,addrlen));
 }
 
 bool Socket::listen(unsigned int backlog)

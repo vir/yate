@@ -28,10 +28,6 @@
 ; This parameter can be overridden in call.progress message by a 'ringing' parameter
 ;ring_on_progress=no
 
-; defer_incoming: bool: Defer 'initialize' cdr generation until 'call.route'
-; message is received.
-;defer_incoming=no
-
 
 [parameters]
 ; Each line consists of name=bool where name is the name of the parameter being

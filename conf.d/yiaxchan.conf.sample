@@ -290,44 +290,6 @@
 ; lpc10: bool: LPC 10
 ;lpc10=enable
 
-; ilbc30: bool: ilbc30
-;ilbc30=enable
-
-; speex: bool: SpeeX
-;speex=enable
-
-; g723: bool: g723
-;g723=enable
-
-; g729: bool: g729
-;g729=enable
-
-; adpcm: bool: adpcm
-;adpcm=enable
-
-; g726: bool: G.726 RFC3551
-;g726=enable
-
-; slin: bool: slin
-;slin=enable
-
-; g722: bool: g722
-;g722=enable
-
-; amr: bool: amr
-;amr=enable
-
-; h261: bool: H.261
-;h261=enable
-
-; h263: bool: H.263
-;h263=enable
-
-; h263p: bool: H.263+
-;h263p=enable
-
-; h264: bool: H.264
-;h264=enable
 
 ;[listener listener_name]
 ; This section configures an extra listener to use

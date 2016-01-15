@@ -74,13 +74,7 @@ for (;;) {
 		    $m->params["id"] = $ourcallid;
 		    $m->params["caller"] = $caller;
 		    $m->params["called"] = $ev->GetValue("called");
-		    $direct = $ev->GetValue("direct");
-		    if ($direct[0] == '{') {
-			foreach(json_decode($json) as $k => $v)
-			    $m->params[$k] = $v;
-		    } else {
-			$m->params["callto"] = $direct;
-		    }
+		    $m->params["callto"] = $ev->GetValue("direct");
 		    $m->params["billid"] = $ev->GetValue("billid");
 		    $m->params["maxcall"] = $ev->GetValue("maxcall");
 		    $m->params["cdrtrack"] = "false";

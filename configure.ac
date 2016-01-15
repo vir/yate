@@ -33,18 +33,15 @@ AC_MSG_RESULT([$uname_os])
 
 # Check if we should look for alternate library names
 AC_ARG_WITH(archlib,AC_HELP_STRING([--with-archlib=NAME],[use NAME as library directory name]),[ac_cv_use_archlib=$withval])
-AC_ARG_WITH(archinc,AC_HELP_STRING([--with-archinc=NAME],[use NAME as include directory name]),[ac_cv_use_archinc=$withval])
 AC_MSG_CHECKING([for libraries directory name])
 archname=`dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null`
 test -z "$archname" && archname=`uname -m 2>/dev/null`
 test -z "$archname" && archname=`arch -k 2>/dev/null`
 test -z "$archname" && archname=`arch 2>/dev/null`
 ARCHLIB="lib"
-ARCHINC="include"
 case "x$archname" in
     x*-*-*)
 	ARCHLIB="lib/$archname"
-	ARCHINC="include/$archname"
 	;;
     x*x86_64*|xppc64*|xaarch64)
 	ARCHLIB=lib64
@@ -62,20 +59,6 @@ esac
 test -d "/usr/$ARCHLIB" || ARCHLIB="lib"
 AC_MSG_RESULT([$ARCHLIB])
 AC_SUBST(ARCHLIB)
-AC_MSG_CHECKING([for include directory name])
-case "x$ac_cv_use_archinc" in
-    x|xyes)
-	;;
-    xno)
-	ARCHINC="inc"
-	;;
-    *)
-	ARCHINC="$ac_cv_use_archinc"
-esac
-test -d "/usr/$ARCHINC" || ARCHINC="inc"
-AC_MSG_RESULT([$ARCHINC])
-AC_SUBST(ARCHINC)
-
 
 # Checks for programs.
 AC_PROG_CXX
@@ -1148,7 +1131,7 @@ if [[ "x$ac_cv_use_spandsp" = "xstatic" ]]; then
     SPANDSP_LIB="-Wl,-Bstatic $SPANDSP_LIB -ltiff -lz -ljpeg -Wl,-Bdynamic"
 fi
 if [[ "x$ac_cv_use_spandsp" = "xyes" ]]; then
-for i in /usr/include /usr/local/include "/usr/$ARCHINC"; do
+for i in /usr/include /usr/local/include; do
     ac_cv_use_spandsp="$i"
     test -f "$ac_cv_use_spandsp/spandsp.h" && break
 done

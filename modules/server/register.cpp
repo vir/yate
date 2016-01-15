@@ -28,7 +28,6 @@ static Configuration s_cfg(Engine::configFile("register"));
 static bool s_critical = false;
 static u_int32_t s_nextTime = 0;
 static int s_expire = 30;
-static bool s_unregister_expired = false;
 static bool s_errOffline = true;
 static ObjList s_handlers;
 
@@ -64,10 +63,8 @@ public:
     virtual void chkConfig();
 
 protected:
-    bool copyParams(Message &msg, Array *a, const String& resultName);
     void indirectQuery(String& query);
     int m_type;
-    bool m_queryReturnsNameValuePairs;
     String m_query;
     String m_result;
     String m_account;
@@ -272,32 +269,11 @@ static void copyParams2(Message &msg, Array* a, int row = 0)
 // copy parameters from multiple SQL result rows to a Message
 // returns true if resultName was found in columns
 
-bool AAAHandler::copyParams(Message &msg, Array *a, const String& resultName)
+static bool copyParams(Message &msg, Array *a, const String& resultName)
 {
     if (!a)
 	return false;
     bool ok = false;
-    if(m_queryReturnsNameValuePairs) {
-	if(a->getColumns() != 2) {
-	    Debug(&module,DebugWarn,"Query returned %d columns, not 2.",a->getColumns());
-	    return false;
-	}
-	for (int j=1;j<a->getRows();j++) {
-	    const String* name = YOBJECT(String,a->get(0, j));
-	    if (!(name && *name)) {
-		Debug(&module,DebugWarn,"No field name in row %d, skipping remaining rows.",j);
-		break;
-	    }
-	    bool res = (*name == resultName);
-	    ok = ok || res;
-	    const String* s = YOBJECT(String,a->get(1,j));
-	    if (res)
-		msg.retValue() = s;
-	    else
-		msg.setParam(*name,s?s->c_str():"");
-	}
-	return ok;
-    }
     FallBackRoute* fallback = 0;
     for (int j=1; j <a->getRows();j++) {
 	Message* m = (j <= 1) ? &msg : new Message(msg);
@@ -344,7 +320,6 @@ bool AAAHandler::copyParams(Message &msg, Array *a, const String& resultName)
 
 AAAHandler::AAAHandler(const char* hname, int type, int prio)
     : MessageHandler(hname,prio),m_type(type)
-    , m_queryReturnsNameValuePairs(false)
 {
 }
 
@@ -367,7 +342,6 @@ const String& AAAHandler::name() const
 bool AAAHandler::loadQuery()
 {
     m_query = s_cfg.getValue(name(),"query");
-    m_queryReturnsNameValuePairs = s_cfg.getBoolValue(name(), "namevaluepairs", false);
     indirectQuery(m_query);
     return !m_query.null();
 }
@@ -434,25 +408,6 @@ static bool failure(Message* m)
     if (m)
 	m->setParam("error","failure");
     return false;
-}
-
-static void dispatchUserUnregisterForExpired(Array * a)
-{
-    if (!a)
-	return;
-    for (int j=1; j < a->getRows();j++) {
-	Message* m = new Message("user.unregister");
-	for (int i=0; i<a->getColumns();i++) {
-	    const String* name = YOBJECT(String,a->get(i,0));
-	    if (!(name && *name))
-		continue;
-	    const String* s = YOBJECT(String,a->get(i,j));
-	    if (!s)
-		continue;
-	    m->setParam(*name,*s);
-	}
-	Engine::enqueue(m);
-    }
 }
 
 bool AAAHandler::received(Message& msg)
@@ -566,20 +521,10 @@ bool AAAHandler::received(Message& msg)
 		s_nextTime = t + s_expire;
 	    else
 		return false;
-	    if(s_unregister_expired) {
-		if(m_queryReturnsNameValuePairs)
-		    Debug(&module,DebugWarn,"Misconfigured: namevaluepairs in '%s' (ignored)",name().c_str());
-		Message m("database");
-		prepareQuery(m,account,query,true);
-		if (Engine::dispatch(m))
-		    if (m.getIntValue("rows") >=1)
-			dispatchUserUnregisterForExpired(static_cast<Array*>(m.userObject("Array")));
-	    } else {
-		// no error check needed - we enqueue the query and return false
-		Message* m = new Message("database");
-		prepareQuery(*m,account,query,false);
-		Engine::enqueue(m);
-	    }
+	    // no error check needed - we enqueue the query and return false
+	    Message* m = new Message("database");
+	    prepareQuery(*m,account,query,false);
+	    Engine::enqueue(m);
 	}
 	break;
     }
@@ -1083,7 +1028,6 @@ void RegistModule::initialize()
     setup();
     Output("Initializing module Register for database");
     s_expire = s_cfg.getIntValue("general","expires",s_expire);
-    s_unregister_expired = s_cfg.getBoolValue("general","unregister_expired",false);
     s_errOffline = s_cfg.getBoolValue("call.route","offlineauto",true);
     Engine::install(new MessageRelay("engine.start",this,Private,150));
     addHandler("call.cdr",AAAHandler::Cdr);

@@ -210,7 +210,6 @@ private:
 class ExtModReceiver : public MessageReceiver, public Mutex
 {
     friend class MsgWatcher;
-    friend class ExtMessage;
 public:
     enum {
 	RoleUnknown,
@@ -284,8 +283,6 @@ private:
     ObjList m_relays;
     String m_trackName;
     String m_reason;
-    bool m_dumparray;
-    bool m_nonBlock;
 };
 
 class ExtThread : public Thread
@@ -622,44 +619,10 @@ bool MsgHolder::decode(const char *s)
     return (m_msg.decode(s,m_ret,m_id) == -2);
 }
 
-static String escape(const char* str)
-{
-    String s;
-    if (TelEngine::null(str))
-	return s;
-    char c;
-    while ((c=*str++)) {
-	if (c == '\\' || c == '\t' || c == '\n')
-	    s += "\\";
-	s += c;
-    }
-    return s;
-}
-
-static String dumpArray(const Array *a)
-{
-    String r;
-    for (int j=0; j < a->getRows(); j++) {
-	for (int i=0; i<a->getColumns(); i++) {
-	    if(i)
-		r << "\t";
-	    const String* s = YOBJECT(String, a->get(i, j));
-	    if (s)
-		r << escape(*s);
-	}
-	r << "\n";
-    }
-    return r;
-}
 
 ExtMessage::~ExtMessage()
 {
     if (m_receiver) {
-	if(m_receiver->m_dumparray && userData()) {
-	    Array* a = static_cast<Array*>(userObject(YATOM("Array")));
-	    if(a)
-		retValue() = dumpArray(a);
-	}
 	m_receiver->returnMsg(this,m_id,m_accepted);
 	m_receiver->unuse();
     }
@@ -815,8 +778,7 @@ ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, 
       m_chan(chan), m_watcher(0),
       m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false), m_scripted(false),
-      m_buffer(0,DEF_INCOMING_LINE), m_script(script), m_args(args), m_trackName(s_trackName),
-      m_dumparray(false), m_nonBlock(false)
+      m_buffer(0,DEF_INCOMING_LINE), m_script(script), m_args(args), m_trackName(s_trackName)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",\"%s\") [%p]",script,args,this);
     m_script.trimBlanks();
@@ -834,8 +796,7 @@ ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, i
       m_chan(chan), m_watcher(0),
       m_selfWatch(false), m_reenter(false), m_setdata(true), m_writing(false),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false), m_scripted(false),
-      m_buffer(0,DEF_INCOMING_LINE), m_script(name), m_args(conn), m_trackName(s_trackName),
-      m_nonBlock(false)
+      m_buffer(0,DEF_INCOMING_LINE), m_script(name), m_args(conn), m_trackName(s_trackName)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",%p,%p) [%p]",name,io,chan,this);
     m_script.trimBlanks();
@@ -1026,12 +987,6 @@ bool ExtModReceiver::received(Message &msg, int id)
     u_int64_t tout = (m_timeout > 0) ? Time::now() + 1000 * m_timeout : 0;
     MsgHolder h(msg);
     if (outputLine(msg.encode(h.m_id))) {
-	if (m_nonBlock) {
-	    DDebug(DebugAll,"ExtMod queued non-blocking message %p '%s' [%p]",&msg,msg.c_str(),this);
-	    unlock();
-	    unuse();
-	    return false;
-	}
 	m_waiting.append(&h)->setDelete(false);
 	DDebug(DebugAll,"ExtMod queued message %p '%s' [%p]",&msg,msg.c_str(),this);
     }
@@ -1388,10 +1343,6 @@ bool ExtModReceiver::processLine(const char* line)
 		role.c_str(),chan.c_str(),type.c_str());
 	    if (role == "global") {
 		m_role = RoleGlobal;
-		if(! chan.null()) {
-		    Debug(DebugMild,"Renamed external '%s' to '%s'",m_script.safe(),chan.c_str());
-		    m_script = chan;
-		}
 		return false;
 	    }
 	    else if (role == "channel") {
@@ -1520,14 +1471,6 @@ bool ExtModReceiver::processLine(const char* line)
 		    m_chan->setId(val);
 		ok = true;
 	    }
-	    else if (id == "scriptname") {
-		if (val.null())
-		    val = m_script;
-		else {
-		    Debug(DebugMild,"Renamed external '%s' to '%s'",m_script.safe(),val.c_str());
-		    m_script = val;
-		}
-	    }
 	    else if (m_chan && (id == "disconnected")) {
 		m_chan->setDisconn(val.toBoolean(m_chan->disconn()));
 		val = m_chan->disconn();
@@ -1613,16 +1556,6 @@ bool ExtModReceiver::processLine(const char* line)
 	    else if (id == "runid") {
 		ok = val.null();
 		val = Engine::runId();
-	    }
-	    else if (id == "dumparray") {
-		m_dumparray = val.toBoolean(m_dumparray);
-		val = m_dumparray;
-		ok = true;
-	    }
-	    else if (id == "nonblocking") {
-		m_nonBlock = val.toBoolean(m_nonBlock);
-		val = m_nonBlock;
-		ok = true;
 	    }
 	    DDebug("ExtModReceiver",DebugAll,"Set '%s'='%s' %s",
 		id.c_str(),val.c_str(),ok ? "ok" : "failed");

@@ -116,10 +116,6 @@ public:
 	    if (!addParam(dest,data))
 		dest->addParam(name,String((unsigned int)(data & mask)));
 	}
-    inline void addNumericParam(NamedList* dest, u_int8_t data) const {
-	    String s((unsigned int)data);
-	    dumpDataBit7(dest, (const uint8_t*)s.c_str(), s.length(), false);
-	}
 
     inline void dumpData(NamedList* dest, const u_int8_t* data, u_int32_t len) const
 	{ SignallingUtils::dumpData(0,*dest,name,data,len); }
@@ -560,23 +556,6 @@ bool ISDNQ931IEData::processKeypad(ISDNQ931Message* msg, bool add,
     return !m_keypad.null();
 }
 
-bool ISDNQ931IEData::processUserUser(ISDNQ931Message* msg, bool add,
-	ISDNQ931ParserData* data)
-{
-    if (!msg)
-	return false;
-    if (add) {
-	ISDNQ931IE* ie = new ISDNQ931IE(ISDNQ931IE::UserUser);
-	ie->addParam("protocol", m_uuprotocol);
-	ie->addParam("information",m_uuinformation);
-	msg->appendSafe(ie);
-	return true;
-    }
-    m_uuprotocol = msg->getIEValue(ISDNQ931IE::UserUser,"protocol");
-    m_uuinformation = msg->getIEValue(ISDNQ931IE::UserUser,"information");
-    return !m_uuinformation.null();
-}
-
 /**
  * ISDNQ931State
  */
@@ -814,20 +793,14 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
     bool retVal = false;
     switch (event->type()) {
 	case SignallingEvent::Progress:
-	    if(state() == OverlapSend) {
-		changeState(CallPresent);
-		retVal = sendCallProceeding(event->message());
-		break;
-	    }
 	    retVal = sendProgress(event->message());
 	    break;
 	case SignallingEvent::Ringing:
 	    retVal = sendAlerting(event->message());
 	    break;
 	case SignallingEvent::Accept:
-	    if (m_overlap && state() != OverlapSend) {
-		sendSetupAck(event->message());
-		changeState(OverlapSend);
+	    if (m_overlap) {
+		sendSetupAck();
 		m_overlap = false;
 		break;
 	    }
@@ -871,7 +844,6 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
 	    retVal = sendInfo(event->message());
 	    break;
 	case SignallingEvent::NewCall:
-	    m_overlap = event->message()->params().getBoolValue("overlapped", false);
 	    retVal = sendSetup(event->message());
 	    break;
 	default:
@@ -1309,12 +1281,10 @@ SignallingEvent* ISDNQ931Call::processMsgSetup(ISDNQ931Message* msg)
     else if (q931() && q931()->primaryRate())
 	return releaseComplete("congestion");
     // *** CalledNo /CallingNo
-    m_overlap = !m_data.processCalledNo(msg,false) && q931()->m_overlapEnabled;
+    m_overlap = !m_data.processCalledNo(msg,false);
     m_data.processCallingNo(msg,false);
     // *** Display
     m_data.processDisplay(msg,false);
-    // *** UUS
-    m_data.processUserUser(msg,false);
     // Set message parameters
     msg->params().setParam("caller",m_data.m_callerNo);
     msg->params().setParam("called",m_data.m_calledNo);
@@ -1326,12 +1296,7 @@ SignallingEvent* ISDNQ931Call::processMsgSetup(ISDNQ931Message* msg)
     msg->params().setParam("callerscreening",m_data.m_callerScreening);
     msg->params().setParam("callednumtype",m_data.m_calledType);
     msg->params().setParam("callednumplan",m_data.m_calledPlan);
-    if(m_data.m_uuinformation) {
-	msg->params().setParam("uuprotocol",m_data.m_uuprotocol);
-	msg->params().setParam("uuinformation",m_data.m_uuinformation);
-    }
-    if(q931()->m_overlapEnabled)
-	msg->params().setParam("overlapped",String::boolText(m_overlap));
+    msg->params().setParam("overlapped",String::boolText(m_overlap));
     return new SignallingEvent(SignallingEvent::NewCall,msg,this);
 }
 
@@ -1343,13 +1308,10 @@ SignallingEvent* ISDNQ931Call::processMsgSetupAck(ISDNQ931Message* msg)
 	return 0;
     if (!m_data.processChannelID(msg,false))
 	return errorWrongIE(msg,ISDNQ931IE::ChannelID,true);
-    if(m_overlap) {
-	changeState(OverlapSend);
-    } else { // We are not using overlap sending. So, just complete the number sending
-	SignallingMessage* m = new SignallingMessage;
-	m->params().addParam("complete",String::boolText(true));
-	sendInfo(m);
-    }
+    // We don't implement overlap sending. So, just complete the number sending
+    SignallingMessage* m = new SignallingMessage;
+    m->params().addParam("complete",String::boolText(true));
+    sendInfo(m);
     return 0;
 }
 
@@ -1616,12 +1578,8 @@ bool ISDNQ931Call::sendInfo(SignallingMessage* sigMsg)
     m_data.processDisplay(msg,true,&q931()->parserData());
     // Check tones or ringing
     const char* tone = sigMsg->params().getValue(YSTRING("tone"));
-    if (tone) {
-	if(state() == OverlapSend)
-	    msg->appendIEValue(ISDNQ931IE::CalledNo,"number",tone);
-	else
-	    msg->appendIEValue(ISDNQ931IE::Keypad,"keypad",tone);
-    }
+    if (tone)
+	msg->appendIEValue(ISDNQ931IE::Keypad,"keypad",tone);
     return q931()->sendMessage(msg,callTei());
 }
 
@@ -1638,8 +1596,7 @@ bool ISDNQ931Call::sendProgress(SignallingMessage* sigMsg)
 	    SignallingUtils::appendFlag(m_data.m_progress,"in-band-info");
     }
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Progress,this);
-    if(!m_data.processProgress(msg,true))
-	return false;
+    m_data.processProgress(msg,true);
     return q931()->sendMessage(msg,callTei());
 }
 
@@ -1694,7 +1651,8 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
     MSG_CHECK_SEND(ISDNQ931Message::Setup)
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Setup,this);
     while (true) {
-	if (q931()->parserData().flag(ISDNQ931::ForceSendComplete) && !m_overlap)
+	// TODO: fix it (don't send?) if overlapp dialing is used
+	if (q931()->parserData().flag(ISDNQ931::ForceSendComplete))
 	    msg->appendSafe(new ISDNQ931IE(ISDNQ931IE::SendComplete));
 	// BearerCaps
 	m_data.m_transferCapability = "speech";
@@ -1749,14 +1707,7 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 	m_data.m_calledType = sigMsg->params().getValue(YSTRING("callednumtype"));
 	m_data.m_calledPlan = sigMsg->params().getValue(YSTRING("callednumplan"));
 	m_data.m_calledNo = sigMsg->params().getValue(YSTRING("called"));
-	if(!(m_overlap && !m_data.m_calledNo))
-	    m_data.processCalledNo(msg,true);
-	// User to User
-	if(sigMsg->params().getValue(YSTRING("uuinformation"))) {
-	    m_data.m_uuprotocol = sigMsg->params().getValue(YSTRING("uuprotocol"));
-	    m_data.m_uuinformation = sigMsg->params().getValue(YSTRING("uuinformation"));
-	    m_data.processUserUser(msg,true);
-	}
+	m_data.processCalledNo(msg,true);
 	// Send
 	changeState(CallInitiated);
 	if (m_net && !q931()->primaryRate()) {
@@ -1784,28 +1735,21 @@ bool ISDNQ931Call::sendSuspendRej(const char* reason, SignallingMessage* sigMsg)
     return q931()->sendMessage(msg,callTei());
 }
 
-// Send SETUP ACKNOWLEDGE. See Q.931 1.1.15
-// IE: ChannelID, Progress, Display, Signal
-bool ISDNQ931Call::sendSetupAck(SignallingMessage* sigMsg)
+bool ISDNQ931Call::sendSetupAck()
 {
     MSG_CHECK_SEND(ISDNQ931Message::SetupAck)
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::SetupAck,this);
     if (!m_channelIDSent) {
-	if(! q931()->primaryRate()) {
-	    m_data.m_channelType = "B";
-	    if (m_circuit)
-		m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
-	    if (!m_data.m_channelSelect) {
-		Debug(q931(),DebugNote,"Call(%u,%u). No voice channel available [%p]",
-		    Q931_CALL_ID,this);
-		return sendReleaseComplete("congestion");
-	    }
+	m_data.m_channelType = "B";
+	if (m_circuit)
+	    m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
+	if (!m_data.m_channelSelect) {
+	    Debug(q931(),DebugNote,"Call(%u,%u). No voice channel available [%p]",
+		Q931_CALL_ID,this);
+	    return sendReleaseComplete("congestion");
 	}
 	m_data.processChannelID(msg,true,&q931()->parserData());
 	m_channelIDSent = true;
-    }
-    if(sigMsg->params().getBoolValue("media",true)) {
-	msg->appendIEValue(ISDNQ931IE::Progress,"description","in-band-info");
     }
     return q931()->sendMessage(msg,callTei());
 }
@@ -2479,7 +2423,6 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     m_format = params.getValue(YSTRING("format"));
     if (0xffff == lookup(m_format,Q931Parser::s_dict_bearerProto1,0xffff))
 	m_format = "alaw";
-    m_overlapEnabled = params.getBoolValue("overlap", true);
     // Debug
     setDebug(params.getBoolValue(YSTRING("print-messages"),false),
 	params.getBoolValue(YSTRING("extended-debug"),false));
@@ -5720,7 +5663,7 @@ ISDNQ931IE* Q931Parser::decodeUserUser(ISDNQ931IE* ie, const u_int8_t* data,
     if (!len)
 	return errorParseIE(ie,s_errorNoData,0,0);
     // data[0]: Protocol discriminator
-    s_ie_ieUserUser[0].addNumericParam(ie, data[0]);
+    s_ie_ieUserUser[0].addIntParam(ie,data[0]);
     if (len == 1)
 	return errorParseIE(ie,s_errorWrongData,0,0);
     // Remaining data: user information
@@ -6132,16 +6075,11 @@ bool Q931Parser::encodeHighLayerCap(ISDNQ931IE* ie, DataBlock& buffer)
 
 bool Q931Parser::encodeUserUser(ISDNQ931IE* ie, DataBlock& buffer)
 {
-    DataBlock data;
-    String hex = ie->getValue(s_ie_ieUserUser[1].name);
-    data.unHexify(hex.c_str(), hex.length(), ' ');
-
-    u_int8_t head[3] = {(u_int8_t)ie->type()};
-    head[1] = (u_int8_t)data.length() + 1; // protocol discriminator byte plus data
-    head[2] = (u_int8_t)ie->getIntValue(s_ie_ieUserUser[0].name);
-
-    buffer.assign(head, sizeof(head));
-    buffer.append(data);
+    // TODO: implement it!
+    u_int8_t tmp[10];
+    tmp[0]=0x7e;tmp[1]=0x08;tmp[2]=0x04;tmp[3]=0x30;tmp[4]=0x39;
+    tmp[5]=0x32;tmp[6]=0x21;tmp[7]=0x30;tmp[8]=0x39;tmp[9]=0x32;
+    buffer.assign(tmp,sizeof(tmp));
     return true;
 }
 

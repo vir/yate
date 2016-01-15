@@ -27,8 +27,6 @@ package Yate;
 
 use strict;
 use warnings;
-use IO::Handle;
-use POSIX qw(:errno_h);
 
 # Executed before everything.
 BEGIN {
@@ -37,7 +35,7 @@ BEGIN {
     use Data::Dumper;
 
     # Set version && disable output buffering.
-    our $VERSION = '0.25';
+    our $VERSION = '0.22';
     $ |= 1;
 }
 
@@ -62,8 +60,6 @@ sub new($;@) {
     # Accept only 'Debug' as additional parameter.
     my $self = {
 	'Debug' => 0,
-	'stdin' => IO::Handle->new_from_fd(fileno(STDIN), 'r'),
-	'stdout' => IO::Handle->new_from_fd(fileno(STDOUT), 'w'),
 	@_,
     };
 
@@ -141,10 +137,6 @@ sub handle_setlocal($) {
 
     if ($self->header('success') eq 'true') {
 	$self->debug('Changed local parameter ' . $self->header('name') . ' to ' . $self->header('value') . '.') if ($self->{'Debug'} == 1);
-	if ($self->header('name') eq 'nonblocking') {
-	    $self->{_nonblocking} = $self->header('value') eq 'true';
-	}
-
     } else {
 	$self->error('Cannot change local parameter ' . $self->header('name') . ' to ' . $self->header('value') . '.');
     }
@@ -304,43 +296,19 @@ sub uninstall_watcher($$;$) {
     }
 }
 
-# Connect to a Yate listener and redirect yate interface to connected socket
-sub connect($$;$$$) {
-    my $self = shift;
-    my $addr = shift || die "Nowhere to connect()";
-    my $role = shift || 'global';
-    die "Areaty connected" if $self->{socket};
-    my $domain = ($addr=~/^[\w\.\-]+\:\d+$/)?'INET':'UNIX';
-    eval "require IO::Socket::$domain" or die "Yate::connect: $@";
-    my $sock = eval "new IO::Socket::$domain(\$addr)" or die "Yate::connect: $!";
-    $self->{socket} = $sock;
-    $self->{stdin} = $self->{stdout} = $sock;
-    $self->print(join(':', "%%>connect", map({ $self->escape($_) } $role, @_)));
-}
-
 # Wait for messages on STDIN (default behaviour).
 sub listen($) {
     my ($self) = @_;
 
-    my $ret = 0;
-    for(;;) {
-	my $line = $self->{stdin}->getline();
-	die "Read error" unless defined($line) || $! == POSIX::EAGAIN;
-	last unless $line;
-	$ret = 1;
-
+    while (my $line = <STDIN>) {
 	# Get rid of \n at the end.
 	chomp($line);
-
-	# Handle quit
-	last if $line eq '%%<quit';
 
 	# Message received. Parse && dispatch (if parse succeeds).
 	if ($self->parse_message($line) == 1) {
 	    $self->dispatch();
 	}
     }
-    return $ret;
 }
 
 # Parses messages and splits it to parts.
@@ -529,18 +497,12 @@ sub dispatch($) {
     foreach (@{$self->{'_handlers'}->{$self->header('name')}}) {
 	my $return = $_->($self);
 
-	next if $self->{_nonblocking};
-	if(ref($return) eq 'ARRAY') {
-	    $self->error('Invalid array returned from ' . $self->header('name') . ' event handler') unless @$return == 2;
-	    $self->return_message(@$return);
-	    return 1;
-	} elsif (defined($return) && lc($return) ne 'false' && $return ne '0') {
+	if (defined($return) && lc($return) ne 'false' && $return ne '0') {
 	    $self->return_message('true', $return);
 
 	    return 1;
 	}
     }
-    return 1 if $self->{_nonblocking};
 
     $self->return_message('false', '');
     $self->error('Could not dispatch event ' . $self->header('name') . '.') if ($self->{'Debug'} == 1);
@@ -615,7 +577,7 @@ sub print($$) {
     if ($message) {
 	$self->debug('Printing ' . $message) if ($self->{'Debug'} == 1);
 
-	$self->{stdout}->print($message . "\n");
+	print STDOUT $message . "\n";
     }
 }
 
@@ -682,6 +644,24 @@ sub setlocal($$$) {
 	return 0;
     }
 
+    if ($name eq 'timeout') {
+	if ($value = '' || $value =~ /[^0-9]/) {
+	    $self->error('Called setlocal with invalid parameters (value is not a number).');
+
+	    return 0;
+	}
+    } elsif ($name eq 'disconnected' || $name eq 'timebomb' || $name eq 'reenter' || $name eq 'selfwatch') {
+	if ($value ne 'true' && $value ne 'false') {
+	    $self->error('Called setlocal with invalid parameters (value is not a boolean (true/false)).');
+
+	    return 0;
+	}
+    } elsif ($name ne 'id') {
+	$self->error('Called setlocal with invalid name (' . $name . ').');
+
+	return 0;
+    }
+
     # Format is %%>setlocal:name:value.
     $self->print(sprintf('%%%%>setlocal:%s:%s',
 	$self->escape($name, ':'),
@@ -690,33 +670,11 @@ sub setlocal($$$) {
     return 1;
 }
 
-# Send quit message
-sub quit
-{
-    shift->print("%%>quit");
-}
-
 # Dump itself to STDERR.
 sub dump($) {
     my ($self) = @_;
 
     $self->debug(Dumper($self));
-}
-
-# Dump message to STDERR.
-sub dumpmsg($;) {
-    my $self = shift; local $_;
-    my($cc1, $cc0) = ('', '');
-    if(-t STDERR) { # Add ANSI colors only on TTY
-	$cc1 = "\x1B\[1m";
-	$cc0 = "\x1B\[0m";
-    }
-    my $msg = "Message ".$self->{headers}{name}.(@_?" [ ${cc1}@_${cc0} ]":'').":\n";
-    $msg .= " H: ".join(', ', map({ $_.' => '.$self->{headers}{$_} } sort keys %{$self->{headers}}))."\n";
-    foreach(sort keys %{$self->{params}}) {
-	$msg .= "   $_ => ".$self->{params}{$_}."\n";
-    }
-    $self->debug($msg);
 }
 
 # Old subroutines. We keep it for backwards compatibillity.
@@ -733,6 +691,8 @@ sub retvalue($$) {
 }
 
 1;
+
+# vi: set ts=8 sw=4 sts=4 noet: #
 
 __END__
 
@@ -764,7 +724,6 @@ Yate - Gateway interface module for YATE (Yet Another Telephone Engine)
     }
 
     my $message = new Yate();
-    #$message->connect('127.0.0.1:42428');
     # call.route, call.execute or any other event.
     $message->install('call.route', \&call_route_handler);
     # This processes events from other modules like conference.cpp.
@@ -833,11 +792,6 @@ Engine with all the parameters and of course the return value. If you
 wish to process a message, but not to send anything back to the Engine
 return ''.
 
-If you want full control over message's return values, uou can use
-array reference as your handler return value. Array must contain
-exactly two elements: 'handled' value ('true' or 'false') and
-message 'retvalue' text.
-
 Handlers will have only one argument and that is the current Yate
 object itself. You can access headers and parameters by C<header> and
 C<param>. For debugging the current structure of the object use C<dump>.
@@ -861,14 +815,6 @@ uninstalled from the event. If you do specify one only this event will
 be uninstalled.
 
 The methods always return undef.
-
-=head2 connect
-
-    $message->connect($addr, [$role, [$id, [$type]]])
-
-connects socket to Yate server's listener, redirects module's input
-and output to that socket and sends %%connect message, then returns.
-Note that Yate object can not be reused for several connections.
 
 =head2 listen
 
@@ -961,12 +907,6 @@ trailing \n.
 
 Dumps all the information about the current Yate object.
 
-=head2 dumpmsg
-
-    $message->dumpmsg('interesting message')
-
-Dumps message information in slightly better form than dump().
-
 =head2 escape
 
     $message->escape($string, $special_char)
@@ -998,12 +938,6 @@ file instead of sending to the Engine.
 
 Methods are depricated. See C<install> or SYNOPSYS for more
 information.
-
-=head2 quit
-
-    $message->quit()
-
-Tell Yate that we are done.
 
 =head1 INTERNAL METHODS
 
@@ -1150,6 +1084,3 @@ it under the terms of the General Public License (GPL).  For
 more information, see http://www.fsf.org/licenses/gpl.txt
 
 =cut
-
-# vi: set ts=8 sw=4 sts=4 noet: #
-

@@ -1,0 +1,32 @@
+Description: Support routing of calls without called and caller numbers (regexroute)
+Author: vir@ctm.ru
+---
+Index: yate/modules/regexroute.cpp
+===================================================================
+--- yate.orig/modules/regexroute.cpp	2016-01-14 16:34:53.000000000 +0300
++++ yate/modules/regexroute.cpp	2016-01-15 11:33:25.000000000 +0300
+@@ -818,7 +818,7 @@
+     u_int64_t tmr = Time::now();
+     String called(msg.getValue(YSTRING("called")));
+     if (called.null())
+-	return false;
++	called = "";
+     const char *context = msg.getValue(YSTRING("context"),"default");
+     Lock lock(s_mutex);
+     if (oneContext(msg,called,context,msg.retValue())) {
+@@ -841,8 +841,15 @@
+ 	return false;
+ 
+     String caller(msg.getValue(YSTRING("caller")));
++#if 1
++    if (caller.null()) {
++	Debug(DebugInfo,"No caller number, using empty one for prerouting");
++	caller = "";
++    }
++#else
+     if (!s_prerouteall && caller.null())
+ 	return false;
++#endif
+ 
+     String ret;
+     Lock lock(s_mutex);

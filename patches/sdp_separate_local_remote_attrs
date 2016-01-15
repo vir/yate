@@ -1,0 +1,384 @@
+Description: Media local and remote media attributes separated
+Author: vir@ctm.ru
+---
+Index: yate/libs/ysdp/media.cpp
+===================================================================
+--- yate.orig/libs/ysdp/media.cpp	2016-01-14 16:34:53.000000000 +0300
++++ yate/libs/ysdp/media.cpp	2016-01-15 16:00:41.000000000 +0300
+@@ -28,11 +28,12 @@
+  */
+ SDPMedia::SDPMedia(const char* media, const char* transport, const char* formats,
+     int rport, int lport)
+-    : NamedList(media),
++    : String(media),
+     m_audio(true), m_video(false), m_modified(false), m_securable(true),
+     m_localChanged(false),
+     m_transport(transport), m_formats(formats),
+-    m_rfc2833(String::boolText(false))
++    m_rfc2833(String::boolText(false)),
++    m_lAttrs(media), m_rAttrs(media), m_fmtps(media)
+ {
+     DDebug(DebugAll,"SDPMedia::SDPMedia('%s','%s','%s',%d,%d) [%p]",
+ 	media,transport,formats,rport,lport,this);
+@@ -149,27 +150,48 @@
+ }
+ 
+ // Add or replace a parameter by name and value, set the modified flag
+-void SDPMedia::parameter(const char* name, const char* value, bool append)
++void SDPMedia::parameter(bool remote, const char* name, const char* value, bool append)
+ {
+     if (!name)
+ 	return;
++    NamedList& nl = remote ? m_rAttrs : m_lAttrs;
+     m_modified = true;
+     if (append)
+-	addParam(name,value);
++	nl.addParam(name,value);
+     else
+-	setParam(name,value);
++	nl.setParam(name,value);
+ }
+ 
+ // Add or replace a parameter, set the modified flag
+-void SDPMedia::parameter(NamedString* param, bool append)
++void SDPMedia::parameter(bool remote, NamedString* param, bool append)
+ {
+     if (!param)
+ 	return;
++    NamedList& nl = remote ? m_rAttrs : m_lAttrs;
+     m_modified = true;
+     if (append)
+-	addParam(param);
++	nl.addParam(param);
+     else
+-	setParam(param);
++	nl.setParam(param);
++}
++
++// Set or reset format parameter
++void SDPMedia::fmtp(const char* format, const char* parameter)
++{
++    if(parameter)
++	m_fmtps.setParam(format, parameter);
++    else
++	m_fmtps.clearParam(format);
++    m_modified = true;
++}
++
++// Set format parameter
++void SDPMedia::fmtp(NamedString* parameter)
++{
++    if(! parameter)
++	return;
++    m_fmtps.setParam(parameter);
++    m_modified = true;
+ }
+ 
+ void SDPMedia::crypto(const char* desc, bool remote)
+@@ -183,6 +205,17 @@
+ 	m_securable = false;
+ }
+ 
++// Append all paramters from one named list to another, inserting keys prefix
++static void putNamedList(NamedList& dst, const NamedList& src, String prefix)
++{
++    unsigned int n = src.length();
++    for (unsigned int i = 0; i < n; i++) {
++	const NamedString* param = src.getParam(i);
++	if (param)
++	    dst.addParam(prefix + param->name(),*param);
++    }
++}
++
+ // Put the list of net media in a parameter list
+ void SDPMedia::putMedia(NamedList& msg, bool putPort)
+ {
+@@ -198,16 +231,11 @@
+     if (remoteCrypto())
+ 	msg.addParam("crypto" + suffix(),remoteCrypto());
+     // must handle encryption differently
+-    const char* enc = getValue("encryption");
++    const char* enc = m_rAttrs.getValue("encryption");
+     if (enc)
+ 	msg.addParam("encryption" + suffix(),enc);
+-    clearParam("encryption");
+-    unsigned int n = length();
+-    for (unsigned int i = 0; i < n; i++) {
+-	const NamedString* param = getParam(i);
+-	if (param)
+-	    msg.addParam("sdp" + suffix() + "_" + param->name(),*param);
+-    }
++    putNamedList(msg, m_rAttrs, "sdp" + suffix() + "_");
++    putNamedList(msg, m_fmtps, "fmtp_");
+ }
+ 
+ };   // namespace TelEngine
+Index: yate/libs/ysdp/parser.cpp
+===================================================================
+--- yate.orig/libs/ysdp/parser.cpp	2016-01-15 14:50:28.000000000 +0300
++++ yate/libs/ysdp/parser.cpp	2016-01-15 16:00:41.000000000 +0300
+@@ -158,6 +158,7 @@
+ 	String aux;
+ 	String mappings;
+ 	String crypto;
++	ObjList fmtps;
+ 	ObjList params;
+ 	ObjList* dest = &params;
+ 	bool first = true;
+@@ -231,11 +232,8 @@
+ 			    line >> annexB;
+ 			else if (line.startSkip("octet-align=",false))
+ 			    amrOctet = (0 != line.toInteger(0));
+-			else if(payload.length()) {
+-			    String key("fmtp-");
+-			    key << payload;
+-			    params.append(new NamedString(key,line));
+-			}
++			else if(payload.length())
++			    fmtps.append(new NamedString(payload, line));
+ 		    }
+ 		}
+ 		else if (first) {
+@@ -308,7 +306,9 @@
+ 	    append = true;
+ 	}
+ 	while (NamedString* par = static_cast<NamedString*>(params.remove(false)))
+-	    net->parameter(par,append);
++	    net->parameter(true, par, append);
++	while (NamedString* par = static_cast<NamedString*>(fmtps.remove(false)))
++	    net->fmtp(par);
+ 	net->setModified(false);
+ 	net->mappings(mappings);
+ 	net->rfc2833(rfc2833);
+Index: yate/libs/ysdp/session.cpp
+===================================================================
+--- yate.orig/libs/ysdp/session.cpp	2016-01-15 12:41:30.000000000 +0300
++++ yate/libs/ysdp/session.cpp	2016-01-15 16:00:41.000000000 +0300
+@@ -139,7 +139,7 @@
+ 		continue;
+ 	    String tmp = param->name();
+ 	    if (tmp.startSkip(sdpPrefix,false) && tmp.startSkip("_",false) && tmp)
+-	        media->parameter(tmp,*param,false);
++	        media->parameter(false, tmp,*param,false); // set local parameter
+ 	}
+     }
+     if (m_secure) {
+@@ -263,11 +263,22 @@
+ 		    continue;
+ 		tmp = param->name();
+ 		if (tmp.startSkip(sdpPrefix + rtp->suffix() + "_",false) && (tmp.find('_') < 0))
+-		    rtp->parameter(tmp,*param,append);
++		    rtp->parameter(false, tmp,*param,append);
+ 	    }
+ 	}
+ 	if (!lst)
+ 	    lst = new ObjList;
++
++	// Copy fmtps for existing formats
++	ObjList* l1 = rtp->formats().split(',',false);
++	for (ObjList* fmt = l1->skipNull(); fmt; fmt = fmt->skipNext()) {
++	    String key = "fmtp_" + fmt->get()->toString();
++	    NamedString* ns = params.getParam(key);
++	    if (ns)
++		rtp->fmtp(fmt->get()->toString().c_str(), ns->c_str());
++	}
++	TelEngine::destruct(l1);
++
+ 	lst->append(rtp);
+     }
+     if (defaults && !lst) {
+@@ -485,15 +496,11 @@
+ 			}
+ 
+ 			if(s->length()) {
+-			    String key("fmtp-");
+-			    key << *s;
+-			    for(unsigned int i = 0; i < m->length(); ++i) {
+-				const NamedString *ns = m->getParam(i);
+-				if(ns && ns->name() == key) {
+-				    temp = new String("fmtp:");
+-				    *temp << payload << " " << *ns;
+-				    rtpmap.append(temp);
+-				}
++			    const NamedString *ns = m->fmtps().getParam(*s);
++			    if(ns && *ns) {
++				temp = new String("fmtp:");
++				*temp << payload << " " << *ns;
++				rtpmap.append(temp);
+ 			    }
+ 			}
+ 		    }
+@@ -536,13 +543,12 @@
+ 	sdp->addLine("m",mline + frm);
+ 	bool enc = false;
+ 	if (m->isModified()) {
+-	    unsigned int n = m->length();
++	    const NamedList& la = m->localAttrs();
++	    unsigned int n = la.length();
+ 	    for (unsigned int i = 0; i < n; i++) {
+-		const NamedString* param = m->getParam(i);
++		const NamedString* param = la.getParam(i);
+ 		if (param) {
+ 		    String tmp = param->name();
+-		    if (tmp.startsWith("fmtp-"))
+-			continue;
+ 		    if (*param)
+ 			tmp << ":" << *param;
+ 		    sdp->addLine("a",tmp);
+@@ -604,6 +610,8 @@
+ 	    return new MimeSdpBody("application/sdp",raw->safe(),raw->length());
+ 	}
+     }
++    if(! msg.getParam("osdp-prefix"))
++	msg.addParam("osdp-prefix", "sdp"); // copy all media attributes
+     String addr;
+     ObjList* lst = updateRtpSDP(msg,addr,update ? m_rtpMedia : 0,allowEmptyAddr);
+     if (!lst)
+@@ -621,6 +629,7 @@
+ }
+ 
+ // Update media format lists from parameters
++// to update SDP that will be sent back in OK reply to initial offer
+ void SDPSession::updateFormats(const NamedList& msg, bool changeMedia)
+ {
+     if (!m_rtpMedia)
+@@ -775,8 +784,13 @@
+     m->addParam("media",*media);
+     m->addParam("transport",media->transport());
+     m->addParam("direction","bidir");
+-    if (media->format())
+-	m->addParam("format",media->format());
++    if (media->format()) {
++	String format = media->format();
++	m->addParam("format", format);
++	NamedString* ns = media->fmtps().getParam(format);
++	if (ns && *ns)
++	    m->addParam("fmtp", *ns);
++    }
+     m->addParam("ipv6_support",String::boolText(m_ipv6));
+     if (m_rtpLocalAddr)
+ 	m->addParam("localip",m_rtpLocalAddr);
+@@ -820,9 +834,10 @@
+     }
+     else
+ 	media->crypto(0,true);
+-    unsigned int n = media->length();
++    const NamedList& ra = media->remoteAttrs();
++    unsigned int n = ra.length();
+     for (unsigned int i = 0; i < n; i++) {
+-	const NamedString* param = media->getParam(i);
++	const NamedString* param = ra.getParam(i);
+ 	if (!param)
+ 	    continue;
+ 	m->addParam("sdp_" + param->name(),*param);
+@@ -911,10 +926,18 @@
+ 		    continue;
+ 		tmp = param->name();
+ 		if (tmp.startSkip(sdpPrefix + rtp->suffix() + "_",false) && (tmp.find('_') < 0))
+-		    rtp->parameter(tmp,*param,append);
++		    rtp->parameter(false, tmp,*param,append);
+ 	    }
+ 	}
+ 	rtp->mappings(params.getValue("rtp_mapping" + rtp->suffix()));
++	for (unsigned int j = 0; j < n; j++) {
++	    const NamedString* param = params.getParam(j);
++	    if (!param)
++		continue;
++	    tmp = param->name();
++	    if (tmp.startSkip("fmtp_",false))
++		rtp->fmtp(tmp.c_str(), param->c_str());
++	}
+ 	if (audio)
+ 	    rtp->rfc2833(params.getIntValue("rtp_rfc2833",-1));
+ 	rtp->crypto(params.getValue("crypto" + rtp->suffix()),false);
+Index: yate/libs/ysdp/yatesdp.h
+===================================================================
+--- yate.orig/libs/ysdp/yatesdp.h	2016-01-14 16:34:53.000000000 +0300
++++ yate/libs/ysdp/yatesdp.h	2016-01-15 16:00:41.000000000 +0300
+@@ -58,7 +58,7 @@
+  * This class holds a single SDP media description
+  * @short SDP media description
+  */
+-class YSDP_API SDPMedia : public NamedList
++class YSDP_API SDPMedia : public String
+ {
+ public:
+     /**
+@@ -189,6 +189,40 @@
+ 	}
+ 
+     /**
++     * Retrieve format parameters list
++     * @return list of format parameters
++     */
++    inline const NamedList& fmtps() const
++	{ return m_fmtps; }
++
++    /**
++     * Set or reset format parameter
++     * @param format format name
++     * @param parameter parameter text from SDP or NULL to delete parameter
++     */
++    void fmtp(const char* format, const char* parameter);
++
++    /**
++     * Set format parameter
++     * @param parameter named parameter
++     */
++    void fmtp(NamedString* parameter);
++
++    /**
++     * Retrieve local media attributes
++     * @return Local attributes
++     */
++    inline const NamedList& localAttrs() const
++	{ return m_lAttrs; }
++
++    /**
++     * Retrieve remote media attributes
++     * @return Remote attributes
++     */
++    inline const NamedList& remoteAttrs() const
++	{ return m_rAttrs; }
++
++    /**
+      * Retrieve remote crypto description
+      * @return Remote crypto description
+      */
+@@ -260,19 +294,21 @@
+     void update(const NamedList& msg, bool pickFormat);
+ 
+     /**
+-     * Add or replace a parameter by name and value, set the modified flag
++     * Add or replace a parameter (SDP attribute) by name and value, set the modified flag
++     * @param remote True to set the remote parameter, false to set the local one
+      * @param name Parameter name
+      * @param value Parameter value
+      * @param append True to append, false to replace
+      */
+-    void parameter(const char* name, const char* value, bool append);
++    void parameter(bool remote, const char* name, const char* value, bool append);
+ 
+     /**
+-     * Add or replace a parameter, set the modified flag
++     * Add or replace a parameter (SDP attribute), set the modified flag
++     * @param remote True to set the remote parameter, false to set the local one
+      * @param param The parameter
+      * @param append True to append, false to replace
+      */
+-    void parameter(NamedString* param, bool append);
++    void parameter(bool remote, NamedString* param, bool append);
+ 
+     /**
+      * Set a new crypto description, set the modified flag if changed.
+@@ -314,6 +350,10 @@
+     String m_lPort;
+     // payload for telephone/event
+     String m_rfc2833;
++    // local and remote media attributes
++    NamedList m_lAttrs, m_rAttrs;
++    // Media format parameters, if any
++    NamedList m_fmtps;
+     // remote security descriptor
+     String m_rCrypto;
+     // local security descriptor

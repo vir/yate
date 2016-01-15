@@ -158,7 +158,6 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 	String aux;
 	String mappings;
 	String crypto;
-	ObjList fmtps;
 	ObjList params;
 	ObjList* dest = &params;
 	bool first = true;
@@ -232,8 +231,11 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 			    line >> annexB;
 			else if (line.startSkip("octet-align=",false))
 			    amrOctet = (0 != line.toInteger(0));
-			else if(payload.length())
-			    fmtps.append(new NamedString(payload, line));
+			else if(payload.length()) {
+			    String key("fmtp-");
+			    key << payload;
+			    params.append(new NamedString(key,line));
+			}
 		    }
 		}
 		else if (first) {
@@ -306,9 +308,7 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 	    append = true;
 	}
 	while (NamedString* par = static_cast<NamedString*>(params.remove(false)))
-	    net->parameter(true, par, append);
-	while (NamedString* par = static_cast<NamedString*>(fmtps.remove(false)))
-	    net->fmtp(par);
+	    net->parameter(par,append);
 	net->setModified(false);
 	net->mappings(mappings);
 	net->rfc2833(rfc2833);

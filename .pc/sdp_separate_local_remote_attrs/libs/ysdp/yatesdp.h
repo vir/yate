@@ -58,7 +58,7 @@ class SDPParser;
  * This class holds a single SDP media description
  * @short SDP media description
  */
-class YSDP_API SDPMedia : public String
+class YSDP_API SDPMedia : public NamedList
 {
 public:
     /**
@@ -189,40 +189,6 @@ public:
 	}
 
     /**
-     * Retrieve format parameters list
-     * @return list of format parameters
-     */
-    inline const NamedList& fmtps() const
-	{ return m_fmtps; }
-
-    /**
-     * Set or reset format parameter
-     * @param format format name
-     * @param parameter parameter text from SDP or NULL to delete parameter
-     */
-    void fmtp(const char* format, const char* parameter);
-
-    /**
-     * Set format parameter
-     * @param parameter named parameter
-     */
-    void fmtp(NamedString* parameter);
-
-    /**
-     * Retrieve local media attributes
-     * @return Local attributes
-     */
-    inline const NamedList& localAttrs() const
-	{ return m_lAttrs; }
-
-    /**
-     * Retrieve remote media attributes
-     * @return Remote attributes
-     */
-    inline const NamedList& remoteAttrs() const
-	{ return m_rAttrs; }
-
-    /**
      * Retrieve remote crypto description
      * @return Remote crypto description
      */
@@ -294,21 +260,19 @@ public:
     void update(const NamedList& msg, bool pickFormat);
 
     /**
-     * Add or replace a parameter (SDP attribute) by name and value, set the modified flag
-     * @param remote True to set the remote parameter, false to set the local one
+     * Add or replace a parameter by name and value, set the modified flag
      * @param name Parameter name
      * @param value Parameter value
      * @param append True to append, false to replace
      */
-    void parameter(bool remote, const char* name, const char* value, bool append);
+    void parameter(const char* name, const char* value, bool append);
 
     /**
-     * Add or replace a parameter (SDP attribute), set the modified flag
-     * @param remote True to set the remote parameter, false to set the local one
+     * Add or replace a parameter, set the modified flag
      * @param param The parameter
      * @param append True to append, false to replace
      */
-    void parameter(bool remote, NamedString* param, bool append);
+    void parameter(NamedString* param, bool append);
 
     /**
      * Set a new crypto description, set the modified flag if changed.
@@ -350,10 +314,6 @@ private:
     String m_lPort;
     // payload for telephone/event
     String m_rfc2833;
-    // local and remote media attributes
-    NamedList m_lAttrs, m_rAttrs;
-    // Media format parameters, if any
-    NamedList m_fmtps;
     // remote security descriptor
     String m_rCrypto;
     // local security descriptor

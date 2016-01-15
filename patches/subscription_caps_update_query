@@ -1,0 +1,63 @@
+Description: Added 'caps_update' database query to subscription module
+Author: vir@ctm.ru
+---
+Index: yate/conf.d/subscription.conf.sample
+===================================================================
+--- yate.orig/conf.d/subscription.conf.sample	2016-01-14 16:34:53.000000000 +0300
++++ yate/conf.d/subscription.conf.sample	2016-01-15 13:29:58.000000000 +0300
+@@ -44,6 +44,9 @@
+ ; contact_delete: string: Database query used to delete a specific contact
+ ;contact_delete=DELETE FROM roster WHERE username='${username}' AND contact='${contact}'
+ 
++; caps_update: string: Database query used to update contact's capabilities list.
++;caps_update=SELECT caps_update('${contact}/${instance}', '${caps.audio}')
++
+ ; route_callto: string: Target to set when successfully handled a call.route message
+ ; This parameter is applied on reload
+ ;route_callto=jabber/${called}
+Index: yate/modules/server/subscription.cpp
+===================================================================
+--- yate.orig/modules/server/subscription.cpp	2016-01-14 16:34:53.000000000 +0300
++++ yate/modules/server/subscription.cpp	2016-01-15 13:31:10.000000000 +0300
+@@ -116,10 +116,12 @@
+     void addListParam(NamedList& list, unsigned int index);
+     inline bool isCaps(const String& capsid) const
+ 	{ return m_caps && *m_caps == capsid; }
++    void updateDb(const NamedList& p);
+     inline void setCaps(const String& capsid, const NamedList& list) {
+ 	    TelEngine::destruct(m_caps);
+ 	    m_caps = new NamedList(capsid);
+ 	    m_caps->copyParams(list,"caps",'.');
++	    updateDb(list);
+ 	}
+     // Copy parameters to a list
+     void addCaps(NamedList& list, const String& prefix = String::empty());
+@@ -518,6 +520,7 @@
+     String m_contactSetFullQuery;
+     String m_contactDeleteQuery;
+     String m_genericUserLoadQuery;
++    String m_capsUpdateQuery;
+     String m_routeCallto;
+     UserList m_users;
+     Mutex m_eventsMutex;
+@@ -692,6 +695,12 @@
+ /*
+  * Instance
+  */
++// Store updated instance caps in database
++void Instance::updateDb(const NamedList& p) {
++    Message * m = __plugin.buildDb(__plugin.m_account,__plugin.m_capsUpdateQuery,p);
++    m = __plugin.queryDb(m);
++    TelEngine::destruct(m);
++}
+ // Add prefixed parameter(s) from this instance
+ void Instance::addListParam(NamedList& list, unsigned int index)
+ {
+@@ -1746,6 +1755,7 @@
+ 	m_contactSetFullQuery = cfg.getValue("general","contact_set_full");
+ 	m_contactDeleteQuery = cfg.getValue("general","contact_delete");
+ 	m_genericUserLoadQuery = cfg.getValue("general","generic_roster_load");
++	m_capsUpdateQuery = cfg.getValue("general","caps_update");
+ 
+ 	if (m_userEventQuery)
+ 	    (new ExpireThread())->startup();

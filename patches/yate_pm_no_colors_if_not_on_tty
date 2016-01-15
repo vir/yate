@@ -4,13 +4,13 @@ Author: vir@ctm.ru
 Index: yate/share/scripts/Yate.pm
 ===================================================================
 --- yate.orig/share/scripts/Yate.pm	2016-01-15 15:30:03.000000000 +0300
-+++ yate/share/scripts/Yate.pm	2016-01-15 15:33:27.000000000 +0300
++++ yate/share/scripts/Yate.pm	2016-01-15 15:53:41.000000000 +0300
 @@ -698,7 +698,12 @@
  # Dump message to STDERR.
  sub dumpmsg($;) {
      my $self = shift; local $_;
 -    my $msg = "Message ".$self->{headers}{name}.(@_?" [ \x1B\[1m@_\x1B\[0m ]":'').":\n";
-+    my($cc1, $cc2) = ('', '');
++    my($cc1, $cc0) = ('', '');
 +    if(-t STDERR) { # Add ANSI colors only on TTY
 +	$cc1 = "\x1B\[1m";
 +	$cc0 = "\x1B\[0m";

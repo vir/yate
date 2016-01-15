@@ -698,7 +698,7 @@ sub dump($) {
 # Dump message to STDERR.
 sub dumpmsg($;) {
     my $self = shift; local $_;
-    my($cc1, $cc2) = ('', '');
+    my($cc1, $cc0) = ('', '');
     if(-t STDERR) { # Add ANSI colors only on TTY
 	$cc1 = "\x1B\[1m";
 	$cc0 = "\x1B\[0m";

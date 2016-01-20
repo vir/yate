@@ -956,7 +956,7 @@ DataBlock ASNLib::encodeInteger(u_int64_t intVal, bool tagCheck)
 	data.append(len);
     }
     data.append(contents);
-    XDebug(s_libName.c_str(),DebugAll,"::encodeInteger('"FMT64"') - encoded into %u bytes",intVal,data.length());
+    XDebug(s_libName.c_str(),DebugAll,"::encodeInteger('" FMT64 "') - encoded into %u bytes",intVal,data.length());
     return data;
 }
 

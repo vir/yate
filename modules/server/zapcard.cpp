@@ -1781,7 +1781,7 @@ SignallingComponent* ZapInterface::create(const String& type, NamedList& name)
     if (!(sig && code && code <= count)) {
 	Debug(&plugin,DebugWarn,"Section '%s'. Invalid sigchan='%s' for type='%s'",
 	    config->c_str(),sig.safe(),sDevType.c_str());
-	return false;
+	return 0;
     }
     ZapInterface* iface = new ZapInterface(name);
     if (iface->init(devType,code,offset+code,*config,*general,name))

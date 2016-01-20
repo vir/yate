@@ -374,9 +374,10 @@ void Cpu::updateYateLoad()
     u_int64_t time = SysUsage::msecRunTime(SysUsage::WallTime);
     bool updateLoad = true;
     if (user < m_yateUser || ker < m_yateSystem || time < m_lastYateCheck) {
-	Debug(&s_module,DebugInfo,"Negative values for yate CPU update "
-	    "cu = "FMT64U" lu="FMT64U" ck="FMT64U" lk="FMT64U" ct="FMT64U" lt="FMT64U" ",
-	      user,m_yateUser,ker,m_yateSystem,time,m_lastYateCheck);
+	Debug(&s_module,DebugInfo,"Negative values for yate CPU update"
+	    " cu = " FMT64U " lu=" FMT64U " ck=" FMT64U
+	    " lk=" FMT64U " ct=" FMT64U " lt=" FMT64U,
+	    user,m_yateUser,ker,m_yateSystem,time,m_lastYateCheck);
 	updateLoad = false;
     }
     if (updateLoad && (m_yateUser != 0 || m_yateSystem != 0)) {

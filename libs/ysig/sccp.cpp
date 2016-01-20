@@ -4429,7 +4429,7 @@ void SS7SCCP::printStatus(bool extended)
 	return;
     m_management->subsystemsStatus(dest);
     m_management->routeStatus(dest);
-    Output("SCCP '%s' [%p] Time: "FMT64" Status:%s",debugName(),this,Time::msecNow(),dest.c_str());
+    Output("SCCP '%s' [%p] Time: " FMT64 " Status:%s",debugName(),this,Time::msecNow(),dest.c_str());
 }
 
 void SS7SCCP::notify(SS7Layer3* link, int sls)

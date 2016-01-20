@@ -1540,7 +1540,7 @@ void JsEngine::initialize(ScriptContext* context, const char* name)
 
 bool JsShared::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsShared::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsShared::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("inc")) {
 	ObjList args;
 	switch (extractArgs(stack,oper,context,args)) {
@@ -1657,7 +1657,7 @@ bool JsMessage::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* c
 
 bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsMessage::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsMessage::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("broadcast")) {
 	if (oper.number() != 0)
 	    return false;
@@ -2158,7 +2158,7 @@ void JsMessage::getResult(ObjList& stack, const ExpOperation& row, const ExpOper
 
 JsObject* JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsMessage::runConstructor '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsMessage::runConstructor '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     ObjList args;
     switch (extractArgs(stack,oper,context,args)) {
 	case 1:
@@ -2291,7 +2291,7 @@ bool JsMessageQueue::matchesFilters(const NamedList& filters)
 
 bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsFile::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsFile::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("exists")) {
 	if (oper.number() != 1)
 	    return false;
@@ -2409,7 +2409,7 @@ void* JsConfigFile::getObject(const String& name) const
 
 bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsConfigFile::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsConfigFile::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     ObjList args;
     if (oper.name() == YSTRING("name")) {
 	switch (extractArgs(stack,oper,context,args)) {
@@ -2591,7 +2591,7 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 
 JsObject* JsConfigFile::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsConfigFile::runConstructor '%s'("FMT64") [%p]",oper.name().c_str(),oper.number(),this);
+    XDebug(&__plugin,DebugAll,"JsConfigFile::runConstructor '%s'(" FMT64 ") [%p]",oper.name().c_str(),oper.number(),this);
     bool warn = false;
     const char* name = 0;
     ObjList args;
@@ -2623,7 +2623,7 @@ void JsConfigFile::initialize(ScriptContext* context)
 
 bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsConfigSection::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsConfigSection::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     ObjList args;
     if (oper.name() == YSTRING("configFile")) {
 	if (extractArgs(stack,oper,context,args) != 0)
@@ -2748,7 +2748,7 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
 JsObject* JsHasher::runConstructor(ObjList& stack, const ExpOperation& oper,
     GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsHasher::runConstructor '%s'("FMT64") [%p]",
+    XDebug(&__plugin,DebugAll,"JsHasher::runConstructor '%s'(" FMT64 ") [%p]",
 	oper.name().c_str(),oper.number(),this);
     ObjList args;
     if (extractArgs(stack,oper,context,args) != 1)
@@ -2779,7 +2779,7 @@ void JsHasher::initialize(ScriptContext* context)
 
 bool JsHasher::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsHasher::runNative '%s'("FMT64") [%p]",
+    XDebug(&__plugin,DebugAll,"JsHasher::runNative '%s'(" FMT64 ") [%p]",
 	oper.name().c_str(),oper.number(),this);
     if (oper.name() == YSTRING("update")) {
 	if (!m_hasher)
@@ -2878,7 +2878,7 @@ void* JsXML::getObject(const String& name) const
 
 bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsXML::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsXML::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     ObjList args;
     if (oper.name() == YSTRING("put")) {
 	int argc = extractArgs(stack,oper,context,args);
@@ -3130,7 +3130,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 
 JsObject* JsXML::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsXML::runConstructor '%s'("FMT64") [%p]",oper.name().c_str(),oper.number(),this);
+    XDebug(&__plugin,DebugAll,"JsXML::runConstructor '%s'(" FMT64 ") [%p]",oper.name().c_str(),oper.number(),this);
     JsXML* obj = 0;
     ObjList args;
     int n = extractArgs(stack,oper,context,args);
@@ -3762,7 +3762,7 @@ ScriptContext* JsEngineWorker::getContext()
 
 bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsChannel::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsChannel::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("id")) {
 	if (oper.number())
 	    return false;

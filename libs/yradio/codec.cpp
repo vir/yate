@@ -2237,7 +2237,7 @@ static unsigned int encodeCause(const GSML3Codec* codec,  uint8_t proto, const I
 	buf[idx] |= rec->toInteger() & 0x7f;
     }
     idx++;
-    buf[idx] |= lookup(cause,(coding == 0 ? s_causeCCITT_dict : s_causeGSM_dict),0) & 0x7f;
+    buf[idx] |= lookup(cause,(cdg == 0 ? s_causeCCITT_dict : s_causeGSM_dict),0) & 0x7f;
     out.append(buf,idx+1);
     if (!TelEngine::null(diag)) {
 	DataBlock d;

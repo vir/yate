@@ -1,4 +1,4 @@
-yate (5.5.1~svn6085) UNRELEASED; urgency=low
+yate (5.5.1~svn6086) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1576,8 +1576,10 @@ yate (5.5.1~svn6085) UNRELEASED; urgency=low
     attributes configurable per section.  + Fixed a GCC 6 build error:
     C++11 requires a space between literal and string macro.  + Fixed
     two invalid false to null conversions.
+  * Updated to SVN revision 6086: + Use integer coding value when
+    deciding what dictionary is to be used for Cause.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 21 Jan 2016 02:19:13 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 22 Jan 2016 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

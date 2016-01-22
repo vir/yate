@@ -2220,6 +2220,13 @@ static unsigned int encodeCause(const GSML3Codec* codec,  uint8_t proto, const I
 	buf[idx] |= 0x01;
     else
 	buf[idx] |= lookup(*loc,s_progIndLocation_dict,0x01) & 0x0f;
+    if (cdg != 0x60) {
+	const String* rec = xml->getAttribute(s_causeRec);
+	if (!TelEngine::null(rec)) {
+	    buf[idx++] &= 0x7f;
+	    buf[idx] |= rec->toInteger() & 0x7f;
+	}
+    }
     if (!(cdg == 0x00 || cdg == 0x60)) {
 	Debug(codec->dbg(),DebugNote,"Unknown Cause coding standard=%s (%u), encoding from hexified <data> element [%p]",
 	    lookup(cdg,s_progIndCoding_dict,"unknown"),cdg >> 5,codec->ptr());
@@ -2230,15 +2237,12 @@ static unsigned int encodeCause(const GSML3Codec* codec,  uint8_t proto, const I
     const String& cause = xml->getText();
     if (TelEngine::null(cause))
 	return CONDITIONAL_ERROR(param,IncorrectOptionalIE,IncorrectMandatoryIE);
-    const String* rec = xml->getAttribute(s_causeRec);
-    const String* diag = xml->getAttribute(s_causeDiag);
-    if (!TelEngine::null(rec)) {
-	buf[idx++] &= 0x7f;
-	buf[idx] |= rec->toInteger() & 0x7f;
-    }
+
     idx++;
     buf[idx] |= lookup(cause,(cdg == 0 ? s_causeCCITT_dict : s_causeGSM_dict),0) & 0x7f;
     out.append(buf,idx+1);
+
+    const String* diag = xml->getAttribute(s_causeDiag);
     if (!TelEngine::null(diag)) {
 	DataBlock d;
 	if (!d.unHexify(*diag))

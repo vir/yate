@@ -38,7 +38,6 @@ BEGIN {
 
     # Set version && disable output buffering.
     our $VERSION = '0.26';
-    $ |= 1;
 }
 
 # All messages syntax.
@@ -68,6 +67,7 @@ sub new($;@) {
     };
 
     bless($self, $class);
+    $self->{stdout}->autoflush(1);
 
     # Install internal handlers.
     $self->install_handlers();
@@ -542,7 +542,7 @@ sub dispatch($) {
     }
     return 1 if $self->{_nonblocking};
 
-    $self->return_message('false', '');
+    $self->return_message('false', $self->header('retvalue'));
     $self->error('Could not dispatch event ' . $self->header('name') . '.') if ($self->{'Debug'} == 1);
 
     return 0;

@@ -7,14 +7,13 @@ yate_pm_dumpmsg_method
 regexroute_without_caller_called
 sdp_fmtp_copy
 q931_uus_support
-h263-1998_payload_mapping
+video_codecs_mapping
 subscription_caps_update_query
 register_module_routing_query_name_vaule_pairs
 namedlist_tohstore
 pgsql_async_notifications
 msgsniff_negative_filter
 ysigchan_dtmfinband_force_support
-h264_video_support
 register_conf_unregister_expired
 sipfeatures_presence_event_package
 extmodule_scriptname_variable
@@ -24,7 +23,6 @@ extmodule_dumparray_variable
 subscription_handlers_prio
 sdp_separate_local_remote_attrs
 socket_multicast_binding
-vp8_vp9_h263_codecs_fix
 cdrbuild_defer_incoming
 queue_out_multi_params_disp
 extmodule_nonblocking_mode

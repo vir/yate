@@ -3,9 +3,9 @@ Author: vir@ctm.ru
 ---
 Index: yate/share/scripts/Yate.pm
 ===================================================================
---- yate.orig/share/scripts/Yate.pm	2016-01-15 16:53:35.000000000 +0300
-+++ yate/share/scripts/Yate.pm	2016-01-15 16:53:35.000000000 +0300
-@@ -328,6 +328,9 @@
+--- yate.orig/share/scripts/Yate.pm	2016-01-27 10:16:58.000000000 +0300
++++ yate/share/scripts/Yate.pm	2016-01-27 10:16:58.000000000 +0300
+@@ -329,6 +329,9 @@
  	# Get rid of \n at the end.
  	chomp($line);
  
@@ -15,7 +15,7 @@ Index: yate/share/scripts/Yate.pm
  	# Message received. Parse && dispatch (if parse succeeds).
  	if ($self->parse_message($line) == 1) {
  	    $self->dispatch();
-@@ -673,24 +676,6 @@
+@@ -674,24 +677,6 @@
  	return 0;
      }
  
@@ -40,7 +40,7 @@ Index: yate/share/scripts/Yate.pm
      # Format is %%>setlocal:name:value.
      $self->print(sprintf('%%%%>setlocal:%s:%s',
  	$self->escape($name, ':'),
-@@ -699,6 +684,12 @@
+@@ -700,6 +685,12 @@
      return 1;
  }
  
@@ -53,7 +53,7 @@ Index: yate/share/scripts/Yate.pm
  # Dump itself to STDERR.
  sub dump($) {
      my ($self) = @_;
-@@ -997,6 +988,12 @@
+@@ -998,6 +989,12 @@
  Methods are depricated. See C<install> or SYNOPSYS for more
  information.
  

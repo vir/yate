@@ -4,7 +4,6 @@ q931_overlap_sending
 cisco_fax_rtp_format_switch
 yate_pm_connect_method
 regexroute_without_caller_called
-yate_pm_better_tcp_connection
 sdp_fmtp_copy
 q931_uus_support
 h263-1998_payload_mapping

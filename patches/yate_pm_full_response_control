@@ -5,8 +5,8 @@ This patch allows perl handler to modify message's retval without acknoledging m
 This can be user in engine command completion and in several other cases.
 Index: yate/share/scripts/Yate.pm
 ===================================================================
---- yate.orig/share/scripts/Yate.pm	2016-01-27 10:04:36.000000000 +0300
-+++ yate/share/scripts/Yate.pm	2016-01-27 10:05:00.000000000 +0300
+--- yate.orig/share/scripts/Yate.pm	2016-01-27 10:16:47.000000000 +0300
++++ yate/share/scripts/Yate.pm	2016-01-27 10:16:47.000000000 +0300
 @@ -37,7 +37,7 @@
      use Data::Dumper;
  
@@ -16,7 +16,7 @@ Index: yate/share/scripts/Yate.pm
      $ |= 1;
  }
  
-@@ -522,14 +522,18 @@
+@@ -523,14 +523,18 @@
      foreach (@{$self->{'_handlers'}->{$self->header('name')}}) {
  	my $return = $_->($self);
  
@@ -37,7 +37,7 @@ Index: yate/share/scripts/Yate.pm
      $self->error('Could not dispatch event ' . $self->header('name') . '.') if ($self->{'Debug'} == 1);
  
      return 0;
-@@ -827,6 +831,11 @@
+@@ -828,6 +832,11 @@
  wish to process a message, but not to send anything back to the Engine
  return ''.
  

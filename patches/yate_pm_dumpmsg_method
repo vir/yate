@@ -1,0 +1,40 @@
+Index: yate/share/scripts/Yate.pm
+===================================================================
+--- yate.orig/share/scripts/Yate.pm	2016-01-27 10:42:02.000000000 +0300
++++ yate/share/scripts/Yate.pm	2016-01-27 10:43:52.000000000 +0300
+@@ -703,6 +703,22 @@
+     $self->debug(Dumper($self));
+ }
+ 
++# Dump message to STDERR.
++sub dumpmsg($;) {
++    my $self = shift; local $_;
++    my($cc1, $cc0) = ('', '');
++    if(-t STDERR) { # Add ANSI colors only on TTY
++	$cc1 = "\x1B\[1m";
++	$cc0 = "\x1B\[0m";
++    }
++    my $msg = "Message ".$self->{headers}{name}.(@_?" [ ${cc1}@_${cc0} ]":'').":\n";
++    $msg .= " H: ".join(', ', map({ $_.' => '.$self->{headers}{$_} } sort keys %{$self->{headers}}))."\n";
++    foreach(sort keys %{$self->{params}}) {
++	$msg .= "   $_ => ".$self->{params}{$_}."\n";
++    }
++    $self->debug($msg);
++}
++
+ # Old subroutines. We keep it for backwards compatibillity.
+ sub retval($$) {
+     my $self = shift;
+@@ -940,6 +956,12 @@
+ 
+ Dumps all the information about the current Yate object.
+ 
++=head2 dumpmsg
++
++    $message->dumpmsg('interesting message')
++
++Dumps message information in slightly better form than dump().
++
+ =head2 escape
+ 
+     $message->escape($string, $special_char)

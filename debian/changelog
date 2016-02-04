@@ -1,3 +1,11 @@
+yate (5.5.1~vir2016020501) UNRELEASED; urgency=medium
+
+  * Yate.pm: Autoflush fixed. Fixed retval corruption if message was not handled.
+  * Use 'copyparams' to populate dumb channel's chan.startup (see Yate issue
+  * Merged upstream updates (SVN r6087)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Fri, 05 Feb 2016 00:10:28 +0300
+
 yate (5.5.1~vir2016011302) UNRELEASED; urgency=medium
 
   * Fixed faxhan module packaging

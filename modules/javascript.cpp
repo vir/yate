@@ -37,7 +37,8 @@ class JsModule : public ChanAssistList
 {
 public:
     enum {
-	Preroute = AssistPrivate
+	Preroute = AssistPrivate,
+	EngStart,
     };
     JsModule();
     virtual ~JsModule();
@@ -59,6 +60,7 @@ private:
     void clearPostHook();
     JsParser m_assistCode;
     MessagePostHook* m_postHook;
+    bool m_started;
 };
 
 INIT_PLUGIN(JsModule);
@@ -134,6 +136,7 @@ public:
     static void reloadDynamic();
     static bool initScript(const String& scriptName, const String& fileName, bool relPath = true, bool fromCfg = true);
     static bool reloadScript(const String& scriptName);
+    static void loadScripts(const NamedList* sect);
     inline static ObjList& globals()
 	{ return s_globals; }
     inline static void unloadAll()
@@ -247,6 +250,7 @@ public:
 	    params().addParam(new ExpFunction("debugEnabled"));
 	    params().addParam(new ExpFunction("debugAt"));
 	    params().addParam(new ExpFunction("setDebug"));
+	    params().addParam(new ExpFunction("started"));
 	    if (name)
 		params().addParam(new ExpOperation(name,"name"));
 	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
@@ -1389,6 +1393,11 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    Debug(&__plugin,DebugNote,"Engine restart is disabled by allow_abort configuration");
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
+    else if (oper.name() == YSTRING("started")) {
+	if (oper.number() != 0)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(Engine::started()));
+    }
     else if (oper.name() == YSTRING("atob")) {
 	// str = Engine.atob(b64_str)
 	ObjList args;
@@ -1531,7 +1540,7 @@ void JsEngine::initialize(ScriptContext* context, const char* name)
 
 bool JsShared::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsShared::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsShared::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("inc")) {
 	ObjList args;
 	switch (extractArgs(stack,oper,context,args)) {
@@ -1648,7 +1657,7 @@ bool JsMessage::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* c
 
 bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsMessage::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsMessage::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("broadcast")) {
 	if (oper.number() != 0)
 	    return false;
@@ -2149,7 +2158,7 @@ void JsMessage::getResult(ObjList& stack, const ExpOperation& row, const ExpOper
 
 JsObject* JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsMessage::runConstructor '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsMessage::runConstructor '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     ObjList args;
     switch (extractArgs(stack,oper,context,args)) {
 	case 1:
@@ -2282,7 +2291,7 @@ bool JsMessageQueue::matchesFilters(const NamedList& filters)
 
 bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsFile::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsFile::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("exists")) {
 	if (oper.number() != 1)
 	    return false;
@@ -2400,7 +2409,7 @@ void* JsConfigFile::getObject(const String& name) const
 
 bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsConfigFile::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsConfigFile::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     ObjList args;
     if (oper.name() == YSTRING("name")) {
 	switch (extractArgs(stack,oper,context,args)) {
@@ -2582,7 +2591,7 @@ bool JsConfigFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject
 
 JsObject* JsConfigFile::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsConfigFile::runConstructor '%s'("FMT64") [%p]",oper.name().c_str(),oper.number(),this);
+    XDebug(&__plugin,DebugAll,"JsConfigFile::runConstructor '%s'(" FMT64 ") [%p]",oper.name().c_str(),oper.number(),this);
     bool warn = false;
     const char* name = 0;
     ObjList args;
@@ -2614,7 +2623,7 @@ void JsConfigFile::initialize(ScriptContext* context)
 
 bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsConfigSection::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsConfigSection::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     ObjList args;
     if (oper.name() == YSTRING("configFile")) {
 	if (extractArgs(stack,oper,context,args) != 0)
@@ -2739,7 +2748,7 @@ bool JsConfigSection::runNative(ObjList& stack, const ExpOperation& oper, GenObj
 JsObject* JsHasher::runConstructor(ObjList& stack, const ExpOperation& oper,
     GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsHasher::runConstructor '%s'("FMT64") [%p]",
+    XDebug(&__plugin,DebugAll,"JsHasher::runConstructor '%s'(" FMT64 ") [%p]",
 	oper.name().c_str(),oper.number(),this);
     ObjList args;
     if (extractArgs(stack,oper,context,args) != 1)
@@ -2770,7 +2779,7 @@ void JsHasher::initialize(ScriptContext* context)
 
 bool JsHasher::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsHasher::runNative '%s'("FMT64") [%p]",
+    XDebug(&__plugin,DebugAll,"JsHasher::runNative '%s'(" FMT64 ") [%p]",
 	oper.name().c_str(),oper.number(),this);
     if (oper.name() == YSTRING("update")) {
 	if (!m_hasher)
@@ -2869,7 +2878,7 @@ void* JsXML::getObject(const String& name) const
 
 bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsXML::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsXML::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     ObjList args;
     if (oper.name() == YSTRING("put")) {
 	int argc = extractArgs(stack,oper,context,args);
@@ -3121,7 +3130,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 
 JsObject* JsXML::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsXML::runConstructor '%s'("FMT64") [%p]",oper.name().c_str(),oper.number(),this);
+    XDebug(&__plugin,DebugAll,"JsXML::runConstructor '%s'(" FMT64 ") [%p]",oper.name().c_str(),oper.number(),this);
     JsXML* obj = 0;
     ObjList args;
     int n = extractArgs(stack,oper,context,args);
@@ -3753,7 +3762,7 @@ ScriptContext* JsEngineWorker::getContext()
 
 bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(&__plugin,DebugAll,"JsChannel::runNative '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsChannel::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("id")) {
 	if (oper.number())
 	    return false;
@@ -4392,6 +4401,21 @@ bool JsGlobal::reloadScript(const String& scriptName)
     return script->runMain();
 }
 
+void JsGlobal::loadScripts(const NamedList* sect)
+{
+    if (!sect)
+	return;
+    unsigned int len = sect->length();
+    for (unsigned int i=0; i<len; i++) {
+	const NamedString *n = sect->getParam(i);
+	if (!n)
+	    continue;
+	String tmp = *n;
+	Engine::runParams().replaceParams(tmp);
+	JsGlobal::initScript(n->name(),tmp);
+    }
+}
+
 bool JsGlobal::runMain()
 {
     ScriptRun* runner = m_jsCode.createRunner(m_context);
@@ -4419,7 +4443,7 @@ static const char* s_cmdsLine = "  javascript {info|eval[=context] instructions.
 
 JsModule::JsModule()
     : ChanAssistList("javascript",true),
-      m_postHook(0)
+      m_postHook(0), m_started(Engine::started())
 {
     Output("Loaded module Javascript");
 }
@@ -4689,6 +4713,13 @@ bool JsModule::received(Message& msg, int id)
 	    clearPostHook();
 	    JsGlobal::unloadAll();
 	    return false;
+	case EngStart:
+	    if (!m_started) {
+		m_started = true;
+		Configuration cfg(Engine::configFile("javascript"));
+		JsGlobal::loadScripts(cfg.getSection("late_scripts"));
+	    }
+	    return false;
     } // switch (id)
     return ChanAssistList::received(msg,id);
 }
@@ -4770,18 +4801,9 @@ void JsModule::initialize()
     }
     JsGlobal::markUnused();
     unlock();
-    NamedList* sect = cfg.getSection("scripts");
-    if (sect) {
-	unsigned int len = sect->length();
-	for (unsigned int i=0; i<len; i++) {
-	    NamedString *n = sect->getParam(i);
-	    if (n) {
-		tmp = *n;
-		Engine::runParams().replaceParams(tmp);
-		JsGlobal::initScript(n->name(),tmp);
-	    }
-	}
-    }
+    JsGlobal::loadScripts(cfg.getSection("scripts"));
+    if (m_started)
+	JsGlobal::loadScripts(cfg.getSection("late_scripts"));
     JsGlobal::reloadDynamic();
     JsGlobal::freeUnused();
 }
@@ -4794,6 +4816,7 @@ void JsModule::init(int priority)
     installRelay(Ringing,priority);
     installRelay(Answered,priority);
     Engine::install(new MessageRelay("call.preroute",this,Preroute,priority,name()));
+    Engine::install(new MessageRelay("engine.start",this,EngStart,150,name()));
 }
 
 }; // anonymous namespace

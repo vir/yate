@@ -74,7 +74,7 @@ private:
 
 JsObject* JsExtObj::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    Debug(DebugAll,"JsExtObj::runConstructor '%s'("FMT64") [%p]",oper.name().c_str(),oper.number(),this);
+    Debug(DebugAll,"JsExtObj::runConstructor '%s'(" FMT64 ") [%p]",oper.name().c_str(),oper.number(),this);
     const char* val = 0;
     ObjList args;
     switch (extractArgs(stack,oper,context,args)) {

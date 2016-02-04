@@ -1345,7 +1345,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 
 bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context) const
 {
-    DDebug(this,DebugAll,"runFunction(%p,'%s' "FMT64", %p) ext=%p",
+    DDebug(this,DebugAll,"runFunction(%p,'%s' " FMT64 ", %p) ext=%p",
 	&stack,oper.name().c_str(),oper.number(),context,(void*)m_extender);
     if (oper.name() == YSTRING("chr")) {
 	String res;

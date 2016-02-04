@@ -1350,6 +1350,13 @@ public:
     static bool restart(unsigned int code, bool gracefull = false);
 
     /**
+     * Check if the engine was started
+     * @return True if the engine has gone through the start phase
+     */
+    static bool started()
+	{ return s_started; }
+
+    /**
      * Check if the engine is currently exiting
      * @return True if exiting, false in normal operation
      */
@@ -1565,6 +1572,7 @@ private:
     static NamedList s_params;
     static int s_haltcode;
     static RunMode s_mode;
+    static bool s_started;
     static unsigned int s_congestion;
     static CallAccept s_accept;
     static const TokenDict s_callAccept[];

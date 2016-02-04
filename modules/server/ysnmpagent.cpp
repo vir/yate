@@ -835,7 +835,7 @@ public:
 
 static DataBlock toNetworkOrder(u_int64_t val, unsigned int size)
 {
-    XDebug(&__plugin,DebugAll,"toNetworkOrder("FMT64")",val);
+    XDebug(&__plugin,DebugAll,"toNetworkOrder(" FMT64 ")",val);
     DataBlock res;
     for (unsigned int i = 0; i < size; i++) {
 	DataBlock aux;

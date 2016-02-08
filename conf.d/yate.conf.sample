@@ -11,8 +11,8 @@
 ; Note that you MUST NOT add a path separator at the end
 ;modpath=
 
-; extrapath: string: Relative path to an extra modules directory, gets loaded
-;  before those added by command line -x parameters
+; extrapath: string: Absolute or relative path to an extra modules directory,
+;  gets loaded before those added by command line -x parameters
 ; Note that you MUST NOT add a path separator at the end
 ;extrapath=
 

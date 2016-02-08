@@ -1,4 +1,4 @@
-yate (5.5.1~svn6087) UNRELEASED; urgency=low
+yate (5.5.1~svn6089) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1581,8 +1581,12 @@ yate (5.5.1~svn6087) UNRELEASED; urgency=low
   * Updated to SVN revision 6087: + Fix for encoding Cause
     recommendation byte: do not attempt to set if if coding standard is
     GSM. Also, check for it when data is provided in hexified form.
+  * Updated to SVN revision 6089: + Support absolute directory names in -
+    x argument and in yate.conf extrapath.  + Add the connection_id
+    parameter to user.auth, user.unregister, call.preroute and
+    chan.startup messages.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 23 Jan 2016 02:19:13 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 09 Feb 2016 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

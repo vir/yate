@@ -1831,7 +1831,10 @@ bool Engine::loadPluginDir(const String& relPath)
 #endif
     bool defload = s_cfg.getBoolValue("general","modload",true);
     String path = s_modpath;
-    if (relPath) {
+    static const Regexp r("^\\([/\\]\\|[[:alpha:]]:[/\\]\\).");
+    if (r.matches(relPath))
+	path = relPath;
+    else if (relPath) {
 	if (!path.endsWith(PATH_SEP))
 	    path += PATH_SEP;
 	path += relPath;
@@ -2275,7 +2278,7 @@ static void usage(bool client, FILE* f)
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
 "   -u pathname    Path to user files directory (%s)\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
-"   -x relpath     Relative path to extra modules directory (can be repeated)\n"
+"   -x dirpath     Absolute or relative path to extra modules directory (can be repeated)\n"
 "   -w directory   Change working directory\n"
 "   -N nodename    Set the name of this node in a cluster\n"
 #ifdef RLIMIT_CORE

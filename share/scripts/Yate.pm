@@ -309,7 +309,7 @@ sub connect($$;$$$) {
     my $self = shift;
     my $addr = shift || die "Nowhere to connect()";
     my $role = shift || 'global';
-    die "Areaty connected" if $self->{socket};
+    die "Already connected" if $self->{socket};
     my $domain = ($addr=~/^[\w\.\-]+\:\d+$/)?'INET':'UNIX';
     eval "require IO::Socket::$domain" or die "Yate::connect: $@";
     my $sock = eval "new IO::Socket::$domain(\$addr)" or die "Yate::connect: $!";

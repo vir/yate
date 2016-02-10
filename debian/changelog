@@ -1,3 +1,9 @@
+yate (5.5.1~vir2016021001) UNRELEASED; urgency=medium
+
+  * Sangoma hardware support enabled (requires Wanpipe)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Wed, 10 Feb 2016 18:00:35 +0300
+
 yate (5.5.1~vir2016020501) UNRELEASED; urgency=medium
 
   * Yate.pm: Autoflush fixed. Fixed retval corruption if message was not handled.

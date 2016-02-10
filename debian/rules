@@ -23,7 +23,7 @@ config: configure-stamp
 configure-stamp: configure yate-config.in
 	dh_testdir
 	# Add here commands to configure the package.
-	./configure $(confflags) --prefix=/usr --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info --sysconfdir=/etc --disable-ilbc --disable-wpcard --enable-sctp
+	./configure $(confflags) --prefix=/usr --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info --sysconfdir=/etc --disable-ilbc --enable-sctp
 	touch configure-stamp
 
 yate-config.in: configure yate-config.sh

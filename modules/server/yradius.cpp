@@ -1176,8 +1176,7 @@ void RadiusClient::addAttributes(NamedList& params, NamedList* list)
 	NamedString* s = list->getParam(i);
 	if (!s)
 	    continue;
-	if (s->name().startsWith("inc:",false)) {
-	    String attr = s->name().substr(4).trimBlanks();
+	if ((s->name() == YSTRING("rad_include")) || s->name().startsWith("inc:",false)) {
 	    if (*s == *list)
 		Debug(&__plugin,DebugWarn,"Section '%s' includes itself!",s->c_str());
 	    else
@@ -1384,6 +1383,8 @@ bool AuthHandler::received(Message& msg)
     String user;
     if (!radclient.prepareAttributes(msg,false,&user))
 	return false;
+    bool cisco = msg.getBoolValue(s_fmtCisco,radclient.addCisco());
+    bool quintum = msg.getBoolValue(s_fmtQuintum,radclient.addQuintum());
     // TODO: process plaintext password
     if ((proto == "digest") || (proto == "sip")) {
 	const char* resp = msg.getValue("response");
@@ -1413,24 +1414,34 @@ bool AuthHandler::received(Message& msg)
     int sep = address.find(':');
     if (sep >= 0)
 	address = address.substr(0,sep);
-    if (radclient.addCisco())
+    if (cisco)
 	radclient.addAttribute("h323-remote-address",address);
-    if (radclient.addQuintum())
+    if (quintum)
 	radclient.addAttribute("Quintum-h323-remote-address",address);
-    String billid = msg.getValue("billid");
-    if (billid) {
-	// create a Cisco-compatible conference ID
-	MD5 cid(billid);
-	String confid;
-	confid << cid.hexDigest().substr(0,8) << " ";
-	confid << cid.hexDigest().substr(8,8) << " ";
-	confid << cid.hexDigest().substr(16,8) << " ";
-	confid << cid.hexDigest().substr(24,8);
-	confid.toUpper();
-	if (s_cisco)
-	    radclient.addAttribute("h323-conf-id",confid);
-	if (s_quintum)
-	    radclient.addAttribute("Quintum-h323-conf-id",confid);
+    if (cisco || quintum) {
+	const String& billid = msg[YSTRING("billid")];
+	if (billid) {
+	    // create a Cisco-compatible conference ID
+	    MD5 cid(billid);
+	    String confid;
+	    confid << cid.hexDigest().substr(0,8) << " ";
+	    confid << cid.hexDigest().substr(8,8) << " ";
+	    confid << cid.hexDigest().substr(16,8) << " ";
+	    confid << cid.hexDigest().substr(24,8);
+	    confid.toUpper();
+	    String tmp("call-id=");
+	    if (address.null())
+		address = s_localAddr.host();
+	    tmp << billid << "@" << address;
+	    if (cisco) {
+		radclient.addAttribute("h323-conf-id",confid);
+		radclient.addAttribute("Cisco-AVPair",tmp);
+	    }
+	    if (quintum) {
+		radclient.addAttribute("Quintum-h323-conf-id",confid);
+		radclient.addAttribute("Quintum-AVPair",tmp);
+	    }
+	}
     }
 
     ObjList result;

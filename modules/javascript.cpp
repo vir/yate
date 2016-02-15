@@ -3020,7 +3020,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    ExpOperation* ns = static_cast<ExpOperation*>(args[1]);
 	    if (name && (JsParser::isUndefined(*name) || JsParser::isNull(*name)))
 		name = 0;
-	    if (name && (JsParser::isUndefined(*ns) || JsParser::isNull(*ns)))
+	    if (ns && (JsParser::isUndefined(*ns) || JsParser::isNull(*ns)))
 		ns = 0;
 	    xml = m_xml->findFirstChild(name,ns);
 	}
@@ -3036,7 +3036,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	ExpOperation* ns = static_cast<ExpOperation*>(args[1]);
 	if (name && (JsParser::isUndefined(*name) || JsParser::isNull(*name)))
 	    name = 0;
-	if (name && (JsParser::isUndefined(*ns) || JsParser::isNull(*ns)))
+	if (ns && (JsParser::isUndefined(*ns) || JsParser::isNull(*ns)))
 	    ns = 0;
 	XmlElement* xml = 0;
 	if (m_xml)
@@ -3093,7 +3093,7 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	ExpOperation* ns = static_cast<ExpOperation*>(args[1]);
 	if (name && (JsParser::isUndefined(*name) || JsParser::isNull(*name)))
 	    name = 0;
-	if (name && (JsParser::isUndefined(*ns) || JsParser::isNull(*ns)))
+	if (ns && (JsParser::isUndefined(*ns) || JsParser::isNull(*ns)))
 	    ns = 0;
 	XmlElement* xml = 0;
 	if (m_xml)

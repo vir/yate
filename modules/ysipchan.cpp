@@ -4496,6 +4496,7 @@ bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src, bool o
 	{ "ip_host", 1 },
 	{ "ip_port", 1 },
 	{ "address", 1 },
+	{ "id", 1 },
 	{ "billid", 1 },
 	{ "handlers", 1 },
 	{  0,   0 },
@@ -4571,6 +4572,7 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
     }
 
     if (params) {
+	m.copyParam(*params,"id");
 	m.copyParam(*params,"number");
 	m.copyParam(*params,"caller");
 	m.copyParam(*params,"called");
@@ -5480,6 +5482,13 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
 	m.addParam("module",plugin.name());
 	m.addParam("route_type","msg");
     }
+    YateSIPConnection* conn = 0;
+    if (message->getParam("To","tag")) {
+	SIPDialog dlg(*message);
+	conn = plugin.findDialog(dlg,true);
+	if (conn)
+	    m.addParam("id",conn->id());
+    }
     String host;
     int portNum = 0;
     message->getParty()->getAddr(host,portNum,false);
@@ -5503,6 +5512,7 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
 	    setAuthError(t,m,age >= 0);
+	    TelEngine::destruct(conn);
 	    return true;
 	}
     }
@@ -5510,14 +5520,10 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     YateSIPTransport* trans = YOBJECT(YateSIPTransport,message->getParty());
     if (trans)
 	trans->fillMessage(m);
-    if (message->getParam("To","tag")) {
-	SIPDialog dlg(*message);
-	YateSIPConnection* conn = plugin.findDialog(dlg,true);
-	if (conn) {
-	    m.userData(conn);
-	    conn->complete(m);
-	    conn->deref();
-	}
+    if (conn) {
+	m.userData(conn);
+	conn->complete(m);
+	TelEngine::destruct(conn);
     }
     m.addParam(s_username,user,false);
 
@@ -7086,6 +7092,7 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
     if (m_user.null() || m_line)
 	return true;
     NamedList params("");
+    params.addParam("id",id());
     params.addParam("billid",billid(),false);
     int age = t->authUser(m_user,false,&params);
     if ((age >= 0) && (age <= 10))

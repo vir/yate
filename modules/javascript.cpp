@@ -522,6 +522,7 @@ public:
 	    params().addParam(new ExpFunction("getAttribute"));
 	    params().addParam(new ExpFunction("setAttribute"));
 	    params().addParam(new ExpFunction("removeAttribute"));
+	    params().addParam(new ExpFunction("attributes"));
 	    params().addParam(new ExpFunction("addChild"));
 	    params().addParam(new ExpFunction("getChild"));
 	    params().addParam(new ExpFunction("getChildren"));
@@ -2951,16 +2952,29 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
     else if (oper.name() == YSTRING("setAttribute")) {
 	if (!m_xml)
 	    return false;
-	if (extractArgs(stack,oper,context,args) != 2)
+	ExpOperation* name = 0;
+	ExpOperation* val = 0;
+	if (!extractStackArgs(1,this,stack,oper,context,args,&name,&val))
 	    return false;
-	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
-	ExpOperation* val = static_cast<ExpOperation*>(args[1]);
-	if (!name || !val)
-	    return false;
-	if (JsParser::isUndefined(*val) || JsParser::isNull(*val))
-	    m_xml->removeAttribute(*name);
-	else
-	    m_xml->setAttribute(*name,*val);
+	if (JsParser::isUndefined(*name) || JsParser::isNull(*name))
+	    return (val == 0);
+	if (val) {
+	    if (JsParser::isUndefined(*val) || JsParser::isNull(*val))
+		m_xml->removeAttribute(*name);
+	    else if (*name)
+		m_xml->setAttribute(*name,*val);
+	}
+	else {
+	    JsObject* jso = YOBJECT(JsObject,name);
+	    if (!jso)
+		return false;
+	    const ObjList* o = jso->params().paramList()->skipNull();
+	    for (; o; o = o->skipNext()) {
+		const NamedString* ns = static_cast<const NamedString*>(o->get());
+		if (ns->name() != JsObject::protoName())
+		    m_xml->setAttribute(ns->name(),*ns);
+	    }
+	}
     }
     else if (oper.name() == YSTRING("removeAttribute")) {
 	if (extractArgs(stack,oper,context,args) != 1)
@@ -2970,6 +2984,24 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    return false;
 	if (m_xml)
 	    m_xml->removeAttribute(*name);
+    }
+    else if (oper.name() == YSTRING("attributes")) {
+	if (extractArgs(stack,oper,context,args))
+	    return false;
+	const ObjList* o = m_xml ? m_xml->attributes().paramList()->skipNull() : 0;
+	JsObject* jso = 0;
+	if (o) {
+	    jso = new JsObject(context,mutex());
+	    for (; o; o = o->skipNext()) {
+		const NamedString* ns = static_cast<const NamedString*>(o->get());
+		if (ns->name() != JsObject::protoName())
+		    jso->params().addParam(ns->name(),*ns);
+	    }
+	}
+	if (jso)
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jso,"attributes"));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("addChild")) {
 	int argc = extractArgs(stack,oper,context,args);

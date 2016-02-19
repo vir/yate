@@ -2916,6 +2916,13 @@ public:
 	{ String::operator=(value); return *this; }
 
     /**
+     * Check if the regular expression is valid
+     * @return True if valid, false if not
+     */
+    inline bool valid() const
+	{ return m_regexp != 0; }
+
+    /**
      * Makes sure the regular expression is compiled
      * @return True if successfully compiled, false on error
      */

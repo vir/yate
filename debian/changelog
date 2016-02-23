@@ -1,4 +1,4 @@
-yate (5.5.1~svn6094) UNRELEASED; urgency=low
+yate (5.5.1~svn6095) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1592,8 +1592,10 @@ yate (5.5.1~svn6094) UNRELEASED; urgency=low
     Add the Cisco call-id to the Access-Request packet too.
   * Updated to SVN revision 6094: + Added method used to check if a
     Regexp is valid.
+  * Updated to SVN revision 6095: + Added JsRegExp function used to
+    check if the object contains a valid regexp.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 20 Feb 2016 02:19:14 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 24 Feb 2016 02:19:13 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

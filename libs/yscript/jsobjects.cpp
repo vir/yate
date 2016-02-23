@@ -1142,6 +1142,7 @@ JsRegExp::JsRegExp(Mutex* mtx)
     : JsObject("RegExp",mtx)
 {
     params().addParam(new ExpFunction("test"));
+    params().addParam(new ExpFunction("valid"));
 }
 
 JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool insensitive, bool extended, bool frozen)
@@ -1149,6 +1150,7 @@ JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool insensit
       m_regexp(rexp,extended,insensitive)
 {
     params().addParam(new ExpFunction("test"));
+    params().addParam(new ExpFunction("valid"));
     params().addParam("ignoreCase",String::boolText(insensitive));
     params().addParam("basicPosix",String::boolText(!extended));
 }
@@ -1158,6 +1160,7 @@ JsRegExp::JsRegExp(Mutex* mtx, const Regexp& rexp, bool frozen)
       m_regexp(rexp)
 {
     params().addParam(new ExpFunction("test"));
+    params().addParam(new ExpFunction("valid"));
     params().addParam("ignoreCase",String::boolText(rexp.isCaseInsensitive()));
     params().addParam("basicPosix",String::boolText(!rexp.isExtended()));
 }
@@ -1173,6 +1176,11 @@ bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	bool ok = op && regexp().matches(*op);
 	TelEngine::destruct(op);
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
+    else if (oper.name() == YSTRING("valid")) {
+	if (oper.number())
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(regexp().valid()));
     }
     else
 	return JsObject::runNative(stack,oper,context);

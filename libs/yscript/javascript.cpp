@@ -692,7 +692,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	    if (op && op->isInteger())
 		idx = (int)op->number();
 	}
-	ExpEvaluator::pushOne(stack,new ExpOperation(String((uint32_t)str->at(idx))));
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)(uint8_t)str->at(idx)));
 	return true;
     }
     if (name == YSTRING("indexOf")) {

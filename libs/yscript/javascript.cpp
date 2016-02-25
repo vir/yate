@@ -439,6 +439,7 @@ public:
     {
 	append(new String("length"));
 	append(new String("charAt"));
+	append(new String("charCodeAt"));
 	append(new String("indexOf"));
 	append(new String("substr"));
 	append(new String("match"));
@@ -681,6 +682,17 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 		idx = (int)op->number();
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(String(str->at(idx))));
+	return true;
+    }
+    if (name == YSTRING("charCodeAt")) {
+	int idx = 0;
+	ObjList args;
+	if (extractArgs(stack,oper,context,args)) {
+	    ExpOperation* op = static_cast<ExpOperation*>(args[0]);
+	    if (op && op->isInteger())
+		idx = (int)op->number();
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(String((uint32_t)str->at(idx))));
 	return true;
     }
     if (name == YSTRING("indexOf")) {

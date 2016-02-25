@@ -1203,7 +1203,7 @@ JsObject* JsRegExp::runConstructor(ObjList& stack, const ExpOperation& oper, Gen
 	return 0;
     bool insensitive = false;
     bool extended = true;
-    if (flags)  {
+    if (flags && *flags)  {
 	const char* f = *flags;
 	char c = *f++;
 	while (c) {

@@ -1,4 +1,4 @@
-yate (5.5.1~svn6095) UNRELEASED; urgency=low
+yate (5.5.1~svn6098) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1594,8 +1594,12 @@ yate (5.5.1~svn6095) UNRELEASED; urgency=low
     Regexp is valid.
   * Updated to SVN revision 6095: + Added JsRegExp function used to
     check if the object contains a valid regexp.
+  * Updated to SVN revision 6098: + Fixed bug: avoid crashing if
+    JsRegExp constructor receives empty flags.  + Added Javascript
+    string method charCodeAt.  + Fixed the returned type of
+    charCodeAt(), must be integer.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 24 Feb 2016 02:19:13 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 26 Feb 2016 02:19:14 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

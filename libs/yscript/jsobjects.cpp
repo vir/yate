@@ -1187,6 +1187,19 @@ bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
     return true;
 }
 
+bool JsRegExp::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsRegExp::runAssign() '%s'='%s' (%s) in '%s' [%p]",
+	oper.name().c_str(),oper.c_str(),oper.typeOf(),toString().c_str(),this);
+    if (!JsObject::runAssign(stack,oper,context))
+	return false;
+    if (oper.name() == YSTRING("ignoreCase"))
+	regexp().setFlags(regexp().isExtended(),oper.toBoolean());
+    else if (oper.name() == YSTRING("basicPosix"))
+	regexp().setFlags(!oper.toBoolean(),regexp().isCaseInsensitive());
+    return true;
+}
+
 JsObject* JsRegExp::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     ObjList args;

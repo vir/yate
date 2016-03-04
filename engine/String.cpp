@@ -1716,13 +1716,13 @@ const String* String::atom(const String*& str, const char* val)
 
 
 Regexp::Regexp()
-    : m_regexp(0), m_flags(0)
+    : m_regexp(0), m_compile(true), m_flags(0)
 {
     XDebug(DebugAll,"Regexp::Regexp() [%p]",this);
 }
 
 Regexp::Regexp(const char* value, bool extended, bool insensitive)
-    : String(value), m_regexp(0), m_flags(0)
+    : String(value), m_regexp(0), m_compile(true), m_flags(0)
 {
     XDebug(DebugAll,"Regexp::Regexp(\"%s\",%d,%d) [%p]",
 	value,extended,insensitive,this);
@@ -1731,7 +1731,7 @@ Regexp::Regexp(const char* value, bool extended, bool insensitive)
 }
 
 Regexp::Regexp(const Regexp& value)
-    : String(value.c_str()), m_regexp(0), m_flags(value.m_flags)
+    : String(value.c_str()), m_regexp(0), m_compile(true), m_flags(value.m_flags)
 {
     XDebug(DebugAll,"Regexp::Regexp(%p) [%p]",&value,this);
 }
@@ -1764,9 +1764,10 @@ void Regexp::changed()
     String::changed();
 }
 
-bool Regexp::compile() const
+bool Regexp::doCompile() const
 {
     XDebug(DebugInfo,"Regexp::compile()");
+    m_compile = false;
     if (c_str() && !m_regexp) {
 	regex_t *data = (regex_t *) ::malloc(sizeof(regex_t));
 	if (!data) {
@@ -1793,6 +1794,7 @@ void Regexp::cleanup()
 	::regfree(data);
 	::free(data);
     }
+    m_compile = true;
 }
 
 void Regexp::setFlags(bool extended, bool insensitive)

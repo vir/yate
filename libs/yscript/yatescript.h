@@ -2431,6 +2431,15 @@ public:
 	{ return m_regexp; }
 
     /**
+     * Try to assign a value to a single field
+     * @param stack Evaluation stack in use
+     * @param oper Field to assign to, contains the field name and new value
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if assignment succeeded
+     */
+    virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+    /**
      * RegExp object constructor, it's run on the prototype
      * @param stack Evaluation stack in use
      * @param oper Constructor function to evaluate

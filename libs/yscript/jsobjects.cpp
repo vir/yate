@@ -1180,10 +1180,23 @@ bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
     else if (oper.name() == YSTRING("valid")) {
 	if (oper.number())
 	    return false;
-	ExpEvaluator::pushOne(stack,new ExpOperation(regexp().valid()));
+	ExpEvaluator::pushOne(stack,new ExpOperation(regexp().compile()));
     }
     else
 	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+bool JsRegExp::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsRegExp::runAssign() '%s'='%s' (%s) in '%s' [%p]",
+	oper.name().c_str(),oper.c_str(),oper.typeOf(),toString().c_str(),this);
+    if (!JsObject::runAssign(stack,oper,context))
+	return false;
+    if (oper.name() == YSTRING("ignoreCase"))
+	regexp().setFlags(regexp().isExtended(),oper.toBoolean());
+    else if (oper.name() == YSTRING("basicPosix"))
+	regexp().setFlags(!oper.toBoolean(),regexp().isCaseInsensitive());
     return true;
 }
 

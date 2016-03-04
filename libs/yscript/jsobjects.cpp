@@ -1180,7 +1180,7 @@ bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
     else if (oper.name() == YSTRING("valid")) {
 	if (oper.number())
 	    return false;
-	ExpEvaluator::pushOne(stack,new ExpOperation(regexp().valid()));
+	ExpEvaluator::pushOne(stack,new ExpOperation(regexp().compile()));
     }
     else
 	return JsObject::runNative(stack,oper,context);

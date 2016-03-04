@@ -2916,17 +2916,11 @@ public:
 	{ String::operator=(value); return *this; }
 
     /**
-     * Check if the regular expression is valid
-     * @return True if valid, false if not
-     */
-    inline bool valid() const
-	{ return m_regexp != 0; }
-
-    /**
      * Makes sure the regular expression is compiled
      * @return True if successfully compiled, false on error
      */
-    bool compile() const;
+    inline bool compile() const
+	{ return m_regexp || (m_compile && doCompile()); }
 
     /**
      * Checks if the pattern matches a given value
@@ -2968,10 +2962,17 @@ protected:
      */
     virtual void changed();
 
+    /**
+     * Compile the regular expression
+     * @return True if successfully compiled, false on error
+     */
+    bool doCompile() const;
+
 private:
     void cleanup();
     bool matches(const char* value, StringMatchPrivate* matchlist) const;
     mutable void* m_regexp;
+    mutable bool m_compile;
     int m_flags;
 };
 

@@ -1302,11 +1302,8 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	}
 	if (min < 0 || max < 0 || min >= max)
 	    return false;
-	unsigned long interval = max;
-	if (min != 0)
-	    interval -= min + 1;
-	int64_t rand = (Random::random() % interval) + min;
-	ExpEvaluator::pushOne(stack,new ExpOperation(rand));
+	int64_t rand = (max > (min + 1)) ? (Random::random() % (max - min)) : 0;
+	ExpEvaluator::pushOne(stack,new ExpOperation(rand + min));
     }
     else
 	return JsObject::runNative(stack,oper,context);

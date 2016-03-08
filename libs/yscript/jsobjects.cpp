@@ -453,6 +453,9 @@ int JsObject::extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& ope
 	return 0;
     for (int i = (int)oper.number(); i;  i--) {
 	ExpOperation* op = obj->popValue(stack,context);
+	JsFunction* jsf = YOBJECT(JsFunction,op);
+	if (jsf)
+	    jsf->firstName(op->name());
 	arguments.insert(op);
     }
     return (int)oper.number();

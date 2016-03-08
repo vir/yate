@@ -1,4 +1,4 @@
-yate (5.5.1~svn6101) UNRELEASED; urgency=low
+yate (5.5.1~svn6102) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1602,8 +1602,11 @@ yate (5.5.1~svn6101) UNRELEASED; urgency=low
     regexp re-compile if not changed. Removed valid() method.  + Allow
     changing RegExp case insensitive and basic posix properties.
   * Updated to SVN revision 6101: + Fixed Math.random() possible crash.
+  * Updated to SVN revision 6102: + Store a JsFunction name in its
+    embedded ExpFunction so they are always in sync.  + Allow assigned
+    top-level functions to work as callbacks.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 08 Mar 2016 02:19:14 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 09 Mar 2016 02:19:14 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

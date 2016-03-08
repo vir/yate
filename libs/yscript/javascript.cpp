@@ -2911,6 +2911,11 @@ ScriptRun::Status JsRunner::call(const String& name, ObjList& args,
     }
     JsFunction* func = c->getGlobalFunction(name);
     if (!func) {
+	JsContext* ctx = YOBJECT(JsContext,context());
+	if (ctx)
+	    func = YOBJECT(JsFunction,ctx->getField(stack(),name,this));
+    }
+    if (!func) {
 	TelEngine::destruct(thisObj);
 	TelEngine::destruct(scopeObj);
 	return Failed;
@@ -3063,9 +3068,7 @@ void JsRunner::traceCall(const ExpOperation& oper, const JsFunction& func)
 	return;
     }
 
-    const String* name = &func.firstName();
-    if (TelEngine::null(name))
-	name = &oper.name();
+    const String& name = func.getFunc()->name();
     JsFuncStats* fs = 0;
     if (m_stats) {
 	m_stats->lock();
@@ -3076,7 +3079,7 @@ void JsRunner::traceCall(const ExpOperation& oper, const JsFunction& func)
 	    if (m_callInfo)
 		m_callInfo->traceLine(m_lastLine,diff);
 	}
-	fs = m_stats->getFuncStats(*name,o->lineNumber());
+	fs = m_stats->getFuncStats(name,o->lineNumber());
 	m_stats->unlock();
     }
 #ifdef STATS_TRACE
@@ -3084,9 +3087,9 @@ void JsRunner::traceCall(const ExpOperation& oper, const JsFunction& func)
     static_cast<const JsCode*>(code())->formatLineNo(caller,m_lastLine);
     static_cast<const JsCode*>(code())->formatLineNo(called,o->lineNumber());
     Debug(STATS_TRACE,DebugCall,"Call %s %s -> %s, instr=%u",
-	name->c_str(),caller.c_str(),called.c_str(),m_instr);
+	name.c_str(),caller.c_str(),called.c_str(),m_instr);
 #endif
-    m_traceStack.insert(m_callInfo = new JsCallInfo(fs,*name,m_lastLine,o->lineNumber(),m_instr,m_totalTime));
+    m_traceStack.insert(m_callInfo = new JsCallInfo(fs,name,m_lastLine,o->lineNumber(),m_instr,m_totalTime));
 }
 
 void JsRunner::traceReturn()
@@ -3361,7 +3364,7 @@ JsFunction::JsFunction(Mutex* mtx)
 
 JsFunction::JsFunction(Mutex* mtx, const char* name, ObjList* args, long int lbl, ScriptCode* code)
     : JsObject(mtx,String("[function ") + name + "()]",false),
-      m_label(lbl), m_code(code), m_func(name), m_name(name)
+      m_label(lbl), m_code(code), m_func(name)
 {
     init();
     if (args) {

@@ -527,11 +527,18 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	    for (unsigned int i = 0; i < n; i++) {
 		const NamedString* param = m->getParam(i);
 		if (param) {
+		    const char* type = "a";
 		    String tmp = param->name();
+		    if (tmp.startSkip("BW-",false)) {
+			if (!tmp)
+			    continue;
+			type = "b";
+		    }
+		    else
+			enc = enc || (tmp == "encryption");
 		    if (*param)
 			tmp << ":" << *param;
-		    sdp->addLine("a",tmp);
-		    enc = enc || (param->name() == "encryption");
+		    sdp->addLine(type,tmp);
 		}
 	    }
 	}
@@ -673,6 +680,32 @@ void SDPSession::updateFormats(const NamedList& msg, bool changeMedia)
 		m_rtpMedia->append(rtp);
 		mediaChanged(*rtp);
 	    }
+	}
+    }
+    String sdpPrefix = msg.getValue("osdp-prefix");
+    if (!sdpPrefix)
+	return;
+    sdpPrefix += "_";
+    for (i = 0; i < n; i++) {
+	const NamedString* param = msg.getParam(i);
+	if (!param)
+	    continue;
+	String tmp = param->name();
+	if (!tmp.startSkip(sdpPrefix,false))
+	    continue;
+	int sep = tmp.find("_");
+	String media("audio");
+	if (sep > 0) {
+	    media = tmp.substr(0,sep);
+	    tmp = tmp.substr(sep + 1);
+	}
+	if (tmp.null() || (tmp.find("_") >= 0))
+	    continue;
+	SDPMedia* rtp = static_cast<SDPMedia*>(m_rtpMedia->operator[](media));
+	if (rtp) {
+	    DDebug(m_enabler,DebugInfo,"Updating %s parameter '%s' to '%s'",
+		media.c_str(),tmp.c_str(),param->c_str());
+	    rtp->parameter(tmp,*param,false);
 	}
     }
 }

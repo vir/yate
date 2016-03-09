@@ -186,6 +186,16 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 		const NamedString* s = static_cast<NamedString*>(l->get());
 		if (s->name() == "m")
 		    break;
+		if (s->name() == "b") {
+		    if (first) {
+			int pos = s->find(':');
+			if (pos >= 0)
+			    dest = dest->append(new NamedString("BW-" + s->substr(0,pos),s->substr(pos+1)));
+			else
+			    dest = dest->append(new NamedString("BW-" + *s));
+		    }
+		    continue;
+		}
 		if (s->name() != "a")
 		    continue;
 		String line(*s);

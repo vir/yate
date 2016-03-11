@@ -2205,18 +2205,11 @@ public:
 	{ return &m_func; }
 
     /**
-     * Retrieve the first name assigned to this function
-     * @return The name of the property towhich this function was first assigned
-     */
-    inline const String& firstName() const
-	{ return m_name; }
-
-    /**
      * Set the name of this function if still empty
      * @param name Name to set as first assigned name
      */
     inline void firstName(const char* name)
-	{ if (m_name.null()) m_name = name; }
+	{ if (m_func.name().null()) const_cast<String&>(m_func.name()) = name; }
 
     /**
      * Retrieve the name of the N-th formal argument
@@ -2257,7 +2250,6 @@ private:
     long int m_label;
     ScriptCode* m_code;
     ExpFunction m_func;
-    String m_name;
 };
 
 /**
@@ -2429,6 +2421,15 @@ public:
      */
     inline Regexp& regexp()
 	{ return m_regexp; }
+
+    /**
+     * Try to assign a value to a single field
+     * @param stack Evaluation stack in use
+     * @param oper Field to assign to, contains the field name and new value
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if assignment succeeded
+     */
+    virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
     /**
      * RegExp object constructor, it's run on the prototype

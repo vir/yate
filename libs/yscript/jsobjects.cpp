@@ -453,6 +453,9 @@ int JsObject::extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& ope
 	return 0;
     for (int i = (int)oper.number(); i;  i--) {
 	ExpOperation* op = obj->popValue(stack,context);
+	JsFunction* jsf = YOBJECT(JsFunction,op);
+	if (jsf)
+	    jsf->firstName(op->name());
 	arguments.insert(op);
     }
     return (int)oper.number();
@@ -1142,6 +1145,7 @@ JsRegExp::JsRegExp(Mutex* mtx)
     : JsObject("RegExp",mtx)
 {
     params().addParam(new ExpFunction("test"));
+    params().addParam(new ExpFunction("valid"));
 }
 
 JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool insensitive, bool extended, bool frozen)
@@ -1149,6 +1153,7 @@ JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool insensit
       m_regexp(rexp,extended,insensitive)
 {
     params().addParam(new ExpFunction("test"));
+    params().addParam(new ExpFunction("valid"));
     params().addParam("ignoreCase",String::boolText(insensitive));
     params().addParam("basicPosix",String::boolText(!extended));
 }
@@ -1158,6 +1163,7 @@ JsRegExp::JsRegExp(Mutex* mtx, const Regexp& rexp, bool frozen)
       m_regexp(rexp)
 {
     params().addParam(new ExpFunction("test"));
+    params().addParam(new ExpFunction("valid"));
     params().addParam("ignoreCase",String::boolText(rexp.isCaseInsensitive()));
     params().addParam("basicPosix",String::boolText(!rexp.isExtended()));
 }
@@ -1174,8 +1180,26 @@ bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	TelEngine::destruct(op);
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
+    else if (oper.name() == YSTRING("valid")) {
+	if (oper.number())
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(regexp().compile()));
+    }
     else
 	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+bool JsRegExp::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsRegExp::runAssign() '%s'='%s' (%s) in '%s' [%p]",
+	oper.name().c_str(),oper.c_str(),oper.typeOf(),toString().c_str(),this);
+    if (!JsObject::runAssign(stack,oper,context))
+	return false;
+    if (oper.name() == YSTRING("ignoreCase"))
+	regexp().setFlags(regexp().isExtended(),oper.toBoolean());
+    else if (oper.name() == YSTRING("basicPosix"))
+	regexp().setFlags(!oper.toBoolean(),regexp().isCaseInsensitive());
     return true;
 }
 
@@ -1195,7 +1219,7 @@ JsObject* JsRegExp::runConstructor(ObjList& stack, const ExpOperation& oper, Gen
 	return 0;
     bool insensitive = false;
     bool extended = true;
-    if (flags)  {
+    if (flags && *flags)  {
 	const char* f = *flags;
 	char c = *f++;
 	while (c) {
@@ -1281,11 +1305,8 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	}
 	if (min < 0 || max < 0 || min >= max)
 	    return false;
-	unsigned long interval = max;
-	if (min != 0)
-	    interval -= min + 1;
-	int64_t rand = (Random::random() % interval) + min;
-	ExpEvaluator::pushOne(stack,new ExpOperation(rand));
+	int64_t rand = (max > (min + 1)) ? (Random::random() % (max - min)) : 0;
+	ExpEvaluator::pushOne(stack,new ExpOperation(rand + min));
     }
     else
 	return JsObject::runNative(stack,oper,context);

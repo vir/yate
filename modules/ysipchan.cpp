@@ -4496,6 +4496,7 @@ bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src, bool o
 	{ "ip_host", 1 },
 	{ "ip_port", 1 },
 	{ "address", 1 },
+	{ "id", 1 },
 	{ "billid", 1 },
 	{ "handlers", 1 },
 	{  0,   0 },
@@ -4541,6 +4542,9 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
 	m.addParam("ip_host",raddr);
 	m.addParam("ip_port",port);
 	m.addParam("ip_transport",message->getParty()->getProtoName());
+	YateSIPTransport* trans = YOBJECT(YateSIPTransport,message->getParty());
+	if (trans)
+	    trans->fillMessage(m);
 	if (raddr)
 	    m.addParam("address",SocketAddr::appendTo(raddr,rport));
 	// a dialogless INVITE could create a new call
@@ -4568,6 +4572,7 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
     }
 
     if (params) {
+	m.copyParam(*params,"id");
 	m.copyParam(*params,"number");
 	m.copyParam(*params,"caller");
 	m.copyParam(*params,"called");
@@ -5364,11 +5369,11 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     hl = message->getHeader("User-Agent");
     if (hl)
 	msg.setParam("device",*hl);
-    // Add transport if registering
-    if (expires && message->getParty()) {
+    // Add transport and also route if registering
+    if (message->getParty()) {
 	YateSIPTransport* trans = static_cast<YateSIPTransport*>(message->getParty()->getTransport());
 	if (trans)
-	    trans->fillMessage(msg,true);
+	    trans->fillMessage(msg,(0 != expires));
     }
     copySipHeaders(msg,*message,true,static_cast<const YateSIPEngine*>(t->getEngine())->foreignAuth());
     SIPMessage* r = 0;
@@ -5477,6 +5482,13 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
 	m.addParam("module",plugin.name());
 	m.addParam("route_type","msg");
     }
+    YateSIPConnection* conn = 0;
+    if (message->getParam("To","tag")) {
+	SIPDialog dlg(*message);
+	conn = plugin.findDialog(dlg,true);
+	if (conn)
+	    m.addParam("id",conn->id());
+    }
     String host;
     int portNum = 0;
     message->getParty()->getAddr(host,portNum,false);
@@ -5500,6 +5512,7 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
 	    setAuthError(t,m,age >= 0);
+	    TelEngine::destruct(conn);
 	    return true;
 	}
     }
@@ -5507,14 +5520,10 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     YateSIPTransport* trans = YOBJECT(YateSIPTransport,message->getParty());
     if (trans)
 	trans->fillMessage(m);
-    if (message->getParam("To","tag")) {
-	SIPDialog dlg(*message);
-	YateSIPConnection* conn = plugin.findDialog(dlg,true);
-	if (conn) {
-	    m.userData(conn);
-	    conn->complete(m);
-	    conn->deref();
-	}
+    if (conn) {
+	m.userData(conn);
+	conn->complete(m);
+	TelEngine::destruct(conn);
     }
     m.addParam(s_username,user,false);
 
@@ -5820,6 +5829,9 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("ip_host",m_host);
     m->addParam("ip_port",String(m_port));
     m->addParam("ip_transport",m_tr->initialMessage()->getParty()->getProtoName());
+    YateSIPTransport* trans = YOBJECT(YateSIPTransport,m_tr->initialMessage()->getParty());
+    if (trans)
+	trans->fillMessage(*m);
     m->addParam("sip_uri",uri);
     m->addParam("sip_from",m_uri);
     m->addParam("sip_to",ev->getMessage()->getHeaderValue("To"));
@@ -5931,6 +5943,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     s->addParam("called",uri.getUser());
     if (m_user)
 	s->addParam(s_username,m_user);
+    s->copyParam(*m,YSTRING("connection_id"));
     Engine::enqueue(s);
 }
 
@@ -6013,6 +6026,10 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	return;
     }
     setParty(m->getParty());
+    String connId;
+    YateSIPTransport* trans = YOBJECT(YateSIPTransport,m->getParty());
+    if (trans)
+	connId = trans->toString();
     updateRtpNatAddress(&msg);
     int maxf = msg.getIntValue(YSTRING("antiloop"),s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
@@ -6126,6 +6143,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     s->setParam("calledfull",m_uri.getUser());
     if (callid())
 	s->setParam("sip_callid",callid());
+    s->addParam("connection_id",connId);
     Engine::enqueue(s);
 }
 
@@ -7074,6 +7092,7 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
     if (m_user.null() || m_line)
 	return true;
     NamedList params("");
+    params.addParam("id",id());
     params.addParam("billid",billid(),false);
     int age = t->authUser(m_user,false,&params);
     if ((age >= 0) && (age <= 10))

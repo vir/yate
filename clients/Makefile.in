@@ -100,7 +100,7 @@ install: all do-install
 	$(if $(ICONFILES),\
 	@mkdir -p "$(DESTDIR)$(icondir)/" && \
 	for i in $(ICONFILES) ; do \
-	    @target=`echo $$i | $(SED) -e 's/\(.*\)-\([0-9]\+\)/\2x\2\/apps\/\1/'`; \
+	    target=`echo $$i | $(SED) -e 's/\(.*\)-\([0-9]\+\)/\2x\2\/apps\/\1/'`; \
 	    @INSTALL_D@ -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(icondir)/$$target" ; \
 	done \
 	)
@@ -131,7 +131,7 @@ uninstall: do-uninstall
 	)
 	$(if $(ICONFILES),\
 	@-for i in $(ICONFILES) ; do \
-	    @target=`echo $$i | $(SED) -e 's/\(.*\)-\([0-9]\+\)/\2x\2\/apps\/\1/'`; \
+	    target=`echo $$i | $(SED) -e 's/\(.*\)-\([0-9]\+\)/\2x\2\/apps\/\1/'`; \
 	    rm "$(DESTDIR)$(icondir)/$$target" ; \
 	done ; \
 	rmdir "$(DESTDIR)$(icondir)" \

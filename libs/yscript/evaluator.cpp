@@ -1345,7 +1345,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 
 bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context) const
 {
-    DDebug(this,DebugAll,"runFunction(%p,'%s' "FMT64", %p) ext=%p",
+    DDebug(this,DebugAll,"runFunction(%p,'%s' " FMT64 ", %p) ext=%p",
 	&stack,oper.name().c_str(),oper.number(),context,(void*)m_extender);
     if (oper.name() == YSTRING("chr")) {
 	String res;
@@ -1545,21 +1545,21 @@ void ExpEvaluator::dump(String& res, bool lineNo) const
     return dump(m_opcodes,res,lineNo);
 }
 
-int64_t ExpOperation::valInteger() const
+int64_t ExpOperation::valInteger(int64_t defVal) const
 {
-    return isInteger() ? number() : 0;
+    return isInteger() ? number() : defVal;
 }
 
-int64_t  ExpOperation::toNumber() const
+int64_t ExpOperation::toNumber() const
 {
     if (isInteger())
 	return number();
     return toInt64(nonInteger());
 }
 
-bool ExpOperation::valBoolean() const
+bool ExpOperation::valBoolean(bool defVal) const
 {
-    return isInteger() ? (number() != 0) : !null();
+    return isInteger() ? (number() != 0) : (defVal || !null());
 }
 
 const char* ExpOperation::typeOf() const
@@ -1628,10 +1628,10 @@ const char* ExpWrapper::typeOf() const
     }
 }
 
-bool ExpWrapper::valBoolean() const
+bool ExpWrapper::valBoolean(bool defVal) const
 {
     if (!m_object)
-	return false;
+	return defVal;
     return !JsParser::isNull(*this);
 }
 

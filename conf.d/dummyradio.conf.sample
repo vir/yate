@@ -1,0 +1,79 @@
+[general]
+; These are the setting for the default radio device profile
+
+; slowdown: integer: Slowdown factor relative to real time speed
+; Valid values 1 - 1000, default 1
+;slowdown=1
+
+; freq_error: integer: Additive frequency tuning error (Hz)
+; Valid values: -10000 - 10000, default 0
+;freq_error=0
+
+; freq_step: integer: Pretend tuning can be done only modulo this value (Hz)
+; Valid values 1 - 10000000, default 1
+;freq_step=1
+
+; sample_error: integer: Additive sample rate error (Hz)
+; Valid values -1000 - 1000, default 0
+;sample_error=0
+
+; sample_step: integer: Pretend sample rate can be set only modulo this value (Hz)
+; Valid values 1 - 1000, default 1
+;sample_step=1
+
+; filter_step: integer: Pretend filter bandwidth can be set only modulo this value (Hz)
+; Valid values 100000 - 5000000, default 250000
+;filter_step=250000
+
+; The following parameters correspond to members of the RadioCapability structure
+
+; maxTuneFreq: integer: Maximum tunable frequency (Hz)
+; Valid values 100000000 - 50000000000, default 5000000000
+;maxTuneFreq=5000000000
+
+; minTuneFreq: integer: Minimum tunable frequency (Hz)
+; Default values 250000000 - 5000000000, default 500000000
+;minTuneFreq=500000000
+
+; maxSampleRate: integer: Maximum settable sample rate (Hz)
+; valid values 5000000 - 50000000, default 20000000
+;maxSampleRate=20000000
+
+; minSampleRate: integer: Minimum settable sample rate (Hz)
+; Valid values 50000 - 5000000, default 250000
+;minSamplerate=250000
+
+; maxFilterBandwidth: integer: Maximum settable filter bandwidth (Hz)
+; Valid values 5000000 - 50000000, default 5000000
+;maxFilterBandwidth=5000000
+
+; minFilterBandwidth: integer: Minimum settable filter bandwidth (Hz)
+; Valid values 100000 - 5000000, default 1500000
+;minFilterBandwidth=1500000
+
+; rxLatency: integer: Simulated receiver latency (samples)
+; Valid values 0 - 50000, default 10000
+;rxLatency=10000
+
+; txLatency: integer: Simulated transmitter latency (samples)
+; Valid values 0 - 50000, default 10000
+;txLatency=10000
+
+; profiling: boolean: True if a profiling tool is running
+; Disable some time related capabilities
+;profiling=no
+
+; sample_energize: integer: Optional value used to energize sent data
+; Interval allowed: [0..10000]. 0: disabled
+;sample_energize=0
+
+; rx_file_raw: string: Optional path to file containg raw data (float) to be returned
+;  when receive is requested
+;rx_file_raw=
+
+; rx_buf_chunk: integer: Optional RX data chunk size
+; This value will be used to allign upper layer timestamp and return aligned data from
+;  configured rx_file_raw file
+; This parameter will be ignored if non 0 and rx_file_raw file samples count is not a
+;  a multiple of rx_buf_chunk samples
+;rx_buf_chunk=0

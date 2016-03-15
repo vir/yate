@@ -37,8 +37,7 @@ BEGIN {
     use Data::Dumper;
 
     # Set version && disable output buffering.
-    our $VERSION = '0.25';
-    $ |= 1;
+    our $VERSION = '0.26';
 }
 
 # All messages syntax.
@@ -62,10 +61,13 @@ sub new($;@) {
     # Accept only 'Debug' as additional parameter.
     my $self = {
 	'Debug' => 0,
+	'stdin' => IO::Handle->new_from_fd(fileno(STDIN), 'r'),
+	'stdout' => IO::Handle->new_from_fd(fileno(STDOUT), 'w'),
 	@_,
     };
 
     bless($self, $class);
+    $self->{stdout}->autoflush(1);
 
     # Install internal handlers.
     $self->install_handlers();
@@ -307,7 +309,7 @@ sub connect($$;$$$) {
     my $self = shift;
     my $addr = shift || die "Nowhere to connect()";
     my $role = shift || 'global';
-    die "Areaty connected" if $self->{socket};
+    die "Already connected" if $self->{socket};
     my $domain = ($addr=~/^[\w\.\-]+\:\d+$/)?'INET':'UNIX';
     eval "require IO::Socket::$domain" or die "Yate::connect: $@";
     my $sock = eval "new IO::Socket::$domain(\$addr)" or die "Yate::connect: $!";
@@ -540,7 +542,7 @@ sub dispatch($) {
     }
     return 1 if $self->{_nonblocking};
 
-    $self->return_message('false', '');
+    $self->return_message('false', $self->header('retvalue'));
     $self->error('Could not dispatch event ' . $self->header('name') . '.') if ($self->{'Debug'} == 1);
 
     return 0;

@@ -4475,15 +4475,17 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
     String prefix = msg.getValue(YSTRING("message-prefix"));
 
     // Add protocol and message type
-    switch (pcType) {
-	case SS7PointCode::ITU:
-	    msg.addParam(prefix+"protocol-type","itu-t");
-	    break;
-	case SS7PointCode::ANSI:
-	case SS7PointCode::ANSI8:
-	    msg.addParam(prefix+"protocol-type","ansi");
-	    break;
-	default: ;
+    if (!msg.getValue(prefix+"protocol-type")) {
+	switch (pcType) {
+	    case SS7PointCode::ITU:
+		msg.setParam(prefix+"protocol-type","itu-t");
+		break;
+	    case SS7PointCode::ANSI:
+	    case SS7PointCode::ANSI8:
+		msg.setParam(prefix+"protocol-type","ansi");
+		break;
+	    default: ;
+	}
     }
     msg.addParam(prefix+"message-type",msgName);
 

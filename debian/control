@@ -6,7 +6,7 @@ Build-Depends: build-essential, debhelper (>= 7), pkg-config,
  libasound2-dev, libqt4-dev, libh323plus-dev|libopenh323-dev, libpt-dev,
  libpq-dev, libmysqlclient-dev, libssl-dev, zaptel-source|dahdi-source,
  libgsm1-dev, libspeex-dev, libspandsp-dev, doxygen, autoconf, libsctp-dev,
- libsqlite3-dev
+ libsqlite3-dev, wanpipe
 Standards-Version: 3.7.3
 Homepage: http://yate.null.ro/
 
@@ -16,8 +16,6 @@ Suggests: yate-telhw, yate-pgsql
 Depends: libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends},
  libsctp1
 Description: The YATE project aims to be a fully featured software PBX.
- .
- This is version 4 or YATE.
  .
  YATE is a next-generation telephony engine; while currently focused on Voice
  over Internet Protocol (VoIP) and PSTN, its power lies in its ability to be
@@ -93,7 +91,7 @@ Description: SQLite database support for yate
 Package: yate-telhw
 Architecture: any
 Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version}),
- dahdi | zaptel
+ dahdi | zaptel | wanpipe
 Depends: libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: Telephony hardware support for yate server
  Also MGCP CA module.

@@ -1361,6 +1361,20 @@ public:
 	}
 
     /**
+     * Finds next XmlElement child of this XmlElement
+     * @param name Name of the child
+     * @param prev Previous child
+     * @param ns Optional child namespace
+     * @param noPrefix True to compare the tag without namespace prefix, false to
+     *  include namespace prefix when comparing the given tag.
+     *  This parameter is ignored if name is 0 or ns is not 0
+     * @return The next found child if prev exists else the first
+     */
+    inline XmlElement* findNextChild(const String& name, const XmlElement* prev = 0,
+	const String* ns = 0, bool noPrefix = true) const
+        { return findNextChild(prev,&name,ns,noPrefix); }
+
+    /**
      * Retrieve a child's text
      * @param name Name (tag) of the child
      * @param ns Optional child namespace

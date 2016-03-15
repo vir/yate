@@ -5,8 +5,10 @@ debian/tmp/usr/lib/libyateasn.so.*
 debian/tmp/usr/lib/libyateasn.so
 debian/tmp/etc/yate/analog.conf
 debian/tmp/usr/lib/yate/server/analog.yate
-#debian/tmp/etc/yate/wpcard.conf
-#debian/tmp/usr/lib/yate/server/wpcard.yate
+debian/tmp/etc/yate/wpcard.conf
+debian/tmp/usr/lib/yate/server/tdmcard.yate
+debian/tmp/etc/yate/tdmcard.conf
+debian/tmp/usr/lib/yate/server/wpcard.yate
 debian/tmp/etc/yate/zapcard.conf
 debian/tmp/usr/lib/yate/server/zapcard.yate
 debian/tmp/etc/yate/ysigchan.conf
@@ -23,5 +25,4 @@ debian/tmp/etc/yate/ss7_lnp_ansi.conf
 debian/tmp/usr/lib/yate/sig/ss7_lnp_ansi.yate
 debian/tmp/etc/yate/camel_map.conf
 debian/tmp/usr/lib/yate/sig/camel_map.yate
-
 

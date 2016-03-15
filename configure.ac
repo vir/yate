@@ -33,15 +33,18 @@ AC_MSG_RESULT([$uname_os])
 
 # Check if we should look for alternate library names
 AC_ARG_WITH(archlib,AC_HELP_STRING([--with-archlib=NAME],[use NAME as library directory name]),[ac_cv_use_archlib=$withval])
+AC_ARG_WITH(archinc,AC_HELP_STRING([--with-archinc=NAME],[use NAME as include directory name]),[ac_cv_use_archinc=$withval])
 AC_MSG_CHECKING([for libraries directory name])
 archname=`dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null`
 test -z "$archname" && archname=`uname -m 2>/dev/null`
 test -z "$archname" && archname=`arch -k 2>/dev/null`
 test -z "$archname" && archname=`arch 2>/dev/null`
 ARCHLIB="lib"
+ARCHINC="include"
 case "x$archname" in
     x*-*-*)
 	ARCHLIB="lib/$archname"
+	ARCHINC="include/$archname"
 	;;
     x*x86_64*|xppc64*|xaarch64)
 	ARCHLIB=lib64
@@ -59,6 +62,20 @@ esac
 test -d "/usr/$ARCHLIB" || ARCHLIB="lib"
 AC_MSG_RESULT([$ARCHLIB])
 AC_SUBST(ARCHLIB)
+AC_MSG_CHECKING([for include directory name])
+case "x$ac_cv_use_archinc" in
+    x|xyes)
+	;;
+    xno)
+	ARCHINC="inc"
+	;;
+    *)
+	ARCHINC="$ac_cv_use_archinc"
+esac
+test -d "/usr/$ARCHINC" || ARCHINC="inc"
+AC_MSG_RESULT([$ARCHINC])
+AC_SUBST(ARCHINC)
+
 
 # Checks for programs.
 AC_PROG_CXX
@@ -1131,7 +1148,7 @@ if [[ "x$ac_cv_use_spandsp" = "xstatic" ]]; then
     SPANDSP_LIB="-Wl,-Bstatic $SPANDSP_LIB -ltiff -lz -ljpeg -Wl,-Bdynamic"
 fi
 if [[ "x$ac_cv_use_spandsp" = "xyes" ]]; then
-for i in /usr/include /usr/local/include; do
+for i in /usr/include /usr/local/include "/usr/$ARCHINC"; do
     ac_cv_use_spandsp="$i"
     test -f "$ac_cv_use_spandsp/spandsp.h" && break
 done
@@ -1448,6 +1465,34 @@ fi
 AC_SUBST(HAVE_ZLIB)
 AC_SUBST(ZLIB_INC)
 AC_SUBST(ZLIB_LIB)
+
+
+HAVE_LIBUSB=no
+LIBUSB_INC=""
+LIBUSB_LIB=""
+AC_ARG_WITH(libusb,AC_HELP_STRING([--with-libusb=DIR],[use libusb DIR (default /usr)]),[ac_cv_use_libusb=$withval],[ac_cv_use_libusb=/usr])
+if [[ "x$ac_cv_use_libusb" != "xno" ]]; then
+    AC_MSG_CHECKING([for libusb in $ac_cv_use_libusb])
+    if [[ -f "$ac_cv_use_libusb/include/libusb-1.0/libusb.h" ]]; then
+	# Save current system libs and include dirs and restore them after trying to link
+	SAVE_LIBS="$LIBS"
+	SAVE_CFLAGS="$CFLAGS"
+	LIBS="$LIBS -lusb-1.0"
+	CFLAGS="$CFLAGS -I$ac_cv_use_libusb/include/libusb-1.0"
+	AC_TRY_LINK([#include <libusb.h>],[libusb_has_capability(0);],[HAVE_LIBUSB=yes],[HAVE_LIBUSB=no])
+	if [[ "$HAVE_LIBUSB" = "yes" ]]; then
+	    LIBUSB_INC="-I$ac_cv_use_libusb/include/libusb-1.0"
+	    LIBUSB_LIB="-lusb-1.0"
+	    AC_TRY_LINK([#include <libusb.h>],[libusb_get_version();],[LIBUSB_INC="-DHAVE_LIBUSB_VER $LIBUSB_INC"])
+	fi
+	LIBS="$SAVE_LIBS"
+	CFLAGS="$SAVE_CFLAGS"
+    fi
+    AC_MSG_RESULT([$HAVE_LIBUSB])
+fi
+AC_SUBST(HAVE_LIBUSB)
+AC_SUBST(LIBUSB_INC)
+AC_SUBST(LIBUSB_LIB)
 
 
 HAVE_QT4=no

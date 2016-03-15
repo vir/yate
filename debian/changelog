@@ -1,3 +1,60 @@
+yate (5.5.1~vir2016031501) UNRELEASED; urgency=medium
+
+  * Fix build.
+  * Fix yate qt client icons.
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Tue, 15 Mar 2016 06:26:48 +0300
+
+yate (5.5.1~vir2016031101) UNRELEASED; urgency=medium
+
+  * Merged upstream updates (SVN r6103)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Fri, 11 Mar 2016 22:38:18 +0300
+
+yate (5.5.1~vir2016021001) UNRELEASED; urgency=medium
+
+  * Sangoma hardware support enabled (requires Wanpipe)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Wed, 10 Feb 2016 18:00:35 +0300
+
+yate (5.5.1~vir2016020501) UNRELEASED; urgency=medium
+
+  * Yate.pm: Autoflush fixed. Fixed retval corruption if message was not handled.
+  * Use 'copyparams' to populate dumb channel's chan.startup (see Yate issue
+  * Merged upstream updates (SVN r6087)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Fri, 05 Feb 2016 00:10:28 +0300
+
+yate (5.5.1~vir2016011302) UNRELEASED; urgency=medium
+
+  * Fixed faxhan module packaging
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Wed, 13 Jan 2016 23:28:05 +0300
+
+yate (5.5.1~vir2016011301) UNRELEASED; urgency=medium
+
+  * Fixed spandsp include file location on debian
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Wed, 13 Jan 2016 06:46:46 +0300
+
+yate (5.5.1~vir2015112701) UNRELEASED; urgency=medium
+
+  * Merged upstream updates (SVN r6073)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Fri, 27 Nov 2015 17:45:07 +0300
+
+yate (5.5.1~vir2015080501) UNRELEASED; urgency=medium
+
+  * Merged upstream updates (SVN r6015)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Wed, 05 Aug 2015 14:14:10 +0300
+
+yate (5.5.1~vir2015070801) UNRELEASED; urgency=medium
+
+  * Fixed Yate.pm
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Wed, 08 Jul 2015 17:18:30 +0300
+
 yate (5.5.1~vir2015061301) UNRELEASED; urgency=medium
 
   * Fixed init script (jessie support)

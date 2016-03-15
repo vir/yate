@@ -149,6 +149,8 @@ using namespace TelEngine;
 #define RUNDELAY_MAX 60000000
 // Amount we decerease delay towards minimum each time child proves sanity
 #define RUNDELAY_DEC 20000
+// Maximum supervised initial delay
+#define INITDELAY_MAX 60000
 // Size of log relay buffer in bytes
 #define MAX_LOGBUFF 4096
 
@@ -218,6 +220,7 @@ NamedList Engine::s_params("");
 Engine::RunMode Engine::s_mode = Engine::Stopped;
 Engine::CallAccept Engine::s_accept = Engine::Accept;
 Engine* Engine::s_self = 0;
+bool Engine::s_started = false;
 int Engine::s_haltcode = -1;
 int EnginePrivate::count = 0;
 static String s_cfgpath(CFG_PATH);
@@ -226,7 +229,9 @@ static bool s_createusr = true;
 static bool s_init = false;
 static bool s_dynplugin = false;
 static Engine::PluginMode s_loadMode = Engine::LoadFail;
+static int s_minworkers = 1;
 static int s_maxworkers = 10;
+static int s_exit = -1;
 unsigned int Engine::s_congestion = 0;
 static Mutex s_congMutex(false,"Congestion");
 static bool s_debug = true;
@@ -1033,7 +1038,7 @@ static void copystream(int dest, int src)
     rotatelogs();
 }
 
-static int supervise(void)
+static int supervise(int initDelay)
 {
     s_superpid = ::getpid();
     ::fprintf(stderr,"Supervisor (%u) is starting\n",s_superpid);
@@ -1045,6 +1050,11 @@ static int supervise(void)
     ::signal(SIGUSR1,superhandler);
     ::signal(SIGUSR2,superhandler);
     ::signal(SIGALRM,SIG_IGN);
+    if (initDelay > 0) {
+	::fprintf(stderr,"Supervisor (%d) delaying initial start by %u.%02u seconds\n",
+		s_superpid,(initDelay + 5) / 1000,((initDelay + 5) / 10) % 100);
+	::usleep(initDelay * 1000);
+    }
     int retcode = 0;
     while (s_runagain) {
 	int wdogfd[2];
@@ -1427,7 +1437,8 @@ int Engine::engineInit()
     const char *modPath = s_cfg.getValue("general","modpath");
     if (modPath)
 	s_modpath = modPath;
-    s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers);
+    s_minworkers = s_cfg.getIntValue("general","minworkers",s_minworkers,1,25);
+    s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers,s_minworkers);
     s_maxevents = s_cfg.getIntValue("general","maxevents",s_maxevents);
     s_restarts = s_cfg.getIntValue("general","restarts");
     m_dispatcher.warnTime(1000*(u_int64_t)s_cfg.getIntValue("general","warntime"));
@@ -1454,6 +1465,7 @@ int Engine::engineInit()
 #ifndef _WINDOWS
     s_params.addParam("lastsignal",String(s_childsig));
 #endif
+    s_params.addParam("minworkers",String(s_minworkers));
     s_params.addParam("maxworkers",String(s_maxworkers));
     s_params.addParam("maxevents",String(s_maxevents));
     if (track)
@@ -1503,6 +1515,7 @@ int Engine::engineInit()
     ::signal(SIGTERM,sighandler);
     Debug(DebugAll,"Engine dispatching start message");
     dispatch("engine.start",true);
+    s_started = true;
     internalStatisticsStart();
     setStatus(SERVICE_RUNNING);
 #ifndef _WINDOWS
@@ -1575,15 +1588,22 @@ int Engine::run()
 	    CapturedEvent::capturing(false);
 	}
 
+	if (s_exit >= 0) {
+	    halt(s_exit);
+	    s_exit = -1;
+	}
+
 	// Create worker thread if we didn't hear about any of them in a while
 	if (s_makeworker && (EnginePrivate::count < s_maxworkers)) {
+	    int build = s_minworkers - EnginePrivate::count;
 	    if (EnginePrivate::count)
-		Alarm("engine","performance",(EnginePrivate::count < 4) ? DebugMild : DebugWarn,
+		Alarm("engine","performance",(build > -3) ? DebugMild : DebugWarn,
 		    "Creating new message dispatching thread (%d running)",EnginePrivate::count);
 	    else
-		Debug(DebugInfo,"Creating first message dispatching thread");
-	    EnginePrivate *prv = new EnginePrivate;
-	    prv->startup();
+		Debug(DebugInfo,"Creating first %d message dispatching threads",build);
+	    do {
+		(new EnginePrivate)->startup();
+	    } while (--build > 0);
 	}
 	else
 	    s_makeworker = true;
@@ -1811,7 +1831,10 @@ bool Engine::loadPluginDir(const String& relPath)
 #endif
     bool defload = s_cfg.getBoolValue("general","modload",true);
     String path = s_modpath;
-    if (relPath) {
+    static const Regexp r("^\\([/\\]\\|[[:alpha:]]:[/\\]\\).");
+    if (r.matches(relPath))
+	path = relPath;
+    else if (relPath) {
 	if (!path.endsWith(PATH_SEP))
 	    path += PATH_SEP;
 	path += relPath;
@@ -2255,7 +2278,7 @@ static void usage(bool client, FILE* f)
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
 "   -u pathname    Path to user files directory (%s)\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
-"   -x relpath     Relative path to extra modules directory (can be repeated)\n"
+"   -x dirpath     Absolute or relative path to extra modules directory (can be repeated)\n"
 "   -w directory   Change working directory\n"
 "   -N nodename    Set the name of this node in a cluster\n"
 #ifdef RLIMIT_CORE
@@ -2294,7 +2317,7 @@ static void usage(bool client, FILE* f)
 "   --remove       Remove the Windows service\n"
 #else
 "   -d             Daemonify, suppress output unless logged\n"
-"   -s             Supervised, restart if crashes or locks up\n"
+"   -s[=msec]      Supervised, restart if crashes or locks up, optionally sleeps initially\n"
 "   -r             Enable rotation of log file (needs -s and -l)\n"
 #endif
     ,s_cfgfile.safe()
@@ -2327,7 +2350,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
     int service = 0;
 #else
     bool daemonic = false;
-    bool supervised = false;
+    int supervised = 0;
 #endif
     bool client = (mode == Client);
     Debugger::Formatting tstamp = Debugger::TextLSep;
@@ -2420,7 +2443,15 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 			daemonic = true;
 			break;
 		    case 's':
-			supervised = true;
+			supervised = -1;
+			if ('=' == pc[1]) {
+			    long int ms = ::strtol(pc+2,0,0);
+			    if (ms > INITDELAY_MAX)
+				supervised = INITDELAY_MAX;
+			    else if (ms > 0)
+				supervised = ms;
+			    pc = 0;
+			}
 			break;
 		    case 'r':
 			s_logrotator = true;
@@ -2509,7 +2540,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 				    s_init = true;
 				    break;
 				case 'x':
-				    s_haltcode++;
+				    s_exit++;
 				    break;
 				case 'w':
 				    s_makeworker = false;
@@ -2736,7 +2767,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
     int retcode = -1;
 #ifndef _WINDOWS
     if (supervised)
-	retcode = supervise();
+	retcode = supervise(supervised);
     if (retcode >= 0)
 	return retcode;
 #endif

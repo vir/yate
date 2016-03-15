@@ -1,0 +1,94 @@
+; This file holds configuration for radiotest module
+
+[test]
+; This section configures the default test (in start test command this is the default section name)
+; Different test sesctions may be defined and passed in test command
+; E.g. 'control radiotest start name=other' will start test configured in section 'other'
+
+; sendonly: boolean: Configures a send only (no read) test
+; Defaults to no
+;sendonly=no
+
+; txdata: string: The data to send
+; This parameter is required
+; Values:
+;   zero: Send a buffer filled with 0 values
+;   single-tone or circle: Send a circle buffer (pattern: 1,0,0,1,-1,0,0,-1)
+;   two-circles: Send a signal composed of 2 sine waves
+;   pulse: Send a pulsed signal (NULLs with pulsed values)
+;   Comma separated list of values to be sent
+;txdata=
+
+; txdata_length: integer: The length (in samples) of TX data
+; This parameter is handled for txpattern: two-circles, pulse
+; two-circles: Defaults to 819, minimum value: 50
+; pulse: Defaults to 10000, minimum value: 50
+;txdata_length=
+
+; txdata_repeat: integer: Repeat tx data after the buffer is built
+; E.g. extend the send buffer (use a larger buffer for send)
+; E.g. a buffer (1,1,0,0) with txdata_repeat=1 will build a send buffer: (1,1,0,0,1,1,0,0)
+; This parameter is ignored for txpattern: two-circles, pulse
+;txdata_repeat=
+
+; pulse: integer: The index used to insert pulsed values
+; The parameter is ignored if txpattern is not 'pulse'
+; Defaults to 2. The value will be clamped in interval [1..1000000]
+;pulse=2
+
+; readsamples: integer: The length of read buffer in samples
+; This parameter is ignored for read only tests
+; Defaults to 256
+;readsampels=256
+
+; Parameters starting with 'init:' will execute commands on radio interface before powering it on
+; Parameters starting with 'cmd:' will execute commands on radio interface after powering it on
+; The commands will be executed before starting any read/write operation
+; Supported commands:
+; init:samplerate: Set radio interface sampling rate
+; init:filter: Set radio interface filter bandwidth
+; init:txfrequency: Set radio interface TX (downlink) tunning frequency
+; init:rxfrequency: Set radio interface RX (uplink) tunning frequency
+; cmd:loopback: Set radio interface loopback
+; cmd:calibrate: Execute the calibrate operation on radio interface
+
+
+[radiodatafile]
+; This section configures radio data file processing
+
+; fmt-float: string: Format for float samples
+;fmt-float=%+g%+gj
+
+; fmt-int: string: Format for int samples
+;fmt-int=%+d%+dj
+
+; separator: string: Samples separator
+; Defaults to space if missing
+; Set it to empty string if no separator is required
+;separator=
+
+; input: string: File to process
+; This parameter is required
+;input=
+
+; output: string: Optional file to write data
+; If missing processing result will be displayed in console/log
+;output=
+
+; recformat: string: Optional format for file record dump
+; E.g.: ${timestamp} delta=${ts-delta} samples=${samples}: ${data}${newline}
+;recformat=${data}
+
+; dumpdata: boolean: Dump record contents
+; This parameter is ignored if data is written to file (e.g. only records
+;  data is dumped to file)
+;dumpdata=true
+
+; recstart: integer: Optional record index to start processing
+;recstart=1
+
+; reccount: integer: Optional number of records to process (0: all)
+;reccount=0
+
+; recsamples: integer: Optional number of samples to dump from each record (0: all)
+;recsamples=0

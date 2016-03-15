@@ -3289,7 +3289,7 @@ SS7TCAPTransactionITU::SS7TCAPTransactionITU(SS7TCAP* tcap, SS7TCAP::TCAPUserTra
 	const String& transactID, NamedList& params, u_int64_t timeout, bool initLocal)
     : SS7TCAPTransaction(tcap,type,transactID,params,timeout,initLocal)
 {
-    DDebug(m_tcap,DebugAll,"SS7TCAPTransactionITU(tcap = '%s' [%p], transactID = %s, timeout="FMT64" ) created [%p]",
+    DDebug(m_tcap,DebugAll,"SS7TCAPTransactionITU(tcap = '%s' [%p], transactID = %s, timeout=" FMT64 " ) created [%p]",
 	    m_tcap->toString().c_str(),tcap,transactID.c_str(),timeout,this);
 }
 

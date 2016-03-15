@@ -1465,8 +1465,9 @@ void LNPQuery::extractAddress(NamedList& params)
 BlockedCode::BlockedCode(const char* code, u_int64_t duration, u_int64_t gap, LNPClient::ACGCause cause)
     : m_code(code)
 {
-    Debug(&__plugin,DebugAll,"BlockedCode created [%p] - code '%s' blocked for "FMT64U" seconds with gap="FMT64U" seconds, cause=%s",
-	  this,m_code.c_str(),duration,gap,lookup(cause,s_acgCauses,""));
+    Debug(&__plugin,DebugAll,"BlockedCode created [%p] - code '%s' blocked for " FMT64U
+	" seconds with gap=" FMT64U " seconds, cause=%s",
+	this,m_code.c_str(),duration,gap,lookup(cause,s_acgCauses,""));
     update(duration,gap,cause);
 }
 
@@ -1478,15 +1479,15 @@ BlockedCode::~BlockedCode()
 void BlockedCode::resetGapInterval()
 {
     u_int64_t interval = (u_int64_t) (90.0 + (110 - 90) * ((double)Random::random() / (double)RAND_MAX)) / 100.0 * m_gap;
-    DDebug(&__plugin,DebugAll,"BlockedCode created [%p] - code '%s' has gap interval="FMT64" seconds",this,m_code.c_str(),
-	interval);
+    DDebug(&__plugin,DebugAll,"BlockedCode created [%p] - code '%s' has gap interval=" FMT64
+	" seconds",this,m_code.c_str(),interval);
     m_gapExpiry = Time::secNow() + interval;
 }
 
 void BlockedCode::update(u_int64_t duration, u_int64_t gap, LNPClient::ACGCause cause)
 {
-    DDebug(&__plugin,DebugAll,"BlockedCode created [%p] - code '%s' update duration="FMT64" seconds, gap="FMT64" seconds",this,m_code.c_str(),
-	duration,gap);
+    DDebug(&__plugin,DebugAll,"BlockedCode created [%p] - code '%s' update duration=" FMT64
+	" seconds, gap=" FMT64 " seconds",this,m_code.c_str(),duration,gap);
     m_cause = cause;
     m_duration = (unsigned int)duration;
     m_durationExpiry = Time::secNow() + duration;

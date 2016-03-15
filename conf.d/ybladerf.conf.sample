@@ -1,0 +1,166 @@
+; This file holds configuration for bladerf module
+
+[general]
+
+; priority: integer: Priority of radio create message handler
+; Defaults to 90
+;priority=90
+
+; fpga_load: boolean: Load FPGA from file on device open
+; Allowed values:
+;  Boolean yes: Always load
+;  Boolean no: Don't load (not recommended)
+;  auto: Check if already loaded. Load only if check fails or not loaded
+; Defaults to boolean 'yes' if missing or invalid
+;fpga_load=yes
+
+; fpga_file_115: string: 115KLE FPGA file to load
+;fpga_file_115=${sharedpath}/data/hostedx115.rbf
+
+; fpga_file_40: string: 40KLE FPGA file to load
+;fpga_file_40=${sharedpath}/data/hostedx40.rbf
+
+; tx_fpga_corr_phase: integer: TX FPGA PHASE correction
+; Interval allowed: [-4096..4096]
+; Defaults to 0 if missing or invalid
+;tx_fpga_corr_phase=0
+
+; tx_fpga_corr_gain: integer: TX FPGA GAIN correction
+; Interval allowed: [-4096..4096]
+; Defaults to 0 if missing or invalid
+;tx_fpga_corr_gain=0
+
+; tx_powerbalance: float: TX I/Q power balance
+; Interval allowed: (0..2)
+; Defaults to 1 if missing or invalid
+;tx_powerbalance=1
+
+; rxcheckts: integer: Check timestamps after reading from device
+; Put a debug message if incorrect
+; This parameter is applied on reload
+; Values:
+;   0: disable
+;   negative: forever, until changed
+;   positive: the number of times to check
+;rxcheckts=-1
+
+; tx_min_buffers: integer: Minimum number of buffers (USB frames) to send
+; This option is used to accumulate data before sending it (avoid short write operations)
+; Minimum allowed value is 1
+; Defaults to the number of allocated buffers
+;tx_min_buffers=
+
+; silence_time: integer: Interval (in milliseconds) to silence timestamp related debug messages
+; Allowed interval [0..60000]
+;silence_time=5000
+
+; rx_ts_past_error_interval: integer: Interval (in milliseconds) for allowed late timestamps
+;  when reading from device. I.e. how many old samples in a row we accept when reading
+; This value is used to make sure we are returning from device read (with error): avoid
+;  reading forever if we have a faulty device
+; Allowed interval [50..10000]
+; Defaults to 200
+;rx_ts_past_error_interval=200
+
+; warn_clamped: integer: Threshold for sent clamped samples warning
+; This parameter is a percent: clamped_samples/requested_samples
+; Allowed interval [0..100]
+; Defaults to 0 (always warn if there is at least 1 sample clamped)
+;warn_clamped=0
+
+
+[libusb]
+; This section configures libusb backend related data
+
+; debug_level: libusb debug level
+; Default to 0 (no debug messages)
+; Currently libusb defines the follwing levels:
+;  1: ERROR, 2: WARNING, 3: INFO, 4: DEBUG
+;debug_level=0
+
+; sync_transfer_timeout: integer: Sync transfer timeout in milliseconds
+; This parameter is applied on device creation
+; This parameter is used when transferring radio data (samples)
+; Allowed interval: [20 .. 500]
+; Defaults to 50
+;sync_transfer_timeout=50
+
+; ctrl_transfer_timeout: integer: Control transfer timeout in milliseconds
+; This parameter is applied on device creation
+; Allowed interval: [200 .. 2000]
+; Defaults to 500
+;ctrl_transfer_timeout=500
+
+; bulk_transfer_timeout: integer: Bulk transfer timeout in milliseconds
+; This parameter is applied on device creation
+; Allowed interval: [200 .. 2000]
+; Defaults to 500
+;bulk_transfer_timeout=500
+
+
+[filedump]
+; This section configures file data dump
+; All parameters are applied on reload
+; This section is always handled on reload (e.g. dump settings are applied, old dump is reset)
+; Dump files are closed when the condition is met (count changes to 0 or reaches 0)
+; TX/RX data dump is done when send/recv is executed (e.g. if no recv is requested by the
+;  upper layer the RX file(s) won't change)
+
+; tx-data-mode: string/boolean: Configures the device send data dump mode (before
+;  sending it to device, after applying changes on data received from upper layer)
+; Values:
+;  Boolean false (disable): Disable data dump
+;  Boolean true (on): Enable data dump, dump forever (until changed)
+;  count: Enable data dump, dump the number of buffers set in 'tx-data-count'
+;tx-data-mode=disable
+
+; tx-data-count: integer: The number of device send data buffers to dump
+; The number of buffers is in device buffers
+; This parameter is ignored if 'tx-data-mode' is not 'count'
+;tx-data-count=10
+
+; tx-data-file: string: File to dump data sent to device
+; 'bordserial' is the serial of the device
+;tx-data-file=tx-data-${boardserial}
+
+; tx-app-mode: string/boolean: Configures the send data dump mode (as received from
+;  from upper layer, before applying any changes)
+; Values:
+;  Boolean false (disable): Disable data dump
+;  Boolean true (on): Enable data dump, dump forever (until changed)
+;  count: Enable data dump, dump the number of buffers set in 'tx-app-count'
+;tx-app-mode=disable
+
+; tx-app-count: integer: The number of send buffers to dump
+; The number of buffers is in send requests (e.g. a buffer will be counted on each request)
+; This parameter is ignored if 'tx-data-mode' is not 'count'
+;tx-app-count=10
+
+; tx-app-file: string: File to dump data received from upper layer
+; 'bordserial' is the serial of the device
+;tx-app-file=tx-app-${boardserial}
+
+; rx-data-mode
+; rx-data-count
+; rx-data-file
+; rx-app-mode
+; rx-app-count
+; rx-app-file
+; See the corresponding TX parameters
+; rx-data-file: The data is dumped after read from device, before applying any changes
+; rx-app-file: The data is dumped before returning it to upper layer
+
+
+[test_name]
+; This section configures a test
+; There may be more than one test section
+
+; Parameters starting with 'init:' can be used to run device commands after creation
+;  and before power up
+; Handled commands:
+; txpattern=circle/zero/random/comma_separated_list_of_values
+; samplerate=device_sample_rate
+; filter=device_filter_bandwidth
+; txfrequency=tx_frequency_in_hertz
+; rxfrequency=rx_frequency_in_hertz
+

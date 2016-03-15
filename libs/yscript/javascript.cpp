@@ -439,6 +439,7 @@ public:
     {
 	append(new String("length"));
 	append(new String("charAt"));
+	append(new String("charCodeAt"));
 	append(new String("indexOf"));
 	append(new String("substr"));
 	append(new String("match"));
@@ -681,6 +682,17 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 		idx = (int)op->number();
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(String(str->at(idx))));
+	return true;
+    }
+    if (name == YSTRING("charCodeAt")) {
+	int idx = 0;
+	ObjList args;
+	if (extractArgs(stack,oper,context,args)) {
+	    ExpOperation* op = static_cast<ExpOperation*>(args[0]);
+	    if (op && op->isInteger())
+		idx = (int)op->number();
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)(uint8_t)str->at(idx)));
 	return true;
     }
     if (name == YSTRING("indexOf")) {
@@ -2558,7 +2570,7 @@ void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* co
 	    temp = new NamedString(op->name(),*ns);
 	object->params().setParam(temp);
     }
-    if (object->frozen())
+    if (object->frozen() || object->params().getParam(JsObject::protoName()))
 	return;
     JsArray* arr = YOBJECT(JsArray,object);
     if (arr) {
@@ -2587,13 +2599,12 @@ void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* co
     if (objCtr)
 	arrayProto = YOBJECT(JsArray,objCtr->params().getParam(YSTRING("prototype")));
 
-
     resolveObjectParams(object,stack,context,ctx,objProto,arrayProto);
 }
 
 bool JsCode::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context) const
 {
-    DDebug(this,DebugAll,"JsCode::runFunction(%p,'%s' "FMT64", %p) ext=%p",
+    DDebug(this,DebugAll,"JsCode::runFunction(%p,'%s' " FMT64 ", %p) ext=%p",
 	&stack,oper.name().c_str(),oper.number(),context,extender());
     if (context) {
 	ScriptRun* sr = static_cast<ScriptRun*>(context);
@@ -2751,7 +2762,7 @@ bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* c
 {
     if (!(func && context))
 	return false;
-    XDebug(this,DebugInfo,"JsCode::callFunction(%p,"FMT64",%p) in %s'%s' this=%p",
+    XDebug(this,DebugInfo,"JsCode::callFunction(%p," FMT64 ",%p) in %s'%s' this=%p",
 	&stack,oper.number(),context,(constr ? "constructor " : ""),
 	func->toString().c_str(),thisObj);
     JsRunner* runner = static_cast<JsRunner*>(context);
@@ -2899,6 +2910,11 @@ ScriptRun::Status JsRunner::call(const String& name, ObjList& args,
 	return Invalid;
     }
     JsFunction* func = c->getGlobalFunction(name);
+    if (!func) {
+	JsContext* ctx = YOBJECT(JsContext,context());
+	if (ctx)
+	    func = YOBJECT(JsFunction,ctx->getField(stack(),name,this));
+    }
     if (!func) {
 	TelEngine::destruct(thisObj);
 	TelEngine::destruct(scopeObj);
@@ -3052,9 +3068,7 @@ void JsRunner::traceCall(const ExpOperation& oper, const JsFunction& func)
 	return;
     }
 
-    const String* name = &func.firstName();
-    if (TelEngine::null(name))
-	name = &oper.name();
+    const String& name = func.getFunc()->name();
     JsFuncStats* fs = 0;
     if (m_stats) {
 	m_stats->lock();
@@ -3065,7 +3079,7 @@ void JsRunner::traceCall(const ExpOperation& oper, const JsFunction& func)
 	    if (m_callInfo)
 		m_callInfo->traceLine(m_lastLine,diff);
 	}
-	fs = m_stats->getFuncStats(*name,o->lineNumber());
+	fs = m_stats->getFuncStats(name,o->lineNumber());
 	m_stats->unlock();
     }
 #ifdef STATS_TRACE
@@ -3073,9 +3087,9 @@ void JsRunner::traceCall(const ExpOperation& oper, const JsFunction& func)
     static_cast<const JsCode*>(code())->formatLineNo(caller,m_lastLine);
     static_cast<const JsCode*>(code())->formatLineNo(called,o->lineNumber());
     Debug(STATS_TRACE,DebugCall,"Call %s %s -> %s, instr=%u",
-	name->c_str(),caller.c_str(),called.c_str(),m_instr);
+	name.c_str(),caller.c_str(),called.c_str(),m_instr);
 #endif
-    m_traceStack.insert(m_callInfo = new JsCallInfo(fs,*name,m_lastLine,o->lineNumber(),m_instr,m_totalTime));
+    m_traceStack.insert(m_callInfo = new JsCallInfo(fs,name,m_lastLine,o->lineNumber(),m_instr,m_totalTime));
 }
 
 void JsRunner::traceReturn()
@@ -3350,7 +3364,7 @@ JsFunction::JsFunction(Mutex* mtx)
 
 JsFunction::JsFunction(Mutex* mtx, const char* name, ObjList* args, long int lbl, ScriptCode* code)
     : JsObject(mtx,String("[function ") + name + "()]",false),
-      m_label(lbl), m_code(code), m_func(name), m_name(name)
+      m_label(lbl), m_code(code), m_func(name)
 {
     init();
     if (args) {
@@ -3566,7 +3580,7 @@ ScriptRun::Status JsParser::eval(const String& text, ExpOperation** result, Scri
 }
 
 // Parse JSON using native methods
-ExpOperation* JsParser::parseJSON(const char* text, Mutex* mtx)
+ExpOperation* JsParser::parseJSON(const char* text, Mutex* mtx, ObjList* stack, GenObject* context)
 {
     if (!text)
 	return 0;
@@ -3575,6 +3589,8 @@ ExpOperation* JsParser::parseJSON(const char* text, Mutex* mtx)
     ParsePoint pp(text,code);
     if (code->parseSimple(pp,true,mtx))
 	ret = code->popOpcode();
+    if (stack)
+	code->resolveObjectParams(YOBJECT(JsObject,ret),*stack,context);
     TelEngine::destruct(code);
     return ret;
 }

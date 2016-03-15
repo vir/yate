@@ -252,6 +252,8 @@ private:
     bool m_colorize;
     bool m_machine;
     int m_offset;
+    int m_header;
+    int m_finish;
     int m_threshold;
     Socket* m_socket;
     unsigned char m_subBuf[64];
@@ -436,7 +438,7 @@ Connection::Connection(Socket* sock, const char* addr, RManagerListener* listene
     : Thread("RManager Connection"),
       m_aliases(""),
       m_auth(None), m_debug(false), m_output(false), m_colorize(false), m_machine(false),
-      m_offset(-1), m_threshold(DebugAll),
+      m_offset(-1), m_header(0), m_finish(-1), m_threshold(DebugAll),
       m_socket(sock), m_subOpt(0), m_subLen(0),
       m_lastch(0), m_escmode(0), m_echoing(false), m_beeping(false),
       m_timeout(0), m_address(addr), m_listener(listener),
@@ -999,7 +1001,7 @@ bool Connection::processChar(unsigned char c)
 
 bool Connection::pagedCommand(bool up)
 {
-    if (m_buffer || m_offset < 0)
+    if (m_buffer || m_offset <= 0)
 	return false;
     const String* s = static_cast<const String*>(m_history.get());
     if (!s)
@@ -1007,13 +1009,22 @@ bool Connection::pagedCommand(bool up)
     if (up) {
 	if (!m_height)
 	    return false;
-	int offs = m_offset - m_height;
-	if (offs < 0)
+	int offs = m_offset - m_height + m_header;
+	if (!offs)
 	    return false;
-	offs -= m_height;
+	offs -= m_height - m_header;
 	if (offs < 0)
 	    offs = 0;
 	m_offset = offs;
+    }
+    else if (m_finish >= 0) {
+	if (m_offset == m_finish)
+	    return false;
+	int last = m_finish - m_height + m_header;
+	if (last < 0)
+	    return false;
+	if (m_offset > last)
+	    m_offset = last;
     }
     execCommand(*s,true);
     return true;
@@ -1027,7 +1038,7 @@ void Connection::putConnInfo(NamedList& msg) const
     msg.setParam("cmd_machine",String::boolText(m_machine));
     if (m_width && m_height && !m_machine) {
 	msg.setParam("cmd_width",String(m_width));
-	msg.setParam("cmd_heigth",String(m_height));
+	msg.setParam("cmd_height",String(m_height));
     }
 }
 
@@ -1208,6 +1219,8 @@ bool Connection::processLine(const char *line, bool saveLine)
     line = 0;
     m_buffer.clear();
     m_offset = -1;
+    m_header = 0;
+    m_finish = -1;
 
     if (str.startSkip("quit"))
     {
@@ -1697,8 +1710,12 @@ void Connection::execCommand(const String& str, bool saveOffset)
     Message m("engine.command");
     m.addParam("line",str);
     putConnInfo(m);
-    if (saveOffset && m_offset >= 0)
+    if (saveOffset && m_offset >= 0) {
 	m.setParam("cmd_offset",String(m_offset));
+	m.setParam("cmd_header",String(m_header));
+	if (m_finish >= 0)
+	    m.setParam("cmd_finish",String(m_finish));
+    }
     if (Engine::dispatch(m)) {
 	writeStr(m.retValue());
 	const ObjList* l = YOBJECT(ObjList,m.userData());
@@ -1712,8 +1729,11 @@ void Connection::execCommand(const String& str, bool saveOffset)
 	    else
 		writeEvent(o->toString(),-1);
 	}
-	if (saveOffset)
+	if (saveOffset) {
 	    m_offset = m.getIntValue("cmd_offset",-1);
+	    m_header = m.getIntValue("cmd_header",0);
+	    m_finish = m.getIntValue("cmd_finish",m_finish);
+	}
     }
     else
 	writeStr((m_machine ? "%%=syntax:" : "Cannot understand: ") + str + "\r\n");

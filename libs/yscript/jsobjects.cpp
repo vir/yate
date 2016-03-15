@@ -34,6 +34,10 @@ public:
 	: JsObject("Object",mtx,true)
 	{
 	}
+    virtual void initConstructor(JsFunction* construct)
+	{
+	    construct->params().addParam(new ExpFunction("keys"));
+	}
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
@@ -449,6 +453,9 @@ int JsObject::extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& ope
 	return 0;
     for (int i = (int)oper.number(); i;  i--) {
 	ExpOperation* op = obj->popValue(stack,context);
+	JsFunction* jsf = YOBJECT(JsFunction,op);
+	if (jsf)
+	    jsf->firstName(op->name());
 	arguments.insert(op);
     }
     return (int)oper.number();
@@ -495,6 +502,37 @@ bool JsObjectObj::runNative(ObjList& stack, const ExpOperation& oper, GenObject*
 {
     if (oper.name() == YSTRING("constructor"))
 	ExpEvaluator::pushOne(stack,new ExpWrapper(new JsObject("Object",mutex())));
+    else if (oper.name() == YSTRING("keys")) {
+	ExpOperation* op = 0;
+	GenObject* obj = 0;
+	if (oper.number() == 0) {
+	    ScriptRun* run = YOBJECT(ScriptRun,context);
+	    if (run)
+		obj = run->context();
+	    else
+		obj = context;
+	}
+	else if (oper.number() == 1) {
+	    op = popValue(stack,context);
+	    if (!op)
+		return false;
+	    obj = op;
+	}
+	else
+	    return false;
+	const NamedList* lst = YOBJECT(NamedList,obj);
+	if (lst) {
+	    NamedIterator iter(*lst);
+	    JsArray* jsa = new JsArray(context,mutex());
+	    while (const NamedString* ns = iter.get())
+		if (ns->name() != protoName())
+		    jsa->push(new ExpOperation(ns->name(),0,true));
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,"keys"));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+	TelEngine::destruct(op);
+    }
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
@@ -515,6 +553,7 @@ JsArray::JsArray(Mutex* mtx)
     params().addParam(new ExpFunction("splice"));
     params().addParam(new ExpFunction("sort"));
     params().addParam(new ExpFunction("indexOf"));
+    params().addParam(new ExpFunction("lastIndexOf"));
     params().addParam("length","0");
 }
 
@@ -777,22 +816,24 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// New length: 4
 	// shift array
 	int32_t shift = (int32_t)oper.number();
-	for (int32_t i = length() + shift - 1; i >= shift; i--) {
-	    NamedString* ns = static_cast<NamedString*>((*params().paramList())[String(i - shift)]);
-	    if (ns) {
-		String index(i);
-		params().clearParam(index);
-		const_cast<String&>(ns->name()) = index;
+	if (shift >= 1) {
+	    for (int32_t i = length() + shift - 1; i >= shift; i--) {
+		NamedString* ns = static_cast<NamedString*>((*params().paramList())[String(i - shift)]);
+		if (ns) {
+		    String index(i);
+		    params().clearParam(index);
+		    const_cast<String&>(ns->name()) = index;
+		}
 	    }
+	    for (int32_t i = shift - 1; i >= 0; i--) {
+		ExpOperation* op = popValue(stack,context);
+		if (!op)
+		    continue;
+	        const_cast<String&>(op->name()) = i;
+		params().paramList()->insert(op);
+	    }
+	    setLength(length() + shift);
 	}
-	for (int32_t i = shift - 1; i >= 0; i--) {
-	    ExpOperation* op = popValue(stack,context);
-	    if (!op)
-		continue;
-	    const_cast<String&>(op->name()) = i;
-	    params().paramList()->insert(op);
-	}
-	setLength(length() + shift);
 	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)length()));
     }
     else if (oper.name() == YSTRING("slice"))
@@ -811,7 +852,9 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	for (int32_t i = 0; i < length(); i++)
 	    result.append(params()[String(i)],separator);
 	ExpEvaluator::pushOne(stack,new ExpOperation(result));
-    } else if (oper.name() == YSTRING("indexOf")) {
+    } else if (oper.name() == YSTRING("indexOf") || oper.name() == YSTRING("lastIndexOf")) {
+	// arr.indexOf(searchElement[,startIndex = 0[,"fieldName"]])
+	// arr.lastIndexOf(searchElement[,startIndex = arr.length-1[,"fieldName"]])
 	ObjList args;
 	if (!extractArgs(this,stack,oper,context,args)) {
 	    Debug(DebugWarn,"Failed to extract arguments!");
@@ -820,19 +863,47 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	ExpOperation* op1 = static_cast<ExpOperation*>(args.remove(false));
 	if (!op1)
 	    return false;
+	ExpWrapper* w1 = YOBJECT(ExpWrapper,op1);
+	ExpOperation* fld = 0;
+	int dir = 1;
 	int pos = 0;
+	if (oper.name().at(0) == 'l') {
+	    dir = -1;
+	    pos = length() - 1;
+	}
 	if (args.skipNull()) {
 	    String* spos = static_cast<String*>(args.remove(false));
-	    if (spos)
-		pos = spos->toInteger(0);
+	    if (spos) {
+		pos = spos->toInteger(pos);
+		if (pos < 0)
+		    pos += length();
+		if (dir > 0) {
+		    if (pos < 0)
+			pos = 0;
+		}
+		else if (pos >= length())
+		    pos = length() - 1;
+	    }
 	    TelEngine::destruct(spos);
+	    fld = static_cast<ExpOperation*>(args.remove(false));
 	}
 	int index = -1;
-	for (int i = pos;i < length();i++) {
+	for (int i = pos; ; i += dir) {
+	    if (dir > 0) {
+		if (i >= length())
+		    break;
+	    }
+	    else if (i < 0)
+		break;
 	    ExpOperation* op2 = static_cast<ExpOperation*>(params().getParam(String(i)));
+	    if (op2 && !TelEngine::null(fld)) {
+		const ExpExtender* ext = YOBJECT(ExpExtender,op2);
+		if (!ext)
+		    continue;
+		op2 = YOBJECT(ExpOperation,ext->getField(stack,*fld,context));
+	    }
 	    if (!op2 || op2->opcode() != op1->opcode())
 		continue;
-	    ExpWrapper* w1 = YOBJECT(ExpWrapper,op1);
 	    ExpWrapper* w2 = YOBJECT(ExpWrapper,op2);
 	    if (w1 || w2) {
 		if (w1 && w2 && w1->object() == w2->object()) {
@@ -845,6 +916,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    }
 	}
 	TelEngine::destruct(op1);
+	TelEngine::destruct(fld);
 	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)index));
 	return true;
     }
@@ -1073,6 +1145,7 @@ JsRegExp::JsRegExp(Mutex* mtx)
     : JsObject("RegExp",mtx)
 {
     params().addParam(new ExpFunction("test"));
+    params().addParam(new ExpFunction("valid"));
 }
 
 JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool insensitive, bool extended, bool frozen)
@@ -1080,6 +1153,7 @@ JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool insensit
       m_regexp(rexp,extended,insensitive)
 {
     params().addParam(new ExpFunction("test"));
+    params().addParam(new ExpFunction("valid"));
     params().addParam("ignoreCase",String::boolText(insensitive));
     params().addParam("basicPosix",String::boolText(!extended));
 }
@@ -1089,6 +1163,7 @@ JsRegExp::JsRegExp(Mutex* mtx, const Regexp& rexp, bool frozen)
       m_regexp(rexp)
 {
     params().addParam(new ExpFunction("test"));
+    params().addParam(new ExpFunction("valid"));
     params().addParam("ignoreCase",String::boolText(rexp.isCaseInsensitive()));
     params().addParam("basicPosix",String::boolText(!rexp.isExtended()));
 }
@@ -1105,8 +1180,26 @@ bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	TelEngine::destruct(op);
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
+    else if (oper.name() == YSTRING("valid")) {
+	if (oper.number())
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(regexp().compile()));
+    }
     else
 	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+bool JsRegExp::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsRegExp::runAssign() '%s'='%s' (%s) in '%s' [%p]",
+	oper.name().c_str(),oper.c_str(),oper.typeOf(),toString().c_str(),this);
+    if (!JsObject::runAssign(stack,oper,context))
+	return false;
+    if (oper.name() == YSTRING("ignoreCase"))
+	regexp().setFlags(regexp().isExtended(),oper.toBoolean());
+    else if (oper.name() == YSTRING("basicPosix"))
+	regexp().setFlags(!oper.toBoolean(),regexp().isCaseInsensitive());
     return true;
 }
 
@@ -1126,7 +1219,7 @@ JsObject* JsRegExp::runConstructor(ObjList& stack, const ExpOperation& oper, Gen
 	return 0;
     bool insensitive = false;
     bool extended = true;
-    if (flags)  {
+    if (flags && *flags)  {
 	const char* f = *flags;
 	char c = *f++;
 	while (c) {
@@ -1212,11 +1305,8 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	}
 	if (min < 0 || max < 0 || min >= max)
 	    return false;
-	unsigned long interval = max;
-	if (min != 0)
-	    interval -= min + 1;
-	int64_t rand = (Random::random() % interval) + min;
-	ExpEvaluator::pushOne(stack,new ExpOperation(rand));
+	int64_t rand = (max > (min + 1)) ? (Random::random() % (max - min)) : 0;
+	ExpEvaluator::pushOne(stack,new ExpOperation(rand + min));
     }
     else
 	return JsObject::runNative(stack,oper,context);
@@ -1226,7 +1316,7 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 
 JsObject* JsDate::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(DebugAll,"JsDate::runConstructor '%s'("FMT64")",oper.name().c_str(),oper.number());
+    XDebug(DebugAll,"JsDate::runConstructor '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
     ObjList args;
     JsObject* obj = 0;
     switch (extractArgs(stack,oper,context,args)) {

@@ -43,3 +43,10 @@
 
 ; The Eliza chat bot, enabled by default for your enjoyment in rmanager
 eliza=eliza.js
+
+
+[late_scripts]
+; Add one entry in this section for each script that is to be loaded after Yate startup
+; These scripts are loaded only after the engine and modules have initialized, immediately
+;  after the dispatching of the "engine.start" message.
+; The names must be unique and different from any in the [scripts] section.

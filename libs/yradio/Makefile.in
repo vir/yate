@@ -15,7 +15,7 @@ INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatexml.h @srcdir@/yateradio.h
 
 PROGS=
 LIBS = libyateradio.a
-OBJS = codec.o
+OBJS = codec.o radio.o
 LIBD_DEV:= libyateradio.so
 LIBD_VER:= $(LIBD_DEV).@PACKAGE_VERSION@
 LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)

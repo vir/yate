@@ -32,7 +32,7 @@ SLIBS:= $(YLIB) libyate.so \
 	libyatemgcp.so.@PACKAGE_VERSION@ libyatemgcp.so \
 	libyatejabber.so.@PACKAGE_VERSION@ libyatejabber.so
 ILIBS:= yscript yasn yradio
-INCS := yateclass.h yatemime.h yatengine.h yatephone.h yatecbase.h yatexml.h
+INCS := yateclass.h yatemime.h yatengine.h yatephone.h yatecbase.h yatexml.h yatemath.h
 GENS := yateversn.h
 LIBS :=
 MAN8 := yate.8 yate-config.8
@@ -165,7 +165,7 @@ apidocs: $(APIINDEX)
 
 $(APIINDEX): @srcdir@/docs/Doxyfile \
     @srcdir@/yateclass.h @srcdir@/yatemime.h @srcdir@/yatengine.h \
-    @srcdir@/yatephone.h @srcdir@/yatecbase.h
+    @srcdir@/yatephone.h @srcdir@/yatecbase.h @srcdir@/yatemath.h
 	$(MAKE) apidocs-build
 
 .PHONY: strip sex love war

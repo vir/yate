@@ -729,7 +729,7 @@ void SDPSession::updateFormats(const NamedList& msg, bool changeMedia)
 	if (rtp) {
 	    DDebug(m_enabler,DebugInfo,"Updating %s parameter '%s' to '%s'",
 		media.c_str(),tmp.c_str(),param->c_str());
-	    rtp->parameter(tmp,*param,false);
+	    rtp->parameter(false, tmp,*param,false);
 	}
     }
 }

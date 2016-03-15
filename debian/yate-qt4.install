@@ -5,9 +5,9 @@ debian/tmp/usr/lib/yate/qt4/customtree.yate
 debian/tmp/usr/lib/yate/qt4/widgetlist.yate
 debian/tmp/usr/lib/yate/qt4/clientarchive.yate
 debian/tmp/usr/lib/libyateqt4.so.*
-debian/tmp/usr/share/pixmaps/null_team-16.png
-debian/tmp/usr/share/pixmaps/null_team-32.png
-debian/tmp/usr/share/pixmaps/null_team-48.png
+debian/tmp/usr/share/icons/hicolor/16x16/apps/null_team.png
+debian/tmp/usr/share/icons/hicolor/32x32/apps/null_team.png
+debian/tmp/usr/share/icons/hicolor/48x48/apps/null_team.png
 debian/tmp/usr/lib/menu/yate-qt4.menu
 debian/tmp/usr/share/applications/yate-qt4.desktop
 debian/tmp/usr/share/yate/sounds/ring.au

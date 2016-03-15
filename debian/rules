@@ -22,6 +22,7 @@ configure:
 config: configure-stamp
 configure-stamp: configure yate-config.in
 	dh_testdir
+	dh_quilt_patch
 	# Add here commands to configure the package.
 	./configure $(confflags) --prefix=/usr --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info --sysconfdir=/etc --disable-ilbc --disable-wpcard --enable-sctp
 	touch configure-stamp

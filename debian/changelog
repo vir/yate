@@ -1,3 +1,10 @@
+yate (5.5.1~vir2016031501) UNRELEASED; urgency=medium
+
+  * Fix build.
+  * Fix yate qt client icons.
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Tue, 15 Mar 2016 06:26:48 +0300
+
 yate (5.5.1~vir2016031101) UNRELEASED; urgency=medium
 
   * Merged upstream updates (SVN r6103)

@@ -1,4 +1,4 @@
-yate (5.5.1~svn6103) UNRELEASED; urgency=low
+yate (5.5.1~svn6104) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1608,8 +1608,10 @@ yate (5.5.1~svn6103) UNRELEASED; urgency=low
   * Updated to SVN revision 6103: + Allow assigned top-level functions
     to work as callbacks.  + Added support for parsing and updating
     bandwidth in SDP.
+  * Updated to SVN revision 6104: + Hand-merged icons location fix  +
+    Fixed a pointer use after free.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 10 Mar 2016 02:19:14 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 18 Mar 2016 02:19:14 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

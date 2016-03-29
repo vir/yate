@@ -18,6 +18,7 @@
  */
 
 #include "yatemath.h"
+#include <stdio.h>
 
 using namespace TelEngine;
 
@@ -312,17 +313,33 @@ String& BitVector::appendTo(String& buf, unsigned int offs, int len) const
 // Math
 //
 // Append a Complex number to a String (using "%g%+gi" format)
-String& Math::dumpComplex(String& dest, const Complex& val, const char* sep)
+String& Math::dumpComplex(String& dest, const Complex& val, const char* sep,
+    const char* fmt)
 {
-    String tmp;
-    return dest.append(tmp.printf("%g%+gi",val.re(),val.im()),sep);
+    if (TelEngine::null(fmt))
+	fmt = "%g%+gi";
+    else if (::strlen(fmt) > 30) {
+	String tmp;
+	return dest.append(tmp.printf(512,fmt,val.re(),val.im()),sep);
+    }
+    char s[60];
+    ::sprintf(s,fmt,val.re(),val.im());
+    return dest.append(s,sep);
 }
 
 // Append float value to a String (using %g format)
-String& Math::dumpFloat(String& dest, const float& val, const char* sep)
+String& Math::dumpFloat(String& dest, const float& val, const char* sep,
+    const char* fmt)
 {
-    String tmp;
-    return dest.append(tmp.printf("%g",val),sep);
+    if (TelEngine::null(fmt))
+	fmt = "%g";
+    else if (::strlen(fmt) > 30) {
+	String tmp;
+	return dest.append(tmp.printf(512,fmt,val),sep);
+    }
+    char s[60];
+    ::sprintf(s,fmt,val);
+    return dest.append(s,sep);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

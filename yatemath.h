@@ -1074,16 +1074,18 @@ public:
      * @param func Pointer to function who appends the object to a String
      *  (0 to dump all available from offset)
      * @param sep Vector elements separator
+     * @param fmt Optional format to use
      * @return Destination string address
      */
-    String& dump(String& buf, String& (*func)(String& s, const Obj& o, const char* sep),
-	const char* sep = ",") const {
+    String& dump(String& buf,
+	String& (*func)(String& s, const Obj& o, const char* sep, const char* fmt),
+	const char* sep = ",", const char* fmt = 0) const {
 	    const Obj* d = data();
 	    if (!(d && func))
 		return buf;
 	    String localBuf;
 	    for (const Obj* last = end(d,length()); d != last; ++d)
-		(*func)(localBuf,*d,sep);
+		(*func)(localBuf,*d,sep,fmt);
 	    return buf.append(localBuf);
 	}
 
@@ -1099,23 +1101,24 @@ public:
      * @param linePrefix Prefix for new lines. Empty string to use the suffix
      * @param suffix String to always add to final result (even if no data dumped)
      * @param sep Vector elements separator
+     * @param fmt Optional format to use
      * @return Destination string address
      */
     String& dump(String& buf, unsigned int lineLen,
-	String& (*func)(String& s, const Obj& o, const char* sep),
+	String& (*func)(String& s, const Obj& o, const char* sep, const char* fmt),
 	unsigned int offset = 0, const char* linePrefix = 0,
-	const char* suffix = "\r\n", const char* sep = ",") const {
+	const char* suffix = "\r\n", const char* sep = ",", const char* fmt = 0) const {
 	    const Obj* d = data();
 	    if (!(d && func))
 		return buf.append(suffix);
 	    if (TelEngine::null(linePrefix))
 		linePrefix = suffix;
 	    if (!lineLen || TelEngine::null(linePrefix))
-		return dump(buf,func,sep) << suffix;
+		return dump(buf,func,sep,fmt) << suffix;
 	    String localBuf;
 	    for (const Obj* last = end(d,length()); d != last;) {
 		String tmp;
-		(*func)(tmp,*d,0);
+		(*func)(tmp,*d,0,fmt);
 		if (++d != last)
 		    tmp << sep;
 		offset += tmp.length();
@@ -1536,18 +1539,22 @@ public:
      * @param buf Destination string
      * @param val Value to dump
      * @param sep Optional separator
+     * @param fmt Format to use ("%g%+gi" if not given)
      * @return Destination string address
      */
-    static String& dumpComplex(String& buf, const Complex& val, const char* sep = 0);
+    static String& dumpComplex(String& buf, const Complex& val, const char* sep = 0,
+	const char* fmt = 0);
 
     /**
      * Dump a float number to a String
      * @param buf Destination string
      * @param val Value to dump
      * @param sep Optional separator
+     * @param fmt Format to use ("%g" if not given)
      * @return Destination string address
      */
-    static String& dumpFloat(String& buf, const float& val, const char* sep = 0);
+    static String& dumpFloat(String& buf, const float& val, const char* sep = 0,
+	const char* fmt = 0);
 };
 
 

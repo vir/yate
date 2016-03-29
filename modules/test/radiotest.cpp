@@ -287,7 +287,7 @@ static bool readSamples(DataBlock& buf, const String& list)
 // RadioTest
 //
 RadioTest::RadioTest(const NamedList& params, const NamedList& radioParams)
-    : Thread("RadioTest"),
+    : Thread("RadioTest",Thread::priority(params["priority"])),
     m_radio(0),
     m_recv(0),
     m_started(false),
@@ -369,6 +369,8 @@ void RadioTest::run()
 	    break;
 	}
 	if (!execute(m_params,"cmd:"))
+	    break;
+	if (m_params.getBoolValue("init_only"))
 	    break;
 	if (m_rx.enabled) {
 	    m_recv = RadioTestRecv::start(this);
@@ -700,12 +702,10 @@ bool RadioTestModule::commandComplete(Message& msg, const String& partLine,
 bool RadioTestModule::onCmdControl(Message& msg)
 {
     static const char* s_help =
-	"\r\ncontrol module_name {start [name=conf_sect_name]|stop|exec}"
+	"\r\ncontrol radiotest {start [name=conf_sect_name]|stop|exec}"
 	"\r\n  Test commands"
-	"\r\ncontrol module_name radiodatafile [sect=conf_sect_name]"
-	"\r\n  Read radio data file. Process it according to given section parameters."
-	"\r\ncontrol module_name help"
-	"\r\n  Display control commands help";
+	"\r\ncontrol radiotest radiodatafile [sect=conf_sect_name]"
+	"\r\n  Read radio data file. Process it according to given section parameters.";
 
     const String& cmd = msg[YSTRING("operation")];
     if (cmd == YSTRING("help")) {
@@ -758,8 +758,14 @@ bool RadioTestModule::test(const String& cmd, const NamedList& list)
 	    Configuration cfg(Engine::configFile(name()));
 	    String n = list.getValue("name","test");
 	    NamedList* sect = n ? cfg.getSection(n) : 0;
-	    if (sect)
-		RadioTest::start(*sect,*cfg.createSection("radio"));
+	    if (sect) {
+		NamedList params(sect->c_str());
+		const char* inc = sect->getValue(YSTRING("include"));
+		if (inc)
+		    params.copyParams(*cfg.createSection(inc));
+		params.copyParams(*sect);
+		RadioTest::start(params,*cfg.createSection("radio"));
+	    }
 	    else
 		Debug(this,DebugNote,"Failed to start test '%s': missing config section",
 		    n.c_str());

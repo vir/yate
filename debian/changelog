@@ -1,4 +1,4 @@
-yate (5.5.1~svn6105) UNRELEASED; urgency=low
+yate (5.5.1~svn6107) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -1613,8 +1613,12 @@ yate (5.5.1~svn6105) UNRELEASED; urgency=low
   * Updated to SVN revision 6105: + Fixes destruction of external
     channels that have or had a watcher.  + Changed the way
     ExtModReceivers are (de)referenced and destroyed.
+  * Updated to SVN revision 6107: + Changed the way ExtModReceivers are
+    (de)referenced and destroyed.  + Allow indicating the format when
+    dumping data.  + Added capability to configure test thread priority
+    and include a config section.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 19 Mar 2016 02:19:14 +0300
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 30 Mar 2016 02:19:14 +0300
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

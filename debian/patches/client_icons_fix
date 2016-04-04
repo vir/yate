@@ -7,10 +7,10 @@ Author: vir@ctm.ru
 Origin: <upstream|backport|vendor|other>, <URL, required except if Author is present>
 Bug: https://github.com/vir/yate/issues/7
 ---
-Index: yate/clients/Makefile.in
+Index: yate3.git/clients/Makefile.in
 ===================================================================
---- yate.orig/clients/Makefile.in	2016-01-14 16:34:35.000000000 +0300
-+++ yate/clients/Makefile.in	2016-03-15 06:41:34.000000000 +0300
+--- yate3.git.orig/clients/Makefile.in	2016-04-04 16:26:34.000000000 +0300
++++ yate3.git/clients/Makefile.in	2016-04-04 16:26:58.000000000 +0300
 @@ -70,7 +70,7 @@
  menudir= $(prefix)/lib/menu
  shrdir = $(datadir)/yate
@@ -25,7 +25,7 @@ Index: yate/clients/Makefile.in
  	@mkdir -p "$(DESTDIR)$(icondir)/" && \
  	for i in $(ICONFILES) ; do \
 -	    @INSTALL_D@ -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(icondir)/$$i" ; \
-+	    @target=`echo $$i | $(SED) -e 's/\(.*\)-\([0-9]\+\)/\2x\2\/apps\/\1/'`; \
++	    target=`echo $$i | $(SED) -e 's/\(.*\)-\([0-9]\+\)/\2x\2\/apps\/\1/'`; \
 +	    @INSTALL_D@ -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(icondir)/$$target" ; \
  	done \
  	)
@@ -35,15 +35,15 @@ Index: yate/clients/Makefile.in
  	$(if $(ICONFILES),\
  	@-for i in $(ICONFILES) ; do \
 -	    rm "$(DESTDIR)$(icondir)/$$i" ; \
-+	    @target=`echo $$i | $(SED) -e 's/\(.*\)-\([0-9]\+\)/\2x\2\/apps\/\1/'`; \
++	    target=`echo $$i | $(SED) -e 's/\(.*\)-\([0-9]\+\)/\2x\2\/apps\/\1/'`; \
 +	    rm "$(DESTDIR)$(icondir)/$$target" ; \
  	done ; \
  	rmdir "$(DESTDIR)$(icondir)" \
  	)
-Index: yate/clients/yate-qt4.desktop
+Index: yate3.git/clients/yate-qt4.desktop
 ===================================================================
---- yate.orig/clients/yate-qt4.desktop	2016-01-14 16:34:35.000000000 +0300
-+++ yate/clients/yate-qt4.desktop	2016-03-15 06:41:34.000000000 +0300
+--- yate3.git.orig/clients/yate-qt4.desktop	2016-04-04 16:26:34.000000000 +0300
++++ yate3.git/clients/yate-qt4.desktop	2016-04-04 16:26:34.000000000 +0300
 @@ -7,7 +7,7 @@
  Comment=Place phone calls over the Internet
  Comment[ro]=Apeluri telefonice peste Internet

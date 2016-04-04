@@ -3,6 +3,7 @@ Section: comm
 Priority: optional
 Maintainer: Vasily i. Redkin <vir@ctm.ru>
 Build-Depends: build-essential, debhelper (>= 7), pkg-config,
+ quilt >= 0.46-7,
  libasound2-dev, libqt4-dev, libh323plus-dev|libopenh323-dev, libpt-dev,
  libpq-dev, libmysqlclient-dev, libssl-dev, zaptel-source|dahdi-source,
  libgsm1-dev, libspeex-dev, libspandsp-dev, doxygen, autoconf, libsctp-dev,

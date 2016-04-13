@@ -5398,7 +5398,10 @@ unsigned int BrfLibUsbDevice::openDevice(bool claim, String* error)
 	    failedDesc++;
 	    continue;
 	}
-	if (desc.idVendor == 7504 && desc.idProduct == 24678)
+	// OpenMoko 0x1d50 Product=0x6066
+	// Nuand    0x2cf0 Product=0x5246
+	if ((desc.idVendor == 0x1d50 && desc.idProduct == 0x6066) ||
+	    (desc.idVendor == 0x2cf0 && desc.idProduct == 0x5246))
 	    m_dev = m_list[i];
     }
     if (!m_dev) {

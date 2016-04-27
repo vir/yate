@@ -523,7 +523,7 @@ public:
      * @return A pointer to data at requested offset, NULL if there is no data available
      */
     inline Obj* data(unsigned int offs = 0)
-	{ return data(offs,length()); }
+	{ return data(offs,available(offs)); }
 
     /**
      * Get a pointer to data from offset to vector end
@@ -531,7 +531,7 @@ public:
      * @return A pointer to data at requested offset, NULL if there is no data available
      */
     inline const Obj* data(unsigned int offs = 0) const
-	{ return data(offs,length()); }
+	{ return data(offs,available(offs)); }
 
     /**
      * Get a pointer to data from offset to vector end

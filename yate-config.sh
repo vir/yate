@@ -79,7 +79,7 @@ cat <<"EOF"
 
 ustr='Usage: yate-config [--cflags] [--includes] [--c-all]
                    [--ldflags] [--libs] [--ld-all] [--ld-nostrip] [--ld-strip]
-		   [--config] [--modules] [--share]
+		   [--config] [--libdir] [--modules] [--share]
 		   [--helpdir] [--scripts] [--skins]
 		   [--version] [--release] [--archlib] [--param=...]'
 if [ "$#" = 0 ]; then
@@ -90,13 +90,14 @@ prefix="@prefix@"
 exec_prefix="@exec_prefix@"
 datarootdir="@datarootdir@"
 shrdir="@datadir@/yate"
+libdir="@libdir@"
 moddir="@libdir@/yate"
 confdir="@sysconfdir@/yate"
 s1="@MODULE_CPPFLAGS@"
 s2="-I@includedir@/yate"
 s3="@MODULE_LDFLAGS@"
 s4="@MODULE_SYMBOLS@"
-s5="-lyate"
+s5="-lyate -L$libdir"
 
 while [ "$#" != 0 ]; do
     case "$1" in
@@ -135,6 +136,9 @@ while [ "$#" != 0 ]; do
 	    ;;
 	--config)
 	    echo "$confdir"
+	    ;;
+	--libdir)
+	    echo "$libdir"
 	    ;;
 	--modules)
 	    echo "$moddir"

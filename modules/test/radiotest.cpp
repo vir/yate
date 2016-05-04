@@ -78,12 +78,12 @@ protected:
 		    (tx ? "TX" : "RX"),ts,this);
 	    }
 	}
-    inline float* sendBuf()
-	{ return (float*)m_sendBufData.data(0); }
+    bool wait(const String& param);
 
     RadioInterface* m_radio;
     RadioTestRecv* m_recv;
     bool m_started;
+    unsigned int m_repeat;
     NamedList m_init;
     NamedList m_params;
     NamedList m_radioParams;
@@ -92,8 +92,7 @@ protected:
     bool m_newTxData;
     unsigned int m_phase;
     unsigned int m_sendBufCount;
-    DataBlock m_sendBufData;
-    unsigned int m_sendBufSamples;
+    ComplexVector m_sendBufData;
     // Pulse
     unsigned int m_pulse;
     ComplexVector m_pulseData;
@@ -161,6 +160,16 @@ INIT_PLUGIN(RadioTestModule);
 static RadioTest* s_test = 0;
 static Mutex s_testMutex(false,"RadioTest");
 
+static inline unsigned int threadIdleIntervals(unsigned int ms)
+{
+    return (ms + Thread::idleMsec()) / Thread::idleMsec();
+}
+
+static inline bool validFloatSample(float val)
+{
+    return (val >= -1.0F) && (val <= 1.0F);
+}
+
 static inline const char* encloseDashes(String& s, bool extra = false)
 {
     static const String s1 = "\r\n-----";
@@ -172,34 +181,6 @@ static inline const char* encloseDashes(String& s, bool extra = false)
 static inline unsigned int samplesf2bytes(unsigned int samples)
 {
     return samples * 2 * sizeof(float);
-}
-
-static inline unsigned int bytes2samplesf(unsigned int len)
-{
-    return len / (2 * sizeof(float));
-}
-
-// Convert a string to double
-// Make sure the value is in interval [-1..1]
-static inline double getDoubleSample(const String& str, double defVal = 0)
-{
-    double d = str.toDouble(defVal);
-    if (d < -1)
-	return -1;
-    if (d > 1)
-	return 1;
-    return d;
-}
-
-static inline void getComplexSample(Complex& c, const String& str,
-    double defRe, double defIm)
-{
-    int pos = str.find(',');
-    if (pos >= 0)
-	c.set(getDoubleSample(str.substr(0,pos),defRe),
-	    getDoubleSample(str.substr(pos + 1),defIm));
-    else
-	c.set(getDoubleSample(str,defRe),defIm);
 }
 
 static String& dumpSamplesFloat(String& s, const DataBlock& buf,
@@ -238,48 +219,167 @@ static String& dumpSamplesInt16(String& s, const DataBlock& buf,
     return s;
 }
 
-static String& appendComplex(String& s, const float* f, unsigned int n, bool fmfG = true)
+static inline bool boolSetError(String& s, const char* e = 0)
 {
-    static const char* s_fmtf1 = "(%.3f,%.3f) (%.3f,%.3f) (%.3f,%.3f) (%.3f,%.3f)";
-    static const char* s_fmtf2 = "(%.3f,%.3f)";
-    static const char* s_fmtg1 = "(%.3g,%.3g) (%.3g,%.3g) (%.3g,%.3g) (%.3g,%.3g)";
-    static const char* s_fmtg2 = "(%.3g,%.3g)";
-
-    const char* fmt1 = fmfG ? s_fmtg1 : s_fmtf1;
-    const char* fmt2 = fmfG ? s_fmtg2 : s_fmtf2;
-    DataBlock tmp((void*)f,n * sizeof(float),false);
-    dumpSamplesFloat(s,tmp,fmt1,fmt2," ");
-    tmp.clear(false);
-    return s;
+    s = e;
+    return false;
 }
 
-static inline String& appendComplex(String& s, const DataBlock& buf)
+// Parse a comma separated list of float values to complex vector
+static bool parseVector(String& error, const String& str, ComplexVector& buf)
 {
-    return appendComplex(s,(const float*)buf.data(),buf.length() / sizeof(float));
-}
-
-// Read samples from string
-static bool readSamples(DataBlock& buf, const String& list)
-{
-    ObjList* l = list.split(',');
-    unsigned int n = l->count();
-    if (n < 2 || (n % 2) != 0) {
-	TelEngine::destruct(l);
-	return false;
+    if (!str)
+	return boolSetError(error,"empty");
+    ObjList* list = str.split(',');
+    unsigned int len = list->length();
+    if ((len < 2) || (len % 2) != 0)
+	return boolSetError(error,"invalid length");
+    buf.resetStorage(len);
+    ObjList* o = list;
+    for (float* b = (float*)buf.data(); o; o = o->next(), b++) {
+	if (!o->get())
+	    continue;
+	*b = (static_cast<String*>(o->get()))->toDouble();
+	if (!validFloatSample(*b))
+	    break;
     }
-    buf.resize(n * sizeof(float));
-    float* f = (float*)buf.data(0);
-    for (ObjList* o = l->skipNull(); f && o; o = o->skipNext()) {
-	*f = static_cast<String*>(o->get())->toDouble();
-	if (*f >= -1 && *f <= 1)
-	    f++;
+    TelEngine::destruct(list);
+    return (o == 0) ? true : boolSetError(error,"invalid data range");
+}
+
+static inline void generateCircleQuarter(Complex*& c, float amplitude, float i, float q,
+    unsigned int loops, float angle, float iSign, float qSign)
+{
+    (c++)->set(i * amplitude,q * amplitude);
+    if (!loops)
+	return;
+    float angleStep = M_PI_2 / (loops + 1);
+    if (angle)
+	angleStep = -angleStep;
+    iSign *= amplitude;
+    qSign *= amplitude;
+    for (; loops; --loops, ++c) {
+	angle += angleStep;
+	c->set(iSign * ::cosf(angle),qSign * ::sinf(angle));
+    }
+}
+
+// Parse a complex numbers pattern
+// forcePeriodic=true: Force lenExtend=false and lenRequired=true for periodic
+//                     patterns (like 'circle')
+// lenExtend=true: Extend destination buffer to be minimum 'len'. 'lenRequired' is ignored
+// lenRequired=true: 'len' MUST be a multiple of generated vector's length
+static bool buildVector(String& error, const String& pattern, ComplexVector& vector,
+    unsigned int len = 0, bool forcePeriodic = true, bool lenExtend = true,
+    bool lenRequired = false, unsigned int* pLen = 0)
+{
+    if (!pattern)
+	return boolSetError(error,"empty");
+    bool isPeriodic = false;
+    String p = pattern;
+    ComplexVector v;
+    // Check for circles
+    if (p.startSkip("circle",false)) {
+	unsigned int cLen = 4;
+	bool rev = false;
+	float div = 1;
+	if (!p || p == YSTRING("_reverse"))
+	    // circle[_reverse]
+	    rev = !p.null();
+	else if (p.startSkip("_div_",false)) {
+	    // circle_div[_reverse]_{divisor}
+	    rev = p.startSkip("reverse_",false);
+	    if (!p)
+		return boolSetError(error);
+	    div = p.toDouble();
+	}
+	else if (p.startSkip("_points_",false)) {
+	    // circle_points[_reverse]_{value}[_div_{divisor}]
+	    rev = p.startSkip("reverse_",false);
+	    if (!p)
+		return boolSetError(error);
+	    int pos = p.find('_');
+	    if (pos < 0)
+		cLen = p.toInteger(0,0,0);
+	    else {
+		// Expecting div
+		cLen = p.substr(0,pos).toInteger(0,0,0);
+		p = p.substr(pos + 1);
+		if (!(p.startSkip("div_",false) && p))
+		    return boolSetError(error);
+		div = p.toDouble();
+	    }
+	}
 	else
-	    f = 0;
+	    return boolSetError(error);
+	// Circle length MUST be a multiple of 4
+	if (!cLen || (cLen % 4) != 0)
+	    return boolSetError(error,"invalid circle length");
+	if (div < 1)
+	    return boolSetError(error,"invalid circle div");
+	v.resetStorage(cLen);
+	Complex* c = v.data();
+	float amplitude = 1.0F / div;
+	float direction = rev ? -1 : 1;
+	unsigned int n = (cLen - 4) / 4;
+	generateCircleQuarter(c,amplitude,1,0,n,0,1,direction);
+	generateCircleQuarter(c,amplitude,0,direction,n,M_PI_2,-1,direction);
+	generateCircleQuarter(c,amplitude,-1,0,n,0,-1,-direction);
+	generateCircleQuarter(c,amplitude,0,-direction,n,M_PI_2,1,-direction);
+	isPeriodic = true;
     }
-    TelEngine::destruct(l);
-    if (!f)
-	buf.clear();
-    return f != 0;
+    else if (pattern == YSTRING("zero")) {
+	// Fill with 0
+	vector.resetStorage(len ? len : 1);
+	if (pLen)
+	    *pLen = 1;
+	return true;
+    }
+    else if (p.startSkip("fill_",false)) {
+	// Fill with value: fill_{real}_{imag}
+	int pos = p.find('_');
+	if (pos < 1 || p.find('_',pos + 1) > 0)
+	    return boolSetError(error);
+	float re = p.substr(0,pos).toDouble();
+	float im = p.substr(pos + 1).toDouble();
+	if (validFloatSample(re) && validFloatSample(im)) {
+	    vector.resetStorage(len ? len : 1);
+	    vector.fill(Complex(re,im));
+	    if (pLen)
+		*pLen = 1;
+	    return true;
+	}
+	return boolSetError(error,"invalid data range");
+    }
+    else if (!parseVector(error,pattern,v))
+	// Parse list of values
+	return false;
+    if (!v.length())
+	return boolSetError(error,"empty result");
+    if (pLen)
+	*pLen = v.length();
+    if (isPeriodic && forcePeriodic) {
+	lenExtend = false;
+	lenRequired = true;
+    }
+    // Try to extend data
+    if (!len || (len == v.length()) || !(lenExtend || lenRequired))
+	vector = v;
+    else {
+	if (lenExtend) {
+	    if (len < v.length())
+		len = v.length();
+	    unsigned int rest = len % v.length();
+	    if (rest)
+		len += v.length() - rest;
+	}
+	else if ((len < v.length()) || ((len % v.length()) != 0))
+	    return boolSetError(error,"required/actual length mismatch");
+	vector.resetStorage(len);
+	for (unsigned int i = 0; (i + v.length()) < len; i += v.length())
+	    vector.slice(i,v.length()).copy(v,v.length());
+    }
+    return true;
 }
 
 
@@ -291,6 +391,7 @@ RadioTest::RadioTest(const NamedList& params, const NamedList& radioParams)
     m_radio(0),
     m_recv(0),
     m_started(false),
+    m_repeat(0),
     m_init(""),
     m_params(params),
     m_radioParams(radioParams),
@@ -298,11 +399,11 @@ RadioTest::RadioTest(const NamedList& params, const NamedList& radioParams)
     m_newTxData(false),
     m_phase(0),
     m_sendBufCount(0),
-    m_sendBufSamples(0),
     m_pulse(0),
     m_rx(false),
     m_skippedBuffs(0)
 {
+    m_params.setParam("orig_test_name",params.c_str());
     m_params.assign(__plugin.name() + "/" + params.c_str());
     debugName(m_params);
     debugChain(&__plugin);
@@ -329,13 +430,18 @@ void RadioTest::run()
     readStop();
     m_started = true;
     m_init.clearParams();
-    Debug(this,DebugInfo,"Initializing... [%p]",this);
+    bool ok = false;
+    unsigned int repeat = m_params.getIntValue("repeat",1,1);
+    Debug(this,DebugInfo,"Initializing repeat=%u [%p]",repeat,this);
     while (true) {
 	// Init
 	// Init test data
 	m_tx.enabled = true;
 	if (!setTxData())
 	    break;
+	m_sendBufCount = m_params.getIntValue("send_buffers",0,0);
+	if (m_sendBufCount)
+	    m_init.addParam("send_buffers",String(m_sendBufCount));
 	m_rx.enabled = !m_params.getBoolValue("sendonly");
 	if (m_rx.enabled) {
 	    unsigned int n = m_params.getIntValue("readsamples",256,1);
@@ -352,46 +458,89 @@ void RadioTest::run()
 	Message m(m_radioParams);
 	m.assign("radio.create");
 	m.setParam("module",__plugin.name());
-	bool ok = Engine::dispatch(m);
+	bool radioOk = Engine::dispatch(m);
 	NamedPointer* np = YOBJECT(NamedPointer,m.getParam(YSTRING("interface")));
 	m_radio = np ? YOBJECT(RadioInterface,np) : 0;
 	if (!m_radio) {
 	    const String& e = m[YSTRING("error")];
 	    Debug(this,DebugNote,"Failed to create radio interface: %s",
-		e.safe(ok ? "Missing interface" : "Message not handled"));
+		e.safe(radioOk ? "Missing interface" : "Message not handled"));
 	    break;
 	}
 	np->takeData();
+	
+	NamedList files("");
+	for (ObjList* o = m_params.paramList()->skipNull(); o; o = o->skipNext()) {
+	    NamedString* ns = static_cast<NamedString*>(o->get());
+	    if (!ns->name().startsWith("file:"))
+		continue;
+	    String file = *ns;
+	    NamedList tmp("");
+	    tmp.addParam("now",String(Time::secNow()));
+	    tmp.replaceParams(file);
+	    if (file && execute("devparam:" + ns->name().substr(5),file,true,0))
+		files.addParam(ns->name(),file);
+	}
+	m_params.clearParam("file",':');
+	m_params.copyParams(files);
+	
 	if (!execute(m_params,"init:"))
 	    break;
-	if (m_radio->initialize() != 0) {
-	    Debug(this,DebugNote,"Failed to initialize radio interface [%p]",this);
-	    break;
+	unsigned int status = m_radio->initialize(m_radioParams);
+	if (status) {
+	    if (RadioInterface::Pending == status) {
+		unsigned int wait = m_params.getIntValue("wait_pending_init",0,0);
+		if (wait)
+		    status = m_radio->pollPending(RadioInterface::PendingInitialize,wait);
+		else {
+		    while (!Thread::check(false)) {
+			status = m_radio->pollPending(RadioInterface::PendingInitialize);
+			if (!status || RadioInterface::Pending != status)
+			    break;
+		    }
+		    if (Thread::check(false))
+			status = RadioInterface::Cancelled;
+		}
+	    }
+	    if (status && status != RadioInterface::Cancelled) {
+		Debug(this,DebugNote,"Failed to initialize radio interface: %u %s [%p]",
+		    status,RadioInterface::errorName(status),this);
+		break;
+	    }
 	}
 	if (!execute(m_params,"cmd:"))
 	    break;
+	if (!wait("wait_after_init"))
+	    break;
+	ok = true;
 	if (m_params.getBoolValue("init_only"))
 	    break;
+#define TEST_FAIL_BREAK { ok = false; break; }
 	if (m_rx.enabled) {
 	    m_recv = RadioTestRecv::start(this);
 	    if (!m_recv) {
 		Debug(this,DebugWarn,"Failed to start read data thread [%p]",this);
-		break;
+		TEST_FAIL_BREAK;
 	    }
 	}
 	String s;
 	m_init.dump(s,"\r\n");
 	Debug(this,DebugInfo,"Starting [%p]%s",this,encloseDashes(s,true));
 	// Run
-	while (!Thread::check(false) && write()) {
+	while (!Thread::check(false)) {
+	    if (!write())
+		TEST_FAIL_BREAK;
 	    if (m_rx.enabled && !m_recv && !Thread::check(false)) {
 		Debug(this,DebugWarn,"Read data thread abnormally terminated [%p]",this);
-		break;
+		TEST_FAIL_BREAK;
 	    }
 	}
 	readStop();
+#undef TEST_FAIL_BREAK
 	break;
     }
+    if (ok && (repeat > 1) && !Thread::check(false))
+	m_repeat = --repeat;
     terminated();
 }
 
@@ -423,75 +572,78 @@ void RadioTest::terminated()
 	s << "\r\n" << prefix << "timestamp=" << io.ts;
     }
     Debug(this,DebugInfo,"Terminated [%p]%s",this,encloseDashes(s));
+    if (!m_repeat)
+	return;
+    Debug(this,DebugNote,"Restarting repeat=%u [%p]",m_repeat,this);
+    Message* m = new Message("chan.control");
+    m->addParam("module",__plugin.name());
+    m->addParam("component",__plugin.name());
+    m->addParam("operation","restart");
+    m->addParam("name",m_params.getValue("orig_test_name"));
+    m->addParam("repeat",String(m_repeat));
+    m->copySubParams(m_params,"file:",false,true);
+    Engine::enqueue(m);
 }
 
 bool RadioTest::setTxData()
 {
     const String& pattern = m_params["txdata"];
-    bool dataRepeat = true;
-    bool dataDump = true;
-    m_newTxData = false;
-    if (pattern) {
-	if (pattern == "single-tone" || pattern == "circle") {
-	    float tmp[] = {1,0,0,1,-1,0,0,-1};
-	    m_sendBufData.assign(tmp,sizeof(tmp));
-	    m_init.addParam("txpattern",pattern);
-	}
-	else if (pattern == "zero") {
-	    float tmp[] = {0,0};
-	    m_sendBufData.assign(tmp,sizeof(tmp));
-	    m_init.addParam("txpattern",pattern);
-	}
-	else if (pattern == "two-circles") {
-	    unsigned int samples = m_params.getIntValue("txdata_length",819,50);
-	    m_sendBufData.assign(0,samplesf2bytes(samples));
-	    m_newTxData = true;
-	    m_phase = 0;
-	    dataRepeat = false;
-	    dataDump = false;
-	    m_init.addParam("txpattern",pattern);
-	}
-	else if (pattern == "pulse") {
-	    unsigned int samples = m_params.getIntValue("txdata_length",10000,50);
-	    m_sendBufData.assign(0,samplesf2bytes(samples));
-	    unsigned int defVal = (samples > 2) ? (samples - 2) : 2;
-	    m_pulse = m_params.getIntValue("pulse",defVal,2,10000000);
-	    m_pulseData.resetStorage(2);
-	    getComplexSample(m_pulseData[0],m_params["pulse1"],1,1);
-	    getComplexSample(m_pulseData[1],m_params["pulse2"],-1,-1);
-	    m_newTxData = true;
-	    m_phase = 0;
-	    dataRepeat = false;
-	    dataDump = false;
-	    m_init.addParam("txpattern",pattern);
-	    m_init.addParam("pulse",String(m_pulse));
-	}
-	else {
-	    if (!readSamples(m_sendBufData,pattern)) {
-		Debug(this,DebugConf,"Invalid tx data pattern [%p]",this);
-		return false;
-	    }
-	    m_init.addParam("txpattern","...");
-	}
-    }
-    else {
+    if (!pattern) {
 	Debug(this,DebugConf,"Missing tx data pattern [%p]",this);
 	return false;
     }
-    if (dataDump) {
-	String tmp;
-	m_init.addParam("txdata",appendComplex(tmp,m_sendBufData));
+    m_newTxData = true;
+    m_phase = 0;
+    m_pulse = 0;
+    String tp;
+    if (pattern == "two-circles") {
+	m_sendBufData.resetStorage(m_params.getIntValue("txdata_length",819,50));
+	m_init.addParam("txpattern",pattern);
     }
-    if (dataRepeat) {
+    else if (pattern == "pulse") {
+	unsigned int samples = m_params.getIntValue("txdata_length",10000,50);
+	m_sendBufData.resetStorage(samples);
+	unsigned int defVal = (samples > 2) ? (samples - 2) : 2;
+	m_pulse = m_params.getIntValue("pulse",defVal,2,10000000);
+	String pattern = m_params.getValue("pulse_pattern","1,1,-1,-1");
+	String e;
+	bool ok = parseVector(e,pattern,m_pulseData);
+	if (!ok || m_pulseData.length() < 2 || m_pulseData.length() > (m_pulse / 3)) {
+	    bool sh = (m_pulseData.length() < 2);
+	    Debug(this,DebugConf,"Invalid pulse_pattern '%s': %s [%p]",
+		pattern.c_str(),e.safe(sh ? "too short" : "too long"),this);
+	    return false;
+	}
+	m_init.addParam("txpattern",pattern);
+	m_init.addParam("pulse",String(m_pulse));
+	String s;
+	unsigned int h = m_pulseData.length() > 10 ? 10 : m_pulseData.length();
+	m_pulseData.head(h).dump(s,Math::dumpComplex," ","%g,%g");
+	m_init.addParam("pulse_pattern",pattern);
+    }
+    else {
+	m_newTxData = false;
+	String e;
+	if (!buildVector(e,pattern,m_sendBufData)) {
+	    Debug(this,DebugConf,"Invalid tx data pattern '%s': %s [%p]",
+		pattern.c_str(),e.safe("unknown"),this);
+	    return false;
+	}
+	unsigned int len = m_sendBufData.length();
 	int n = m_params.getIntValue("txdata_repeat");
 	if (n > 0) {
-	    DataBlock tmp = m_sendBufData;
-	    while (n--)
-		m_sendBufData += tmp;
+	    ComplexVector tmp(m_sendBufData);
+	    m_sendBufData.resetStorage(n * len);
+	    for (unsigned int i = 0; i < m_sendBufData.length(); i += len)
+		m_sendBufData.slice(i,len).copy(tmp,len);
 	}
+	m_init.addParam("txpattern",pattern.substr(0,50));
+	String s;
+	m_sendBufData.head(len > 20 ? 20 : len).dump(s,Math::dumpComplex,",","%g,%g");
+	if (!s.startsWith(pattern))
+	    m_init.addParam("txdata",s);
     }
-    m_sendBufSamples = bytes2samplesf(m_sendBufData.length());
-    m_init.addParam("send-samples",String(m_sendBufSamples));
+    m_init.addParam("send_samples",String(m_sendBufData.length()));
     return true;
 }
 
@@ -503,24 +655,20 @@ void RadioTest::regenerateTxData()
     static const float s_r2 = M_SQRT1_2;
     static const float s_cs8[8] = {1,s_r2,0,-s_r2,-1,-s_r2,0,s_r2};
 
-    float* ip = sendBuf();
-    if (m_pulse)
-	for (unsigned int i = 0; i < m_sendBufSamples; i++, ip += 2, m_phase++) {
+    Complex* last = 0;
+    Complex* c = m_sendBufData.data(0,m_sendBufData.length(),last);
+    if (m_pulse) {
+	m_sendBufData.bzero();
+	for (; c != last; ++c, ++m_phase) {
 	    unsigned int idx = m_phase % m_pulse;
-	    if (idx < m_pulseData.length()) {
-		Complex& c = m_pulseData[idx];
-		ip[0] = c.re();
-		ip[1] = c.im();
-	    }
-	    else
-		::memset(ip,0,2 * sizeof(float));
+	    if (idx < m_pulseData.length())
+		*c = m_pulseData[idx];
 	}
+    }
     else
-	for (unsigned int i = 0; i < m_sendBufSamples; i++) {
-	    *ip++ = 0.5 * (s_cs4[m_phase % 4] + s_cs8[m_phase % 8]);
-	    *ip++ = -0.5 * (s_cs4[(m_phase + 1) % 4] + s_cs8[(m_phase + 2) % 8]);
-	    m_phase++;
-	}
+	for (; c != last; ++c, ++m_phase)
+	    c->set(0.5 * (s_cs4[m_phase % 4] + s_cs8[m_phase % 8]),
+		-0.5 * (s_cs4[(m_phase + 1) % 4] + s_cs8[(m_phase + 2) % 8]));
 }
 
 bool RadioTest::execute(const String& cmd, const String& param, bool fatal,
@@ -540,6 +688,13 @@ bool RadioTest::execute(const String& cmd, const String& param, bool fatal,
 	c = m_radio->setLoopback(param);
     else if (cmd == YSTRING("calibrate"))
 	c = m_radio->calibrate();
+    else if (cmd.startsWith("devparam:")) {
+	NamedList tmp("");
+	if (params)
+	    tmp.copySubParams(*params,cmd + "_");
+	tmp.setParam("cmd:" + cmd,param);
+	c = m_radio->setParams(tmp);
+    }
     else {
 	Debug(this,DebugNote,"Unhandled command '%s' [%p]",cmd.c_str(),this);
 	return true;
@@ -571,10 +726,11 @@ bool RadioTest::write()
 	regenerateTxData();
     if (!m_tx.ts)
 	updateTs(true);
-    unsigned int code = m_radio->send(m_tx.ts,sendBuf(),m_sendBufSamples);
+    unsigned int code = m_radio->send(m_tx.ts,(float*)m_sendBufData.data(),
+	m_sendBufData.length());
     if (!code) {
-	m_tx.ts += m_sendBufSamples;
-	m_tx.transferred += m_sendBufSamples;
+	m_tx.ts += m_sendBufData.length();
+	m_tx.transferred += m_sendBufData.length();
 	if (!m_sendBufCount)
 	    return true;
 	m_sendBufCount--;
@@ -622,7 +778,7 @@ void RadioTest::readStop()
     m_recv->cancel();
     lck.drop();
     // Wait for 5 seconds before hard cancelling
-    unsigned int n = (5000 + Thread::idleMsec()) / Thread::idleMsec();
+    unsigned int n = threadIdleIntervals(5000);
     while (m_recv && n) {
 	Thread::idle();
 	n--;
@@ -640,6 +796,19 @@ void RadioTest::hardCancelRecv()
     m_recv->cancel(true);
     m_recv = 0;
 }
+
+bool RadioTest::wait(const String& param)
+{
+    unsigned int wait = m_params.getIntValue(param,0,0);
+    if (!wait)
+	return true;
+    Debug(this,DebugInfo,"Waiting '%s' %ums [%p]",param.c_str(),wait,this);
+    unsigned int n = threadIdleIntervals(wait);
+    for (; n && !Thread::check(false); n--)
+	Thread::idle();
+    return n == 0;
+}
+
 
 //
 // RadioTestModule
@@ -662,7 +831,7 @@ void RadioTestModule::initialize()
     Output("Initializing module Radio Test");
     if (!relayInstalled(Halt)) {
 	setup();
-	installRelay(Halt);
+	installRelay(Halt,120);
 	installRelay(Control);
     }
 }
@@ -733,7 +902,8 @@ bool RadioTestModule::test(const String& cmd, const NamedList& list)
 	lck.acquire(s_testMutex);
     }
     bool start = (cmd == YSTRING("start"));
-    if (start || !cmd || cmd == YSTRING("stop")) {
+    bool restart = !start && (cmd == YSTRING("restart"));
+    if (start || restart || !cmd || cmd == YSTRING("stop")) {
 	// Stop the test
 	while (s_test) {
 	    s_test->cancel();
@@ -741,7 +911,7 @@ bool RadioTestModule::test(const String& cmd, const NamedList& list)
 		s_test->m_recv->cancel();
 	    lck.drop();
 	    // Wait for 5 seconds before hard cancelling
-	    unsigned int n = (5000 + Thread::idleMsec()) / Thread::idleMsec();
+	    unsigned int n = threadIdleIntervals(5000);
 	    while (s_test && n) {
 		Thread::idle();
 		n--;
@@ -754,21 +924,32 @@ bool RadioTestModule::test(const String& cmd, const NamedList& list)
 	    s_test->cancel(true);
 	    s_test = 0;
 	}
-	if (start) {
+	while (start || restart) {
 	    Configuration cfg(Engine::configFile(name()));
-	    String n = list.getValue("name","test");
+	    String n = list.getValue("name",start ? "test" : 0);
 	    NamedList* sect = n ? cfg.getSection(n) : 0;
-	    if (sect) {
-		NamedList params(sect->c_str());
-		const char* inc = sect->getValue(YSTRING("include"));
-		if (inc)
-		    params.copyParams(*cfg.createSection(inc));
-		params.copyParams(*sect);
-		RadioTest::start(params,*cfg.createSection("radio"));
-	    }
-	    else
+	    if (!sect) {
 		Debug(this,DebugNote,"Failed to start test '%s': missing config section",
 		    n.c_str());
+		break;
+	    }
+	    NamedList params(sect->c_str());
+	    const char* inc = sect->getValue(YSTRING("include"));
+	    if (inc)
+		params.copyParams(*cfg.createSection(inc));
+	    params.copyParams(*sect);
+	    if (restart) {
+		unsigned int repeat = list.getIntValue("repeat",0,0);
+		if (!repeat)
+		    break;
+		params.setParam("repeat",String(repeat));
+		params.clearParam("file",':');
+		params.copySubParams(list,"file:",false,true);
+	    }
+	    params.setParam(YSTRING("first"),String::boolText(start));
+	    const char* radioSect = params.getValue("radio_section","radio");
+	    RadioTest::start(params,*cfg.createSection(radioSect));
+	    break;
 	}
     }
     else if (s_test)

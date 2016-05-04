@@ -149,18 +149,3 @@
 ; See the corresponding TX parameters
 ; rx-data-file: The data is dumped after read from device, before applying any changes
 ; rx-app-file: The data is dumped before returning it to upper layer
-
-
-[test_name]
-; This section configures a test
-; There may be more than one test section
-
-; Parameters starting with 'init:' can be used to run device commands after creation
-;  and before power up
-; Handled commands:
-; txpattern=circle/zero/random/comma_separated_list_of_values
-; samplerate=device_sample_rate
-; filter=device_filter_bandwidth
-; txfrequency=tx_frequency_in_hertz
-; rxfrequency=rx_frequency_in_hertz
-

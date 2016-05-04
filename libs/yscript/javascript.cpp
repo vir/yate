@@ -939,8 +939,15 @@ bool JsCode::initialize(ScriptContext* context) const
     JsObject::initialize(context);
     for (ObjList* l = m_globals.skipNull(); l; l = l->skipNext()) {
 	ExpOperation* op = static_cast<ExpOperation*>(l->get());
-	if (!context->params().getParam(op->name()))
-	    context->params().setParam(static_cast<ExpOperation*>(l->get())->clone());
+	if (context->params().getParam(op->name()))
+	    continue;
+	const JsFunction* jf = YOBJECT(JsFunction,op);
+	if (jf) {
+	    JsObject* nf = jf->copy(context->mutex());
+	    context->params().setParam(new ExpWrapper(nf,op->name(),op->barrier()));
+	}
+	else
+	    context->params().setParam(op->clone());
     }
     return true;
 }

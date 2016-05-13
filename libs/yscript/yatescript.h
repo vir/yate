@@ -2231,7 +2231,16 @@ public:
      * @param mtx Pointer to the mutex that serializes the copied array
      * @return New object instance, does not keep references to old array
      */
-    virtual JsObject* copy(Mutex* mtx) const;
+    inline JsObject* copy(Mutex* mtx) const
+	{ return copy(mtx,0); }
+
+    /**
+     * Deep copy method with given name
+     * @param mtx Pointer to the mutex that serializes the copied array
+     * @param name Name for the copied function
+     * @return New object instance, does not keep references to old array
+     */
+    virtual JsObject* copy(Mutex* mtx, const char* name) const;
 
 protected:
     /**

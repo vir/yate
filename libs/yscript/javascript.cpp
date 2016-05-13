@@ -943,7 +943,7 @@ bool JsCode::initialize(ScriptContext* context) const
 	    continue;
 	const JsFunction* jf = YOBJECT(JsFunction,op);
 	if (jf) {
-	    JsObject* nf = jf->copy(context->mutex());
+	    JsObject* nf = jf->copy(context->mutex(),jf->getFunc()->name());
 	    context->params().setParam(new ExpWrapper(nf,op->name(),op->barrier()));
 	}
 	else
@@ -3383,12 +3383,12 @@ JsFunction::JsFunction(Mutex* mtx, const char* name, ObjList* args, long int lbl
     params().addParam("length",String(argc));
 }
 
-JsObject* JsFunction::copy(Mutex* mtx) const
+JsObject* JsFunction::copy(Mutex* mtx, const char* name) const
 {
     ObjList args;
     for (ObjList* l = m_formal.skipNull(); l; l = l->skipNext())
 	args.append(new String(l->get()->toString()));
-    return new JsFunction(mtx,0,&args,label(),m_code);
+    return new JsFunction(mtx,name,&args,label(),m_code);
 }
 
 void JsFunction::init()

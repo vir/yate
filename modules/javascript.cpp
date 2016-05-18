@@ -758,6 +758,7 @@ static bool s_allowAbort = false;
 static bool s_allowTrace = false;
 static bool s_allowLink = true;
 static bool s_autoExt = true;
+static unsigned int s_maxFile = 500000;
 
 UNLOAD_PLUGIN(unloadNow)
 {
@@ -4315,6 +4316,7 @@ JsGlobal::JsGlobal(const char* scriptName, const char* fileName, bool relPath, b
     m_jsCode.basePath(s_basePath,s_libsPath);
     if (relPath)
 	m_jsCode.adjustPath(*this);
+    m_jsCode.setMaxFileLen(s_maxFile);
     m_jsCode.link(s_allowLink);
     m_jsCode.trace(s_allowTrace);
     DDebug(&__plugin,DebugAll,"Loading global Javascript '%s' from '%s'",name().c_str(),c_str());
@@ -4609,6 +4611,7 @@ bool JsModule::evalContext(String& retVal, const String& cmd, ScriptContext* con
 {
     JsParser parser;
     parser.basePath(s_basePath,s_libsPath);
+    parser.setMaxFileLen(s_maxFile);
     parser.link(s_allowLink);
     parser.trace(s_allowTrace);
     if (!parser.parse(cmd)) {
@@ -4806,6 +4809,7 @@ void JsModule::initialize()
     if (tmp && !tmp.endsWith(Engine::pathSeparator()))
 	tmp += Engine::pathSeparator();
     s_libsPath = tmp;
+    s_maxFile = cfg.getIntValue("general","max_length",500000,32768,2097152);
     s_autoExt = cfg.getBoolValue("general","auto_extensions",true);
     s_allowAbort = cfg.getBoolValue("general","allow_abort");
     bool changed = false;
@@ -4822,6 +4826,7 @@ void JsModule::initialize()
     lock();
     if (changed || m_assistCode.scriptChanged(tmp,s_basePath,s_libsPath)) {
 	m_assistCode.clear();
+	m_assistCode.setMaxFileLen(s_maxFile);
 	m_assistCode.link(s_allowLink);
 	m_assistCode.trace(s_allowTrace);
 	m_assistCode.basePath(s_basePath,s_libsPath);

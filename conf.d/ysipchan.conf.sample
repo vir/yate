@@ -257,6 +257,10 @@
 ; This parameter is applied on reload
 ;auth_foreign=disable
 
+;auth_copy_headers: string: Comma separated list of headers to be copied in user.auth message
+; This parameter is applied on reload
+;auth_copy_headers=
+
 ; body_encoding: keyword: Encoding used for received generic binary bodies
 ;  Can be one of: base64, hex, hexs, raw
 ;body_encoding=base64

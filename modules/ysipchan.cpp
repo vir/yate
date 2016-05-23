@@ -1219,6 +1219,7 @@ static bool s_preventive_bye = true;
 static bool s_ignoreVia = true;          // Ignore Via headers and send answer back to the source
 static bool s_sipt_isup = false;         // Control the application/isup body processing
 static bool s_printMsg = true;           // Print sent/received SIP messages to output
+static ObjList* s_authCopyHeader = 0;    // Copy headers in user.auth
 
 static bool s_ipv6 = false;              // IPv6 support enabled
 static u_int64_t s_waitActiveUdpTrans = 1000000; // Time to wait for active UDP transactions
@@ -1298,6 +1299,12 @@ const TokenDict SipHandler::s_bodyEnc[] = {
     { "hexs",   BodyHexS},
     { 0, 0 },
 };
+
+static inline String& getGlobal(String& dest, String& src)
+{
+    Lock lck(s_globalMutex);
+    return (dest = src);
+}
 
 // Get an address. Check if enclosed in []
 static inline void getAddrCheckIPv6(String& dest, const String& src)
@@ -2172,8 +2179,8 @@ static void setAuthError(SIPTransaction* trans, const NamedList& params,
 	m->deref();
 	return;
     }
-    Lock lck(s_globalMutex);
-    trans->requestAuth(s_realm,domain,stale);
+    String r;
+    trans->requestAuth(getGlobal(r,s_realm),domain,stale);
 }
 
 
@@ -4508,6 +4515,9 @@ bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src, bool o
 	NamedString* s = src.getParam(i);
 	if (!s)
 	    continue;
+	// Don't copy added SIP headers: on success they will be added again
+	if (s->name().startsWith("sip_"))
+	    continue;
 	String name = s->name();
 	if (name.startSkip("authfail_",false) == ok)
 	    continue;
@@ -4559,16 +4569,19 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
 	hl = message->getHeader("User-Agent");
 	if (hl)
 	    m.addParam("device",*hl);
+	s_globalMutex.lock();
 	for (const ObjList* l = message->header.skipNull(); l; l = l->skipNext()) {
 	    hl = static_cast<const MimeHeaderLine*>(l->get());
 	    String name(hl->name());
 	    name.toLower();
-	    if (!name.startsWith("security-"))
+	    if (!(name.startsWith("security-") ||
+		(s_authCopyHeader && s_authCopyHeader->find(name))))
 		continue;
 	    String tmp;
 	    hl->buildLine(tmp,false);
 	    m.addParam("sip_" + name,tmp);
 	}
+	s_globalMutex.unlock();
     }
 
     if (params) {
@@ -7804,8 +7817,8 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	if ((code == 401) && (s_noAutoAuth != error)) {
-	    Lock lck(s_globalMutex);
-	    m_tr->requestAuth(s_realm,m_domain,false);
+	    String r;
+	    m_tr->requestAuth(getGlobal(r,s_realm),m_domain,false);
 	}
 	else if (msg) {
 	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),code,reason);
@@ -8858,6 +8871,7 @@ SIPDriver::SIPDriver()
 SIPDriver::~SIPDriver()
 {
     Output("Unloading module SIP Channel");
+    TelEngine::destruct(s_authCopyHeader);
 }
 
 void SIPDriver::initialize()
@@ -8869,6 +8883,7 @@ void SIPDriver::initialize()
     s_globalMutex.lock();
     s_cfg.load();
     NamedList* general = s_cfg.getSection("general");
+    TelEngine::destruct(s_authCopyHeader);
     if (general) {
 	String* dtmfMethods = general->getParam("dtmfmethods");
 	if (dtmfMethods) {
@@ -8879,6 +8894,16 @@ void SIPDriver::initialize()
 	    s_dtmfMethods.setDefault();
 	    s_dtmfMethods.getDeprecatedDtmfMethod(*general,"dtmfinfo",DtmfMethods::Info,&s_warnDtmfInfoCfg);
 	    s_dtmfMethods.getDeprecatedDtmfMethod(*general,"dtmfinband",DtmfMethods::Inband,&s_warnDtmfInbandCfg);
+	}
+	const String& tmp = (*general)[YSTRING("auth_copy_headers")];
+	if (tmp) {
+	    s_authCopyHeader = tmp.split(',',false);
+	    ObjList* o = s_authCopyHeader->skipNull();
+	    if (o)
+		for (; o; o = o->skipNext())
+		    (static_cast<String*>(o->get()))->toLower();
+	    else
+		TelEngine::destruct(s_authCopyHeader);
 	}
     }
     else

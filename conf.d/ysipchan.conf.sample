@@ -104,6 +104,10 @@
 ; Low priorities are not recommended except for debugging
 ;thread=normal
 
+; role: string: Role to be set in messages sent by connections using this listener
+; This parameter is applied on reload
+;role=
+
 ; floodevents: int: How many SIP events retrieved in a row trigger a flood warning and the drop mechanism
 ;  for INVITE/REGISTER/SUBSCRIBE/OPTIONS messages if the flood protection is on.
 ; NOTE! The drop mechanism is separately activated by the floodprotection setting which is on by default. Also,
@@ -532,3 +536,7 @@
 ; High priorities need superuser privileges on POSIX operating systems
 ; Low priorities are not recommended except for debugging
 ;thread=normal
+
+; role: string: Role to be set in messages sent by connections using this listener
+; This parameter is applied on reload
+;role=

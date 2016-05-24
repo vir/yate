@@ -419,6 +419,7 @@ protected:
     YateSIPTransportWorker* m_worker;    // Transport worker
     bool m_initialized;                  // Flag reset when initializing by the module and set in init()
     String m_protoAddr;                  // Proto + addr: used for debug (send/recv msg)
+    String m_role;
 private:
     YateSIPTransport() : ProtocolHolder(Udp) {} // No default constructor
 };
@@ -2792,6 +2793,7 @@ bool YateSIPTransport::init(const NamedList& params, const NamedList& defs,
 	}
     }
     m_rtpNatAddr = params.getValue(YSTRING("nat_address"));
+    m_role = params[YSTRING("role")];
     unlock();
     // Done if not first
     if (!first)
@@ -2848,6 +2850,10 @@ void YateSIPTransport::fillMessage(Message& msg, bool addRoute)
 {
     msg.setParam("connection_id",toString());
     msg.setParam("connection_reliable",String::boolText(0 != tcpTransport()));
+    if (m_role) {
+	Lock lck(this);
+	msg.setParam("role",m_role);
+    }
     if (addRoute) {
 	msg.setParam("route_params","oconnection_id");
 	msg.setParam("oconnection_id",toString());
@@ -3056,8 +3062,9 @@ bool YateSIPUDPTransport::init(const NamedList& params, const NamedList& defs, b
     m_forceBind = params.getBoolValue("udp_force_bind",true);
     m_bufferReq = params.getIntValue("buffer",defs.getIntValue("buffer"));
     if (first) {
-	setAddr(params.getValue("addr"),params.getIntValue("port",5060),
-	    params.getBoolValue("ipv6"));
+	const String& addr = params["addr"];
+	setAddr(addr,params.getIntValue("port",5060),
+	    params.getBoolValue("ipv6",(addr.find(':') >= 0)));
 	m_ipv6Support = s_ipv6;
     }
     bool ok = YateSIPTransport::init(params,defs,first,prio);
@@ -3943,11 +3950,16 @@ void YateSIPTCPListener::init(const NamedList& params, bool first)
 	m_sslContextCheck = true;
     }
     m_backlog = params.getIntValue("backlog",5,0);
-    setAddr(addr,port,params.getBoolValue("ipv6"));
+    setAddr(addr,port,params.getBoolValue("ipv6",(addr.find(':') >= 0)));
     if (first)
 	m_bind = true;
     updateIPv6Support();
     m_transParamsChanged = m_transParamsChanged || first;
+    const String& role = params[YSTRING("role")];
+    if (role != m_transParams[YSTRING("role")]) {
+	m_transParamsChanged = true;
+	m_transParams.setParam("role",role);
+    }
     String rtp;
     bool setRtpAddrChg = updateRtpAddr(params,rtp);
     if (rtp != m_transParams["rtp_localip"]) {

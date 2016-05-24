@@ -1,3 +1,33 @@
+yate (5.5.1~svn6117) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6117:
+  * Added quilt build-dep
+  * Dependency string fixed
+  * Revert wrong part of "Updated debian package version to
+    5.5.1~svn6105"
+  * Fix icon paths patch
+  * Additional check for Nuand's vendor and product when choosing a
+    device to open.
+  * Fixed bug: properly return data pointer when requested offset is not
+    0.
+  * Append a -L directive to library returned by yate-config to support
+    prefixes not in linker's path.
+  * This prevents changing JS functions across instances of the same
+    script.
+  * Make a copy of global JS functions when initializing a Script
+    Context.
+  * Added support to poll for pending operation completion.
+  * Added capability to set custom device params and automatically
+    restart radio test.
+  * Replaced calibration algorithm (work in progress). Added
+    asynchronous calibration support. Removed test capability.
+  * Make sure to also copy the name of a global function when
+    initializing a ScriptContext.
+  * Made maximum loadable JS file size configurable.
+  * Added option to copy message headers in user.auth messages.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 24 May 2016 09:39:13 +0300
+
 yate (5.5.1~svn6107) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line

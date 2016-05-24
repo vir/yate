@@ -3062,8 +3062,9 @@ bool YateSIPUDPTransport::init(const NamedList& params, const NamedList& defs, b
     m_forceBind = params.getBoolValue("udp_force_bind",true);
     m_bufferReq = params.getIntValue("buffer",defs.getIntValue("buffer"));
     if (first) {
-	setAddr(params.getValue("addr"),params.getIntValue("port",5060),
-	    params.getBoolValue("ipv6"));
+	const String& addr = params["addr"];
+	setAddr(addr,params.getIntValue("port",5060),
+	    params.getBoolValue("ipv6",(addr.find(':') >= 0)));
 	m_ipv6Support = s_ipv6;
     }
     bool ok = YateSIPTransport::init(params,defs,first,prio);
@@ -3949,7 +3950,7 @@ void YateSIPTCPListener::init(const NamedList& params, bool first)
 	m_sslContextCheck = true;
     }
     m_backlog = params.getIntValue("backlog",5,0);
-    setAddr(addr,port,params.getBoolValue("ipv6"));
+    setAddr(addr,port,params.getBoolValue("ipv6",(addr.find(':') >= 0)));
     if (first)
 	m_bind = true;
     updateIPv6Support();

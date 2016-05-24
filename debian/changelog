@@ -1,3 +1,13 @@
+yate (5.5.1~svn6119) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6119:
+  * Added listener role parameter. Set it in messages sent by
+    connections using the listener.
+  * Listener: default 'ipv6' parameter to true if bind address contains
+    ':'.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 25 May 2016 02:19:14 +0300
+
 yate (5.5.1~svn6117) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6117:

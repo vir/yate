@@ -170,7 +170,7 @@ $(APIINDEX): @srcdir@/docs/Doxyfile \
 
 .PHONY: strip sex love war
 strip: all
-	-strip --strip-debug --discard-locals $(PROGS) $(SLIBS)
+	-strip --preserve-dates --strip-debug --discard-locals $(PROGS) $(SLIBS)
 
 sex: strip
 	@echo 'Stripped for you!'

@@ -1,3 +1,17 @@
+yate (5.5.1~svn6121) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6121:
+  * Added possibility to specify custom RPM build commands and
+    parameters.
+  * Fixed binaries stripping to preserve file date to avoid dependency
+    problems.
+  * Fixed explicit disabling of GUI build when Qt is present but
+    unusable.
+  * Detect 'ipv6' default value from bind address when updating an udp
+    transport: avoid listener restart.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 28 May 2016 02:19:15 +0300
+
 yate (5.5.1~svn6119) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6119:

@@ -4817,9 +4817,9 @@ bool YateSIPEndPoint::setupUdpTransport(const String& name, bool enabled,
     if (rd) {
 	if (enabled) {
 	    reason = 0;
-	    bool ipv6 = params.getBoolValue("ipv6");
+	    const String& addr = params["addr"];
+	    bool ipv6 = params.getBoolValue("ipv6",(addr.find(':') >= 0));
 	    if (rd->ipv6() == ipv6 && (!rd->ipv6() || rd->ipv6Support() == s_ipv6)) {
-		const String& addr = params["addr"];
 		int port = params.getIntValue("port",5060);
 		if (rd->addrWouldChange(rd,addr,port))
 		    reason = "Address changed";

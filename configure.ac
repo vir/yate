@@ -11,6 +11,7 @@ PACKAGE_RELEASE="1"
 PACKAGE_STATUS="devel"
 PACKAGE_REVISION=`svn info 2>/dev/null | sed -n 's,^Revision: *,,p'`
 test -z "$PACKAGE_REVISION" && PACKAGE_REVISION=`cat "$srcdir/packing/revision.txt" 2>/dev/null`
+AC_ARG_WITH(status,AC_HELP_STRING([--with-status=NAME],[use NAME as package status]),[PACKAGE_STATUS=$withval])
 
 PACKAGE_VERSION_MAJOR="${PACKAGE_VERSION%%.*}"
 PACKAGE_VERSION_MINOR="${PACKAGE_VERSION#*.}"

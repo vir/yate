@@ -500,6 +500,23 @@ public:
     };
 
     /**
+     * Operations
+     * Used to handle pending state
+     */
+    enum Operation {
+	PendingInitialize = 0,           // initialize() is pending
+	PendingCount,
+    };
+
+    /**
+     * Poll for a pending operation
+     * @param oper Operation to check
+     * @param waitMs Optional time (in milliseconds) to wait for operation completion
+     * @return Error code (0 on success)
+     */
+    unsigned int pollPending(unsigned int oper, unsigned int waitMs = 0);
+
+    /**
      * Retrieve the radio device path
      * @param devicePath Destination buffer
      * @return Error code (0 on success)
@@ -784,16 +801,27 @@ protected:
      * Constructor
      * @param name Interface name
      */
-    inline RadioInterface(const char* name)
-	: m_lastErr(0), m_totalErr(0), m_radioCaps(0), m_name(name)
-	{ debugName(m_name); }
+    RadioInterface(const char* name);
 
+    /**
+     * Set pending state
+     * @param oper Operation to set
+     * @param code Status code
+     */
+    inline void setPending(unsigned int oper, unsigned int code = Pending) {
+	    Lock lck(m_mutex);
+	    if (oper < PendingCount)
+		m_pendingCode[oper] = code;
+	}
+	
     unsigned int m_lastErr;               // Last error that appeared during functioning
     unsigned int m_totalErr;              // All the errors that appeared
     RadioCapability* m_radioCaps;         // Radio capabilities
 
 private:
     String m_name;
+    Mutex m_mutex;
+    unsigned int m_pendingCode[PendingCount];
 };
 
 

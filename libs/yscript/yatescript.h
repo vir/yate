@@ -1835,6 +1835,20 @@ public:
 	{ return m_code; }
 
     /**
+     * Set the maximum loaded file length
+     * @param len New maximum file length
+     */
+    inline void setMaxFileLen(unsigned int len)
+	{ m_maxFileLen = len; }
+
+    /**
+     * Retrieve the maximum loadable file size
+     * @return The maximum number of octets that will be loaded from a file
+     */
+    inline unsigned int maxFileLen() const
+	{ return m_maxFileLen; }
+
+    /**
      * Create a context adequate for the parsed code
      * @return A new script context
      */
@@ -1878,13 +1892,6 @@ protected:
      * @param code Parsed code block, may be NULL
      */
     void setCode(ScriptCode* code);
-
-    /**
-     * Set the maximum loaded file length
-     * @param len New maximum file length
-     */
-    inline void setMaxFileLen(unsigned int len)
-	{ m_maxFileLen = len; }
 
 private:
     ScriptCode* m_code;
@@ -2231,7 +2238,16 @@ public:
      * @param mtx Pointer to the mutex that serializes the copied array
      * @return New object instance, does not keep references to old array
      */
-    virtual JsObject* copy(Mutex* mtx) const;
+    inline JsObject* copy(Mutex* mtx) const
+	{ return copy(mtx,0); }
+
+    /**
+     * Deep copy method with given name
+     * @param mtx Pointer to the mutex that serializes the copied array
+     * @param name Name for the copied function
+     * @return New object instance, does not keep references to old array
+     */
+    virtual JsObject* copy(Mutex* mtx, const char* name) const;
 
 protected:
     /**

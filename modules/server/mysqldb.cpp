@@ -281,9 +281,10 @@ void MyConn::closeConn()
     MYSQL* tmp = m_conn;
     m_conn = 0;
     mysql_close(tmp);
+    String name(*this);
     if (m_owner)
 	m_owner->m_connections.remove(this);
-    Debug(&module,DebugInfo,"Database connection '%s' closed",c_str());
+    Debug(&module,DebugInfo,"Database connection '%s' closed",name.c_str());
 }
 
 void MyConn::runQueries()

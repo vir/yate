@@ -168,6 +168,34 @@ String& RadioReadBufs::dump(String& buf)
 }
 
 
+RadioInterface::RadioInterface(const char* name)
+    : m_lastErr(0), m_totalErr(0), m_radioCaps(0), m_name(name),
+    m_mutex(false,"RadioInterface")
+{
+    debugName(m_name);
+    ::memset(m_pendingCode,0,sizeof(m_pendingCode));
+}
+
+// Poll for a pending operation
+unsigned int RadioInterface::pollPending(unsigned int oper, unsigned int waitMs)
+{
+    if (oper >= PendingCount)
+	return 0;
+    if (waitMs && (Pending == m_pendingCode[oper])) {
+	unsigned int intervals = (waitMs + Thread::idleMsec() - 1) / Thread::idleMsec();
+	while ((Pending == m_pendingCode[oper]) && intervals && !Thread::check(false)) {
+	    Thread::idle();
+	    intervals--;
+	}
+    }
+    Lock lck(m_mutex);
+    if (Pending == m_pendingCode[oper])
+	return Pending;
+    unsigned int code = m_pendingCode[oper];
+    m_pendingCode[oper] = 0;
+    return code;
+}
+
 // NOTE: This method assumes a single port is used
 // E.g.: a sample is an I/Q pair
 // If multiple ports are handled the sampleLen() function should handle the number of ports

@@ -9,6 +9,7 @@ CXX := @CXX@ -Wall
 OBJCXX := @CXX@ -Wall
 SED := sed
 DEFS :=
+LIBENG:=
 LIBAUX:= @DLOPEN_LIB@ @LIBS@
 LIBTHR:= @THREAD_LIB@
 INCLUDES := -I.. -I@top_srcdir@
@@ -138,4 +139,4 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 ../$(YLIB): $(LIBOBJS) $(LIBS)
-	$(LINK) -o $@ $(SONAME_OPT)$(YLIB) $^ $(LIBTHR) $(LIBAUX) $(MACOSX_LIB) @RESOLV_LIB@
+	$(LINK) -o $@ $(SONAME_OPT)$(YLIB) $^ $(LIBTHR) $(LIBAUX) $(LIBENG) $(MACOSX_LIB) @RESOLV_LIB@

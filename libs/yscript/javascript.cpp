@@ -939,8 +939,15 @@ bool JsCode::initialize(ScriptContext* context) const
     JsObject::initialize(context);
     for (ObjList* l = m_globals.skipNull(); l; l = l->skipNext()) {
 	ExpOperation* op = static_cast<ExpOperation*>(l->get());
-	if (!context->params().getParam(op->name()))
-	    context->params().setParam(static_cast<ExpOperation*>(l->get())->clone());
+	if (context->params().getParam(op->name()))
+	    continue;
+	const JsFunction* jf = YOBJECT(JsFunction,op);
+	if (jf) {
+	    JsObject* nf = jf->copy(context->mutex(),jf->getFunc()->name());
+	    context->params().setParam(new ExpWrapper(nf,op->name(),op->barrier()));
+	}
+	else
+	    context->params().setParam(op->clone());
     }
     return true;
 }
@@ -3376,12 +3383,12 @@ JsFunction::JsFunction(Mutex* mtx, const char* name, ObjList* args, long int lbl
     params().addParam("length",String(argc));
 }
 
-JsObject* JsFunction::copy(Mutex* mtx) const
+JsObject* JsFunction::copy(Mutex* mtx, const char* name) const
 {
     ObjList args;
     for (ObjList* l = m_formal.skipNull(); l; l = l->skipNext())
 	args.append(new String(l->get()->toString()));
-    return new JsFunction(mtx,0,&args,label(),m_code);
+    return new JsFunction(mtx,name,&args,label(),m_code);
 }
 
 void JsFunction::init()

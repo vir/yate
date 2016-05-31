@@ -47,7 +47,7 @@
 
 ; ipv6: boolean: Listen on IPv6 address(es)
 ; Listen will fail if IPv6 support is not enabled or not supported
-; Defaults to no
+; Defaults to 'yes' if IP address is an IPv6 one or 'no' otherwise
 ;ipv6=no
 
 ; udp_force_bind: boolean: Try to use a random port if failed to bind on configured one (UDP only)
@@ -103,6 +103,10 @@
 ; High priorities need superuser privileges on POSIX operating systems
 ; Low priorities are not recommended except for debugging
 ;thread=normal
+
+; role: string: Role to be set in messages sent by connections using this listener
+; This parameter is applied on reload
+;role=
 
 ; floodevents: int: How many SIP events retrieved in a row trigger a flood warning and the drop mechanism
 ;  for INVITE/REGISTER/SUBSCRIBE/OPTIONS messages if the flood protection is on.
@@ -259,6 +263,10 @@
 ; auth_foreign: bool: Attempt to authenticate nonces not generated locally
 ; This parameter is applied on reload
 ;auth_foreign=disable
+
+;auth_copy_headers: string: Comma separated list of headers to be copied in user.auth message
+; This parameter is applied on reload
+;auth_copy_headers=
 
 ; body_encoding: keyword: Encoding used for received generic binary bodies
 ;  Can be one of: base64, hex, hexs, raw
@@ -504,7 +512,7 @@
 
 ; ipv6: boolean: Listen on IPv6 address(es)
 ; Listen will fail if IPv6 support is not enabled or not supported
-; Defaults to no
+; Defaults to 'yes' if IP address is an IPv6 one or 'no' otherwise
 ;ipv6=no
 
 ; rtp_localip: ipaddress: IP address to bind local RTP to
@@ -531,3 +539,7 @@
 ; High priorities need superuser privileges on POSIX operating systems
 ; Low priorities are not recommended except for debugging
 ;thread=normal
+
+; role: string: Role to be set in messages sent by connections using this listener
+; This parameter is applied on reload
+;role=

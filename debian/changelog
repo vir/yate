@@ -1,3 +1,15 @@
+yate (5.5.1~vir2016053101) UNRELEASED; urgency=medium
+
+  * Merged upstream updates (SVN r6121)
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Tue, 31 May 2016 17:44:56 +0300
+
+yate (5.5.1~vir2016031502) UNRELEASED; urgency=medium
+
+  * Fix build
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Tue, 15 Mar 2016 14:41:09 +0300
+
 yate (5.5.1~vir2016031501) UNRELEASED; urgency=medium
 
   * Fix build.

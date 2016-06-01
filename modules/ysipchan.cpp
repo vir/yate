@@ -2566,6 +2566,7 @@ bool YateSIPPartyHolder::buildParty(bool force)
     }
     YateSIPTCPTransport* tcpTrans = 0;
     YateSIPUDPTransport* udpTrans = 0;
+    YateSIPWSTransport* wsTrans = 0;
     bool initTcp = false;
     bool addrValid = true;
     if (m_transId) {
@@ -2575,13 +2576,16 @@ bool YateSIPPartyHolder::buildParty(bool force)
 	if (trans) {
 	    tcpTrans = trans->tcpTransport();
 	    if (!tcpTrans) {
-		udpTrans = trans->udpTransport();
-		if (!udpTrans)
-		    TelEngine::destruct(trans);
+		wsTrans = trans->wsTransport();
+		if (!wsTrans) {
+		    udpTrans = trans->udpTransport();
+		    if (!udpTrans)
+			TelEngine::destruct(trans);
+		}
 	    }
 	}
     }
-    if (!(tcpTrans || udpTrans)) {
+    if (!(tcpTrans || udpTrans || wsTrans)) {
 	if (protocol() == Udp) {
 	    if (plugin.ep()) {
 		if (!m_transLocalAddr)
@@ -2621,6 +2625,11 @@ bool YateSIPPartyHolder::buildParty(bool force)
 	if (!p)
 	    p = new YateTCPParty(tcpTrans);
     }
+    else if (wsTrans) {
+	p = wsTrans->getParty();
+	if (!p)
+	    p = new YateWSParty(wsTrans);
+    }
     setParty(p);
     TelEngine::destruct(p);
     if (!addrValid)
@@ -2633,6 +2642,7 @@ bool YateSIPPartyHolder::buildParty(bool force)
     }
     TelEngine::destruct(udpTrans);
     TelEngine::destruct(tcpTrans);
+    TelEngine::destruct(wsTrans);
     return m_party != 0;
 }
 
@@ -2664,6 +2674,8 @@ bool YateSIPPartyHolder::updateProto(const NamedList& params, const String& pref
 	    // Check transport id prefix
 	    if (m_transId.startsWith("tcp:",false))
 		proto = Tcp;
+	    else if (m_transId.startsWith("ws:",false))
+		proto = Ws;
 	    else if (m_transId.startsWith("tls:",false))
 		proto = Tls;
 	    else

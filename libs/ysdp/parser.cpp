@@ -150,6 +150,9 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 	if ((trans &= "RTP/AVP") || (trans &= "RTP/SAVP") ||
 	    (trans &= "RTP/AVPF") || (trans &= "RTP/SAVPF"))
 	    trans.toUpper();
+	else if ((trans &= "UDP/TLS/RTP/SAVP") ||
+		(trans &= "UDP/TLS/RTP/SAVPF"))
+	    trans.toUpper();
 	else if ((trans &= "udptl") || (trans &= "tcp")) {
 	    trans.toLower();
 	    rtp = false;

@@ -235,8 +235,11 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 			    line >> mode;
 			else if (line.startSkip("annexb=",false))
 			    line >> annexB;
-			else if (line.startSkip("octet-align=",false))
-			    amrOctet = (0 != line.toInteger(0));
+			else if (line.startSkip("octet-align=",false)) {
+			    int val = 0;
+			    line >> val;
+			    amrOctet = (0 != val);
+			}
 		    }
 		}
 		else if (first) {

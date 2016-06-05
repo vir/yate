@@ -416,6 +416,52 @@ public:
     }
 };
 
+// IceControlling (ICE)
+class YStunAttributeIceControlling: public YStunAttribute
+{
+public:
+    inline YStunAttributeIceControlling(u_int16_t type = IceControlling)
+	: YStunAttribute(type)
+    {
+	TelEngine::Random rnd;
+	m_tieBreaker[0] = rnd.get();
+	m_tieBreaker[1] = rnd.get();
+    }
+    virtual ~YStunAttributeIceControlling() { }
+    inline void toString(String& dest)
+    {
+	dest.hexify(&m_tieBreaker, sizeof(m_tieBreaker));
+    }
+    bool fromBuffer(u_int8_t* buffer, u_int16_t len)
+    {
+	if (!(buffer && len == 8))
+	    return false;
+	m_tieBreaker[0] = ((u_int32_t*)buffer)[0];
+	m_tieBreaker[1] = ((u_int32_t*)buffer)[1];
+	return true;
+    }
+    void toBuffer(DataBlock& buffer)
+    {
+	DataBlock tmp;
+	tmp.resize(12);
+	setHeader((u_int8_t*)tmp.data(), type(), 8);
+	*(u_int32_t*)tmp.data(4) = m_tieBreaker[0];
+	*(u_int32_t*)tmp.data(8) = m_tieBreaker[1];
+	buffer += tmp;
+    }
+    u_int32_t m_tieBreaker[2];
+};
+
+// IceControlled (ICE)
+class YStunAttributeIceControlled: public YStunAttributeIceControlling
+{
+public:
+    inline YStunAttributeIceControlled()
+	: YStunAttributeIceControlling(IceControlled)
+    {
+    }
+};
+
 // Unknown
 class YStunAttributeUnknown : public YStunAttribute
 {
@@ -466,7 +512,7 @@ public:
     YStunAttribute* getAttribute(u_int16_t attrType, bool remove = false);
     void toMessage(Message& msg) const;
     bool toBuffer(DataBlock& buffer) const;
-    void print();
+    void print() const;
     static TokenDict s_tokens[];
 private:
     Type m_type;                         // Message type
@@ -1054,7 +1100,7 @@ bool YStunMessage::toBuffer(DataBlock& buffer) const
     return true;
 }
 
-void YStunMessage::print()
+void YStunMessage::print() const
 {
     String id;
     id.hexify(m_id.data(), m_id.length());
@@ -1197,6 +1243,15 @@ YStunMessage* YStunUtils::decode(const void* data, u_int32_t len, YStunMessage::
 	    case YStunAttribute::UseCandidate:
 		attr = new YStunAttributeUseCandidate();
 		break;
+	    case YStunAttribute::IceControlling:
+		attr = new YStunAttributeIceControlling();
+		break;
+	    case YStunAttribute::IceControlled:
+		attr = new YStunAttributeIceControlled();
+		break;
+	    case YStunAttribute::Fingerprint:
+		attr = new YStunAttributeFingerprint();
+		break;
 	    case YStunAttribute::UnknownAttributes:
 	    case YStunAttribute::Realm:
 	    case YStunAttribute::Nonce:
@@ -1249,6 +1304,9 @@ bool YStunUtils::sendMessage(Socket* socket, const YStunMessage* msg,
 	return false;
     DDebug(&iplugin,DebugAll,"Send message ('%s') to '%s:%d'. [%p]",
 	msg->text(),addr.host().c_str(),addr.port(),sender);
+#ifdef XDEBUG
+    msg->print();
+#endif
     DataBlock buffer;
     msg->toBuffer(buffer);
     int result = socket->sendTo(buffer.data(),buffer.length(),addr);
@@ -1432,6 +1490,9 @@ bool YStunSocketFilter::received(void* buffer, int length, int flags,
     }
     else
 	msg = YStunUtils::decode(buffer,length,type);
+#ifdef XDEBUG
+    msg->print();
+#endif
 
     switch(msg->type()) {
 	case YStunMessage::BindReq:
@@ -1635,6 +1696,8 @@ void YStunSocketFilter::processBindReq(YStunMessage* msg)
 	    m_notFound = false;
 	    dispatchChanRtp();
 	}
+	if (msg->getAttribute(YStunAttribute::IceControlling))
+	    rspMsg->addAttribute(new YStunAttributeIceControlled);
 	// Add mapped address attribute
 	rspMsg->addAttribute(new YStunAttributeAddr(
 	    m_rfc5389

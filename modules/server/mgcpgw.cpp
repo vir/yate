@@ -81,8 +81,6 @@ protected:
 		m->addParam("mgcp_allowed",String::boolText(false));
 	    return m;
 	}
-    virtual Message* buildSocketStun(RefObject* context)
-        { return NULL; /* just a stub */ }
     virtual void mediaChanged(const SDPMedia& media);
 private:
     void endTransaction(int code = 407, const NamedList* params = 0, MimeSdpBody* sdp = 0);

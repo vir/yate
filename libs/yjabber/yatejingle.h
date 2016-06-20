@@ -23,7 +23,6 @@
 
 #include <yateclass.h>
 #include <yatejabber.h>
-#include <yateice.h>
 
 /**
  * Holds all Telephony Engine related classes.
@@ -409,7 +408,7 @@ public:
  * This class holds a RTP transport candidate
  * @short A RTP transport candidate
  */
-class YJABBER_API JGRtpCandidate : public IceRtpCandidate
+class YJABBER_API JGRtpCandidate : public String
 {
 public:
     /**
@@ -417,7 +416,9 @@ public:
      */
     inline JGRtpCandidate(const char* id, const char* component = "1",
 	unsigned int generation = 0, unsigned int net = 0, int prio = 0)
-	: IceRtpCandidate(id, component, generation, net, prio)
+	: String(id),
+	m_port(0), m_component(component), m_generation(generation),
+	m_network(net), m_priority(prio), m_protocol("udp"), m_type("host")
 	{}
 
     /**
@@ -426,7 +427,6 @@ public:
      * @param container The transport container
      */
     inline JGRtpCandidate(XmlElement* xml, const JGRtpCandidates& container)
-	: IceRtpCandidate("")
 	{ fromXml(xml,container); }
 
     /**
@@ -442,6 +442,15 @@ public:
      * @param container The transport container
      */
     void fromXml(XmlElement* xml, const JGRtpCandidates& container);
+
+    String m_address;
+    String m_port;
+    String m_component;                  // Candidate component
+    String m_generation;                 // Candidate generation
+    String m_network;                    // NIC card (diagnostic only)
+    String m_priority;                   // Candidate priority
+    String m_protocol;                   // The only allowable value is "udp"
+    String m_type;                       // A Candidate Type as defined in ICE-CORE
 };
 
 
@@ -483,13 +492,6 @@ public:
      */
     void fromXml(XmlElement* xml, const JGRtpCandidates& container);
 
-    /**
-     * Utility function needed for debug: dump a candidate to a string
-     * @param buf String buffer
-     * @param sep Parameters separator character
-     */
-    virtual void dump(String& buf, char sep = ' ');
-
     String m_username;
     String m_password;
 };
@@ -499,7 +501,7 @@ public:
  * This class holds a list of jingle RTP transport candidates
  * @short A list of RTP transport candidates
  */
-class YJABBER_API JGRtpCandidates : public IceRtpCandidates
+class YJABBER_API JGRtpCandidates : public ObjList
 {
 public:
     /**
@@ -528,15 +530,28 @@ public:
     inline const char* typeName() const
 	{ return typeName(m_type); }
 
+    /**
+     * Fill password and ufrag data
+     */
+    inline void generateIceAuth() {
+	    generateIceToken(m_password,true);
+	    generateIceToken(m_ufrag,false);
+	}
 
-#if 0
+    /**
+     * Fill password and ufrag data using old transport restrictions (16 bytes length)
+     */
+    inline void generateOldIceAuth() {
+	    generateOldIceToken(m_password);
+	    generateOldIceToken(m_ufrag);
+	}
+
     /**
      * Find a candidate by its component value
      * @param component The value to search
      * @return JGRtpCandidate pointer or 0
      */
     JGRtpCandidate* findByComponent(unsigned int component);
-#endif
 
     /**
      * Create a 'transport' element from this object. Add candidates
@@ -553,6 +568,21 @@ public:
     void fromXml(XmlElement* element);
 
     /**
+     * Generate a random password or username to be used with ICE-UDP transport
+     * @param dest Destination string
+     * @param pwd True to generate a password, false to generate an username (ufrag)
+     * @param max Maximum number of characters. The maxmimum value is 256.
+     *  The minimum value is 22 for password and 4 for username
+     */
+    static void generateIceToken(String& dest, bool pwd, unsigned int max = 0);
+
+    /**
+     * Generate a random password or username to be used with old ICE-UDP transport
+     * @param dest Destination string
+     */
+    static void generateOldIceToken(String& dest);
+
+    /**
      * Get the name associated with a list's type
      * @param t The desired type
      * @param defVal Default value to return
@@ -567,6 +597,8 @@ public:
     static const TokenDict s_type[];
 
     Type m_type;
+    String m_password;
+    String m_ufrag;
 };
 
 

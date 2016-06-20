@@ -20,7 +20,6 @@
  */
 
 #include <yatesdp.h>
-#include <yateice.h>
 
 namespace TelEngine {
 
@@ -34,8 +33,7 @@ SDPMedia::SDPMedia(const char* media, const char* transport, const char* formats
     m_localChanged(false),
     m_transport(transport), m_formats(formats),
     m_rfc2833(String::boolText(false)),
-    m_lAttrs(media), m_rAttrs(media), m_fmtps(media),
-    m_lIceCandidates(NULL), m_rIceCandidates(NULL)
+    m_lAttrs(media), m_rAttrs(media), m_fmtps(media)
 {
     DDebug(DebugAll,"SDPMedia::SDPMedia('%s','%s','%s',%d,%d) [%p]",
 	media,transport,formats,rport,lport,this);
@@ -55,8 +53,6 @@ SDPMedia::SDPMedia(const char* media, const char* transport, const char* formats
 SDPMedia::~SDPMedia()
 {
     DDebug(DebugAll,"SDPMedia::~SDPMedia() '%s' [%p]",c_str(),this);
-    delete m_lIceCandidates;
-    delete m_rIceCandidates;
 }
 
 const char* SDPMedia::fmtList() const
@@ -151,21 +147,6 @@ void SDPMedia::update(const NamedList& msg, bool pickFormat)
 	    }
 	}
     }
-    IceRtpCandidate* c = NULL;
-    if(!m_lIceCandidates) {
-	m_lIceCandidates = new IceRtpCandidates();
-	m_lIceCandidates->generateIceAuth();
-	c = new IceRtpCandidate(m_id + "_candidate_" + String((int)Random::random()));
-	c->m_component = "1"; // rtp
-	c->m_protocol = "udp";
-	c->m_type = "host";
-	m_lIceCandidates->append(c);
-    }
-    else
-	c = m_lIceCandidates->findByComponent(1);
-    c->m_address = msg.getValue("localip");
-    c->m_port = m_lPort;
-    c->Update();
 }
 
 // Add or replace a parameter by name and value, set the modified flag
@@ -255,13 +236,6 @@ void SDPMedia::putMedia(NamedList& msg, bool putPort)
 	msg.addParam("encryption" + suffix(),enc);
     putNamedList(msg, m_rAttrs, "sdp" + suffix() + "_");
     putNamedList(msg, m_fmtps, "fmtp_");
-}
-
-void SDPMedia::ice(IceRtpCandidates* c, bool remote)
-{
-    IceRtpCandidates*& m = remote ? m_rIceCandidates : m_lIceCandidates;
-    delete m;
-    m = c;
 }
 
 };   // namespace TelEngine

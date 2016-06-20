@@ -798,20 +798,17 @@ bool YRTPWrapper::setupSRTP(Message& msg, bool buildMaster)
     else
 	buildMaster = false;
 
-    String suite = msg[YSTRING("crypto_suite")];;
-    String key = msg[YSTRING("crypto_key_tx")];
-    if (!(srtp->supported(m_rtp) && (key.null() ? srtp->create(suite,key,true) : srtp->setup(suite,key,0)))) {
+    String suite;
+    String key;
+    if (!(srtp->supported(m_rtp) && srtp->create(suite,key,true))) {
 	if (buildMaster)
 	    TelEngine::destruct(srtp);
 	return false;
     }
     m_rtp->security(srtp);
-    m_rtp->rtcpMux(NULL != msg.getParam(YSTRING("sdp_rtcp-mux")));
 
     msg.setParam("ocrypto_suite",suite);
     msg.setParam("ocrypto_key",key);
-    if(m_rtp->rtcpMux())
-	msg.setParam("osdp_rtcp-mux", "");
     return true;
 }
 

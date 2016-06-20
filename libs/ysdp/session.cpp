@@ -20,7 +20,6 @@
  */
 
 #include <yatesdp.h>
-#include <yateice.h>
 
 namespace TelEngine {
 
@@ -32,8 +31,7 @@ SDPSession::SDPSession(SDPParser* parser)
       m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_sdpHash(YSTRING_INIT_HASH),
       m_secure(m_parser->m_secure), m_rfc2833(m_parser->m_rfc2833),
-      m_ice(m_parser->m_ice), m_ipv6(false), m_dtlsSrtp(true),
-      m_enabler(0), m_ptr(0)
+      m_ipv6(false), m_enabler(0), m_ptr(0)
 {
     setSdpDebug();
 }
@@ -48,7 +46,6 @@ SDPSession::SDPSession(SDPParser* parser, NamedList& params)
     m_rtpForward = params.getBoolValue("rtp_forward");
     m_secure = params.getBoolValue("secure",parser->m_secure);
     m_rfc2833 = parser->m_rfc2833;
-    m_ice = params.getBoolValue("ice",parser->m_ice);
     setRfc2833(params.getParam("rfc2833"));
 }
 
@@ -119,7 +116,6 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
     DDebug(m_enabler,DebugAll,"SDPSession::dispatchRtp(%p,%s,%u,%u,%p) [%p]",
 	media,addr,start,pick,context,m_ptr);
     Message* m = buildChanRtp(media,addr,start,context);
-    m->addParam("getsession","true");
     if (m)
 	dispatchingRtp(m,media);
     if (!(m && Engine::dispatch(m))) {
@@ -127,51 +123,6 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
 	return false;
     }
     media->update(*m,start);
-
-    const IceRtpCandidates* iceLocal = media->localIceCandidates();
-    if (iceLocal) {
-	const IceRtpCandidates* iceRemote = media->remoteIceCandidates();
-	// Start STUN
-	Message* msg = buildSocketStun(m->userData());
-	if (msg) {
-	    //IceRtpCandidate* local =  YOBJECT(IceRtpCandidate,iceLocal);
-	    //IceRtpCandidate* remote = YOBJECT(IceRtpCandidate,iceRemote);
-	    msg->addParam("localusername",iceLocal->m_ufrag);
-	    msg->addParam("localpassword",iceLocal->m_password);
-	    if(iceRemote) {
-		msg->addParam("remoteusername",iceRemote->m_ufrag);
-		msg->addParam("remotepassword",iceRemote->m_password);
-		//msg->addParam("remoteip",m->getValue("remoteip"));
-		//msg->addParam("remoteport",rtpRemote->m_port);
-	    }
-	    msg->addParam("userid", m->getValue("rtpid"));
-	    msg->addParam("rfc5389", String::boolText(true));
-	    Engine::enqueue(msg);
-	}
-    }
-
-    if (m_dtlsSrtp) {
-	String setup = media->remoteAttrs().getParam(YSTRING("setup"));
-	String fp = media->remoteAttrs().getParam(YSTRING("fingerprint"));
-	bool act;
-	if (setup == YSTRING("actpass"))
-	    act = true;
-	else if (setup == YSTRING("active"))
-	    act = false;
-	else {
-	    Debug(m_enabler,DebugWarn,"Got strange 'setup' attribute in SDP from %s [%p]",addr,m_ptr);
-	    act = true;
-	}
-	Message msg("socket.dtls");
-	msg.userData(m->userData());
-	msg.copyParams(*m, "id,rtpid,localip,localport,sdp_fingerprint,context,domain");
-	msg.setParam("active", String::boolText(act));
-	if(Engine::dispatch(&msg)) {
-	    media->parameter(false, "setup", act ? "active" : "passive", false);
-	    media->parameter(false, "fingerprint", msg.retValue(), false);
-	}
-    }
-
     if (!pick) {
 	TelEngine::destruct(m);
 	return true;
@@ -179,7 +130,6 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
     m_rtpForward = false;
     m_rtpLocalAddr = m->getValue("localip",m_rtpLocalAddr);
     m_mediaStatus = m_rtpLocalAddr.null() ? MediaMuted : MediaStarted;
-
     const char* sdpPrefix = m->getValue("osdp-prefix","osdp");
     if (sdpPrefix) {
 	unsigned int n = m->length();
@@ -410,8 +360,6 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
     sdp->addLine("s",m_parser->m_sessionName);
     sdp->addLine("c",conn);
     sdp->addLine("t","0 0");
-    if (m_ice)
-	sdp->addLine("a", "ice-lite");
 
     Lock lock(m_parser);
     bool defcodecs = m_parser->m_codecs.getBoolValue("default",true);
@@ -624,13 +572,6 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	    sdp->addLine("a","crypto:" + m->localCrypto());
 	    if (!enc)
 		sdp->addLine("a","encryption:optional");
-	}
-	const IceRtpCandidates* ice = m->localIceCandidates();
-	if(ice) {
-	    for (ObjList* o = ice->skipNull(); o; o = o->skipNext())
-		sdp->addLine("a", ((static_cast<IceRtpCandidate*>(o->get()))->toSDPAttribute(*ice)));
-	    sdp->addLine("a", ice->toSDPAttribute(false));
-	    sdp->addLine("a", ice->toSDPAttribute(true));
 	}
     }
     // increment version if body hash changed
@@ -860,7 +801,6 @@ void SDPSession::resetSdp(bool all)
     if (all) {
 	m_secure = m_parser->secure();
 	m_rfc2833 = m_parser->rfc2833();
-	m_ice = m_parser->ice();
     }
 }
 

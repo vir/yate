@@ -238,8 +238,6 @@ protected:
 		m->addParam("mgcp_allowed",String::boolText(false));
 	    return m;
 	}
-    virtual Message* buildSocketStun(RefObject* context)
-        { return NULL; /* just a stub */ }
     void mediaChanged(const SDPMedia& media);
 private:
     void waitNotChanging(bool clearTrans = false);

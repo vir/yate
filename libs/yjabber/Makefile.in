@@ -6,12 +6,12 @@ DEBUG :=
 CXX  := @CXX@ -Wall
 AR  := ar
 DEFS :=
-INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@/../yice -I@srcdir@
+INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@
 SONAME_OPT := @SONAME_OPT@
 YATELIBS := -L../.. -lyate @LIBS@
-INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatexml.h @srcdir@/../yice/yateice.h @srcdir@/xmpputils.h @srcdir@/yatejabber.h @srcdir@/yatejingle.h
+INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatexml.h @srcdir@/xmpputils.h @srcdir@/yatejabber.h @srcdir@/yatejingle.h
 
 PROGS=
 LIBS = libyatejabber.a

@@ -609,12 +609,11 @@ public:
     /**
      * Constructor
      */
-    inline RTPReceiver(RTPSession* session = 0, bool rtcp_mux = false)
+    inline RTPReceiver(RTPSession* session = 0)
 	: RTPBaseIO(session),
 	  m_ioLostPkt(0), m_dejitter(0),
 	  m_seqSync(0), m_seqCount(0), m_warn(true), m_warnSeq(1),
-	  m_seqLost(0), m_wrongSSRC(0), m_syncLost(0),
-	  m_rtcp_mux(rtcp_mux)
+	  m_seqLost(0), m_wrongSSRC(0), m_syncLost(0)
 	{ }
 
     /**
@@ -753,7 +752,6 @@ private:
     unsigned int m_seqLost;
     unsigned int m_wrongSSRC;
     unsigned int m_syncLost;
-    bool m_rtcp_mux;
 };
 
 /**
@@ -1308,19 +1306,6 @@ public:
     inline void setWarnSeq(bool on)
 	{ m_warnSeq = on ? 1 : -1; }
 
-    /**
-     * Get RTCP multiplexing flag
-     * @return true if RTCP packets is multiplexed with RTP on the same port
-     */
-    bool rtcpMux() const
-	{ return m_rtcp_mux; }
-
-    /** Set RTCP multiplexing flag
-     * @param flag new flag value
-     */
-    void rtcpMux(bool flag)
-	{ m_rtcp_mux = flag; }
-
 protected:
     /**
      * Method called periodically to push any asynchronous data or statistics
@@ -1347,7 +1332,6 @@ private:
     u_int64_t m_reportTime;
     u_int64_t m_reportInterval;
     int m_warnSeq;                       // Warn on invalid sequence (1: DebugWarn, -1: DebugInfo)
-    bool m_rtcp_mux;
 };
 
 /**

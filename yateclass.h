@@ -5829,6 +5829,7 @@ class Socket;
  */
 class YATE_API SocketAddr : public GenObject
 {
+    YCLASS(SocketAddr,GenObject)
 public:
     /**
      * Known address families

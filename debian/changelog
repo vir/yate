@@ -1,3 +1,11 @@
+yate (5.5.1~svn6124) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6124:
+  * Added missing getObject() to SocketAddr.
+  * Fixed group of main Yate package.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 29 Jun 2016 02:19:18 +0300
+
 yate (5.5.1~svn6122) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6122:

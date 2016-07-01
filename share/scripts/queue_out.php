@@ -76,7 +76,7 @@ for (;;) {
 		    $m->params["called"] = $ev->GetValue("called");
 		    $direct = $ev->GetValue("direct");
 		    if ($direct[0] == '{') {
-			foreach(json_decode($json) as $k => $v)
+			foreach(json_decode($direct) as $k => $v)
 			    $m->params[$k] = $v;
 		    } else {
 			$m->params["callto"] = $direct;

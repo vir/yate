@@ -1,3 +1,10 @@
+yate (5.5.1~vir2016070101) UNRELEASED; urgency=medium
+
+  * Merged upstream updates (SVN r6124)
+  * Fixed queue_out.php
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Fri, 01 Jul 2016 22:50:38 +0300
+
 yate (5.5.1~vir2016053101) UNRELEASED; urgency=medium
 
   * Merged upstream updates (SVN r6121)

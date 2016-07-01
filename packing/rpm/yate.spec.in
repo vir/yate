@@ -70,7 +70,7 @@ Release:	%{status}%{revision}@PACKAGE_RELEASE@%{dist}
 License:	GPL
 Packager:	Paul Chitescu <paulc@voip.null.ro>
 Source:		http://yate.null.ro/tarballs/@PACKAGE_TARNAME@@PACKAGE_VERSION_MAJOR@/@PACKAGE_TARNAME@-@PACKAGE_VERSION@-@PACKAGE_STATUS@@PACKAGE_RELEASE@.tar.gz
-Group:		Applications/Communications
+Group:		Applications/Communication
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root
 URL:		http://yate.null.ro/
 %{?extra_prov:Provides: %{?extra_prov}}

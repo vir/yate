@@ -124,6 +124,15 @@ public:
     virtual bool received(Message &msg);
 };
 
+class CommandHandler : public MessageHandler
+{
+public:
+    CommandHandler()
+	: MessageHandler("engine.command",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
 
 MOHSource::MOHSource(const String &name, const String &command_line, unsigned int rate)
     : ThreadedSource("slin"),
@@ -418,12 +427,58 @@ bool AttachHandler::received(Message &msg)
 
 bool StatusHandler::received(Message &msg)
 {
-    const char *sel = msg.getValue("module");
-    if (sel && ::strcmp(sel,"moh"))
+    String sel = msg.getValue("module");
+    if (sel && !sel.startSkip(__plugin.name(),true))
 	return false;
-    msg.retValue() << "name=moh,type=misc"
-		   << ";sources=" << sources.count()
-		   << ",chans=" << chans.count() << "\r\n";
+    if(! sel) {
+	msg.retValue() << "name=moh,type=misc"
+		       << ";sources=" << sources.count()
+		       << ",chans=" << chans.count() << "\r\n";
+    }
+    else if(sel == YSTRING("list")) {
+	NamedList* nl = s_cfg.getSection(YSTRING("mohs"));
+	if(nl) {
+	    msg.retValue() << "name=moh,type=misc"
+		<< ";mohs=" << nl->count() << ";";
+	    const ObjList *p = nl->paramList()->skipNull();
+	    bool first = true;
+	    for (; p; p = p->skipNext()) {
+		if(first)
+		    first = false;
+		else
+		    msg.retValue() << ",";
+		const NamedString* s = static_cast<const NamedString *>(p->get());
+		msg.retValue() << s->name() << "=";
+#if 0
+		if(s->null())
+		    msg.retValue() << "NULL";
+		else
+		    msg.retValue() << "\"" << s->sqlEscape('\"') << "\"";
+#endif
+	    }
+	}
+	msg.retValue() << "\r\n";
+    }
+    return false;
+}
+
+bool CommandHandler::received(Message &msg)
+{
+    static const String name(__plugin.name());
+    const String* partial = msg.getParam(YSTRING("partline"));
+    if (!partial)
+	return false;
+    if (*partial == YSTRING("status")) {
+	partial = msg.getParam(YSTRING("partword"));
+	if (TelEngine::null(partial) || name.startsWith(*partial))
+	    msg.retValue().append(name,"\t");
+    }
+    else if (*partial == YSTRING("status moh")) {
+	String list("list");
+	partial = msg.getParam(YSTRING("partword"));
+	if (TelEngine::null(partial) || list.startsWith(*partial))
+	    msg.retValue().append(list,"\t");
+    }
     return false;
 }
 
@@ -462,6 +517,7 @@ void MOHPlugin::initialize()
 	Engine::install(m_handler);
 	Engine::install(new AttachHandler);
 	Engine::install(new StatusHandler);
+	Engine::install(new CommandHandler);
     }
 }
 

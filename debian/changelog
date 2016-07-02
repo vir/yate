@@ -1,3 +1,9 @@
+yate (5.5.1~vir2016070301) UNRELEASED; urgency=medium
+
+  * "status moh list" console command added
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Sun, 03 Jul 2016 01:02:12 +0300
+
 yate (5.5.1~vir2016070101) UNRELEASED; urgency=medium
 
   * Merged upstream updates (SVN r6124)

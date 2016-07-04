@@ -45,7 +45,7 @@ Description: YATE shared library
 Package: yate-dev
 Section: libdevel
 Architecture: any
-Suggests: libyate-dbg, yate-dbg, yate-telhw-dbg, yate-doc
+Suggests: yate-dbg, yate-doc
 Depends:  libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: YATE library development files
 

@@ -5,8 +5,8 @@
  * BladeRF radio interface
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2015 Null Team
- * Copyright (C) 2015 LEGBA Inc
+ * Copyright (C) 2015, 2016 Null Team
+ * Copyright (C) 2015, 2016 LEGBA Inc
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -661,7 +661,7 @@ static inline void generateCircleQuarter(Complex*& c, float amplitude, float i, 
 // lenRequired=true: 'len' MUST be a multiple of generated vector's length
 static bool buildVector(String& error, const String& pattern, ComplexVector& vector,
     unsigned int len = 0, bool forcePeriodic = true, bool lenExtend = true,
-    bool lenRequired = false, unsigned int* pLen = 0)
+    bool lenRequired = false, unsigned int* pLen = 0, float gain=1)
 {
     if (!pattern)
 	return boolSetError(error,"empty");
@@ -709,7 +709,7 @@ static bool buildVector(String& error, const String& pattern, ComplexVector& vec
 	    return boolSetError(error,"invalid circle div");
 	v.resetStorage(cLen);
 	Complex* c = v.data();
-	float amplitude = 1.0F / div;
+	float amplitude = gain / div;
 	float direction = rev ? -1 : 1;
 	unsigned int n = (cLen - 4) / 4;
 	generateCircleQuarter(c,amplitude,1,0,n,0,1,direction);
@@ -793,9 +793,29 @@ static inline int16_t energize(float value, float scale, int16_t refVal, unsigne
     }
     return v;
 }
+
 static inline void brfCopyTxData(int16_t* dest, float* src, unsigned int samples,
-    float scaleI, int16_t maxI, float scaleQ, int16_t maxQ, unsigned int& clamped)
+    float scaleI, int16_t maxI, float scaleQ, int16_t maxQ, unsigned int& clamped,
+    const long* ampTable=NULL)
 {
+    if (ampTable) {
+	for (; samples; samples--) {
+	    // IQ gain balance control
+	    long xRe = energize(*src++,scaleI,maxI,clamped);
+	    long xIm = energize(*src++,scaleQ,maxQ,clamped);
+	    // amplifier predistortion
+	    // power of the sample, normalized to the energy scale
+	    // this has a range of 0 .. (2*scale)-1
+	    unsigned p = (xRe*xRe + xIm*xIm)/1024; // 2 * (xRe*xRe + xIm*xIm)/2048
+	    // get the correction factor, abs of 0..1
+	    long corrRe = ampTable[p];
+	    long corrIm = ampTable[p+1];
+	    // apply the correction factor
+	    *dest++ = htole16((corrRe*xRe - corrIm*xIm)/2048);
+	    *dest++ = htole16((corrRe*xIm + corrIm*xRe)/2048);
+	}
+	return;
+    }
     for (; samples; samples--) {
 	*dest++ = htole16(energize(*src++,scaleI,maxI,clamped));
 	*dest++ = htole16(energize(*src++,scaleQ,maxQ,clamped));
@@ -1104,7 +1124,7 @@ public:
     inline BrfDevState(unsigned int chg = 0, unsigned int txChg = 0,
 	unsigned int rxChg = 0)
 	: m_changed(chg), m_txChanged(txChg), m_rxChanged(rxChg),
-	m_loopback(0), m_loopbackParams(""), m_rxDcAuto(true),
+	m_loopback(0), m_loopbackParams(""), m_txPatternGain(1), m_rxDcAuto(true),
 	m_tx(true), m_rx(false)
 	{}
     inline BrfDevState(const BrfDevState& src, unsigned int chg = 0,
@@ -1131,6 +1151,7 @@ public:
 		setFlags();
 	    setLoopback(src.m_loopback,src.m_loopbackParams);
 	    m_txPattern = src.m_txPattern;
+	    m_txPatternGain = src.m_txPatternGain;
 	    m_rxDcAuto = src.m_rxDcAuto;
 	    m_tx = src.m_tx;
 	    m_rx = src.m_rx;
@@ -1145,6 +1166,7 @@ public:
     int m_loopback;                      // Current loopback
     NamedList m_loopbackParams;          // Loopback params
     String m_txPattern;                  // Transmit pattern
+    float m_txPatternGain;               // Transmit pattern gain
     bool m_rxDcAuto;                     // Automatically adjust Rx DC offset
     BrfDevDirState m_tx;
     BrfDevDirState m_rx;
@@ -1717,7 +1739,7 @@ public:
     // Open (on=false)/close RXOUTSW switch
     inline unsigned int setRxOut(bool on)
 	{ return writeLMS(0x09,on ? 0x80 : 0x00,0x80); }
-    unsigned int setTxPattern(const String& pattern);
+    unsigned int setTxPattern(const String& pattern, float gain = 1.0F);
     void dumpStats(String& buf, const char* sep);
     void dumpTimestamps(String& buf, const char* sep);
     void dumpDev(String& buf, bool info, bool state, const char* sep,
@@ -1984,7 +2006,8 @@ private:
 	float* powerScale = 0);
     void sendTxPatternChanged();
     void sendCopyTxPattern(int16_t* buf, unsigned int avail,
-	float scaleI, int16_t maxI, float scaleQ, int16_t maxQ, unsigned int& clamped);
+	float scaleI, int16_t maxI, float scaleQ, int16_t maxQ, unsigned int& clamped,
+	const long* ampTable);
     unsigned int recv(uint64_t& ts, float* data, unsigned int& samples,
 	String* error = 0);
     void captureHandle(BrfDevIO& io, const float* buf, unsigned int samples, uint64_t ts,
@@ -2021,6 +2044,8 @@ private:
     unsigned int internalSetGain(bool tx, int val, int* newVal = 0, String* error = 0);
     unsigned int internalSetTxIQBalance(bool newGain, float newBalance = 0,
 	const char* param = 0);
+    unsigned int setGainExp(float breakpoint, float max);
+    unsigned int setPhaseExp(float breakpoint, float max);
     inline unsigned int internalSetCorrectionIQ(bool tx, int I, int Q,
 	String* error = 0) {
 	    unsigned int status = internalSetDcOffset(tx,true,I,error);
@@ -2264,6 +2289,12 @@ private:
     unsigned int prepareCalibrateBb(BrfBbCalData& data, bool dc, String* error);
     unsigned int calibrateBb(BrfBbCalData& data, bool dc, String* error);
     unsigned int calibrateBaseband(String* error);
+    // amplifier linearization
+    ComplexVector sweepPower(float startdB, float stopdB, float stepdB);
+    unsigned int findGainExpParams(const ComplexVector& sweep, float startSweep, float stepSweep);
+    unsigned int findPhaseExpParams(const ComplexVector& swee, float startSweep, float stepSweepp);
+    unsigned int calculateAmpTable();
+    //
     unsigned int deviceCheck(String* error);
     unsigned int testVga(const char* loc, bool tx, bool preMixer, float omega = 0,
 	String* error = 0);
@@ -2422,6 +2453,14 @@ private:
     float m_wrPowerScaleQ;
     int16_t m_wrMaxI;
     int16_t m_wrMaxQ;
+    // amp linearization
+    float m_gainExpBreak;	    // amp linearization gain exapansion breakpoint, dB power scale
+    float m_gainExpSlope;	    // amp linearization gain exapansion slope, dB power gain
+    float m_phaseExpBreak;	    // amp linearization phase expansion breakpoint, dB power scale
+    float m_phaseExpSlope;	    // amp linearization phase expanaion slope, radians per power unit
+    // The parameters above are used to generate this table
+    long m_ampTable[2*2*2048];	    // amp linearization table, complex pairs indexed in normalized power units
+    bool m_ampTableUse;
     // Alter data
     NamedList m_rxAlterDataParams;
     bool m_rxAlterData;
@@ -2689,6 +2728,8 @@ static const String s_ifcCmds[] = {
     "vgagain","correction","lmswrite",
     "bufoutput","rxdcoutput","txpattern","show",
     "cal_stop", "cal_abort",
+    "balance",
+    "gainexp", "phaseexp",
     ""};
 // libusb
 static unsigned int s_lusbSyncTransferTout = LUSB_SYNC_TIMEOUT; // Sync transfer timeout def val (in milliseconds)
@@ -3185,6 +3226,11 @@ BrfLibUsbDevice::BrfLibUsbDevice(BrfInterface* owner)
     m_wrPowerScaleQ(s_sampleEnergize),
     m_wrMaxI(s_sampleEnergize),
     m_wrMaxQ(s_sampleEnergize),
+    m_gainExpBreak(0),
+    m_gainExpSlope(0),
+    m_phaseExpBreak(0),
+    m_phaseExpSlope(0),
+    m_ampTableUse(false),
     m_rxAlterDataParams(""),
     m_rxAlterData(false),
     m_rxAlterIncrement(0),
@@ -3230,17 +3276,17 @@ BrfLibUsbDevice::~BrfLibUsbDevice()
     doClose();
 }
 
-unsigned int BrfLibUsbDevice::setTxPattern(const String& pattern)
+unsigned int BrfLibUsbDevice::setTxPattern(const String& pattern, float gain)
 {
     Lock lck(m_dbgMutex);
-    if (m_state.m_txPattern == pattern)
+    if (m_state.m_txPattern == pattern && m_state.m_txPatternGain == gain)
 	return 0;
     ComplexVector buf;
     unsigned int status = 0;
     String e;
     unsigned int pLen = 0;
     if (pattern &&
-	!buildVector(e,pattern,buf,totalSamples(true),false,true,false,&pLen)) {
+	!buildVector(e,pattern,buf,totalSamples(true),false,true,false,&pLen,gain)) {
 	Debug(m_owner,DebugNote,"Invalid tx pattern '%s': %s [%p]",
 	    pattern.c_str(),e.c_str(),m_owner);
 	status = RadioInterface::Failure;
@@ -3248,6 +3294,7 @@ unsigned int BrfLibUsbDevice::setTxPattern(const String& pattern)
     if (!status && buf.length()) {
 	m_txPattern = buf;
 	m_state.m_txPattern = pattern;
+	m_state.m_txPatternGain = gain;
 	if (m_owner && m_owner->debugAt(DebugNote)) {
 	    String s;
 	    if (!pLen)
@@ -3259,9 +3306,9 @@ unsigned int BrfLibUsbDevice::setTxPattern(const String& pattern)
 		s.clear();
 	    else
 		s.printf(1024,"HEAD[%u]: %s",pLen,s.c_str());
-	    Debug(m_owner,DebugNote,"TX pattern set to '%s' len=%u [%p]%s",
-		m_state.m_txPattern.substr(0,100).c_str(),m_txPattern.length(),
-		m_owner,encloseDashes(s,true));
+	    Debug(m_owner,DebugNote,"TX pattern set to '%s' gain=%.3f len=%u [%p]%s",
+		m_state.m_txPattern.substr(0,100).c_str(),m_state.m_txPatternGain,
+		m_txPattern.length(),m_owner,encloseDashes(s,true));
 	}
     }
     else {
@@ -3269,6 +3316,7 @@ unsigned int BrfLibUsbDevice::setTxPattern(const String& pattern)
 	    Debug(m_owner,DebugNote,"TX pattern cleared [%p]",m_owner);
 	m_txPattern.resetStorage(0);
 	m_state.m_txPattern.clear();
+	m_state.m_txPatternGain = 1;
     }
     m_txPatternChanged = true;
     return status;
@@ -3934,7 +3982,29 @@ unsigned int BrfLibUsbDevice::getTxVga(int& vga, bool preMixer)
     return internalGetTxVga(&vga,preMixer);
 }
 
-// Set TX power balance
+// Set TX gain expansion
+unsigned int BrfLibUsbDevice::setGainExp(float breakpoint, float max)
+{
+    m_gainExpBreak = pow(10,breakpoint*0.1);
+    // the base slope is 1, so max gain of 1 is a slope of zero
+    // we correct for the by subtracting 1 from the max
+    // we will add it back after we compute the expansion factor
+    m_gainExpSlope = (max-1) / (2-breakpoint);
+    calculateAmpTable();
+    return 0;
+}
+
+// Set TX phase expansion
+unsigned int BrfLibUsbDevice::setPhaseExp(float breakpoint, float max)
+{
+    m_phaseExpBreak = pow(10,breakpoint*0.1);
+    // convert max to radians
+    max = max * M_PI / 180.0;
+    m_phaseExpSlope = max / (2-breakpoint);
+    calculateAmpTable();
+    return 0;
+}
+
 unsigned int BrfLibUsbDevice::setTxIQBalance(float value)
 {
     BRF_TX_SERIALIZE_CHECK_PUB_ENTRY(false,"setTxIQBalance()");
@@ -4590,7 +4660,7 @@ unsigned int BrfLibUsbDevice::setState(BrfDevState& state, String* error)
 	BRF_SET_STATE_NOERROR(state.m_changed,DevStatRxDcAuto,
 	    setRxDcAuto(state.m_rxDcAuto));
 	BRF_SET_STATE_NOERROR(state.m_changed,DevStatTxPattern,
-	    setTxPattern(state.m_txPattern));
+	    setTxPattern(state.m_txPattern,state.m_txPatternGain));
 	break;
     }
     if (state.m_changed || state.m_txChanged || state.m_rxChanged)
@@ -4770,6 +4840,9 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	io.resetBufPos();
 	io.timestamp = ts;
     }
+    const long* ampTable = 0;
+    if (m_ampTableUse)
+	ampTable = m_ampTable;
     float scale = 0;
     float* scaleI = &m_wrPowerScaleI;
     float* scaleQ = &m_wrPowerScaleQ;
@@ -4814,13 +4887,25 @@ unsigned int BrfLibUsbDevice::send(uint64_t ts, float* data, unsigned int sample
 	    io.crtBufSampOffs += avail;
 	    io.timestamp += avail;
 	    if (m_txPatternBuffer.length() == 0) {
-		brfCopyTxData(start,data,avail,*scaleI,*maxI,*scaleQ,*maxQ,clamped);
+		brfCopyTxData(start,data,avail,*scaleI,*maxI,*scaleQ,*maxQ,clamped,ampTable);
 		data += avail * 2;
 	    }
 	    else
-		sendCopyTxPattern(start,avail,*scaleI,*maxI,*scaleQ,*maxQ,clamped);
+		sendCopyTxPattern(start,avail,*scaleI,*maxI,*scaleQ,*maxQ,clamped,ampTable);
 	    if (io.crtBufSampOffs >= io.bufSamples)
 		io.advanceBuffer();
+#ifdef XDEBUG
+	    if (avail) {
+		float sum = 0.0F;
+		for (unsigned i=0; i<avail*2; i++) {
+		    sum += start[i]*start[i];
+		}
+		const float rms = ::sqrtf(sum/avail);
+		const float dB = 20.0F*log10f((rms+0.5F)/2048.0F);
+		XDebug(m_owner,DebugAll,"energized ouput RMS level %f in linear amplitude (%f dB) [%p]",
+			rms, dB, this);
+	    }
+#endif
 	}
 	unsigned int nBuf = io.crtBuf;
 	unsigned int oldBufSampOffs = nBuf ? io.crtBufSampOffs : 0;
@@ -4887,7 +4972,8 @@ void BrfLibUsbDevice::sendTxPatternChanged()
 }
 
 void BrfLibUsbDevice::sendCopyTxPattern(int16_t* buf, unsigned int avail,
-    float scaleI, int16_t maxI, float scaleQ, int16_t maxQ, unsigned int& clamped)
+    float scaleI, int16_t maxI, float scaleQ, int16_t maxQ, unsigned int& clamped,
+    const long* ampTable)
 {
     while (avail) {
 	if (m_txPatternBufPos == m_txPatternBuffer.length())
@@ -4898,7 +4984,7 @@ void BrfLibUsbDevice::sendCopyTxPattern(int16_t* buf, unsigned int avail,
 	float* b = (float*)m_txPatternBuffer.data(m_txPatternBufPos);
 	avail -= cp;
 	m_txPatternBufPos += cp;
-	brfCopyTxData(buf,b,cp,scaleI,maxI,scaleQ,maxQ,clamped);
+	brfCopyTxData(buf,b,cp,scaleI,maxI,scaleQ,maxQ,clamped,ampTable);
     }
 }
 
@@ -5387,9 +5473,16 @@ unsigned int BrfLibUsbDevice::internalSetFpgaCorr(bool tx, int corr, int16_t val
     BrfDevDirState& io = getDirState(tx);
     if (corr == CorrFpgaGain) {
 	old = &io.fpgaCorrGain;
-	orig = clampInt(orig,-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX,"FPGA GAIN",lvl);
-	value = orig + BRF_FPGA_CORR_MAX;
 	addr = fpgaCorrAddr(tx,false);
+	// Because FPGA Gain cal is broken in older images, we fake it in software.
+	// We should probably just keep faking it, even in newer FPGA images.
+	Debug(m_owner,DebugNote,"%s FPGA corr faking %s set to %d (reg %d) [%p]",
+	    brfDir(tx),lookup(corr,s_corr),orig,value,m_owner);
+	const float bal = 1 + 0.1*(((float)orig) / BRF_FPGA_CORR_MAX);
+	internalSetTxIQBalance(false,bal);
+	// Set a "safe" value for the gain balance register.
+	// FIXME - The "safe" value may be different in future FPGA images!!
+	value = BRF_FPGA_CORR_MAX;
     }
     else if (corr == CorrFpgaPhase) {
 	old = &io.fpgaCorrPhase;
@@ -7882,6 +7975,7 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 unsigned int BrfLibUsbDevice::prepareCalibrateBb(BrfBbCalData& data, bool dc,
     String* error)
 {
+    Debug(m_owner,DebugAll,"prepareCalibrateBb dc=%d [%p]",dc,this);
     // Reset cal structure
     unsigned int status = 0;
     while (true) {
@@ -7923,17 +8017,19 @@ unsigned int BrfLibUsbDevice::prepareCalibrateBb(BrfBbCalData& data, bool dc,
 		    return setErrorFail(error,"Unable to choose RX filter bandwidth");
 		}
 	    }
+	    // cal, test
+	    // For DC, test and cal differ by pi/2
+	    // FIXME - This works only for RX and TX same sample rate.
 	    rxFreq = m_state.m_tx.frequency - (Fs / 4);
-	    // Reset data
-	    // Test tone omega: M_PI_2 + (M_PI / (2 * R));
-	    float R = (float)Fs / data.m_calSampleRate;
-	    float testToneOmega = M_PI_2 * (1 + 1 / R);
-	    data.resetOmega(-M_PI_2,testToneOmega);
+	    data.resetOmega(-M_PI_2,-M_PI);
 	}
 	else {
-	    // toneOmega: -M_PI_4 testOmega: (3 * M_PI_4);
-	    //return setErrorFail(error,"prepare not implemented");
-	    return 0;
+	    // parameters for Gain/Phase calibration
+	    // cal, test
+	    // For phase/gain, test and cal differ by pi 
+	    // FIXME - This works only for RX and TX same sample rate.
+	    rxFreq = m_state.m_tx.frequency + (Fs / 4);
+	    data.resetOmega(M_PI,0);
 	}
 	s.m_rx.lpfBw = bw;
 	s.m_rx.sampleRate = Fs;
@@ -7947,13 +8043,17 @@ unsigned int BrfLibUsbDevice::prepareCalibrateBb(BrfBbCalData& data, bool dc,
 	s.m_rx.vga2 = data.intParam(dc,YSTRING("rxvga2"),
 	    BRF_RXVGA2_GAIN_DEF,BRF_RXVGA2_GAIN_MIN,BRF_RXVGA2_GAIN_MAX);
 	if (dc) {
-	    m_syncTxState.m_tx.fpgaCorrPhase = 0;
-	    m_syncTxState.m_tx.fpgaCorrGain = 0;
+	    m_syncTxState.m_tx.fpgaCorrPhase = data.m_phase;
+	    m_syncTxState.m_tx.fpgaCorrGain = data.m_gain;
+	    s.m_tx.fpgaCorrPhase = data.m_phase;
+	    s.m_tx.fpgaCorrGain = data.m_gain;
 	    s.m_txChanged |= DevStatFpga;
 	}
 	else {
 	    m_syncTxState.m_tx.dcOffsetI = data.m_dcI;
 	    m_syncTxState.m_tx.dcOffsetQ = data.m_dcQ;
+	    s.m_tx.dcOffsetI = data.m_dcI;
+	    s.m_tx.dcOffsetQ = data.m_dcQ;
 	    s.m_txChanged |= DevStatDc;
 	}
 	NamedList lpParams("");
@@ -7980,6 +8080,7 @@ unsigned int BrfLibUsbDevice::calibrateBb(BrfBbCalData& data, bool dc, String* e
 {
     const char* oper = dc ? "TX I/Q DC Offset (LO Leakage) calibration" :
 	"TX I/Q Imbalance calibration";
+    Debug(m_owner,DebugAll,"calibrateBb %s [%p]",oper,this);
 
     // VGA tests
     String e;
@@ -8016,7 +8117,7 @@ unsigned int BrfLibUsbDevice::calibrateBb(BrfBbCalData& data, bool dc, String* e
     BrfDuration duration;
     int range = dc ? (BRF_TX_DC_OFFSET_MAX + 1) : BRF_FPGA_CORR_MAX;
     unsigned int loops = data.uintParam(dc,"loops",2,1,10);
-    int step = dc ? 1 : (1 << loops);
+    int step = dc ? 1 : 16*(1 << loops);
     unsigned int origSamples = 0;
     if (data.boolParam(dc,"increase_buffer",true))
 	origSamples = data.samples();
@@ -8094,6 +8195,7 @@ unsigned int BrfLibUsbDevice::calibrateBaseband(String* error)
 	m_calibration.assign("");
 	m_calibration.clearParams();
 	BRF_FUNC_CALL_BREAK(writeLMS(p[YSTRING("lms_write")],&e,true));
+	//
 	// Calibrate TX LO Leakage (I/Q DC Offset)
 	BRF_FUNC_CALL_BREAK(prepareCalibrateBb(data,true,&e));
 	BRF_FUNC_CALL_BREAK(writeLMS(p[YSTRING("lms_write_alter")],&e,true));
@@ -8101,12 +8203,36 @@ unsigned int BrfLibUsbDevice::calibrateBaseband(String* error)
 	    data.m_dcI = data.m_dcQ = 0;
 	    BRF_FUNC_CALL_BREAK(calibrateBb(data,true,&e));
 	}
-	if (status || m_calibrateStop)
+	if (status || m_calibrateStop) {
+	    Debug(m_owner,DebugInfo,"Calibration stopping with status=%d stop=%d [%p]",
+		status,m_calibrateStop,this);
 	    break;
+	}
 	// Calibrate TX I/Q Imbalance
 	// This will set TX DC I/Q also
+	// test pattern and tuning data must change
 	BRF_FUNC_CALL_BREAK(prepareCalibrateBb(data,false,&e));
 	BRF_FUNC_CALL_BREAK(calibrateBb(data,false,&e));
+	//
+	// and do it all again
+	// LO leakage
+	if (status || m_calibrateStop) {
+	    Debug(m_owner,DebugInfo,"Calibration stopping with status=%d stop=%d [%p]",
+		status,m_calibrateStop,this);
+	    break;
+	}
+	BRF_FUNC_CALL_BREAK(prepareCalibrateBb(data,true,&e));
+	BRF_FUNC_CALL_BREAK(writeLMS(p[YSTRING("lms_write_alter")],&e,true));
+	BRF_FUNC_CALL_BREAK(calibrateBb(data,true,&e));
+	// I/Q balance
+	if (status || m_calibrateStop) {
+	    Debug(m_owner,DebugInfo,"Calibration stopping with status=%d stop=%d [%p]",
+		status,m_calibrateStop,this);
+	    break;
+	}
+	BRF_FUNC_CALL_BREAK(prepareCalibrateBb(data,false,&e));
+	BRF_FUNC_CALL_BREAK(calibrateBb(data,false,&e));
+	//
 	// Update calibrated data
 	m_calibration.assign(String(data.m_calFreq));
 	m_calibration.addParam("tx_dc_i",String(data.m_dcI));
@@ -8116,6 +8242,24 @@ unsigned int BrfLibUsbDevice::calibrateBaseband(String* error)
 	break;
     }
     Debug(m_owner,DebugAll,"Finalizing BB calibration [%p]",m_owner);
+
+    // amplifier linearization
+#if 0
+    static const float startSweep = -20;
+    static const float stopSweep = 0;
+    static const float stepSweep = 1.0;
+    ComplexVector sweep = sweepPower(startSweep, stopSweep, stepSweep);
+    if (sweep.length()) {
+	String tmp;
+	sweep.dump(tmp,Math::dumpComplex," ","(%g,%g)");
+	Debug(m_owner,DebugInfo,"amp sweep: %s [%p]",tmp.c_str(),this);
+	findGainExpParams(sweep, startSweep, stepSweep);
+	findPhaseExpParams(sweep, startSweep, stepSweep);
+	calculateAmpTable();
+    }
+    else
+	Debug(m_owner,DebugWarn,"amplifier calibration sweep failed");
+#endif
 
     if (m_calibrateStop) {
 	bool a = (m_calibrateStop < 0);
@@ -9242,6 +9386,18 @@ unsigned int BrfInterface::setParams(NamedList& params, bool shareFate)
 unsigned int BrfInterface::send(uint64_t when, float* samples, unsigned size,
     float* powerScale)
 {
+#ifdef XDEBUG
+    if (size) {
+	float sum = 0.0F;
+	for (unsigned i=0; i<2*size; i++)
+	    sum += samples[i]*samples[i];
+	float dB = 10.0F*log10f(sum/size);
+	float scaleDB = 0.0F;
+	if (powerScale) scaleDB = 20.0F*log10f(*powerScale);
+	XDebug(this,DebugAll,"Sending at time %lu power %f dB to be scaled %f dB [%p]",
+		when, dB, scaleDB, this);
+    }
+#endif
     return m_dev->syncTx(when,samples,size,powerScale);
 }
 
@@ -9644,6 +9800,12 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	"\r\n  Set or retrieve RX FPGA PHASE correction"
 	"\r\ncontrol ifc_name rxfpgagain [value=]"
 	"\r\n  Set or retrieve RX FPGA GAIN correction"
+	"\r\ncontrol ifc_name balance value="
+	"\r\n  Set software IQ gain balance"
+	"\r\ncontrol ifc_name gainexp bp= max="
+	"\r\n  Set amp gain expansion breakpoint (dB) and +3 dB expansion (dB)"
+	"\r\ncontrol ifc_name phaseexp bp= max="
+	"\r\n  Set amp phase expansion breakpoint (dB) and +3 dB expansion (deg)"
 	"\r\ncontrol ifc_name showstatus"
 	"\r\n  Output interface status"
 	"\r\ncontrol ifc_name showboardstatus"
@@ -9721,6 +9883,30 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	if (!ifc->device())
 	    return retMsgError(msg,"No device");
 	ifc->device()->setTxPattern(msg[YSTRING("pattern")]);
+	return true;
+    }
+    if (cmd == YSTRING("balance")) {
+	if (!ifc->device())
+	    return retMsgError(msg,"No device");
+	const String txPB = msg[YSTRING("value")];
+	const float val = txPB.toDouble(1);
+	ifc->device()->setTxIQBalance(val);
+	return true;
+    }
+    if (cmd == YSTRING("gainexp")) {
+	if (!ifc->device())
+	    return retMsgError(msg,"No device");
+	const String bp = msg[YSTRING("bp")];
+	const String max = msg[YSTRING("max")];
+	ifc->device()->setGainExp(bp.toDouble(1),max.toDouble(1));
+	return true;
+    }
+    if (cmd == YSTRING("phaseexp")) {
+	if (!ifc->device())
+	    return retMsgError(msg,"No device");
+	const String bp = msg[YSTRING("bp")];
+	const String max = msg[YSTRING("max")];
+	ifc->device()->setPhaseExp(bp.toDouble(1),max.toDouble(1));
 	return true;
     }
     if (cmd == YSTRING("showstatus"))
@@ -10150,6 +10336,148 @@ void BrfThread::notify()
 	dev->m_sendThread = 0;
     else if (dev->m_recvThread == this)
 	dev->m_recvThread = 0;
+}
+
+// amplifier linearization functions
+
+// mean complex gain between two vectors
+static Complex meanComplexGain(const Complex* rx, const Complex* tx, unsigned length)
+{
+    // no data? unity gain
+    if (!length)
+	return Complex(1,0);
+    Complex sum = 0;
+    unsigned count = 0;
+    for (unsigned i=0; i<length; i++) {
+	if (i<8)
+	    Debug(DebugAll,"meanComplexGain rx[%u]=%f%+f tx[%u]=%f%+f",
+		i,rx[i].re(),rx[i].im(),i,tx[i].re(),tx[i].im());
+	Complex gain = rx[i] / tx[i];
+	sum += gain;
+	count++;
+    }
+    return sum / length;
+}
+
+static unsigned findBreakAndSlope(const FloatVector& v, float startdB, float stepdB, float *bp, float *slope)
+{
+    if (v.length()==0) {
+	Debug(DebugWarn,"findBreakAndSlope zero length vector");
+	return -1;
+    }
+    unsigned imax = v.length()-1;
+    // get the last two power values
+    float lastdB = startdB + stepdB*imax;
+    float pmax = pow(10,lastdB*0.1);
+    float pmax_1 = pow(10,(lastdB-stepdB)*0.1);
+    // slope at high end of the scale
+    // defines a line through the two two samples
+    *slope = (v[imax] - v[imax-1]) / (pmax - pmax_1);
+    // breakpoint is the intersection of the two lines
+    *bp = pmax - (v[imax] - v[0]) / (*slope);
+    return 0;
+}
+
+unsigned BrfLibUsbDevice::findGainExpParams(const ComplexVector& sweep, float startdB, float stepdB)
+{
+    FloatVector gain(sweep.length());
+    for (unsigned i=0; i<gain.length(); i++)
+	gain[i] = sweep[i].norm2();
+    if (findBreakAndSlope(gain, startdB, stepdB, &m_gainExpBreak, &m_gainExpSlope) < 0)
+	return -1;
+    Debug(m_owner,DebugInfo,"amp gain expansion: bp = %f linear slope = %f linear [%p]",
+	m_gainExpBreak,m_gainExpSlope,this);
+    return 0;
+}
+
+unsigned BrfLibUsbDevice::findPhaseExpParams(const ComplexVector& sweep, float startdB, float stepdB)
+{
+    FloatVector phase(sweep.length());
+    for (unsigned i=0; i<phase.length(); i++)
+	phase[i] = sweep[i].arg();
+    if (findBreakAndSlope(phase, startdB, stepdB, &m_phaseExpBreak, &m_phaseExpSlope) < 0)
+	return -1;
+    Debug(m_owner,DebugInfo,"amp phase expansion: bp = %f linear slope = %f deg/lin [%p]",
+	m_phaseExpBreak,180*m_phaseExpSlope/M_PI,this);
+    return 0;
+}
+
+// sweep function
+// sweeps power over a range and records gain and phase of the loopback signal
+ComplexVector BrfLibUsbDevice::sweepPower(float startdB, float stopdB, float stepdB)
+{
+    Debug(m_owner,DebugInfo,"sweepPower start=%4.2f stop=%4.2f step=%4.2f",
+	startdB, stopdB, stepdB);
+    unsigned steps = 1 + (unsigned)((stopdB-startdB)/stepdB);
+    ComplexVector sweep(steps);
+    Complex rxBuf[2004];
+    unsigned int status = 0;
+    String e;
+    for (unsigned step=0; step<steps; step++) {
+	// set up the reference signal
+	float dB = startdB + stepdB*step;
+	float gain = pow(10,dB/10);
+	setTxPattern("circle",gain);
+	// receive the amp output
+	Thread::msleep(10);
+	BRF_FUNC_CALL_BREAK(setStateSyncTx(0,&e));
+	uint64_t ts = m_syncTxState.m_tx.m_timestamp + m_radioCaps.rxLatency;
+	BRF_FUNC_CALL_BREAK(capture(false,(float*)rxBuf,2004,ts,&e));
+	// calculate and save the gain
+	unsigned base = (4 - (ts % 4)) % 4;
+	Complex sGain = meanComplexGain(rxBuf+2*base, m_txPatternBuffer.data(), 2000);
+	Debug(m_owner,DebugAll,"sweepPower[%u] result=(%g,%g) when=%lu base=%u"
+	    " power=%4.2f (%4.2f linear) gain=%4.2f dB @ %4.2f deg",
+	    step,sGain.re(),sGain.im(),ts,base,dB,gain,
+	    10*log10(sGain.norm2()),sGain.arg()*180/M_PI);
+	sweep[step] = sGain;
+    }
+    if (status) {
+	Debug(m_owner,DebugWarn,"sweep: %u %s",status,e.c_str());
+	sweep.resetStorage(0);
+    }
+    return sweep;
+}
+
+// generic expansion function
+// returns the expansion factor for this power level x
+// x and breakpoint in linear power units
+// slope in units of <whatever> / <linear power>
+// expansion factor in units of <whatever>, determined by the units of the slope
+inline float expansion(float x, float breakpoint, float slope)
+{
+    const float delta = x - breakpoint;
+    if (delta<0) return 0;
+    return delta*slope;
+}
+
+// recaluclate the amplifier linearization table
+// should be called any time an amplifier linearization parameter changes
+unsigned BrfLibUsbDevice::calculateAmpTable()
+{
+    float maxGain = 1 + expansion(2, m_gainExpBreak, m_gainExpSlope);
+    float maxPhase = expansion(2, m_phaseExpBreak, m_phaseExpSlope);
+    float midGain = 1 + expansion(1, m_gainExpBreak, m_gainExpSlope);
+    float midPhase = expansion(1, m_phaseExpBreak, m_phaseExpSlope);
+    Debug(m_owner,DebugInfo,
+	"calculateAmpTable gBp=%4.2f gS=%4.2f g0=%4.2f gMax=%4.2f "
+	"pBp=%4.2f pS=%+4.2f p0=%+4.2f deg pMax=%+4.2f deg",
+	m_gainExpBreak, m_gainExpSlope, midGain, maxGain, m_phaseExpBreak,
+	m_phaseExpSlope*180/M_PI, midPhase*180/M_PI, maxPhase*180/M_PI);
+    for (unsigned i=0; i<2*2048; i++) {
+	// normalized power level (0..2)
+	float p = ((float)i) / 2048.0F;
+	// base gain is 1 - this is where we compensate the 1 we subtracted from the max
+	float gainExp = 1 + expansion(p, m_gainExpBreak, m_gainExpSlope);
+	float phaseExp = expansion(p, m_phaseExpBreak, m_phaseExpSlope);
+	Complex c(0,phaseExp);
+	float adjGain = gainExp / maxGain;
+	Complex adjust = c.exp() * adjGain;
+	m_ampTable[2*i] = 2048*adjust.re();
+	m_ampTable[2*i+1] = 2048*adjust.im();
+    }
+    m_ampTableUse = true;
+    return 0;
 }
 
 }; // anonymous namespace

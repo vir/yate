@@ -1,3 +1,12 @@
+yate (5.5.1~svn6125) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6125:
+  * invalit Suggests removed
+  * Calibration fix and amplifier linearization feature (work in
+    progress) by David Burgess.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 06 Jul 2016 02:19:16 +0300
+
 yate (5.5.1~svn6124) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6124:

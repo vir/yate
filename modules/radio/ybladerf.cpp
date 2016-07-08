@@ -9534,18 +9534,7 @@ unsigned int BrfInterface::setRxGain(int val, unsigned port, bool preMixer)
     unsigned int status = m_dev->enableRxVga(true,preMixer);
     if (status)
 	return status;
-    status = m_dev->setRxVga(val,preMixer);
-    if (status)
-	return status;
-    int tmp = 0;
-    status = m_dev->getRxVga(tmp,preMixer);
-    if (status)
-	return status;
-    if (tmp == val)
-	return NoError;
-    Debug(this,DebugNote,"Failed to set RX VGA%c requested=%d read=%d [%p]",
-	mixer(preMixer),val,tmp,this);
-    return NotExact;
+    return m_dev->setRxVga(val,preMixer);
 }
 
 unsigned int BrfInterface::setTxGain(int val, unsigned port, bool preMixer)

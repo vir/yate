@@ -37,7 +37,7 @@ BEGIN {
     use Data::Dumper;
 
     # Set version && disable output buffering.
-    our $VERSION = '0.26';
+    our $VERSION = '0.27';
 }
 
 # All messages syntax.

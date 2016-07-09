@@ -507,6 +507,9 @@ sub dispatch($) {
 	# If there's no ID, it is for the watcher.
 	if ($self->header('id')) {
 	    $type = '_incoming_handlers';
+
+	    my $response_handler = delete $self->{_response}{$self->header('id')};
+	    $response_handler->($self) if $response_handler;
 	} else {
 	    $type = '_watchers';
 	}
@@ -621,6 +624,7 @@ sub print($$) {
 
 # Send a message to the Engine (like chan.masquarade).
 sub message($$$;$;@) {
+    my $result_handler = pop @_ if ref($_[$#@]);
     my ($self, $name, $return_value, $id, %params) = @_;
 
     # Input checks for name, return_value and id.
@@ -632,6 +636,9 @@ sub message($$$;$;@) {
 
     if (!$id) {
 	$id = generate_id();
+    }
+    if ($result_handler) {
+	$self->{_response}{$id} = $result_handler;
     }
 
     my $params = '';
@@ -879,7 +886,7 @@ listen for events from the Engine.
 
 =head2 message
 
-    $message->message($name, $return_value, $id, ParamName => ParamValue, ...)
+    $message->message($name, $return_value, $id, ParamName => ParamValue, ...[, \&response_handler])
 
 Sends a message (like chan.masquarade) to the Engine. Required
 arguments are $name (name of the message) and $return_value (textual
@@ -887,7 +894,8 @@ return value of the message). If you want to specify parameters to be
 returned with the message, but you do not want to give a specific $id
 you can just set $id to undef or 0. Id is actually an obscure unique
 message ID string. To see if your message is processed or not you
-should call C<install_incoming>.
+should call C<install_incoming> or specify a reference to the response
+handler as last parameter.
 
 All passed arguments are escaped.
 

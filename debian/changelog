@@ -1,3 +1,12 @@
+yate (5.5.1~vir2016070901) UNRELEASED; urgency=medium
+
+  * Merged upstream fixes (SVN r6126)
+  * Yate.pm version 0.27: response_handler parameter support in message()
+  * Fixed unescaping of handler filter parameters
+  * Fixed invalid Suggests line in debian control file
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Sat, 09 Jul 2016 08:43:57 +0300
+
 yate (5.5.1~vir2016070301) UNRELEASED; urgency=medium
 
   * "status moh list" console command added

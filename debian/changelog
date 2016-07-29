@@ -1,3 +1,10 @@
+yate (5.5.1~svn6127) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6127:
+  * Added a Text-to-Speech script wrapper for Festival.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 30 Jul 2016 02:19:15 +0300
+
 yate (5.5.1~svn6126) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6126:

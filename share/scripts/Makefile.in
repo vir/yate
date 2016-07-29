@@ -5,7 +5,7 @@
 DESTDIR :=
 
 SCRIPTS := leavemail.php voicemail.php route.php queue_in.php queue_out.php banbrutes.php \
-	echo.sh
+	echo.sh tts.sh
 SCRLIBS := libyate.php libyateivr.php libyatechan.php libvoicemail.php \
 	libeliza.js libchatbot.js eliza.js \
 	libyate.py \

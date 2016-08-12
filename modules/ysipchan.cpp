@@ -6445,13 +6445,12 @@ bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
 // Creates a SDP for provisional (1xx) messages
 MimeSdpBody* YateSIPConnection::createProvisionalSDP(Message& msg)
 {
-    if (!msg.getBoolValue(YSTRING("earlymedia"),true))
+    // check if we are forwarding RTP or our peer can source at least audio data
+    if (!msg.getBoolValue(YSTRING("earlymedia"),m_rtpForward
+	    || (getPeer() && getPeer()->getSource())))
 	return 0;
     if (m_rtpForward)
 	return createPasstroughSDP(msg);
-    // check if our peer can source at least audio data
-    if (!(getPeer() && getPeer()->getSource()))
-	return 0;
     if (m_rtpAddr.null())
 	return 0;
     if (s_1xx_formats)

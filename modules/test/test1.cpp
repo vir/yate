@@ -74,7 +74,7 @@ bool TestHandler::received(Message &msg)
 };
 
 TestPlugin1::TestPlugin1()
-    : m_first(true)
+    : Plugin("test1","misc"), m_first(true)
 {
     Output("Hello, I am module TestPlugin1");
 }

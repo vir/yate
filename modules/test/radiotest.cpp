@@ -497,6 +497,7 @@ void RadioTest::run()
 			status = m_radio->pollPending(RadioInterface::PendingInitialize);
 			if (!status || RadioInterface::Pending != status)
 			    break;
+			Thread::idle();
 		    }
 		    if (Thread::check(false))
 			status = RadioInterface::Cancelled;

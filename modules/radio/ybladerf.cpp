@@ -4324,9 +4324,6 @@ void BrfLibUsbDevice::runSend(BrfThread* th)
 	    ts = crtRxTs;
 	}
 	while (!status && sendCount--) {
-	    // Simulate some processing
-	    // This will allow other threads to call device methods
-	    generateExpTone(buf,3);
 	    status = syncTx(ts,(float*)buf.data(),buf.length(),0,true);
 	    ts += buf.length();
 	}

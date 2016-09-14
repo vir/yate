@@ -104,6 +104,7 @@ namespace TelEngine {
 #define DebugMax DebugAll
 
 #define OUT_BUFFER_SIZE 8192
+#define OUT_HEADER_SIZE 112
 
 // RefObject mutex pool array size
 #ifndef REFOBJECT_MUTEX_COUNT
@@ -306,7 +307,7 @@ void Debug(const char* facility, int level, const char* format, ...)
 	return;
     if (!format)
 	format = "";
-    char buf[64];
+    char buf[OUT_HEADER_SIZE];
     ::snprintf(buf,sizeof(buf),"<%s:%s> ",facility,dbg_level(level));
     va_list va;
     va_start(va,format);
@@ -336,7 +337,7 @@ void Debug(const DebugEnabler* local, int level, const char* format, ...)
 	return;
     if (!format)
 	format = "";
-    char buf[64];
+    char buf[OUT_HEADER_SIZE];
     if (facility)
 	::snprintf(buf,sizeof(buf),"<%s:%s> ",facility,dbg_level(level));
     else
@@ -357,7 +358,7 @@ void Alarm(const char* component, int level, const char* format, ...)
 	return;
     if (TelEngine::null(component))
 	component = "unknown";
-    char buf[64];
+    char buf[OUT_HEADER_SIZE];
     ::snprintf(buf,sizeof(buf),"<%s:%s> ",component,dbg_level(level));
     va_list va;
     va_start(va,format);
@@ -375,7 +376,7 @@ void Alarm(const DebugEnabler* component, int level, const char* format, ...)
 	return;
     const char* name = (component && !TelEngine::null(component->debugName()))
 	? component->debugName() : "unknown";
-    char buf[64];
+    char buf[OUT_HEADER_SIZE];
     ::snprintf(buf,sizeof(buf),"<%s:%s> ",name,dbg_level(level));
     va_list va;
     va_start(va,format);
@@ -393,7 +394,7 @@ void Alarm(const char* component, const char* info, int level, const char* forma
 	return;
     if (TelEngine::null(component))
 	component = "unknown";
-    char buf[64];
+    char buf[OUT_HEADER_SIZE];
     ::snprintf(buf,sizeof(buf),"<%s:%s> ",component,dbg_level(level));
     va_list va;
     va_start(va,format);
@@ -411,7 +412,7 @@ void Alarm(const DebugEnabler* component, const char* info, int level, const cha
 	return;
     const char* name = (component && !TelEngine::null(component->debugName()))
 	? component->debugName() : "unknown";
-    char buf[64];
+    char buf[OUT_HEADER_SIZE];
     ::snprintf(buf,sizeof(buf),"<%s:%s> ",name,dbg_level(level));
     va_list va;
     va_start(va,format);
@@ -504,7 +505,7 @@ Debugger::Debugger(const char* name, const char* format, ...)
     : m_name(name), m_level(DebugAll)
 {
     if (s_debugging && m_name && (s_debug >= DebugAll) && !reentered()) {
-	char buf[64];
+	char buf[OUT_HEADER_SIZE];
 	::snprintf(buf,sizeof(buf),">>> %s",m_name);
 	va_list va;
 	va_start(va,format);
@@ -522,7 +523,7 @@ Debugger::Debugger(int level, const char* name, const char* format, ...)
     : m_name(name), m_level(level)
 {
     if (s_debugging && m_name && (s_debug >= level) && !reentered()) {
-	char buf[64];
+	char buf[OUT_HEADER_SIZE];
 	::snprintf(buf,sizeof(buf),">>> %s",m_name);
 	va_list va;
 	va_start(va,format);

@@ -741,6 +741,7 @@ private:
     bool m_keepTcpOffline;               // Don't reset party when offline
     bool m_matchPort;
     bool m_matchUser;
+    bool m_forceNotify;
 };
 
 class YateSIPEndPoint : public Thread
@@ -1127,7 +1128,8 @@ public:
     YateSIPConnection* findDialog(const String& dialog, const String& fromTag,
 	const String& toTag, bool incRef = false);
     YateSIPLine* findLine(const String& line) const;
-    YateSIPLine* findLine(const String& addr, int port, const String& user = String::empty());
+    YateSIPLine* findLine(const String& addr, int port, const String& user = String::empty(),
+	SIPParty* party = 0);
     // Drop channels belonging using a given transport
     // Return the number of disconnected channels
     unsigned int transportTerminated(YateSIPTransport* trans);
@@ -5519,7 +5521,7 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     message->getParty()->getAddr(host,portNum,false);
     URI uri(message->uri);
     String user;
-    YateSIPLine* line = plugin.findLine(host,portNum,uri.getUser());
+    YateSIPLine* line = plugin.findLine(host,portNum,uri.getUser(),message->getParty());
     m.addParam("called",uri.getUser(),false);
     uri = message->getHeader("From");
     uri.parse();
@@ -5823,7 +5825,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     s_globalMutex.unlock();
 
     URI uri(m_tr->getURI());
-    YateSIPLine* line = plugin.findLine(m_host,m_port,uri.getUser());
+    YateSIPLine* line = plugin.findLine(m_host,m_port,uri.getUser(),m_party);
     Message *m = message("call.preroute");
     decodeIsupBody(*m,m_tr->initialMessage()->body);
     copySipBody(*m,m_tr->initialMessage()->body);
@@ -8132,7 +8134,7 @@ YateSIPLine::YateSIPLine(const String& name)
       m_flags(-1), m_trans(-1), m_tr(0), m_marked(false), m_valid(false),
       m_localPort(0), m_partyPort(0), m_localDetect(false),
       m_keepTcpOffline(s_lineKeepTcpOffline),
-      m_matchPort(true), m_matchUser(true)
+      m_matchPort(true), m_matchUser(true), m_forceNotify(false)
 {
     m_partyMutex = this;
     DDebug(&plugin,DebugInfo,"YateSIPLine::YateSIPLine('%s') [%p]",c_str(),this);
@@ -8167,10 +8169,10 @@ void YateSIPLine::setValid(bool valid, const char* reason, const char* error)
 {
     DDebug(&plugin,DebugInfo,"YateSIPLine(%s) setValid(%u,%s) current=%u [%p]",
 	c_str(),valid,reason,m_valid,this);
-    if ((m_valid == valid) && !reason)
+    if ((m_valid == valid) && !(m_forceNotify || reason))
 	return;
     m_valid = valid;
-    if (m_registrar && m_username) {
+    if (m_forceNotify || (m_registrar && m_username)) {
 	Message* m = new Message("user.notify");
 	m->addParam("account",*this);
 	m->addParam("protocol","sip");
@@ -8554,6 +8556,7 @@ bool YateSIPLine::update(const Message& msg)
 	if (!m_party)
 	    Debug(&plugin,DebugNote,"Line '%s' failed to set party [%p]",c_str(),this);
     }
+    m_forceNotify = (protocol() == Tcp) || (protocol() == Tls);
     // if something changed we logged out so try to climb back
     if (chg || (oper == YSTRING("login")))
 	login();
@@ -8582,6 +8585,8 @@ void YateSIPLine::transportChangedStatus(int stat, const String& reason)
 	// Pending login
 	if (trans && m_resend)
 	    login();
+	else if (trans && trans->tcpTransport())
+	    setValid(true);
     }
 }
 
@@ -8710,14 +8715,22 @@ YateSIPLine* SIPDriver::findLine(const String& line) const
 }
 
 // find line by party address and port
-YateSIPLine* SIPDriver::findLine(const String& addr, int port, const String& user)
+YateSIPLine* SIPDriver::findLine(const String& addr, int port, const String& user, SIPParty* party)
 {
-    if (!(port && addr))
+    YateSIPTCPTransport* tr = YOBJECT(YateSIPTCPTransport,party);
+    if (tr && !tr->outgoing())
+	tr = 0;
+    bool matchAddr = port && addr;
+    if (!(tr || matchAddr))
 	return 0;
     Lock mylock(this);
     ObjList* l = s_lines.skipNull();
     for (; l; l = l->skipNext()) {
 	YateSIPLine* sl = static_cast<YateSIPLine*>(l->get());
+	if (tr && sl->isTransport(tr))
+	    return sl;
+	if (!matchAddr)
+	    continue;
 	if (sl->matchInbound(addr,port,user))
 	    return sl;
 	if (sl->getPartyPort() && (sl->getPartyPort() == port) && (sl->getPartyAddr() == addr)) {

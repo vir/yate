@@ -1127,7 +1127,8 @@ public:
     YateSIPConnection* findDialog(const String& dialog, const String& fromTag,
 	const String& toTag, bool incRef = false);
     YateSIPLine* findLine(const String& line) const;
-    YateSIPLine* findLine(const String& addr, int port, const String& user = String::empty());
+    YateSIPLine* findLine(const String& addr, int port, const String& user = String::empty(),
+	SIPParty* party = 0);
     // Drop channels belonging using a given transport
     // Return the number of disconnected channels
     unsigned int transportTerminated(YateSIPTransport* trans);
@@ -5519,7 +5520,7 @@ bool YateSIPEndPoint::generic(const SIPMessage* message, SIPTransaction* t, cons
     message->getParty()->getAddr(host,portNum,false);
     URI uri(message->uri);
     String user;
-    YateSIPLine* line = plugin.findLine(host,portNum,uri.getUser());
+    YateSIPLine* line = plugin.findLine(host,portNum,uri.getUser(),message->getParty());
     m.addParam("called",uri.getUser(),false);
     uri = message->getHeader("From");
     uri.parse();
@@ -5823,7 +5824,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     s_globalMutex.unlock();
 
     URI uri(m_tr->getURI());
-    YateSIPLine* line = plugin.findLine(m_host,m_port,uri.getUser());
+    YateSIPLine* line = plugin.findLine(m_host,m_port,uri.getUser(),m_party);
     Message *m = message("call.preroute");
     decodeIsupBody(*m,m_tr->initialMessage()->body);
     copySipBody(*m,m_tr->initialMessage()->body);
@@ -8710,14 +8711,22 @@ YateSIPLine* SIPDriver::findLine(const String& line) const
 }
 
 // find line by party address and port
-YateSIPLine* SIPDriver::findLine(const String& addr, int port, const String& user)
+YateSIPLine* SIPDriver::findLine(const String& addr, int port, const String& user, SIPParty* party)
 {
-    if (!(port && addr))
+    YateSIPTCPTransport* tr = YOBJECT(YateSIPTCPTransport,party);
+    if (tr && !tr->outgoing())
+	tr = 0;
+    bool matchAddr = port && addr;
+    if (!(tr || matchAddr))
 	return 0;
     Lock mylock(this);
     ObjList* l = s_lines.skipNull();
     for (; l; l = l->skipNext()) {
 	YateSIPLine* sl = static_cast<YateSIPLine*>(l->get());
+	if (tr && sl->isTransport(tr))
+	    return sl;
+	if (!matchAddr)
+	    continue;
 	if (sl->matchInbound(addr,port,user))
 	    return sl;
 	if (sl->getPartyPort() && (sl->getPartyPort() == port) && (sl->getPartyAddr() == addr)) {

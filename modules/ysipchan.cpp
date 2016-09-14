@@ -741,6 +741,7 @@ private:
     bool m_keepTcpOffline;               // Don't reset party when offline
     bool m_matchPort;
     bool m_matchUser;
+    bool m_forceNotify;
 };
 
 class YateSIPEndPoint : public Thread
@@ -8133,7 +8134,7 @@ YateSIPLine::YateSIPLine(const String& name)
       m_flags(-1), m_trans(-1), m_tr(0), m_marked(false), m_valid(false),
       m_localPort(0), m_partyPort(0), m_localDetect(false),
       m_keepTcpOffline(s_lineKeepTcpOffline),
-      m_matchPort(true), m_matchUser(true)
+      m_matchPort(true), m_matchUser(true), m_forceNotify(false)
 {
     m_partyMutex = this;
     DDebug(&plugin,DebugInfo,"YateSIPLine::YateSIPLine('%s') [%p]",c_str(),this);
@@ -8168,10 +8169,10 @@ void YateSIPLine::setValid(bool valid, const char* reason, const char* error)
 {
     DDebug(&plugin,DebugInfo,"YateSIPLine(%s) setValid(%u,%s) current=%u [%p]",
 	c_str(),valid,reason,m_valid,this);
-    if ((m_valid == valid) && !reason)
+    if ((m_valid == valid) && !(m_forceNotify || reason))
 	return;
     m_valid = valid;
-    if (m_registrar && m_username) {
+    if (m_forceNotify || (m_registrar && m_username)) {
 	Message* m = new Message("user.notify");
 	m->addParam("account",*this);
 	m->addParam("protocol","sip");
@@ -8555,6 +8556,7 @@ bool YateSIPLine::update(const Message& msg)
 	if (!m_party)
 	    Debug(&plugin,DebugNote,"Line '%s' failed to set party [%p]",c_str(),this);
     }
+    m_forceNotify = (protocol() == Tcp) || (protocol() == Tls);
     // if something changed we logged out so try to climb back
     if (chg || (oper == YSTRING("login")))
 	login();
@@ -8583,6 +8585,8 @@ void YateSIPLine::transportChangedStatus(int stat, const String& reason)
 	// Pending login
 	if (trans && m_resend)
 	    login();
+	else if (trans && trans->tcpTransport())
+	    setValid(true);
     }
 }
 

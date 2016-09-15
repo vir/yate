@@ -47,7 +47,7 @@
 
 ; The following parameters are handled internally and cannot be changed:
 ;  time, chan, operation, cdrwrite, cdrtrack, cdrcreate, cdrid, runid,
-;  direction, status, duration, billtime, ringtime, answered, delivered, released
+;  direction, status, duration, billtime, ringtime
 
 
 ; Special section for time formatting

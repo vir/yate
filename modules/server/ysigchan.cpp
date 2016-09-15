@@ -214,8 +214,6 @@ public:
     static const TokenDict s_operations[];
     // Append an onDemand component
     bool appendOnDemand(SignallingComponent* cmp, int type);
-    // Check for call delivered in parameters
-    bool checkDelivered(const NamedList& params, const String& prefix = String::empty());
     // Install a relay
     inline bool requestRelay(int id, const char* name, unsigned priority = 100)
 	{ return installRelay(id,name,priority); }
@@ -1605,11 +1603,6 @@ void SigChannel::endDisconnect(const Message& params, bool handled)
 
 void SigChannel::hangup(const char* reason, SignallingEvent* event, const NamedList* extra)
 {
-    if (isOutgoing() && event && event->message() && !isDelivered()) {
-	SS7MsgISUP* isup = YOBJECT(SS7MsgISUP,event->message());
-	if (isup && plugin.checkDelivered(isup->params()))
-	    setDelivered();
-    }
     static const String params = "reason";
     Lock lock(m_mutex);
     releaseCallAccepted();
@@ -1652,8 +1645,6 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event, const NamedL
     Message* m = message("chan.hangup",true);
     m->setParam("status",status());
     m->setParam("reason",m_reason);
-    if (event)
-	m->addParam("released",String::boolText(true));
     Engine::enqueue(m);
 }
 
@@ -2837,19 +2828,6 @@ bool SigDriver::appendOnDemand(SignallingComponent* cmp, int type)
     m_onDemand.append(dsccp);
     DDebug(this,DebugAll,"On Demand (%p): '%s' added",cmp,cmp->toString().c_str());
     return true;
-}
-
-// Check for call delivered in parameters
-bool SigDriver::checkDelivered(const NamedList& params, const String& prefix)
-{
-    const String& loc = params[prefix + "CauseIndicators.location"];
-    if (loc == YSTRING("U"))
-	return true;
-    const String& cause = params[prefix + "CauseIndicators"];
-    if (!cause)
-	return false;
-    return cause == YSTRING("busy") || cause == YSTRING("noanswer") ||
-	cause == YSTRING("call-delivered");
 }
 
 bool SigDriver::initOnDemand(NamedList& sect, int type)
@@ -4820,12 +4798,8 @@ bool IsupDecodeHandler::received(Message& msg)
     if (pcType == SS7PointCode::Other)
 	return false;
 
-    if (m_isup->decodeMessage(msg,msgType,pcType,paramPtr,data->length()-1)) {
-	NamedString* ns = msg.getParam(prefix + "checkdelivered");
-	if (ns)
-	    *ns = String::boolText(plugin.checkDelivered(msg,prefix));
+    if (m_isup->decodeMessage(msg,msgType,pcType,paramPtr,data->length()-1))
 	return true;
-    }
     msg.setParam("error","Parser failure");
     return false;
 }

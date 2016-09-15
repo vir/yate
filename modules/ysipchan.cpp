@@ -950,7 +950,7 @@ public:
     void doRefer(SIPTransaction* t);
     void doMessage(SIPTransaction* t);
     void reInvite(SIPTransaction* t);
-    void hangup(bool remote = true);
+    void hangup();
     inline const SIPDialog& dialog() const
 	{ return m_dialog; }
     inline void setStatus(const char *stat, int state = -1)
@@ -992,10 +992,6 @@ protected:
     virtual void mediaChanged(const SDPMedia& media);
     virtual void dispatchingRtp(Message*& msg, SDPMedia* media);
     virtual void endDisconnect(const Message& msg, bool handled);
-    inline bool checkDelivered() const
-	{ return isOutgoing() && !isDelivered(); }
-    void checkDelivered(int code, bool checkParams = false, const SIPMessage* msg = 0,
-	const MimeHeaderLine* sipReason = 0, const MimeHeaderLine* q850Reason = 0);
 
 private:
     virtual void statusParams(String& str);
@@ -1016,7 +1012,7 @@ private:
     // Decode an application/isup body into 'msg' if configured to do so
     // The message's name and user data are restored before exiting, regardless the result
     // Return true if an ISUP message was succesfully decoded
-    bool decodeIsupBody(Message& msg, MimeBody* body, bool checkDelivered = false);
+    bool decodeIsupBody(Message& msg, MimeBody* body);
     // Build the body of a SIP message from an engine message
     // Encode an ISUP message from parameters received in msg if enabled to process them
     // Build a multipart/mixed body if more then one body is going to be sent
@@ -2046,8 +2042,7 @@ inline bool addBodyParam(NamedList& nl, const char* param, MimeBody* body, const
 // Decode an application/isup body into 'msg' if configured to do so
 // The message's name and user data are restored before exiting, regardless the result
 // Return true if an ISUP message was succesfully decoded
-static bool doDecodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* body,
-    bool checkDelivered = false)
+static bool doDecodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* body)
 {
     if (!s_sipt_isup)
 	return false;
@@ -2064,10 +2059,7 @@ static bool doDecodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* 
     msg.addParam("message-prefix","isup.");
     addBodyParam(msg,"isup.protocol-type",isup,"version");
     addBodyParam(msg,"isup.protocol-basetype",isup,"base");
-    if (checkDelivered)
-	msg.addParam("isup.checkdelivered","");
     msg.addParam(new NamedPointer("rawdata",new DataBlock(isup->body())));
-
     bool ok = Engine::dispatch(msg);
     // Clear added params and restore message
     if (!ok) {
@@ -2196,34 +2188,6 @@ static void setAuthError(SIPTransaction* trans, const NamedList& params,
     }
     String r;
     trans->requestAuth(getGlobal(r,s_realm),domain,stale);
-}
-
-// Retrieve Reason header(s) from message
-static void getHeaderReason(const SIPMessage* msg, const MimeHeaderLine*& sip,
-    const MimeHeaderLine*& q850)
-{
-    if (!msg)
-	return;
-    for (const ObjList* o = msg->header.skipNull(); o; o = o->skipNext()) {
-	const MimeHeaderLine* t = static_cast<const MimeHeaderLine*>(o->get());
-	if (t->name() |= "Reason")
-	    continue;
-	if (*t == YSTRING("SIP")) {
-	    if (!sip)
-		sip = t;
-	}
-	else if (*t == YSTRING("Q.850")) {
-	    if (!q850)
-		q850 = t;
-	}
-    }
-}
-
-// Retrieve the integer value of header 'cause' parameter
-static inline int getCauseParamInt(const MimeHeaderLine* hdr)
-{
-    const NamedString* p = hdr ? hdr->getParam(YSTRING("cause")) : 0;
-    return p ? p->toInteger() : 0;
 }
 
 
@@ -6242,7 +6206,7 @@ YateSIPConnection::~YateSIPConnection()
 void YateSIPConnection::destroyed()
 {
     DDebug(this,DebugAll,"YateSIPConnection::destroyed() [%p]",this);
-    hangup(false);
+    hangup();
     clearTransaction();
     TelEngine::destruct(m_route);
     TelEngine::destruct(m_routes);
@@ -6302,7 +6266,7 @@ void YateSIPConnection::detachTransaction2()
     startPendingUpdate();
 }
 
-void YateSIPConnection::hangup(bool remote)
+void YateSIPConnection::hangup()
 {
     if (m_hungup)
 	return;
@@ -6319,8 +6283,6 @@ void YateSIPConnection::hangup(bool remote)
     Message* m = message("chan.hangup");
     if (res)
 	m->setParam("reason",res);
-    if (remote)
-	m->addParam("released",String::boolText(true));
     Engine::enqueue(m);
     if (!error)
 	error = res.c_str();
@@ -6622,7 +6584,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	if (msg->body) {
 	    paramMutex().unlock();
 	    Message tmp("isup.decode");
-	    bool ok = decodeIsupBody(tmp,msg->body,checkDelivered());
+	    bool ok = decodeIsupBody(tmp,msg->body);
 	    ok = copySipBody(tmp,msg->body) || ok;
 	    paramMutex().lock();
 	    if (ok)
@@ -6664,8 +6626,6 @@ bool YateSIPConnection::process(SIPEvent* ev)
 		Debug(this,DebugMild,"Received %d redirect without Contact [%p]",code,this);
 	}
 	paramMutex().unlock();
-	if (checkDelivered())
-	    checkDelivered(code,true,msg);
 	hangup();
     }
     else if (code == 408) {
@@ -6845,7 +6805,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	if (fatal) {
 	    setReason("Request Timeout",408);
 	    mylock.drop();
-	    hangup(false);
+	    hangup();
 	    mylock.acquire(driver());
 	}
 	else {
@@ -6898,7 +6858,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 		TelEngine::destruct(lst);
 		setReason("Media information changed during reINVITE",415);
 		mylock.drop();
-		hangup(false);
+		hangup();
 		return false;
 	    }
 	    setReason("Missing media information",415);
@@ -6906,7 +6866,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	else
 	    setReason(msg->reason,code);
 	mylock.drop();
-	hangup(false);
+	hangup();
 	return false;
     }
 
@@ -7075,7 +7035,7 @@ bool YateSIPConnection::reInviteForward(SIPTransaction* t, MimeSdpBody* sdp, int
 	// media is uncertain now so drop the call
 	setReason("Internal Server Error",500);
 	mylock.drop();
-	hangup(false);
+	hangup();
     }
     else {
 	// we remember the request and leave it pending
@@ -7205,7 +7165,7 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 	setPartyChanged(t->initialMessage()->getParty(),this);
     if (msg->body) {
 	Message tmp("isup.decode");
-	bool ok = decodeIsupBody(tmp,msg->body,checkDelivered());
+	bool ok = decodeIsupBody(tmp,msg->body);
 	ok = copySipBody(tmp,msg->body) || ok;
 	if (ok) {
 	    paramMutex().lock();
@@ -7230,8 +7190,6 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 	    setReason(MimeHeaderLine::unquote(*text),m_reasonCode,driver());
 	// FIXME: add SIP and Q.850 cause codes
     }
-    if (checkDelivered())
-	checkDelivered(0,true,msg);
     t->setResponse(m);
     m->deref();
     m_byebye = false;
@@ -7771,51 +7729,6 @@ void YateSIPConnection::endDisconnect(const Message& msg, bool handled)
     paramMutex().unlock();
 }
 
-static inline bool isSipDelivered(int code)
-{
-    return code == 486 || code == 600 || code == 603;
-}
-
-void YateSIPConnection::checkDelivered(int code, bool checkParams, const SIPMessage* msg,
-    const MimeHeaderLine* sip, const MimeHeaderLine* q850)
-{
-    if (isIncoming())
-	return;
-// NOTE: TESTING purpose only
-const char* stage = "sip code";
-String tmp(msg ? (char*)msg->getBuffer().data() : "",msg ? msg->getBuffer().length() : 0);
-if (tmp)
-tmp = "\r\n-----\r\n" + tmp + "\r\n-----";
-    while (true) {
-	if (isSipDelivered(code))
-	    break;
-stage = "ISUP message";
-	if (checkParams) {
-	    // Check decoded message carried by body (isup)
-	    Lock lck(paramMutex());
-	    const String& prefix = parameters()[YSTRING("message-prefix")];
-	    if (prefix && parameters().getBoolValue(prefix + "checkdelivered"))
-		break;
-	}
-	if (!(sip || q850) && msg)
-	    getHeaderReason(msg,sip,q850);
-stage = "Q.850 reason";
-	// Check Q.850 cause first: it indicates cause at remote interworking
-	if (q850) {
-	    int cause = getCauseParamInt(q850);
-	    if (cause == 7 || cause == 17 || cause == 19)
-		break;
-	}
-stage = "SIP reason";
-	if (sip && isSipDelivered(getCauseParamInt(sip)))
-	    break;
-Debug(this,DebugTest,"Not detected delivered code=%d%s",code,tmp.safe());
-	return;
-    }
-Debug(this,DebugTest,"Detected delivered by '%s'%s",stage,tmp.safe());
-    setDelivered();
-}
-
 void YateSIPConnection::statusParams(String& str)
 {
     Channel::statusParams(str);
@@ -8126,9 +8039,9 @@ bool YateSIPConnection::initTransfer(Message*& msg, SIPMessage*& sipNotify,
 }
 
 // Decode an application/isup body into 'msg' if configured to do so
-bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body, bool checkDelivered)
+bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
 {
-    return doDecodeIsupBody(this,msg,body,checkDelivered);
+    return doDecodeIsupBody(this,msg,body);
 }
 
 // Build the body of a SIP message from an engine message

@@ -1642,7 +1642,6 @@ class YATE_API Channel : public CallEndpoint, public DebugEnabler, public Messag
 {
     friend class Driver;
     friend class Router;
-    friend class CallEndpoint;
     YNOCOPY(Channel); // no automatic copies please
 private:
     NamedList m_parameters;
@@ -1663,7 +1662,6 @@ protected:
     String m_targetid;
     String m_billid;
     bool m_answered;
-    bool m_delivered;
 
 public:
     /**
@@ -1887,13 +1885,6 @@ public:
      */
     inline bool isAnswered() const
 	{ return m_answered; }
-
-    /**
-     * Check if the call was delivered or not
-     * @return True if the call was delivered
-     */
-    inline bool isDelivered() const
-	{ return m_delivered; }
 
     /**
      * Get the direction of the channel as string
@@ -2153,14 +2144,6 @@ protected:
      */
     inline NamedList& parameters()
 	{ return m_parameters; }
-
-    /**
-     * Set call delivered flag. Update related data
-     */
-    inline void setDelivered() {
-	m_delivered = true;
-	maxPDD(0);
-    }
 
 private:
     void init();

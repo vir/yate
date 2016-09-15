@@ -105,9 +105,6 @@ private:
 	m_hangup;
     String m_dir;
     String m_status;
-    bool m_answered;
-    bool m_delivered;
-    bool m_released;
     String m_cdrId;
     bool m_first;
     bool m_write;
@@ -242,9 +239,6 @@ static const char* const s_forbidden[] = {
     "cdrcreate",
     "cdrid",
     "runid",
-    "answered",
-    "delivered",
-    "released",
     0
 };
 
@@ -313,7 +307,6 @@ static void expireHungup()
 
 CdrBuilder::CdrBuilder(const char *name)
     : NamedList(name), m_dir("unknown"), m_status("unknown"),
-      m_answered(false), m_delivered(false), m_released(false),
       m_first(true), m_write(true)
 {
     m_statusTime = m_start = m_call = m_ringing = m_answer = m_hangup = 0;
@@ -379,10 +372,6 @@ void CdrBuilder::emit(const char *operation)
     m->addParam("billtime",printTime(buf,t_hangup - t_answer));
     m->addParam("ringtime",printTime(buf,t_answer - t_ringing));
     m->addParam("status",m_status);
-    m->addParam("answered",String::boolText(m_answered));
-    m->addParam("delivered",String::boolText(m_delivered));
-    if (m_released)
-	m->addParam("released",String::boolText(m_released));
     String tmp;
 
     if (m_startTime.m_enabled) {
@@ -498,10 +487,6 @@ bool CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 	}
 	else if (s->name() == YSTRING("direction"))
 	    m_dir = *s;
-	else if (s->name() == YSTRING("answered"))
-	    m_answered = s->toBoolean();
-	else if (s->name() == YSTRING("delivered"))
-	    m_delivered = s->toBoolean();
 	else {
 	    // search the parameter
 	    Param* p = static_cast<Param*>(s_params[s->name()]);
@@ -521,7 +506,6 @@ bool CdrBuilder::update(const Message& msg, int type, u_int64_t val)
     update(type,val);
 
     if (type == CdrHangup) {
-	m_released = msg.getBoolValue(YSTRING("released"));
 	s_cdrs.remove(this);
 	// object is now destroyed, "this" no longer valid
 	return false;

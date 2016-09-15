@@ -190,6 +190,12 @@ bool CallEndpoint::disconnect(bool final, const char* reason, bool notify, const
 	e->disconnect();
     }
 
+    Channel* chan = YOBJECT(Channel,this);
+    if (chan && chan->isDelivered()) {
+	chan = YOBJECT(Channel,temp);
+	if (chan && !chan->isDelivered())
+	    chan->setDelivered();
+    }
     temp->setPeer(0,reason,notify,params);
     bool dead = !alive();
     if (dead)
@@ -389,7 +395,7 @@ Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
       m_parameters(""), m_driver(driver), m_outgoing(outgoing),
       m_timeout(0), m_maxcall(0), m_maxPDD(0), m_dtmfTime(0),
-      m_toutAns(0), m_dtmfSeq(0), m_answered(false)
+      m_toutAns(0), m_dtmfSeq(0), m_answered(false), m_delivered(false)
 {
     init();
 }
@@ -398,7 +404,7 @@ Channel::Channel(Driver& driver, const char* id, bool outgoing)
     : CallEndpoint(id),
       m_parameters(""), m_driver(&driver), m_outgoing(outgoing),
       m_timeout(0), m_maxcall(0), m_maxPDD(0), m_dtmfTime(0),
-      m_toutAns(0), m_dtmfSeq(0), m_answered(false)
+      m_toutAns(0), m_dtmfSeq(0), m_answered(false), m_delivered(false)
 {
     init();
 }
@@ -587,12 +593,13 @@ void Channel::status(const char* newstat)
 	m_answered = true;
 	// stop pre-answer timeout, restart answered timeout
 	m_maxcall = 0;
-	maxPDD(0);
+	setDelivered();
 	if (m_toutAns)
 	    timeout(Time::now() + m_toutAns*(u_int64_t)1000);
     }
-    else if (m_status == YSTRING("ringing") || m_status == YSTRING("progressing"))
-	maxPDD(0);
+    else if (!m_delivered &&
+	(m_status == YSTRING("ringing") || m_status == YSTRING("progressing")))
+	setDelivered();
 }
 
 const char* Channel::direction() const
@@ -667,6 +674,7 @@ void Channel::complete(Message& msg, bool minimal) const
     if (getLastPeerId(peer))
 	msg.setParam("lastpeerid",peer);
     msg.setParam("answered",String::boolText(m_answered));
+    msg.setParam("delivered",String::boolText(m_delivered));
     msg.setParam("direction",direction());
 }
 

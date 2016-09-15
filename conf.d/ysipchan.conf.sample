@@ -324,6 +324,25 @@
 ; Defaults to yes
 ;printmsg=yes
 
+; tcp_idle: integer: Interval (in seconds) allowed for an incoming TCP connection
+;  to stay idle (nothing sent/received)
+; This parameter is applied on reload for new connections only
+; It may be overridden in listener sections
+; Defaults to 120
+; Minimum allowed value is calculated from SIP 'B' timer (which is 64 * t1 timer value)
+;  expressed in seconds using the following formula: B * 3 / 2 (46 seconds for T1 default value)
+; Maximum allwed value is 600
+;tcp_idle=120
+
+; tcp_keepalive: integer: Interval (in seconds) to send keepalive on outgoing TCP connections
+; Defaults to 'tcp_idle' value
+;tcp_keepalive=tcp_idle
+
+; tcp_keepalive_first: integer: Interval (in seconds) to send first keepalive on
+;   outgoing TCP connections
+; If set this parameter must be less than 'tcp_keepalive'
+;tcp_keepalive_first=0
+
 
 [options]
 ; Controls the behaviour for SIP options retrieval

@@ -513,6 +513,8 @@ protected:
     ObjList m_queue;                     // Pending message queue
     int m_sent;                          // Sent bytes from first message in queue
                                          // -1 to dequeue a new message and print it
+    unsigned int m_firstKeepalive;       // Outgoing: first keep alive interval
+    bool m_firstKeepaliveSent;           // First keep alive used
     unsigned int m_idleInterval;         // Incoming: interval allowed to stay with a reference
                                          //  counter=1 without receiving any data
                                          // Outgoing: keep alive interval
@@ -1230,6 +1232,8 @@ static u_int64_t s_waitActiveUdpTrans = 1000000; // Time to wait for active UDP 
 static unsigned int s_tcpConnectRetry = 3; // Number of TCP connect attempts
 static u_int64_t s_tcpConnectInterval = 1000000; // The interval to attempt tcp connect
 static unsigned int s_tcpIdle = TCP_IDLE_DEF; // TCP transport idle interval
+static unsigned int s_tcpKeepalive = TCP_IDLE_DEF; // TCP transport keepalive interval
+static unsigned int s_tcpKeepaliveFirst = 0; // TCP transport first keepalive interval
 static unsigned int s_tcpMaxpkt = 1500;  // Maximum packet to accept on TCP connections
 static String s_tcpOutRtpip;             // RTP ip for outgoing tcp/tls transports (protected by plugin mutex)
 static bool s_lineKeepTcpOffline = true; // Lines: keep TCP transports when offline
@@ -3229,6 +3233,7 @@ YateSIPTCPTransport::YateSIPTCPTransport(bool tls, const String& laddr, const St
     int rport)
     : YateSIPTransport(tls ? Tls : Tcp,String::empty(),0,Idle),
     m_outgoing(true), m_party(0), m_sent(-1),
+    m_firstKeepalive(0), m_firstKeepaliveSent(false),
     m_idleInterval(TCP_IDLE_DEF), m_idleTimeout(0),
     m_flowTimer(false), m_keepAlivePending(false),
     m_msg(0), m_sipBufOffs(0), m_contentLen(0),
@@ -3249,6 +3254,7 @@ YateSIPTCPTransport::YateSIPTCPTransport(bool tls, const String& laddr, const St
 YateSIPTCPTransport::YateSIPTCPTransport(Socket* sock, bool tls)
     : YateSIPTransport(tls ? Tls : Tcp,String::empty(),sock,sock ? Connected : Idle),
     m_outgoing(false), m_party(0), m_sent(-1),
+    m_firstKeepalive(0), m_firstKeepaliveSent(false),
     m_idleInterval(TCP_IDLE_DEF), m_idleTimeout(0),
     m_flowTimer(false), m_keepAlivePending(false),
     m_msg(0), m_sipBufOffs(0), m_contentLen(0),
@@ -3279,11 +3285,22 @@ YateTCPParty* YateSIPTCPTransport::getParty()
 bool YateSIPTCPTransport::init(const NamedList& params, bool first, Thread::Priority prio)
 {
     bool ok = YateSIPTransport::init(params,NamedList::empty(),first,prio);
-    m_idleInterval = tcpIdleInterval(params.getIntValue(YSTRING("tcp_idle"),s_tcpIdle));
+    String extra;
+    if (outgoing()) {
+	m_idleInterval = params.getIntValue(YSTRING("tcp_keepalive"),s_tcpKeepalive,0);
+	m_firstKeepalive = params.getIntValue(YSTRING("tcp_keepalive_first"),
+	    s_tcpKeepaliveFirst,0);
+	if (m_firstKeepalive && m_idleInterval && m_firstKeepalive >= m_idleInterval)
+	    m_firstKeepalive = 0;
+	extra << " (first=" << m_firstKeepalive << ")";
+    }
+    else
+	m_idleInterval = tcpIdleInterval(params.getIntValue(YSTRING("tcp_idle"),s_tcpIdle));
     setIdleTimeout();
     Debug(&plugin,DebugAll,
-	"Transport(%s) initialized maxpkt=%u rtp_localip=%s nat_address=%s tcp_idle=%u [%p]",
-	m_id.c_str(),m_maxpkt,m_rtpLocalAddr.c_str(),m_rtpNatAddr.c_str(),m_idleInterval,this);
+	"Transport(%s) initialized maxpkt=%u rtp_localip=%s nat_address=%s tcp_%s=%usec%s [%p]",
+	m_id.c_str(),m_maxpkt,m_rtpLocalAddr.c_str(),m_rtpNatAddr.c_str(),
+	(outgoing() ? "keepalive" : "idle"),m_idleInterval,extra.safe(),this);
     if (ok && first)
 	ok = startWorker(prio);
     return ok;
@@ -3376,6 +3393,7 @@ int YateSIPTCPTransport::process()
 	    return Thread::idleUsec();
 	m_connectRetry--;
 	int conn = connect();
+	m_firstKeepaliveSent = false;
 	if (conn > 0)
 	    setIdleTimeout();
 	else if (conn < 0)
@@ -3833,9 +3851,15 @@ void YateSIPTCPTransport::resetConnection(Socket* sock)
 
 void YateSIPTCPTransport::setIdleTimeout(u_int64_t time)
 {
-    m_idleTimeout = time + (u_int64_t)m_idleInterval * 1000000;
-    XDebug(&plugin,DebugAll,"Transport(%s) set idle timeout to %u [%p]",
-	m_id.c_str(),(unsigned int)(m_idleTimeout / 1000000),this);
+    unsigned int i = m_idleInterval;
+    if (outgoing() && !m_firstKeepaliveSent) {
+	m_firstKeepaliveSent = true;
+	if (m_firstKeepalive)
+	    i = m_firstKeepalive;
+    }
+    m_idleTimeout = time + (u_int64_t)i * 1000000;
+    XDebug(&plugin,DebugAll,"Transport(%s) set idle timeout to %u (interval=%u) [%p]",
+	m_id.c_str(),(unsigned int)(m_idleTimeout / 1000000),i,this);
 }
 
 bool YateSIPTCPTransport::sendKeepAlive(bool request)
@@ -9016,6 +9040,8 @@ void SIPDriver::initialize()
     maxChans(s_cfg.getIntValue("general","maxchans",maxChans()));
     // Adjust here the TCP idle interval: it uses the SIP engine
     s_tcpIdle = tcpIdleInterval(s_cfg.getIntValue("general","tcp_idle",TCP_IDLE_DEF));
+    s_tcpKeepalive = s_cfg.getIntValue("general","tcp_keepalive",s_tcpIdle);
+    s_tcpKeepaliveFirst = s_cfg.getIntValue("general","tcp_keepalive_first",0,0);
     // Mark listeners
     m_endpoint->initializing(true);
     // Setup general listener

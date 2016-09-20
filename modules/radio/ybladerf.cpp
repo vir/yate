@@ -5468,18 +5468,22 @@ unsigned int BrfLibUsbDevice::internalSetFpgaCorr(bool tx, int corr, int16_t val
     uint8_t addr = 0;
     int* old = 0;
     BrfDevDirState& io = getDirState(tx);
+    bool setBoard = true;
     if (corr == CorrFpgaGain) {
 	old = &io.fpgaCorrGain;
 	addr = fpgaCorrAddr(tx,false);
-	// Because FPGA Gain cal is broken in older images, we fake it in software.
-	// We should probably just keep faking it, even in newer FPGA images.
-	Debug(m_owner,DebugNote,"%s FPGA corr faking %s set to %d (reg %d) [%p]",
-	    brfDir(tx),lookup(corr,s_corr),orig,value,m_owner);
-	const float bal = 1 + 0.1*(((float)orig) / BRF_FPGA_CORR_MAX);
-	internalSetTxIQBalance(false,bal);
-	// Set a "safe" value for the gain balance register.
-	// FIXME - The "safe" value may be different in future FPGA images!!
-	value = BRF_FPGA_CORR_MAX;
+	if (tx) {
+	    // Because FPGA Gain cal is broken in older images, we fake it in software.
+	    // We should probably just keep faking it, even in newer FPGA images.
+	    // NOTE: If this changes don't forget to change internalGetFpgaCorr() also
+	    const float bal = 1 + 0.1*(((float)orig) / BRF_FPGA_CORR_MAX);
+	    status = internalSetTxIQBalance(false,bal);
+	    setBoard = false;
+	}
+	else {
+	    orig = clampInt(orig,-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX,"FPGA GAIN",lvl);
+	    value = orig + BRF_FPGA_CORR_MAX;
+	}
     }
     else if (corr == CorrFpgaPhase) {
 	old = &io.fpgaCorrPhase;
@@ -5490,19 +5494,22 @@ unsigned int BrfLibUsbDevice::internalSetFpgaCorr(bool tx, int corr, int16_t val
     else
 	status = setUnkValue(e,0,"FPGA corr value " + String(corr));
     if (!status) {
-	status = gpioWrite(addr,value,2,&e);
+	if (setBoard)
+	    status = gpioWrite(addr,value,2,&e);
 	if (!status) {
 	    if (old) {
 		if (io.showFpgaCorrChange == 0 && *old != orig)
-		    Debug(m_owner,DebugInfo,"%s FPGA corr %s set to %d (reg %d) [%p]",
-			brfDir(tx),lookup(corr,s_corr),orig,value,m_owner);
+		    Debug(m_owner,DebugInfo,"%s FPGA corr %s %s to %d (reg %d) [%p]",
+			brfDir(tx),lookup(corr,s_corr),(setBoard ? "set" : "faked"),
+			orig,value,m_owner);
 		*old = orig;
 	    }
 	    return 0;
 	}
     }
-    e.printf(1024,"Failed to set %s FPGA corr %s to %d (from %d) - %s [%p]",
-	brfDir(tx),lookup(corr,s_corr),value,orig,e.c_str(),m_owner);
+    e.printf(1024,"Failed to %s %s FPGA corr %s to %d (from %d) - %s [%p]",
+	(setBoard ? "set" : "fake"),brfDir(tx),lookup(corr,s_corr),
+	value,orig,e.c_str(),m_owner);
     return showError(status,e,0,error);
 }
 
@@ -5515,6 +5522,12 @@ unsigned int BrfLibUsbDevice::internalGetFpgaCorr(bool tx, int corr, int16_t* va
     int* update = 0;
     BrfDevDirState& io = getDirState(tx);
     if (corr == CorrFpgaGain) {
+	if (tx) {
+	    // NOTE: we are faking it
+	    if (value)
+		*value = io.fpgaCorrGain;
+	    return 0;
+	}
 	update = &io.fpgaCorrGain;
 	addr = fpgaCorrAddr(tx,false);
     }

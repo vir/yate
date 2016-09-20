@@ -1,3 +1,11 @@
+yate (5.5.1~svn6138) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6138:
+  * Fake fpga gain set for TX only. Properly report set value. Improved
+    debug.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 21 Sep 2016 02:19:17 +0300
+
 yate (5.5.1~svn6137) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6137:

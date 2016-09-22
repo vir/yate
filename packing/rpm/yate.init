@@ -10,7 +10,7 @@
 #
 
 # Extra Yate command line options, do not edit them here
-OPTS="-F -s -r -l /var/log/yate -vvv -Df"
+OPTS="-F -s -r -l /var/log/yate -vvv -DF"
 
 # To override create file /etc/sysconfig/yate and put OPTS=... in it
 [ -r /etc/sysconfig/yate ] && . /etc/sysconfig/yate

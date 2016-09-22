@@ -1,3 +1,11 @@
+yate (5.5.1~svn6139) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6139:
+  * By default start Yate service with GMT format YYYY-MM-
+    DD_hh:mm:ss.uuuuuu timestamps.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 23 Sep 2016 02:19:16 +0300
+
 yate (5.5.1~svn6138) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6138:

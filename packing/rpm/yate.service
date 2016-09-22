@@ -12,7 +12,7 @@ ExecReload=/bin/kill -HUP $MAINPID
 PIDFile=/var/run/yate.pid
 TimeoutSec=30
 # Default Yate command line options, do not edit them here
-Environment="OPTS=-F -s -r -l /var/log/yate -vvv -Df" "PWLIB_ASSERT_ACTION=C"
+Environment="OPTS=-F -s -r -l /var/log/yate -vvv -DF" "PWLIB_ASSERT_ACTION=C"
 # To override create file /etc/sysconfig/yate and put OPTS=... in it
 EnvironmentFile=-/etc/sysconfig/yate
 

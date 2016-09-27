@@ -63,6 +63,7 @@
 ;  $(variables,list) = comma separated list of the global variables names
 ;  $(variables,list,sep) = list of the global variables names with explicit separator
 ;  $(variables,NAME) = "true" if global variable NAME exists, "false" otherwise
+;  $(timestamp) = timestamp string according to current logging style
 ;  $(transcode,FLAGS,FORMAT1,FORMAT2,...) = list of formats the input can be transcoded into
 ;       e - exclude initial formats form generated list
 ;       r - allow rate conversion (for use with wideband)
@@ -188,7 +189,8 @@
 ;   old message but placed in the new one
 ; dispatch - dispatches a new message in the engine waiting for it to return,
 ;   parameters are taken from the old message but placed in the new one
-; echo - displays that line after making substitutions
+; echo, output - displays that line after making substitutions
+; debug - displays line as a debug after making substitutions
 ; { - starts a block that ends on another line with }
 ; The @jump, @goto, @include and @call forms suppress warning if missing target
 ;

@@ -441,6 +441,11 @@ static void evalFunc(String& str, Message& msg)
 	}
 	else if (str == YSTRING("dispatching"))
 	    str = s_dispatching;
+	else if (str == YSTRING("timestamp")) {
+	    char buf[24];
+	    Debugger::formatTime(buf);
+	    str = buf;
+	}
 	else if (bare && str.trimBlanks())
 	    str = s_vars.getValue(str);
 	else {
@@ -708,12 +713,25 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 	    if (!ok)
 		continue;
 
-	    if (val.startSkip("echo") || val.startSkip("output")) {
+	    int level = 0;
+	    if (val.startSkip("echo") || val.startSkip("output")
+		    || (val.startSkip("debug") && ((level = DebugAll)))) {
+		if (level) {
+		    val >> level;
+		    val.trimBlanks();
+		    if (level < DebugTest)
+			level = DebugTest;
+		    else if (level > DebugAll)
+			level = DebugAll;
+		}
 		// special case: display the line but don't set params
 		val = match.replaceMatches(val);
 		msg.replaceParams(val);
 		replaceFuncs(val,msg);
-		Output("%s",val.safe());
+		if (level)
+		    Debug(level,"%s",val.safe());
+		else
+		    Output("%s",val.safe());
 		continue;
 	    }
 	    else if (val == "{") {

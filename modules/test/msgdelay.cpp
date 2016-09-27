@@ -60,12 +60,14 @@ bool DelayHandler::received(Message &msg)
     int ms = p->toInteger();
     // make sure we don't get here again
     msg.clearParam(p);
-    if (ms > 0) {
+    if (ms > 0 && !Engine::exiting()) {
 	// delay maximum 10s
 	if (ms > 10000)
 	    ms = 10000;
 	Debug(DebugAll,"Delaying '%s' by %d ms in thread '%s'",msg.safe(),ms,Thread::currentName());
-	Thread::msleep(ms);
+	unsigned int n = (ms + Thread::idleMsec() - 1) / Thread::idleMsec();
+	while (n-- && !Engine::exiting())
+	    Thread::idle();
     }
     return false;
 };

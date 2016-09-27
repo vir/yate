@@ -2428,6 +2428,7 @@ private:
     int m_rxDcAvgI;                      // Current average for I (in-phase) DC RX offset
     int m_rxDcAvgQ;                      // Current average for Q (quadrature) DC RX offset
     int m_freqOffset;                    // Master clock frequency adjustment
+    bool m_txGainCorrSoftware;           // Use software TX GAIN correction
     BrfDevIO m_txIO;
     BrfDevIO m_rxIO;
     LusbTransfer m_usbTransfer[EpCount]; // List of USB transfers
@@ -3206,6 +3207,7 @@ BrfLibUsbDevice::BrfLibUsbDevice(BrfInterface* owner)
     m_rxDcAvgI(0),
     m_rxDcAvgQ(0),
     m_freqOffset(BRF_FREQ_OFFS_DEF),
+    m_txGainCorrSoftware(true),
     m_txIO(true),
     m_rxIO(false),
     m_syncTxStateSet(false),
@@ -3597,6 +3599,7 @@ unsigned int BrfLibUsbDevice::open(const NamedList& params)
 	BRF_FUNC_CALL_BREAK(tmpAltSet.restore());
 	m_freqOffset = clampIntParam(params,"RadioFrequencyOffset",
 	    BRF_FREQ_OFFS_DEF,BRF_FREQ_OFFS_MIN,BRF_FREQ_OFFS_MAX);
+	m_txGainCorrSoftware = params.getBoolValue(YSTRING("tx_fpga_corr_gain_software"),true);
 	// Init TX/RX buffers
 	m_rxResyncCandidate = 0;
 	m_state.m_rxDcAuto = params.getBoolValue("rx_dc_autocorrect",true);
@@ -3638,8 +3641,10 @@ unsigned int BrfLibUsbDevice::open(const NamedList& params)
 	// Make sure we have the correct values for status
 	BRF_FUNC_CALL_BREAK(updateStatus(&e));
 	// Set tx I/Q balance
-	const String& txPB = params["tx_powerbalance"];
-	internalSetTxIQBalance(false,txPB.toDouble(1),"tx_powerbalance");
+	if (!m_txGainCorrSoftware) {
+	    const String& txPB = params["tx_powerbalance"];
+	    internalSetTxIQBalance(false,txPB.toDouble(1),"tx_powerbalance");
+	}
 	// Set some optional params
 	setTxPattern(params["txpattern"]);
 	showBuf(true,params.getIntValue("txbufoutput",0),
@@ -5472,10 +5477,9 @@ unsigned int BrfLibUsbDevice::internalSetFpgaCorr(bool tx, int corr, int16_t val
     if (corr == CorrFpgaGain) {
 	old = &io.fpgaCorrGain;
 	addr = fpgaCorrAddr(tx,false);
-	if (tx) {
+	if (tx && m_txGainCorrSoftware) {
 	    // Because FPGA Gain cal is broken in older images, we fake it in software.
 	    // We should probably just keep faking it, even in newer FPGA images.
-	    // NOTE: If this changes don't forget to change internalGetFpgaCorr() also
 	    const float bal = 1 + 0.1*(((float)orig) / BRF_FPGA_CORR_MAX);
 	    status = internalSetTxIQBalance(false,bal);
 	    setBoard = false;
@@ -5522,8 +5526,7 @@ unsigned int BrfLibUsbDevice::internalGetFpgaCorr(bool tx, int corr, int16_t* va
     int* update = 0;
     BrfDevDirState& io = getDirState(tx);
     if (corr == CorrFpgaGain) {
-	if (tx) {
-	    // NOTE: we are faking it
+	if (tx && m_txGainCorrSoftware) {
 	    if (value)
 		*value = io.fpgaCorrGain;
 	    return 0;

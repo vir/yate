@@ -31,6 +31,7 @@
 ;tx_fpga_corr_gain=0
 
 ; tx_powerbalance: float: TX I/Q power balance
+; This parameter is ignored if tx_fpga_corr_gain_software is enabled
 ; Interval allowed: (0..2)
 ; Defaults to 1 if missing or invalid
 ;tx_powerbalance=1
@@ -67,6 +68,11 @@
 ; Allowed interval [0..100]
 ; Defaults to 0 (always warn if there is at least 1 sample clamped)
 ;warn_clamped=0
+
+; tx_fpga_corr_gain_software: boolean: Use software TX FPGA GAIN correction
+; This parameter is applied on reload for new devices only
+; Defaults to yes
+;tx_fpga_corr_gain_software=yes
 
 
 [libusb]

@@ -1151,6 +1151,28 @@ bool JsCode::getEscape(const char*& expr, String& str, char sep)
 	str << c;
 	return true;
     }
+    switch (*expr) {
+	case 'u':
+	    {
+		DataBlock bin;
+		if (bin.unHexify(expr + 1,4,'\0')) {
+		    str = UChar((bin.at(0) << 8) + bin.at(1));
+		    expr += 5;
+		    return true;
+		}
+	    }
+	    break;
+	case 'x':
+	    {
+		DataBlock bin;
+		if (bin.unHexify(expr + 1,2,'\0')) {
+		    str = UChar(bin.at(0));
+		    expr += 3;
+		    return true;
+		}
+	    }
+	    break;
+    }
     return ExpEvaluator::getEscape(expr,str,sep);
 }
 

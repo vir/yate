@@ -1,3 +1,10 @@
+yate (5.5.1~svn6143) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6143:
+  * Added support for parsing \xXX and \uXXXX escape sequences.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 04 Nov 2016 02:19:15 +0300
+
 yate (5.5.1~svn6142) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6142:

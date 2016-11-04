@@ -901,7 +901,10 @@ bool JsContext::runStringField(GenObject* obj, const String& name, ObjList& stac
     if (!s)
 	return false;
     if (name == YSTRING("length")) {
-	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)s->length()));
+	int64_t len = s->lenUtf8();
+	if (len < 0)
+	    len = s->length();
+	ExpEvaluator::pushOne(stack,new ExpOperation(len));
 	return true;
     }
     return false;

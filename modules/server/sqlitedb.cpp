@@ -247,7 +247,7 @@ int SqlConn::queryDb(const char* query, Message* dest)
 			cols = lc;
 			if (results) {
 			    dest->userData(a);
-			    a = 0;
+			    TelEngine::destruct(a);
 			}
 		    }
 		    i = -2;

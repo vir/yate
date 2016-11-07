@@ -1,3 +1,12 @@
+yate (5.5.1~svn6147) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6147:
+  * Fixed ExtModReceiver leak when destroyed from cleanup()
+  * Fixed a memory leak returning data from the SQLite module.
+  * Fixed a rather harmless shutdown time memory leak.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 08 Nov 2016 02:19:15 +0300
+
 yate (5.5.1~svn6144) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6144:

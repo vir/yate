@@ -3701,12 +3701,12 @@ JsEngineWorker::JsEngineWorker(JsEngine* engine, ScriptContext* context, ScriptC
     : Thread("JsScheduler"), m_eventsMutex(false,"JsEngine"), m_id(0), m_context(context), m_code(code),
     m_engine(engine)
 {
-    DDebug(&__plugin,DebugAll,"Creating JsEngineWorker [%p]",this);
+    DDebug(&__plugin,DebugAll,"Creating JsEngineWorker engine=%p [%p]",m_engine,this);
 }
 
 JsEngineWorker::~JsEngineWorker()
 {
-    DDebug(&__plugin,DebugAll,"Destroing JsEngineWorker [%p]",this);
+    DDebug(&__plugin,DebugAll,"Destroying JsEngineWorker engine=%p [%p]",m_engine,this);
     if (m_engine)
 	m_engine->resetWorker();
 }
@@ -3750,6 +3750,7 @@ void JsEngineWorker::run()
 	RefPointer<JsTimeEvent> ev = static_cast<JsTimeEvent*>(o->get());
 	myLock.drop();
 	if (!ev->timeout(t)) {
+	    ev = 0;
 	    Thread::idle(true);
 	    continue;
 	}

@@ -819,7 +819,7 @@ ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, i
 void ExtModReceiver::destruct()
 {
     Debug(DebugAll,"ExtModReceiver::destruct() pid=%d [%p]",m_pid,this);
-    Lock lock(this);
+    lock();
     // One destruction is plenty enough
     m_use = -1;
     s_mutex.lock();
@@ -837,6 +837,8 @@ void ExtModReceiver::destruct()
     tmp = m_out;
     m_out = 0;
     delete tmp;
+    unlock();
+    GenObject::destruct();
 }
 
 void ExtModReceiver::closeIn()

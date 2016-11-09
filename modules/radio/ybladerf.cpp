@@ -3722,7 +3722,6 @@ unsigned int BrfLibUsbDevice::initialize(const NamedList& params)
 	    m_owner && m_owner->debugAt(DebugAll)) {
 	    String s;
 #ifdef DEBUG
-	    BrfSerialize txSerialize(this,true,true);
 	    if (!txSerialize.status)
 		internalDumpDev(s,false,true,"\r\n",true,true,true);
 #endif

@@ -1491,15 +1491,15 @@ static bool ciscoTime(double t, String& ret)
 
 bool AcctHandler::received(Message& msg)
 {
-    if (!msg.getBoolValue("cdrwrite_radius",true))
+    if (!msg.getBoolValue(YSTRING("cdrwrite_radius"),true))
 	return false;
-    String op = msg.getValue("operation");
     int acctStat = 0;
-    if (op == "initialize")
+    const String& op = msg[YSTRING("operation")];
+    if (op == YSTRING("initialize"))
 	acctStat = Acct_Start;
-    else if (op == "finalize")
+    else if (op == YSTRING("finalize"))
 	acctStat = Acct_Stop;
-    else if (op == "status")
+    else if ((op == YSTRING("status")) || (op == YSTRING("update")))
 	acctStat = Acct_Alive;
     else
 	return false;
@@ -1613,23 +1613,22 @@ bool RadiusHandler::received(Message& msg)
     bool auth = msg.getBoolValue(YSTRING("auth"),true);
     int acctStat = 0;
     if (!auth) {
-	String op = msg.getValue("operation");
-	if (op == "initialize")
+	const String& op = msg[YSTRING("operation")];
+	if (op == YSTRING("initialize"))
 	    acctStat = Acct_Start;
-	else if (op == "finalize")
+	else if (op == YSTRING("finalize"))
 	    acctStat = Acct_Stop;
-	else if (op == "status") {
+	else if ((op == YSTRING("status")) || (op == YSTRING("update")))
 	    acctStat = Acct_Alive;
-	} else
+	else
 	    return false;
     }
     RadiusClient radclient;
     if (!radclient.prepareAttributes(msg))
 	return false;
 
-    if (!auth) {
+    if (!auth)
 	radclient.addAttribute("Acct-Status-Type",acctStat);
-    }
 
     ObjList result;
     if (auth && radclient.doAuthenticate(&result) != AuthSuccess) {

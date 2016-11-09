@@ -1,3 +1,11 @@
+yate (5.5.1~svn6149) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6149:
+  * Fixed bug: avoid deadlock (ddebug build only).
+  * Interpret call.cdr operation=update as an interim accounting.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 10 Nov 2016 02:19:15 +0300
+
 yate (5.5.1~svn6147) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6147:

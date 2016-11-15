@@ -137,6 +137,9 @@
 ; billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',\
 ; reason='${reason}' WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
 
+;cdr_status=UPDATE cdr SET duration=INTERVAL '${duration} s',billtime=INTERVAL '${billtime} s',\
+; ringtime=INTERVAL '${ringtime} s' WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
+
 ;cdr_finalize=UPDATE cdr SET address='${address}',direction='${direction}',\
 ; billid='${billid}',caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',\
 ; billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',\

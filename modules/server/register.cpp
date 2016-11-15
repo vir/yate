@@ -83,6 +83,7 @@ protected:
     String m_name;
     String m_queryInitialize;
     String m_queryUpdate;
+    String m_queryStatus;
     String m_queryCombined;
     bool m_critical;
 };
@@ -550,15 +551,17 @@ bool CDRHandler::loadQuery()
 {
     m_queryInitialize = s_cfg.getValue(name(),"cdr_initialize");
     m_queryUpdate = s_cfg.getValue(name(),"cdr_update");
+    m_queryStatus = s_cfg.getValue(name(),"cdr_status");
     m_queryCombined = s_cfg.getValue(name(),"cdr_combined");
     m_query = s_cfg.getValue(name(),"cdr_finalize");
     if (m_query.null())
 	m_query = s_cfg.getValue(name(),"query");
     indirectQuery(m_queryInitialize);
     indirectQuery(m_queryUpdate);
+    indirectQuery(m_queryStatus);
     indirectQuery(m_queryCombined);
     indirectQuery(m_query);
-    return m_queryInitialize || m_queryUpdate || m_queryCombined || m_query;
+    return m_queryInitialize || m_queryUpdate || m_queryStatus || m_queryCombined || m_query;
 }
 
 bool CDRHandler::received(Message& msg)
@@ -575,6 +578,8 @@ bool CDRHandler::received(Message& msg)
 	query = m_queryInitialize;
     else if (query == YSTRING("update"))
 	query = m_queryUpdate;
+    else if (query == YSTRING("status"))
+	query = m_queryStatus;
     else if (query == YSTRING("combined"))
 	query = m_queryCombined;
     else if (query == YSTRING("finalize"))

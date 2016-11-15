@@ -1,3 +1,10 @@
+yate (5.5.1~svn6150) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6150:
+  * Added handling of CDR operation "status" in the register module.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 16 Nov 2016 02:19:15 +0300
+
 yate (5.5.1~svn6149) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6149:

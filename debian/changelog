@@ -1,3 +1,14 @@
+yate (5.5.1~svn6153) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6153:
+  * Build and package separately the AMR-NB and GSM-EFR codecs.
+  * Added support for setting AMR and other codecs' parameters in SDP.
+  * Switch AMR octet-aligned mode early enough to store the correct
+    format parameters.
+  * Set the initial CMR to the desired AMR mode.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 26 Nov 2016 02:19:15 +0300
+
 yate (5.5.1~svn6150) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6150:

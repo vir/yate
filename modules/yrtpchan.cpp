@@ -171,6 +171,7 @@ private:
     bool startSRTP(const String& suite, const String& keyParams, const ObjList* paramList);
     bool setupUDPTL(Message& msg);
     void setTimeout(const Message& msg, int timeOut);
+    static void setFormat(DataFormat& dest, const char* format, const NamedList& params);
     YRTPSession* m_rtp;
     YUDPTLSession* m_udptl;
     RTPSession::Direction m_dir;
@@ -620,6 +621,31 @@ void YRTPWrapper::setTimeout(const Message& msg, int timeOut)
 	session()->setTimeout(timeOut);
 }
 
+void YRTPWrapper::setFormat(DataFormat& dest, const char* format, const NamedList& params)
+{
+    dest.clearParams();
+    dest = format;
+    const String& fmtp = params["sdp_fmtp:" + dest];
+    if (fmtp.null())
+	return;
+    ObjList* lst = fmtp.split(';');
+    for (ObjList* l = lst->skipNull(); l; l = l->skipNext()) {
+	const String* s = static_cast<const String*>(l->get());
+	int pos = s->find('=');
+	String name;
+	String value;
+	if (pos > 0) {
+	    name = s->substr(0,pos);
+	    value = s->substr(pos + 1);
+	}
+	else if (pos)
+	    name = *s;
+	if (name.trimSpaces())
+	    dest.addParam(name,value.trimSpaces());
+    }
+    TelEngine::destruct(lst);
+}
+
 bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
 {
     Debug(&splugin,DebugAll,"YRTPWrapper::startRTP(\"%s\",%u) [%p]",raddr,rport,this);
@@ -681,7 +707,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
 	    m_source->ref();
 	    m_conn->setSource(0,m_media);
 	}
-	m_source->m_format = format;
+	setFormat(m_source->m_format,format,msg);
 	if (m_conn) {
 	    m_conn->setSource(m_source,m_media);
 	    m_source->deref();
@@ -692,7 +718,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
 	    m_consumer->ref();
 	    m_conn->setConsumer(0,m_media);
 	}
-	m_consumer->m_format = format;
+	setFormat(m_consumer->m_format,format,msg);
 	m_consumer->setSplitable();
 	if (m_conn) {
 	    m_conn->setConsumer(m_consumer,m_media);

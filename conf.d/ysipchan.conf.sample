@@ -416,6 +416,9 @@
 ; gsm: bool: European GSM 06.10 (GSM/8000)
 ;gsm=default
 
+; gsm-efr: bool: European GSM 06.60 (GSM-EFR/8000)
+;gsm-efr=default
+
 ; lpc10: bool: Linear Prediction Codec (LPC/8000)
 ;lpc10=default
 

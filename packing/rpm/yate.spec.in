@@ -8,6 +8,7 @@
 # to disable USB support run rpmbuild --define 'nousb 1'
 # to disable SCTP support run rpmbuild --define 'nosctp 1'
 # to disable H.323 support run rpmbuild --define 'noh323 1'
+# to disable AMR codecs run rpmbuild --define 'noamr 1'
 # to disable the GUI clients run rpmbuild --define 'nogui 1'
 # to disable only Zaptel support run rpmbuild --define 'nozap 1'
 # to disable only TDMV support run rpmbuild --define 'notdm 1'
@@ -22,6 +23,7 @@
 %{?nousb:%define no_usb 1}
 %{?nosctp:%define no_sctp 1}
 %{?noh323:%define no_h323 1}
+%{?noamr:%define no_amr 1}
 %{?nogui:%define no_gui 1}
 %{?nozap:%define no_zaptel 1}
 %{?notdm:%define no_tdmapi 1}
@@ -281,6 +283,29 @@ provides moderate compression and good voice quality.
 
 %files gsm
 %{_libdir}/yate/gsmcodec.yate
+
+
+%if "%{no_amr}" != "1"
+
+%package amr
+Summary:	GSM-AMR and GSM-EFR audio codecs for Yate
+Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
+
+%description amr
+GSM-AMR and GSM-EFR audio codecs for Yate. AMR is a multi-rate codec that provides moderate
+to high compression rate and good voice quality. EFR is just a different payload stucture
+for 12.2 kbit/s AMR-NB.
+
+%files amr
+%{_libdir}/yate/amrnbcodec.yate
+%{_libdir}/yate/efrcodec.yate
+%config(noreplace) %{_sysconfdir}/yate/amrnbcodec.conf
+
+%define conf_amr %{nil}
+%else
+%define conf_amr --without-amrnb
+%endif
 
 
 %package speex
@@ -610,6 +635,9 @@ The devel package must still be installed separately.
 %if "%{no_h323}" == "1"
 %define _unpackaged_files_terminate_build 0
 %endif
+%if "%{no_amr}" == "1"
+%define _unpackaged_files_terminate_build 0
+%endif
 %if "%{no_gui}" == "1"
 %define _unpackaged_files_terminate_build 0
 %endif
@@ -654,15 +682,14 @@ chmod +x %{local_find_requires} %{local_find_provides}
 ./configure --prefix=%{prefix} --sysconfdir=%{_sysconfdir} \
 	--datadir=%{_datadir} --includedir=%{_includedir} \
 	--libdir=%{_libdir} --mandir=%{_mandir} --with-archlib=%{_lib} \
-	--without-amrnb \
 	--without-spandsp --without-coredumper \
-	%{conf_sctp} %{conf_h323} %{conf_pstn} %{conf_usb} %{conf_gui} %{?extra_conf}
+	%{conf_sctp} %{conf_h323} %{conf_amr} %{conf_pstn} %{conf_usb} %{conf_gui} \
+	%{?extra_conf}
 make %{stripped} %{?extra_make}
 %{?extra_step}
 
 %install
 make install DESTDIR=%{buildroot} %{?extra_make}
-rm %{buildroot}%{_sysconfdir}/yate/amrnbcodec.conf
 rm %{buildroot}%{_sysconfdir}/yate/radiotest.conf
 %if "%{systemd}" != "0"
 mkdir -p %{buildroot}%{_unitdir}
@@ -684,6 +711,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Fri Nov 25 2016 Paul Chitescu <paulc@voip.null.ro>
+- Added package for the AMR codec
+
 * Thu Nov 26 2015 Paul Chitescu <paulc@voip.null.ro>
 - More tweaking to suppress unwanted dependencies in newer RPM
 

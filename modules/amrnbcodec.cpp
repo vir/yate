@@ -481,6 +481,7 @@ void AmrEncoder::attached(bool added)
     Debug(MODNAME,DebugAll,"AmrEncoder picked mask=0x%02X neigh=%s period=%d [%p]",
 	m_mask,String::boolText(m_neighbor),tmp,this);
     setMode(getMode(m_mode,m_mask,m_desired));
+    m_cmr = m_desired;
 }
 
 

@@ -443,11 +443,12 @@ public:
     bool startRtp(RefObject* context = 0);
 
     /**
-     * Update from parameters. Build a default SDP from parser formats if no media is found in params
+     * Update from parameters and optionally build a default SDP.
      * @param params List of parameters to update from
+     * @param defaults Build a default SDP from parser formats if no media is found in params
      * @return True if media changed
      */
-    bool updateSDP(const NamedList& params);
+    bool updateSDP(const NamedList& params, bool defaults = true);
 
     /**
      * Update RTP/SDP data from parameters

@@ -56,6 +56,15 @@ namespace { // anonymous
 // Discontinuous Transmission (DTX)
 static bool s_discontinuous = false;
 
+// Change mode only to neighbor
+static bool s_neighbor = false;
+
+// Mode change period in frames
+static uint8_t s_period = 1;
+
+// Supported modes mask
+static uint8_t s_mask = 0xff;
+
 // Default mode
 static Mode s_mode = MR122;
 
@@ -84,6 +93,7 @@ public:
 protected:
     void filterBias(short* buf, unsigned int len);
     bool dataError(const char* text = 0);
+    void setMode(Mode mode);
     virtual bool pushData(unsigned long& tStamp, unsigned long& flags) = 0;
     void* m_amrState;
     DataBlock m_data;
@@ -100,13 +110,21 @@ class AmrEncoder : public AmrTrans
 public:
     inline AmrEncoder(const char* sFormat, const char* dFormat, bool octetAlign, bool discont = false)
 	: AmrTrans(sFormat,dFormat,::Encoder_Interface_init(discont ? 1 : 0),octetAlign,true),
-	 m_mode(s_mode), m_silent(false)
+	 m_mode(s_mode), m_desired(s_mode), m_change(0), m_mask(s_mask),
+	 m_period(s_period), m_neighbor(false), m_silent(false)
 	{ }
     virtual ~AmrEncoder();
     virtual bool control(NamedList& params);
 protected:
+    void setMode(Mode mode);
+    virtual void attached(bool added);
     virtual bool pushData(unsigned long& tStamp, unsigned long& flags);
     Mode m_mode;
+    Mode m_desired;
+    int m_change;
+    uint8_t m_mask;
+    uint8_t m_period;
+    bool m_neighbor;
     bool m_silent;
 };
 
@@ -151,6 +169,77 @@ static const TokenDict s_modes[] = {
     { "12.2", MR122 },
     { 0, 0 }
 };
+
+// Helper function, parses a mode-set string to a bit mask
+static uint8_t parseMask(const String& modes, uint8_t defMask = 0xff)
+{
+    if (modes.null())
+	return defMask;
+    uint8_t mask = 0;
+    ObjList* lst = modes.split(',',false);
+    for (ObjList* l = lst->skipNull(); l; l = l->skipNext()) {
+	int mode = static_cast<const String*>(l->get())->toInteger(s_modes,-1);
+	if (mode >= MR475 && mode <= MR122)
+	    mask |= (1 << mode);
+    }
+    TelEngine::destruct(lst);
+    return mask ? mask : defMask;
+}
+
+// Helper function, parses a possibly NULL mode-set string pointer
+inline static uint8_t parseMask(const String* modes, uint8_t defMask = 0xff)
+{
+    return modes ? parseMask(*modes) : defMask;
+}
+
+// Helper function returning nearest allowed mode
+static Mode getMode(int mode, uint8_t mask, int oldMode)
+{
+    if (mode < MR475)
+	mode = MR475;
+    else if (mode > MR122)
+	mode = MR122;
+    if (mask & (1 << mode))
+	return (Mode)mode;
+    if (oldMode > mode) {
+	for (int m = mode + 1; m <= MR122; m++)
+	    if (mask & (1 << m))
+		return (Mode)m;
+    }
+    while (--mode >= MR475)
+	if (mask & (1 << mode))
+	    return (Mode)mode;
+    return (Mode)oldMode;
+}
+
+// Helper function returning nearest neighbor allowed mode
+static Mode getNeighbor(int mode, uint8_t mask, int oldMode)
+{
+    if (mode < MR475)
+	mode = MR475;
+    else if (mode > MR122)
+	mode = MR122;
+    if (mode == oldMode)
+	return (Mode)mode;
+    int m;
+    if (oldMode < mode) {
+	for (m = oldMode + 1; m <= mode; m++) {
+	    if (mask & (1 << m))
+		break;
+	}
+    }
+    else {
+	for (m = oldMode - 1; m >= mode; m--) {
+	    if (mask & (1 << m))
+		break;
+	}
+    }
+    if (m < MR475)
+	m = MR475;
+    else if (m > MR122)
+	m = MR122;
+    return (Mode)m;
+}
 
 // Helper function, gets a number of bits and advances pointer, return -1 for error
 static int getBits(unsigned const char*& ptr, int& len, int& bpos, unsigned char bits)
@@ -267,6 +356,19 @@ bool AmrEncoder::pushData(unsigned long& tStamp, unsigned long& flags)
     if (m_data.length() < BUFFER_SIZE)
 	return false;
 
+    if ((m_mode != m_desired) && (--m_change <= 0)) {
+	Mode mode = m_neighbor
+	    ? getNeighbor(m_desired,m_mask,m_mode)
+	    : getMode(m_desired,m_mask,m_mode);
+	if (mode == m_mode)
+	    m_desired = mode;
+	else {
+	    DDebug(MODNAME,DebugAll,"Encode mode changing %d -> %d, desired %d",m_mode,mode,m_desired);
+	    m_mode = mode;
+	    m_change = (mode == m_desired) ? 0 : m_period;
+	}
+    }
+
     unsigned char unpacked[MAX_AMRNB_SIZE+1];
     int len = ::Encoder_Interface_Encode(m_amrState,m_mode,(short*)m_data.data(),unpacked,0);
     if ((len <= 0) || (len >= MAX_AMRNB_SIZE))
@@ -284,7 +386,7 @@ bool AmrEncoder::pushData(unsigned long& tStamp, unsigned long& flags)
     m_silent = silent;
     unpacked[len] = 0;
     XDebug(MODNAME,DebugAll,"Encoded mode %d frame to %d bytes first %02x [%p]",
-	m_mode,len,unpacked[0],this);
+	mode,len,unpacked[0],this);
     unsigned char buffer[MAX_AMRNB_SIZE];
     // build a TOC with just one entry
     if (m_octetAlign) {
@@ -307,6 +409,11 @@ bool AmrEncoder::pushData(unsigned long& tStamp, unsigned long& flags)
 	    buffer[i] = leftover | (unpacked[i] >> 2);
 	    leftover = (unpacked[i] << 6) & 0xc0;
 	}
+	switch (modeBits[mode] & 7) {
+	    case 0:
+	    case 7:
+		buffer[len++] = leftover;
+	}
     }
     m_data.cut(-BUFFER_SIZE);
     DataBlock outData(buffer,len,false);
@@ -314,24 +421,66 @@ bool AmrEncoder::pushData(unsigned long& tStamp, unsigned long& flags)
     outData.clear(false);
     tStamp += SAMPLES_FRAME;
     flags &= ~DataMark;
+    m_showError = true;
     return (0 != m_data.length());
+}
+
+// Change the desired mode
+void AmrEncoder::setMode(Mode mode)
+{
+    m_desired = mode;
+    if (m_period)
+	m_change = m_period;
+    else
+	m_mode = mode;
 }
 
 // Execute control operations
 bool AmrEncoder::control(NamedList& params)
 {
     bool ok = false;
-    int mode = params[YSTRING("mode")].toInteger(s_modes,-1);
+    int mode = params.getIntValue(YSTRING("mode"),s_modes,-1);
     if (mode >= MR475 && mode <= MR122) {
-	m_mode = (Mode)mode;
+	if (params.getBoolValue(YSTRING("force"))) {
+	    m_mode = m_desired = (Mode)mode;
+	    m_change = 0;
+	}
+	else
+	    setMode(getMode(mode,m_mask,m_desired));
 	ok = true;
     }
-    mode = params[YSTRING("cmr")].toInteger(s_modes,-1);
+    mode = params.getIntValue(YSTRING("cmr"),s_modes,-1);
     if (mode >= MR475 && mode <= MR122) {
 	m_cmr = (Mode)mode;
 	ok = true;
     }
     return TelEngine::controlReturn(&params,AmrTrans::control(params) || ok);
+}
+
+// Callback to pick AMR parameters from consumer (typically RTP)
+void AmrEncoder::attached(bool added)
+{
+    AmrTrans::attached(added);
+    if (!added)
+	return;
+    ObjList* lst = getConsumers();
+    if (!lst)
+	return;
+    RefPointer<DataConsumer> cons = static_cast<DataConsumer*>(lst->get());
+    if (!cons)
+	return;
+    const DataFormat& fmt = cons->getFormat();
+    m_mask = parseMask(fmt[YSTRING("mode-set")],s_mask);
+    m_neighbor = fmt.getIntValue(YSTRING("mode-change-neighbor"),0) != 0;
+    int tmp = fmt.getIntValue(YSTRING("mode-change-period"),s_period);
+    if (tmp < 0)
+	tmp = 0;
+    else if (tmp > 4)
+	tmp = 4;
+    m_period = (uint8_t)tmp;
+    Debug(MODNAME,DebugAll,"AmrEncoder picked mask=0x%02X neigh=%s period=%d [%p]",
+	m_mask,String::boolText(m_neighbor),tmp,this);
+    setMode(getMode(m_mode,m_mask,m_desired));
 }
 
 
@@ -350,9 +499,13 @@ bool AmrDecoder::pushData(unsigned long& tStamp, unsigned long& flags)
 	return false;
     unsigned const char* ptr = (unsigned const char*)m_data.data();
     int len = m_data.length();
+    bool octetHint = m_octetAlign;
     // an octet aligned packet should have 0 in the 4 reserved bits of CMR
     //  and in the lower 2 bits of first TOC entry octet
-    bool octetHint = ((ptr[0] & 0x0f) | (ptr[1] & 0x03)) == 0;
+    if ((ptr[0] & 0x0f) | (ptr[1] & 0x03))
+	octetHint = false;
+    else if (((ptr[1] & 0xc0) == 0) && (len > 14))
+	octetHint = true;
     if (octetHint != m_octetAlign) {
 	Debug(MODNAME,DebugNote,"Decoder switching from %s to %s mode [%p]",
 	    alignName(m_octetAlign),alignName(octetHint),this);
@@ -428,6 +581,7 @@ bool AmrDecoder::pushData(unsigned long& tStamp, unsigned long& flags)
 	m_cmr = (Mode)cmr;
 	// TODO: find and notify paired encoder about the mode change request
     }
+    m_showError = true;
     return (0 != m_data.length());
 }
 
@@ -483,10 +637,16 @@ void AmrPlugin::initialize()
 {
     Output("Initializing module AMR-NB");
     Configuration cfg(Engine::configFile("amrnbcodec"));
-    int mode = cfg.getIntValue("general","mode",s_modes,MR122);
-    if (mode >= MR475 && mode <= MR122)
-	s_mode = (Mode)mode;
+    s_mask = parseMask(cfg.getKey("general","mode-set"));
+    s_mode = getMode(cfg.getIntValue("general","mode",s_modes,MR122),s_mask,MR122);
     s_discontinuous = cfg.getBoolValue("general","discontinuous",false);
+    s_neighbor = cfg.getBoolValue("general","mode-change-neighbor",false);
+    int tmp = cfg.getIntValue("general","mode-change-period",1);
+    if (tmp < 0)
+	tmp = 0;
+    else if (tmp > 4)
+	tmp = 4;
+    s_period = tmp;
 }
 
 

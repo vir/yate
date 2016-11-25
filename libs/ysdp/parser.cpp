@@ -229,8 +229,8 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 		}
 		else if (line.startSkip("fmtp:",false)) {
 		    int num = var - 1;
-		    line >> num >> " ";
-		    if (num == var) {
+		    line >> num;
+		    if ((num == var) && line.trimSpaces()) {
 			if (line.startSkip("mode=",false))
 			    line >> mode;
 			else if (line.startSkip("annexb=",false))
@@ -240,6 +240,8 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 			    line >> val;
 			    amrOctet = (0 != val);
 			}
+			else
+			    dest = dest->append(new NamedString("fmtp:" + payload,line));
 		    }
 		}
 		else if (first) {

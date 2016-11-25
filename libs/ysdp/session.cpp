@@ -202,10 +202,10 @@ bool SDPSession::startRtp(RefObject* context)
 }
 
 // Update from parameters. Build a default SDP if no media is found in params
-bool SDPSession::updateSDP(const NamedList& params)
+bool SDPSession::updateSDP(const NamedList& params, bool defaults)
 {
-    DDebug(m_enabler,DebugAll,"SDPSession::updateSdp('%s') [%p]",params.c_str(),m_ptr);
-    bool defaults = true;
+    DDebug(m_enabler,DebugAll,"SDPSession::updateSdp('%s',%s) [%p]",
+	params.c_str(),String::boolText(defaults),m_ptr);
     const char* sdpPrefix = params.getValue("osdp-prefix","osdp");
     ObjList* lst = 0;
     unsigned int n = params.length();
@@ -215,7 +215,7 @@ bool SDPSession::updateSDP(const NamedList& params)
 	const NamedString* p = params.getParam(i);
 	if (!p)
 	    continue;
-	// search for rtp_port or rtp_port_MEDIANAME parameters
+	// search for media or media_MEDIANAME parameters
 	String tmp(p->name());
 	if (!tmp.startSkip("media",false))
 	    continue;
@@ -257,12 +257,14 @@ bool SDPSession::updateSDP(const NamedList& params)
 	}
 	rtp->crypto(crypto,false);
 	if (sdpPrefix) {
+	    String prefix;
+	    prefix << sdpPrefix << rtp->suffix() << "_";
 	    for (unsigned int j = 0; j < n; j++) {
 		const NamedString* param = params.getParam(j);
 		if (!param)
 		    continue;
 		tmp = param->name();
-		if (tmp.startSkip(sdpPrefix + rtp->suffix() + "_",false) && (tmp.find('_') < 0))
+		if (tmp.startSkip(prefix,false) && (tmp.find('_') < 0))
 		    rtp->parameter(tmp,*param,append);
 	    }
 	}
@@ -473,14 +475,20 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 				((0 != l->find("g729b")) ? "yes" : "no");
 			    dest = dest->append(temp);
 			}
-			else if (*s == "amr") {
+			else if (*s == "amr" || s->startsWith("amr/")) {
 			    temp = new String("fmtp:");
 			    *temp << payload << " octet-align=0";
 			    dest = dest->append(temp);
 			}
-			else if (*s == "amr-o") {
+			else if (*s == "amr-o" || s->startsWith("amr-o/")) {
 			    temp = new String("fmtp:");
 			    *temp << payload << " octet-align=1";
+			    dest = dest->append(temp);
+			}
+			const String* fmtp = m->getParam("fmtp:" + *s);
+			if (fmtp) {
+			    temp = new String("fmtp:");
+			    *temp << payload << " " << *fmtp;
 			    dest = dest->append(temp);
 			}
 		    }
@@ -526,7 +534,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	    unsigned int n = m->length();
 	    for (unsigned int i = 0; i < n; i++) {
 		const NamedString* param = m->getParam(i);
-		if (param) {
+		if (param && (param->name().find(':') < 0)) {
 		    const char* type = "a";
 		    String tmp = param->name();
 		    if (tmp.startSkip("BW-",false)) {
@@ -625,7 +633,7 @@ void SDPSession::updateFormats(const NamedList& msg, bool changeMedia)
 	    const NamedString* p = msg.getParam(i);
 	    if (!p)
 		continue;
-	    // search for media_MEDIANAME parameters
+	    // search for media or media_MEDIANAME parameters
 	    String tmp = p->name();
 	    if (!tmp.startSkip("media",false))
 		continue;

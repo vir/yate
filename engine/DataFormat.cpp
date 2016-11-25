@@ -535,6 +535,11 @@ bool DataSource::valid() const
     return false;
 }
 
+bool DataSource::control(NamedList& params)
+{
+    return m_translator && m_translator->control(params);
+}
+
 unsigned long DataSource::Forward(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     Lock mylock(this,100000);
@@ -1053,10 +1058,12 @@ bool DataEndpoint::clearData(DataNode* node)
 bool DataEndpoint::control(NamedList& params)
 {
     // TODO how do we handle this case????? operation-status
+    DataSource* peerSrc = m_consumer ? m_consumer->getConnSource() : 0;
     return (m_source && m_source->control(params)) ||
 	(m_consumer && m_consumer->control(params)) ||
 	(m_peerRecord && m_peerRecord->control(params)) ||
-	(m_callRecord && m_callRecord->control(params));
+	(m_callRecord && m_callRecord->control(params)) ||
+	(peerSrc && peerSrc->control(params));
 }
 
 
@@ -1578,6 +1585,8 @@ bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer, boo
 	    DataTranslator* trans = trans2->getFirstTranslator();
 	    trans2->getTransSource()->attach(consumer,override);
 	    source->attach(trans);
+	    trans->attached(true);
+	    trans2->attached(true);
 	    trans->deref();
 	    retv = true;
 	}
@@ -1773,6 +1782,7 @@ DataTranslator* ChainedFactory::create(const DataFormat& sFormat, const DataForm
 	// trans2 may be a chain itself so find the first translator
 	DataTranslator* trans1 = trans2->getFirstTranslator();
 	trans->getTransSource()->attach(trans1);
+	trans1->attached(true);
 	trans1->deref();
     }
     else

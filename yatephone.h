@@ -373,7 +373,6 @@ public:
     inline static unsigned long invalidStamp()
 	{ return (unsigned long)-1; }
 
-protected:
     /**
      * Owner attach and detach notification.
      * This method is called with @ref DataEndpoint::commonMutex() held
@@ -382,6 +381,7 @@ protected:
     virtual void attached(bool added)
 	{ }
 
+protected:
     DataFormat m_format;
     unsigned long m_timestamp;
 };
@@ -504,6 +504,13 @@ public:
      * @return True if still valid, false if node should be removed
      */
     virtual bool valid() const;
+
+    /**
+     * Modify source parameters, calls translator if one is set
+     * @param params The list of parameters to change
+     * @return True if processed
+     */
+    virtual bool control(NamedList& params);
 
     /**
      * Forwards the data to its consumers
@@ -786,6 +793,13 @@ public:
     static void setMaxChain(unsigned int maxChain);
 
 protected:
+    /**
+     * Get access to the list of consumers of the data source
+     * @return Pointer to list entry of first consumer, NULL if none attached
+     */
+    inline ObjList* getConsumers() const
+	{ return m_tsource ? m_tsource->m_consumers.skipNull() : 0; }
+
     /**
      * Synchronize the consumer with a source
      * @param source Data source to copy the timestamp from

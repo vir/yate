@@ -91,9 +91,9 @@ static inline unsigned int validFrequency(uint32_t val, String* error = 0,
 }
 
 // Frequency offset interval
-#define BRF_FREQ_OFFS_DEF 128
-#define BRF_FREQ_OFFS_MIN 64
-#define BRF_FREQ_OFFS_MAX 192
+#define BRF_FREQ_OFFS_DEF 128.0
+#define BRF_FREQ_OFFS_MIN 64.0
+#define BRF_FREQ_OFFS_MAX 192.0
 
 #define BRF_RXVGA1_GAIN_MIN     5
 #define BRF_RXVGA1_GAIN_MAX     30
@@ -1777,9 +1777,9 @@ public:
     // Retrieve frequency
     unsigned int getFrequency(uint32_t& hz, bool tx);
     // Set frequency offset
-    unsigned int setFreqOffset(int offs, int* newVal = 0);
+    unsigned int setFreqOffset(float offs, float* newVal = 0);
     // Get frequency offset
-    unsigned int getFreqOffset(int& offs);
+    unsigned int getFreqOffset(float& offs);
     // Set the LPF bandwidth for a specific module
     unsigned int setLpfBandwidth(uint32_t band, bool tx);
     // Get the LPF bandwidth for a specific module
@@ -2058,7 +2058,7 @@ private:
 	    BRF_FUNC_CALL(internalSetCorrectionIQ(false,rxI,rxQ,error));
 	    return status;
 	}
-    unsigned int internalSetFreqOffs(int val, int* newVal, String* error = 0);
+    unsigned int internalSetFreqOffs(float val, float* newVal, String* error = 0);
     unsigned int internalSetFrequency(bool tx, uint32_t hz, String* error = 0);
     unsigned int internalGetFrequency(bool tx, uint32_t* hz = 0, String* error = 0);
     // Retrieve TX/RX timestamp
@@ -2245,6 +2245,11 @@ private:
     inline int clampIntParam(const NamedList& params, const String& param,
 	int defVal, int minVal, int maxVal, int level = DebugConf)
 	{ return clampInt(params.getIntValue(param,defVal),minVal,maxVal,param,level); }
+    float clampFloat(float val, float minVal, float maxVal, const char* what = 0,
+	int level = DebugNote);
+    inline float clampFloatParam(const NamedList& params, const String& param,
+	float defVal, float minVal, float maxVal, int level = DebugConf)
+	{ return clampFloat(params.getDoubleValue(param,defVal),minVal,maxVal,param,level); }
     unsigned int openDevice(bool claim, String* error = 0);
     void closeDevice();
     void getDevStrDesc(String& data, uint8_t index, const char* what);
@@ -2427,7 +2432,7 @@ private:
     int m_rxDcOffsetMax;                 // Rx DC offset correction
     int m_rxDcAvgI;                      // Current average for I (in-phase) DC RX offset
     int m_rxDcAvgQ;                      // Current average for Q (quadrature) DC RX offset
-    int m_freqOffset;                    // Master clock frequency adjustment
+    float m_freqOffset;                  // Master clock frequency adjustment
     bool m_txGainCorrSoftware;           // Use software TX GAIN correction
     BrfDevIO m_txIO;
     BrfDevIO m_rxIO;
@@ -2561,7 +2566,7 @@ public:
 	{ return setFrequency(hz,false); }
     virtual unsigned int getRxFreq(uint64_t& hz) const
 	{ return getFrequency(hz,false); }
-    virtual unsigned int setFreqOffset(int offs, int* newVal = 0)
+    virtual unsigned int setFreqOffset(float offs, float* newVal = 0)
 	{ return m_dev->setFreqOffset(offs,newVal); }
     virtual unsigned int setSampleRate(uint64_t hz);
     virtual unsigned int getSampleRate(uint64_t& hz) const;
@@ -3597,7 +3602,7 @@ unsigned int BrfLibUsbDevice::open(const NamedList& params)
 	BRF_FUNC_CALL_BREAK(lmsRead(0x04,data,&e));
 	m_lmsVersion.printf("0x%x (%u.%u)",data,(data >> 4),(data & 0x0f));
 	BRF_FUNC_CALL_BREAK(tmpAltSet.restore());
-	m_freqOffset = clampIntParam(params,"RadioFrequencyOffset",
+	m_freqOffset = clampFloatParam(params,"RadioFrequencyOffset",
 	    BRF_FREQ_OFFS_DEF,BRF_FREQ_OFFS_MIN,BRF_FREQ_OFFS_MAX);
 	m_txGainCorrSoftware = params.getBoolValue(YSTRING("tx_fpga_corr_gain_software"),true);
 	// Init TX/RX buffers
@@ -3849,20 +3854,22 @@ unsigned int BrfLibUsbDevice::getFrequency(uint32_t& hz, bool tx)
 }
 
 // Set frequency offset
-unsigned int BrfLibUsbDevice::setFreqOffset(int offs, int* newVal)
+unsigned int BrfLibUsbDevice::setFreqOffset(float offs, float* newVal)
 {
     BRF_TX_SERIALIZE_CHECK_PUB_ENTRY(false,"setFreqOffset()");
     return internalSetFreqOffs(offs,newVal);
 }
 
 // Get frequency offset
-unsigned int BrfLibUsbDevice::getFreqOffset(int& offs)
+unsigned int BrfLibUsbDevice::getFreqOffset(float& offs)
 {
     BRF_TX_SERIALIZE_CHECK_DEV("getFreqOffset()");
     String val;
     unsigned int status = getCalField(val,"DAC","DAC_TRIM");
-    if (status == 0)
-	offs = val.toInteger();
+    if (status == 0) {
+	offs = val.toInteger() / 256.0;
+	// TODO m_freqOffset = offs ???
+    }
     return status;
 }
 
@@ -5784,21 +5791,25 @@ unsigned int BrfLibUsbDevice::internalSetTxIQBalance(bool newGain, float newBala
     return 0;
 }
 
-unsigned int BrfLibUsbDevice::internalSetFreqOffs(int val, int* newVal, String* error)
+unsigned int BrfLibUsbDevice::internalSetFreqOffs(float val, float* newVal, String* error)
 {
-    val = clampInt(val,BRF_FREQ_OFFS_MIN,BRF_FREQ_OFFS_MAX,"FrequencyOffset");
+    val = clampFloat(val,BRF_FREQ_OFFS_MIN,BRF_FREQ_OFFS_MAX,"FrequencyOffset");
     String e;
-    unsigned int status = gpioWrite(0x22,(val & 0xff) << 8,2,&e);
-    if (status == 0) {
-	if (m_freqOffset != val) {
-	    Debug(m_owner,DebugInfo,"FrequencyOffset set to %d [%p]",val,m_owner);
-	    m_freqOffset = val;
-	}
-	if (newVal)
-	    *newVal = val;
-	return 0;
+    // val has an 8 bit integer range with float precision, which need to be converted to 16 bit integer
+    uint32_t voltageDAC = val * 256;
+    unsigned int status = gpioWrite(0x22,voltageDAC,2,&e);
+    if (status)
+	return showError(status,e,"FrequencyOffset set failed",error);
+    if (m_freqOffset != val) {
+	Debug(m_owner,(m_freqOffset != val) ? DebugInfo : DebugAll,
+	    "FrequencyOffset changed %g -> %g [%p]",m_freqOffset,val,m_owner);
+	m_freqOffset = val;
     }
-    return showError(status,e,"FrequencyOffset set failed",error);
+    else
+	Debug(m_owner,DebugAll,"FrequencyOffset set to %g [%p]",val,m_owner);
+    if (newVal)
+	*newVal = val;
+    return 0;
 }
 
 unsigned int BrfLibUsbDevice::internalSetFrequency(bool tx, uint32_t hz, String* error)
@@ -5880,7 +5891,7 @@ unsigned int BrfLibUsbDevice::internalSetFrequency(bool tx, uint32_t hz, String*
     }
     if (getDirState(tx).frequency != hz) {
 	getDirState(tx).frequency = hz;
-	Debug(m_owner,DebugInfo,"%s frequency set to %gMHz offset=%u [%p]",
+	Debug(m_owner,DebugInfo,"%s frequency set to %gMHz offset=%g [%p]",
 	    brfDir(tx),(double)hz / 1000000,m_freqOffset,m_owner);
     }
     return 0;
@@ -6973,6 +6984,17 @@ int BrfLibUsbDevice::clampInt(int val, int minVal, int maxVal, const char* what,
     int c = val < minVal ? minVal : maxVal;
     if (what)
 	Debug(m_owner,level,"Clamping %s %d -> %d [%p]",what,val,c,m_owner);
+    return c;
+}
+
+float BrfLibUsbDevice::clampFloat(float val, float minVal, float maxVal, const char* what,
+    int level)
+{
+    if (val >= minVal && val <= maxVal)
+	return val;
+    float c = val < minVal ? minVal : maxVal;
+    if (what)
+	Debug(m_owner,level,"Clamping %s %g -> %g [%p]",what,val,c,m_owner);
     return c;
 }
 

@@ -227,7 +227,7 @@ public:
     bool autoComplete();
     void putConnInfo(NamedList& msg) const;
     void execCommand(const String& str, bool saveOffset);
-    bool pagedCommand(bool up);
+    bool pagedCommand(bool up, bool skip = false);
     void endSubnegotiation();
     void errorBeep();
     void clearLine();
@@ -922,11 +922,15 @@ bool Connection::processChar(unsigned char c)
 		m_cursorPos--;
 		return false;
 	    case 'H': // Home
+		if (pagedCommand(true,true))
+		    return false;
 		if (m_echoing)
 		    writeStr("\r");
 		m_cursorPos = 0;
 		return false;
 	    case 'F': // End
+		if (pagedCommand(false,true))
+		    return false;
 		if (atEol)
 		    return false;
 		if (m_echoing && m_buffer)
@@ -936,11 +940,15 @@ bool Connection::processChar(unsigned char c)
 	    case '~':
 		switch (escMode) {
 		    case '1': // Home
+			if (pagedCommand(true,true))
+			    return false;
 			if (m_echoing)
 			    writeStr("\r");
 			m_cursorPos = 0;
 			return false;
 		    case '4': // End
+			if (pagedCommand(false,true))
+			    return false;
 			if (atEol)
 			    return false;
 			if (m_echoing && m_buffer)
@@ -999,7 +1007,7 @@ bool Connection::processChar(unsigned char c)
     return false;
 }
 
-bool Connection::pagedCommand(bool up)
+bool Connection::pagedCommand(bool up, bool skip)
 {
     if (m_buffer || m_offset <= 0)
 	return false;
@@ -1007,15 +1015,19 @@ bool Connection::pagedCommand(bool up)
     if (!s)
 	return false;
     if (up) {
-	if (!m_height)
-	    return false;
-	int offs = m_offset - m_height + m_header;
-	if (!offs)
-	    return false;
-	offs -= m_height - m_header;
-	if (offs < 0)
-	    offs = 0;
-	m_offset = offs;
+	if (skip)
+	    m_offset = 0;
+	else {
+	    if (!m_height)
+		return false;
+	    int offs = m_offset - m_height + m_header;
+	    if (!offs)
+		return false;
+	    offs -= m_height - m_header;
+	    if (offs < 0)
+		offs = 0;
+	    m_offset = offs;
+	}
     }
     else if (m_finish >= 0) {
 	if (m_offset == m_finish)
@@ -1023,7 +1035,7 @@ bool Connection::pagedCommand(bool up)
 	int last = m_finish - m_height + m_header;
 	if (last < 0)
 	    return false;
-	if (m_offset > last)
+	if (skip || (m_offset > last))
 	    m_offset = last;
     }
     execCommand(*s,true);

@@ -668,7 +668,7 @@ public:
      *  be adjusted to fit specific device value)
      * @return Error code (0 on success)
      */
-    virtual unsigned int setFreqOffset(int offs, int* newVal = 0) = 0;
+    virtual unsigned int setFreqOffset(float offs, float* newVal = 0) = 0;
 
     /**
      * Set the sample rate

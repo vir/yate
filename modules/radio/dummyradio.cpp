@@ -60,7 +60,7 @@ public:
 	{ return setFrequency(hz,false); }
     virtual unsigned int getRxFreq(uint64_t& hz) const
 	{ return getFrequency(hz,false); }
-    virtual unsigned int setFreqOffset(int offs, int* newVal)
+    virtual unsigned int setFreqOffset(float offs, float* newVal)
 	{ return NotSupported; }
     virtual unsigned int setSampleRate(uint64_t hz);
     virtual unsigned int getSampleRate(uint64_t& hz) const

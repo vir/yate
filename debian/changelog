@@ -1,3 +1,11 @@
+yate (5.5.1~svn6155) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6155:
+  * Use float instead of integer for frequency offset value.
+  * Added support for the Home and End keys in paged commands.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 06 Dec 2016 02:19:15 +0300
+
 yate (5.5.1~svn6153) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6153:

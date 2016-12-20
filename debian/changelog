@@ -1,3 +1,12 @@
+yate (5.5.1~svn6156) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6156:
+  * This allows controlling how long a child can hang before being
+    killed.
+  * Added command line option to set supervisor's sanity points pool.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 21 Dec 2016 02:19:15 +0300
+
 yate (5.5.1~svn6155) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6155:

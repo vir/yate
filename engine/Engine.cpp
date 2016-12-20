@@ -139,7 +139,9 @@ using namespace TelEngine;
 
 // Supervisor control constants
 
-// Maximum the child's sanity pool can grow
+// Minimum configurable size of child's sanity pool
+#define MIN_SANITY 2
+// Default maximum the child's sanity pool can grow
 #define MAX_SANITY 5
 // Initial sanity buffer, allow some init time for the child
 #define INIT_SANITY 30
@@ -169,6 +171,7 @@ static bool s_keepclosing = false;
 static bool s_nounload = false;
 static int s_super_handle = -1;
 static int s_run_attempt = 0;
+static int s_max_sanity = MAX_SANITY;
 static bool s_interactive = true;
 static bool s_localsymbol = false;
 static bool s_logtruncate = false;
@@ -1041,7 +1044,7 @@ static void copystream(int dest, int src)
 static int supervise(int initDelay)
 {
     s_superpid = ::getpid();
-    ::fprintf(stderr,"Supervisor (%u) is starting\n",s_superpid);
+    ::fprintf(stderr,"Supervisor (%d) is starting, max sanity %d\n",s_superpid,s_max_sanity);
     ::signal(SIGINT,superhandler);
     ::signal(SIGTERM,superhandler);
     ::signal(SIGHUP,superhandler);
@@ -1136,8 +1139,8 @@ static int supervise(int initDelay)
 	    if (tmp >= 0) {
 		// Timer messages add one sanity point every second
 		tmp += sanity;
-		if (tmp > MAX_SANITY)
-		    tmp = MAX_SANITY;
+		if (tmp > s_max_sanity)
+		    tmp = s_max_sanity;
 		if (sanity < tmp)
 		    sanity = tmp;
 		// Decrement inter-run delay each time child proves sanity
@@ -2319,6 +2322,7 @@ static void usage(bool client, FILE* f)
 "   -d             Daemonify, suppress output unless logged\n"
 "   -s[=msec]      Supervised, restart if crashes or locks up, optionally sleeps initially\n"
 "   -r             Enable rotation of log file (needs -s and -l)\n"
+"   -S sanity      Set size of supervised sanity points pool\n"
 #endif
     ,s_cfgfile.safe()
     ,s_usrpath.safe());
@@ -2455,6 +2459,16 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 			break;
 		    case 'r':
 			s_logrotator = true;
+			break;
+		    case 'S':
+			GET_PARAM;
+			s_max_sanity = ::strtol(param,0,0);
+			if (s_max_sanity <= 0)
+			    s_max_sanity = MAX_SANITY;
+			else if (s_max_sanity < MIN_SANITY)
+			    s_max_sanity = MIN_SANITY;
+			else if (s_max_sanity > INIT_SANITY)
+			    s_max_sanity = INIT_SANITY;
 			break;
 #endif
 		    case 't':

@@ -258,7 +258,7 @@ install-noconf: all
 install-api: $(APIDOCS)
 	@mkdir -p "$(DESTDIR)$(docdir)/api/" && \
 	install -m 0644 @srcdir@/docs/*.html "$(DESTDIR)$(docdir)/" && \
-	test -f "$(APIINDEX)" && \
+	test ! -f "$(APIINDEX)" || \
 	install -m 0644 @srcdir@/docs/api/*.* "$(DESTDIR)$(docdir)/api/"
 
 uninstall uninstall-root:

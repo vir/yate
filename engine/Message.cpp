@@ -300,6 +300,7 @@ MessageDispatcher::MessageDispatcher(const char* trackParam)
       m_hookMutex(false,"PostHooks"),
       m_msgAppend(&m_messages), m_hookAppend(&m_hooks),
       m_trackParam(trackParam), m_changes(0), m_warnTime(0),
+      m_enqueueCount(0), m_dequeueCount(0), m_dispatchCount(0), m_queuedMax(0),
       m_hookCount(0), m_hookHole(false)
 {
     XDebug(DebugInfo,"MessageDispatcher::MessageDispatcher('%s') [%p]",trackParam,this);
@@ -389,6 +390,7 @@ bool MessageDispatcher::dispatch(Message& msg)
     NamedCounter* saved = Thread::getCurrentObjCounter(counting);
     ObjList *l = &m_handlers;
     Lock mylock(this);
+    m_dispatchCount++;
     for (; l; l=l->next()) {
 	MessageHandler *h = static_cast<MessageHandler*>(l->get());
 	if (h && (h->null() || *h == msg)) {
@@ -519,6 +521,9 @@ bool MessageDispatcher::enqueue(Message* msg)
     if (!msg || m_messages.find(msg))
 	return false;
     m_msgAppend = m_msgAppend->append(msg);
+    u_int64_t count = (++m_enqueueCount) - m_dequeueCount;
+    if (m_queuedMax < count)
+	m_queuedMax = count;
     return true;
 }
 
@@ -528,6 +533,8 @@ bool MessageDispatcher::dequeueOne()
     if (m_messages.next() == m_msgAppend)
 	m_msgAppend = &m_messages;
     Message* msg = static_cast<Message *>(m_messages.remove(false));
+    if (msg)
+	m_dequeueCount++;
     unlock();
     if (!msg)
 	return false;
@@ -558,6 +565,16 @@ unsigned int MessageDispatcher::postHookCount()
 {
     Lock lock(m_hookMutex);
     return m_hooks.count();
+}
+
+void MessageDispatcher::getStats(u_int64_t& enqueued, u_int64_t& dequeued, u_int64_t& dispatched, u_int64_t& queueMax)
+{
+    lock();
+    enqueued = m_enqueueCount;
+    dequeued = m_dequeueCount;
+    dispatched = m_dispatchCount;
+    queueMax = m_queuedMax;
+    unlock();
 }
 
 void MessageDispatcher::setHook(MessagePostHook* hook, bool remove)

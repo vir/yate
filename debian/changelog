@@ -1,3 +1,15 @@
+yate (5.5.1~svn6159) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6159:
+  * Added command line option to set supervisor's sanity points pool.
+  * Fixed automatic detection of ARCHLIB=lib64 on non-Debian machines
+    having dpkg installed.
+  * Added message queue and dispatcher stats to the "status engine"
+    response.
+  * Added a "maxmsgrate" to the "status engine" output.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 30 Dec 2016 02:19:14 +0300
+
 yate (5.5.1~svn6156) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6156:

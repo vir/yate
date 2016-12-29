@@ -489,6 +489,7 @@ bool EngineStatusHandler::received(Message &msg)
     Engine::self()->getStats(enq,deq,disp,qmax);
     msg.retValue() << ",messages=" << (enq - deq) << ",maxqueue=" << qmax;
     msg.retValue() << ",messagerate=" << Engine::self()->messageRate();
+    msg.retValue() << ",maxmsgrate=" << Engine::self()->messageMaxRate();
     msg.retValue() << ",enqueued=" << enq << ",dequeued=" << deq << ",dispatched=" << disp ;
     msg.retValue() << ",supervised=" << (s_super_handle >= 0);
     msg.retValue() << ",runattempt=" << s_run_attempt;
@@ -1359,7 +1360,7 @@ unsigned int SharedVars::dec(const String& name, unsigned int wrap)
 
 
 Engine::Engine()
-    : m_dispatchedLast(0), m_messageRate(0)
+    : m_dispatchedLast(0), m_messageRate(0), m_maxMsgRate(0)
 {
     DDebug(DebugAll,"Engine::Engine() [%p]",this);
     initUsrPath(s_usrpath);
@@ -1628,6 +1629,8 @@ int Engine::run()
 	uint64_t disp = m_dispatcher.dispatchCount();
 	m_messageRate = disp - m_dispatchedLast;
 	m_dispatchedLast = disp;
+	if (m_maxMsgRate < m_messageRate)
+	    m_maxMsgRate = m_messageRate;
 
 	// Attempt to sleep until the next full second
 	long t = 1000000 - (long)(Time::now() % 1000000) - corr;

@@ -1522,6 +1522,13 @@ public:
 	{ return m_messageRate; }
 
     /**
+     * Get the maximum rate of dispatched messages per second
+     * @return Maximum number of messages dispatched per second
+     */
+    inline unsigned int messageMaxRate() const
+	{ return m_maxMsgRate; }
+
+    /**
      * Retrieve dispatcher's statistics counters
      * @param enqueued Returns count of enqueued messages
      * @param dequeued Returns count of dequeued messages
@@ -1622,6 +1629,7 @@ private:
     MessageDispatcher m_dispatcher;
     uint64_t m_dispatchedLast;
     unsigned int m_messageRate;
+    unsigned int m_maxMsgRate;
     static Engine* s_self;
     static String s_node;
     static String s_shrpath;

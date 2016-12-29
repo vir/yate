@@ -39,15 +39,21 @@ archname=`dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null`
 test -z "$archname" && archname=`uname -m 2>/dev/null`
 test -z "$archname" && archname=`arch -k 2>/dev/null`
 test -z "$archname" && archname=`arch 2>/dev/null`
-ARCHLIB="lib"
+ARCHLIB=""
 case "x$archname" in
     x*-*-*)
-	ARCHLIB="lib/$archname"
-	;;
-    x*x86_64*|xppc64*|xaarch64)
-	ARCHLIB=lib64
+	test -d "/usr/lib/$archname" && ARCHLIB="lib/$archname"
 	;;
 esac
+if [[ -z "$ARCHLIB" ]]; then
+    case "x$archname" in
+	x*x86_64*|xppc64*|xaarch64)
+	    ARCHLIB="lib64"
+	    ;;
+	*)
+	    ARCHLIB="lib"
+    esac
+fi
 case "x$ac_cv_use_archlib" in
     x|xyes)
 	;;

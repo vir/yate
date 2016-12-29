@@ -792,6 +792,43 @@ public:
     unsigned int postHookCount();
 
     /**
+     * Get the total number of enqueued messages
+     * @return Count of enqueued messages
+     */
+    u_int64_t enqueueCount() const
+	{ return m_enqueueCount; }
+
+    /**
+     * Get the total number of dequeued messages
+     * @return Count of dequeued messages
+     */
+    u_int64_t dequeueCount() const
+	{ return m_dequeueCount; }
+
+    /**
+     * Get the total number of dispatched messages
+     * @return Count of dispatched messages
+     */
+    u_int64_t dispatchCount() const
+	{ return m_dispatchCount; }
+
+    /**
+     * Get the queued messages high watermark
+     * @return Highest number of messages in queue
+     */
+    u_int64_t queuedMax() const
+	{ return m_queuedMax; }
+
+    /**
+     * Retrieve all statistics counters
+     * @param enqueued Returns count of enqueued messages
+     * @param dequeued Returns count of dequeued messages
+     * @param dispatched Returns count of all dispatched messages, including dequeued ones
+     * @param queueMax Returns queued high watermark
+     */
+    void getStats(u_int64_t& enqueued, u_int64_t& dequeued, u_int64_t& dispatched, u_int64_t& queueMax);
+
+    /**
      * Install or remove a hook to catch messages after being dispatched
      * @param hook Pointer to a post-dispatching message hook
      * @param remove Set to True to remove the hook instead of adding
@@ -816,6 +853,10 @@ private:
     String m_trackParam;
     unsigned int m_changes;
     u_int64_t m_warnTime;
+    u_int64_t m_enqueueCount;
+    u_int64_t m_dequeueCount;
+    u_int64_t m_dispatchCount;
+    u_int64_t m_queuedMax;
     int m_hookCount;
     bool m_hookHole;
 };
@@ -1474,6 +1515,23 @@ public:
 	{ return m_dispatcher.postHookCount(); }
 
     /**
+     * Get the rate of dispatched messages per second
+     * @return Number of messages dispatched in the last second
+     */
+    inline unsigned int messageRate() const
+	{ return m_messageRate; }
+
+    /**
+     * Retrieve dispatcher's statistics counters
+     * @param enqueued Returns count of enqueued messages
+     * @param dequeued Returns count of dequeued messages
+     * @param dispatched Returns count of all dispatched messages, including dequeued ones
+     * @param queueMax Returns queued high watermark
+     */
+    inline void getStats(u_int64_t& enqueued, u_int64_t& dequeued, u_int64_t& dispatched, u_int64_t& queueMax)
+	{ m_dispatcher.getStats(enqueued,dequeued,dispatched,queueMax); }
+
+    /**
      * Loads the plugins from an extra plugins directory or just an extra plugin
      * @param relPath Path to the extra directory, relative to the main modules
      * @return True if the plugin was loaded or the directory could at least be opened
@@ -1562,6 +1620,8 @@ private:
     void tryPluginFile(const String& name, const String& path, bool defload);
     ObjList m_libs;
     MessageDispatcher m_dispatcher;
+    uint64_t m_dispatchedLast;
+    unsigned int m_messageRate;
     static Engine* s_self;
     static String s_node;
     static String s_shrpath;

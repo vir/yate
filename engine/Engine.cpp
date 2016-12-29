@@ -485,7 +485,11 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",inuse=" << Engine::self()->usedPlugins();
     msg.retValue() << ",handlers=" << Engine::self()->handlerCount();
     msg.retValue() << ",hooks=" << Engine::self()->postHookCount();
-    msg.retValue() << ",messages=" << Engine::self()->messageCount();
+    uint64_t enq,deq,disp,qmax;
+    Engine::self()->getStats(enq,deq,disp,qmax);
+    msg.retValue() << ",messages=" << (enq - deq) << ",maxqueue=" << qmax;
+    msg.retValue() << ",messagerate=" << Engine::self()->messageRate();
+    msg.retValue() << ",enqueued=" << enq << ",dequeued=" << deq << ",dispatched=" << disp ;
     msg.retValue() << ",supervised=" << (s_super_handle >= 0);
     msg.retValue() << ",runattempt=" << s_run_attempt;
 #ifndef _WINDOWS
@@ -1355,6 +1359,7 @@ unsigned int SharedVars::dec(const String& name, unsigned int wrap)
 
 
 Engine::Engine()
+    : m_dispatchedLast(0), m_messageRate(0)
 {
     DDebug(DebugAll,"Engine::Engine() [%p]",this);
     initUsrPath(s_usrpath);
@@ -1620,6 +1625,9 @@ int Engine::run()
 	    // If we cannot restart now try again in 10s
 	    s_restarts = Time::now() + 10000000;
 	}
+	uint64_t disp = m_dispatcher.dispatchCount();
+	m_messageRate = disp - m_dispatchedLast;
+	m_dispatchedLast = disp;
 
 	// Attempt to sleep until the next full second
 	long t = 1000000 - (long)(Time::now() % 1000000) - corr;

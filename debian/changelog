@@ -1,3 +1,10 @@
+yate (5.5.1~svn6160) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6160:
+  * Export message queues statistic data via SNMP.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 04 Jan 2017 02:19:14 +0300
+
 yate (5.5.1~svn6159) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6159:

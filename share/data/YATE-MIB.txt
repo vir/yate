@@ -12,7 +12,7 @@ IMPORTS
 		FROM NULL-TEAM-MIB;
 
 yate MODULE-IDENTITY
-	LAST-UPDATED	"201307311120Z"
+	LAST-UPDATED	"201701031300Z"
 	ORGANIZATION	"S.C. Null Team Impex S.R.L."
 	CONTACT-INFO
 		"Diana Cionoiu
@@ -21,7 +21,7 @@ yate MODULE-IDENTITY
 		  Email: office@null.ro"
 	DESCRIPTION
 		"The MIB module for Yate."
-	REVISION	"201307311120Z"
+	REVISION	"201701031300Z"
 	DESCRIPTION
 		"Most recent version of this MIB module."
 	REVISION	"201009281300Z"
@@ -86,6 +86,54 @@ messages OBJECT-TYPE
 	DESCRIPTION
 		"Engine number of messages waiting to be handled."
 	::= { engine 3 }
+ 
+msgMaxQueued OBJECT-TYPE
+	SYNTAX		Gauge32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Maximum number of queued messages (high watermark)."
+	::= { messages 1 }
+
+msgLastSecond OBJECT-TYPE
+	SYNTAX		Gauge32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Current message rate (messages dispatched in the last second)."
+	::= { messages 2 }
+
+msgMaxPerSecond OBJECT-TYPE
+	SYNTAX		Gauge32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Maximum message rate (highest dispatched messages count in any second of the engine run)."
+	::= { messages 3 }
+
+msgEnqueued OBJECT-TYPE
+	SYNTAX		Counter64
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of messages enqueued in the entire engine run."
+	::= { messages 4 }
+
+msgDequeued OBJECT-TYPE
+	SYNTAX		Counter64
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of messages dequeued in the entire engine run."
+	::= { messages 5 }
+
+msgDispatched OBJECT-TYPE
+	SYNTAX		Counter64
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of messages dispatched (includes dequeued and dispatched messages by worker thread) in the entire engine run."
+	::= { messages 6 }
 
 threads OBJECT-TYPE
 	SYNTAX		Gauge32

@@ -225,11 +225,11 @@ namespace TelEngine {
 #define YIGNORE(v) while (v) { break; }
 
 #ifdef HAVE_BLOCK_RETURN
-#define YSTRING(s) (*({static const String str(s);&str;}))
-#define YATOM(s) (*({static const String* str(0);str ? str : String::atom(str,s);}))
+#define YSTRING(s) (*({static const String str("" s);&str;}))
+#define YATOM(s) (*({static const String* str(0);str ? str : String::atom(str,"" s);}))
 #else
-#define YSTRING(s) (s)
-#define YATOM(s) (s)
+#define YSTRING(s) ("" s)
+#define YATOM(s) ("" s)
 #endif
 
 #define YSTRING_INIT_HASH ((unsigned) -1)

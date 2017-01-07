@@ -1,3 +1,11 @@
+yate (5.5.1~svn6161) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6161:
+  * Check if YSTRING and YATOM are used incorrectly on a non-literal
+    srting.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 08 Jan 2017 02:19:14 +0300
+
 yate (5.5.1~svn6160) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6160:

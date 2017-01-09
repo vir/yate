@@ -251,6 +251,7 @@ public:
 	    params().addParam(new ExpFunction("debugAt"));
 	    params().addParam(new ExpFunction("setDebug"));
 	    params().addParam(new ExpFunction("started"));
+	    params().addParam(new ExpFunction("accepting"));
 	    if (name)
 		params().addParam(new ExpOperation(name,"name"));
 	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
@@ -1399,6 +1400,25 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	if (oper.number() != 0)
 	    return false;
 	ExpEvaluator::pushOne(stack,new ExpOperation(Engine::started()));
+    }
+    else if (oper.name() == YSTRING("accepting")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 0:
+		ExpEvaluator::pushOne(stack,new ExpOperation(
+		    lookup(Engine::accept(),Engine::getCallAcceptStates())));
+		break;
+	    case 1:
+		{
+		    int arg = static_cast<ExpOperation*>(args[0])->toInteger(
+			Engine::getCallAcceptStates(),-1);
+		    if ((Engine::Accept <= arg) && (Engine::Reject >= arg))
+			Engine::setAccept((Engine::CallAccept)arg);
+		}
+		break;
+	    default:
+		return false;
+	}
     }
     else if (oper.name() == YSTRING("atob")) {
 	// str = Engine.atob(b64_str)

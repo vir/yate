@@ -51,6 +51,7 @@
 ;  $(engine,NAME) = value of Engine's runtime parameter NAME
 ;  $(runid) = the current Engine run identifier
 ;  $(nodename) = the node name the Engine runs as, may be empty
+;  $(accepting) = call accept status in engine, one of "accept", "partial", "congestion" or "reject"
 ;  $(threadname) = name of the thread that dispatched the message, may be empty
 ;  $(dispatching) = the reentry depth, 0 if the message is not generated locally
 ;  $(message,name) = name of the message handled

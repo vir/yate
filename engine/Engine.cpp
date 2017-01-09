@@ -236,6 +236,7 @@ static int s_minworkers = 1;
 static int s_maxworkers = 10;
 static int s_addworkers = 1;
 static int s_maxmsgrate = 0;
+static int s_maxqueued = 0;
 static int s_exit = -1;
 unsigned int Engine::s_congestion = 0;
 static Mutex s_congMutex(false,"Congestion");
@@ -1362,7 +1363,8 @@ unsigned int SharedVars::dec(const String& name, unsigned int wrap)
 
 
 Engine::Engine()
-    : m_dispatchedLast(0), m_messageRate(0), m_maxMsgRate(0), m_rateCongested(false)
+    : m_dispatchedLast(0), m_messageRate(0), m_maxMsgRate(0),
+      m_rateCongested(false), m_queueCongested(false)
 {
     DDebug(DebugAll,"Engine::Engine() [%p]",this);
     initUsrPath(s_usrpath);
@@ -1452,6 +1454,7 @@ int Engine::engineInit()
     s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers,s_minworkers,500);
     s_addworkers = s_cfg.getIntValue("general","addworkers",s_addworkers,1,10);
     s_maxmsgrate = s_cfg.getIntValue("general","maxmsgrate",s_maxmsgrate,0,50000);
+    s_maxqueued = s_cfg.getIntValue("general","maxqueued",s_maxqueued,0,10000);
     s_maxevents = s_cfg.getIntValue("general","maxevents",s_maxevents,0,1000);
     s_restarts = s_cfg.getIntValue("general","restarts");
     m_dispatcher.warnTime(1000*(u_int64_t)s_cfg.getIntValue("general","warntime"));
@@ -1482,6 +1485,7 @@ int Engine::engineInit()
     s_params.addParam("maxworkers",String(s_maxworkers));
     s_params.addParam("addworkers",String(s_addworkers));
     s_params.addParam("maxmsgrate",String(s_maxmsgrate));
+    s_params.addParam("maxqueued",String(s_maxqueued));
     s_params.addParam("maxevents",String(s_maxevents));
     if (track)
 	s_params.addParam("trackparam",track);
@@ -1584,6 +1588,8 @@ int Engine::run()
 		= s_cfg.getIntValue("general","addworkers",s_addworkers,1,10))));
 	    s_params.setParam("maxmsgrate",String((s_maxmsgrate
 		= s_cfg.getIntValue("general","maxmsgrate",s_maxmsgrate,0,50000))));
+	    s_params.setParam("maxqueued",String((s_maxqueued
+		= s_cfg.getIntValue("general","maxqueued",s_maxqueued,0,10000))));
 	    s_params.setParam("maxevents",String((s_maxevents
 		= s_cfg.getIntValue("general","maxevents",s_maxevents,0,1000))));
 	    initPlugins();
@@ -1653,10 +1659,15 @@ int Engine::run()
 	m_dispatchedLast = disp;
 	if (m_maxMsgRate < m_messageRate)
 	    m_maxMsgRate = m_messageRate;
-	bool rateCongested = s_maxmsgrate && (m_messageRate > (unsigned)s_maxmsgrate);
-	if (rateCongested != m_rateCongested) {
-	    m_rateCongested = rateCongested;
-	    setCongestion(rateCongested ? "message rate over limit" : 0);
+	bool cong = s_maxmsgrate && (m_messageRate > (unsigned)s_maxmsgrate);
+	if (cong != m_rateCongested) {
+	    m_rateCongested = cong;
+	    setCongestion(cong ? "message rate over limit" : 0);
+	}
+	cong = s_maxqueued && (m_dispatcher.messageCount() > (unsigned)s_maxqueued);
+	if (cong != m_queueCongested) {
+	    m_queueCongested = cong;
+	    setCongestion(cong ? "message queue over limit" : 0);
 	}
 
 	// Attempt to sleep until the next full second

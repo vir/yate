@@ -39,6 +39,11 @@
 ; Valid range 0 to 50000, default 0 (disable message rate check)
 ;maxmsgrate=0
 
+; maxqueued: int: Message queue size threshold to declare engine congestion
+; This parameter is reloadable
+; Valid range 0 to 10000, default 0 (disable queue size check)
+;maxqueued=0
+
 ; maxevents: int: Maximum number of events kept per type
 ; This parameter is reloadable
 ; Valid range 0 to 1000, default 25, 0 disables limit

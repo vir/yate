@@ -1630,6 +1630,8 @@ private:
     uint64_t m_dispatchedLast;
     unsigned int m_messageRate;
     unsigned int m_maxMsgRate;
+    bool m_rateCongested;
+    bool m_queueCongested;
     static Engine* s_self;
     static String s_node;
     static String s_shrpath;

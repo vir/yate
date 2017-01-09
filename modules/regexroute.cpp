@@ -428,6 +428,8 @@ static void evalFunc(String& str, Message& msg)
 	    str = Engine::nodeName();
 	else if (str == YSTRING("threadname"))
 	    str = Thread::currentName();
+	else if (str == YSTRING("accepting"))
+	    str = lookup(Engine::accept(),Engine::getCallAcceptStates());
 	else if ((sep >= 0) && (str == YSTRING("transcode"))) {
 	    str = par.substr(0,sep);
 	    par = par.substr(sep+1).trimBlanks();

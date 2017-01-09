@@ -17,15 +17,31 @@
 ;extrapath=
 
 ; nodename: string: Name of this node in a cluster
+; Defaults to detected machine hostname
 ;nodename=
 
 : minworkers: int: Minimum / initial number of engine worker threads
+; Valid range 1 to 100, default 1
 ;minworkers=1
 
 ; maxworkers: int: Maximum number of worker threads the engine can create
+; This parameter is reloadable
+; Valid range minworkers to 500, default 10
 ;maxworkers=10
 
+; addworkers: int: How many workers to create in a batch when needed
+; This parameter is reloadable
+; Valid range 1 to 10, default 1
+;addworkers=1
+
+; maxmsgrate: int: Message rate threshold to declare engine congestion
+; This parameter is reloadable
+; Valid range 0 to 50000, default 0 (disable message rate check)
+;maxmsgrate=0
+
 ; maxevents: int: Maximum number of events kept per type
+; This parameter is reloadable
+; Valid range 0 to 1000, default 25, 0 disables limit
 ;maxevents=25
 
 ; startevents: boolean: Capture all debug events at startup

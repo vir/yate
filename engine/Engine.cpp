@@ -234,6 +234,8 @@ static bool s_dynplugin = false;
 static Engine::PluginMode s_loadMode = Engine::LoadFail;
 static int s_minworkers = 1;
 static int s_maxworkers = 10;
+static int s_addworkers = 1;
+static int s_maxmsgrate = 0;
 static int s_exit = -1;
 unsigned int Engine::s_congestion = 0;
 static Mutex s_congMutex(false,"Congestion");
@@ -1360,7 +1362,7 @@ unsigned int SharedVars::dec(const String& name, unsigned int wrap)
 
 
 Engine::Engine()
-    : m_dispatchedLast(0), m_messageRate(0), m_maxMsgRate(0)
+    : m_dispatchedLast(0), m_messageRate(0), m_maxMsgRate(0), m_rateCongested(false)
 {
     DDebug(DebugAll,"Engine::Engine() [%p]",this);
     initUsrPath(s_usrpath);
@@ -1446,9 +1448,11 @@ int Engine::engineInit()
     const char *modPath = s_cfg.getValue("general","modpath");
     if (modPath)
 	s_modpath = modPath;
-    s_minworkers = s_cfg.getIntValue("general","minworkers",s_minworkers,1,25);
-    s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers,s_minworkers);
-    s_maxevents = s_cfg.getIntValue("general","maxevents",s_maxevents);
+    s_minworkers = s_cfg.getIntValue("general","minworkers",s_minworkers,1,100);
+    s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers,s_minworkers,500);
+    s_addworkers = s_cfg.getIntValue("general","addworkers",s_addworkers,1,10);
+    s_maxmsgrate = s_cfg.getIntValue("general","maxmsgrate",s_maxmsgrate,0,50000);
+    s_maxevents = s_cfg.getIntValue("general","maxevents",s_maxevents,0,1000);
     s_restarts = s_cfg.getIntValue("general","restarts");
     m_dispatcher.warnTime(1000*(u_int64_t)s_cfg.getIntValue("general","warntime"));
     extraPath(clientMode() ? "client" : "server");
@@ -1476,6 +1480,8 @@ int Engine::engineInit()
 #endif
     s_params.addParam("minworkers",String(s_minworkers));
     s_params.addParam("maxworkers",String(s_maxworkers));
+    s_params.addParam("addworkers",String(s_addworkers));
+    s_params.addParam("maxmsgrate",String(s_maxmsgrate));
     s_params.addParam("maxevents",String(s_maxevents));
     if (track)
 	s_params.addParam("trackparam",track);
@@ -1571,6 +1577,15 @@ int Engine::run()
 
 	if (s_init) {
 	    s_init = false;
+	    s_cfg.load();
+	    s_params.setParam("maxworkers",String((s_maxworkers
+		= s_cfg.getIntValue("general","maxworkers",s_maxworkers,s_minworkers,1000))));
+	    s_params.setParam("addworkers",String((s_addworkers
+		= s_cfg.getIntValue("general","addworkers",s_addworkers,1,10))));
+	    s_params.setParam("maxmsgrate",String((s_maxmsgrate
+		= s_cfg.getIntValue("general","maxmsgrate",s_maxmsgrate,0,50000))));
+	    s_params.setParam("maxevents",String((s_maxevents
+		= s_cfg.getIntValue("general","maxevents",s_maxevents,0,1000))));
 	    initPlugins();
 	}
 
@@ -1603,13 +1618,20 @@ int Engine::run()
 	}
 
 	// Create worker thread if we didn't hear about any of them in a while
-	if (s_makeworker && (EnginePrivate::count < s_maxworkers)) {
-	    int build = s_minworkers - EnginePrivate::count;
-	    if (EnginePrivate::count)
-		Alarm("engine","performance",(build > -3) ? DebugMild : DebugWarn,
-		    "Creating new message dispatching thread (%d running)",EnginePrivate::count);
-	    else
+	int build = s_maxworkers - EnginePrivate::count;
+	if (s_makeworker && (build > 0)) {
+	    if (EnginePrivate::count) {
+		if (build > s_addworkers)
+		    build = s_addworkers;
+		Alarm("engine","performance",
+		    (EnginePrivate::count > (s_minworkers + 3)) ? DebugWarn : DebugMild,
+		    "Creating new %d message dispatching threads (%d running)",
+		    build,EnginePrivate::count);
+	    }
+	    else {
+		build = s_minworkers;
 		Debug(DebugInfo,"Creating first %d message dispatching threads",build);
+	    }
 	    do {
 		(new EnginePrivate)->startup();
 	    } while (--build > 0);
@@ -1631,6 +1653,11 @@ int Engine::run()
 	m_dispatchedLast = disp;
 	if (m_maxMsgRate < m_messageRate)
 	    m_maxMsgRate = m_messageRate;
+	bool rateCongested = s_maxmsgrate && (m_messageRate > (unsigned)s_maxmsgrate);
+	if (rateCongested != m_rateCongested) {
+	    m_rateCongested = rateCongested;
+	    setCongestion(rateCongested ? "message rate over limit" : 0);
+	}
 
 	// Attempt to sleep until the next full second
 	long t = 1000000 - (long)(Time::now() % 1000000) - corr;

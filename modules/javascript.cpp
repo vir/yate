@@ -22,6 +22,7 @@
 #include <yatepbx.h>
 #include <yatescript.h>
 #include <yatexml.h>
+#include <stdlib.h> /* for Engine.getenv() exclusively */
 
 #define NATIVE_TITLE "[native code]"
 
@@ -269,6 +270,7 @@ public:
 	    params().addParam(new ExpFunction("htoa"));
 	    params().addParam(new ExpFunction("btoh"));
 	    params().addParam(new ExpFunction("htob"));
+	    params().addParam(new ExpFunction("getenv"));
 	}
     static void initialize(ScriptContext* context, const char* name = 0);
     inline void resetWorker()
@@ -1512,6 +1514,27 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	}
 	else
 	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
+    }
+    else if (oper.name() == YSTRING("getenv")) {
+	// str = Engine.getenv(envvarname[, defval])
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 1:
+	    case 2:
+		break;
+	    default:
+		return false;
+	}
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	const char* val = getenv(name.c_str());
+	if (val == NULL) {
+	    if (args[1])
+		ExpEvaluator::pushOne(stack,static_cast<ExpOperation*>(args[1])->clone(name));
+	    else
+		ExpEvaluator::pushOne(stack,new ExpWrapper(0,name));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(val,name));
     }
     else
 	return JsObject::runNative(stack,oper,context);

@@ -1,3 +1,20 @@
+yate (5.5.1~svn6163) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6163:
+  * Extended range for some configurable engine limits and made them
+    reloadable.
+  * Added setting to automatically enter congested mode over a message
+    rate threshold.
+  * Added setting to create more than one worker at a time.
+  * Optimized MessageDispatcher::messageCount() using the enqueue /
+    dequeue counters.
+  * Added access to Engine's call accept state from Javascript and
+    regexroute.
+  * Added setting to automatically enter congested mode over a queue
+    size threshold.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 10 Jan 2017 02:19:15 +0300
+
 yate (5.5.1~svn6161) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6161:

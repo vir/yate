@@ -1,3 +1,14 @@
+yate (5.5.1~svn6164) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6164:
+  * Added access to Engine's call accept state from Javascript and
+    regexroute.
+  * Added setting to automatically enter congested mode over a queue
+    size threshold.
+  * Frequency offset calibration by Razvan Varlan.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 13 Jan 2017 02:19:15 +0300
+
 yate (5.5.1~svn6163) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6163:

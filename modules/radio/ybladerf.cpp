@@ -95,6 +95,15 @@ static inline unsigned int validFrequency(uint32_t val, String* error = 0,
 #define BRF_FREQ_OFFS_MIN 64.0
 #define BRF_FREQ_OFFS_MAX 192.0
 
+#define BRF_MAX_DELAY_SUPER_SPEED_DEF   550
+#define BRF_MAX_DELAY_HIGH_SPEED_DEF    750
+#define BRF_BEST_DELAY_SUPER_SPEED_DEF  450
+#define BRF_BEST_DELAY_HIGH_SPEED_DEF   600
+#define BRF_KNOWN_DELAY_SUPER_SPEED_DEF 400
+#define BRF_KNOWN_DELAY_HIGH_SPEED_DEF  500
+#define BRF_SYSTEM_ACCURACY_DEF         300
+#define BRF_ACCURACY_PPB_DEF            30
+
 #define BRF_RXVGA1_GAIN_MIN     5
 #define BRF_RXVGA1_GAIN_MAX     30
 #define BRF_RXVGA1_GAIN_DEF     30
@@ -1565,10 +1574,94 @@ private:
     int m_tmpAltSet;
 };
 
+
+/**
+ * Clock discipline algorithm to sync the BladeRF's VCTCXO to local machine's clock.
+ * It's intended to maintain (measure and correct) sampling rate drifts,
+ *  caused by equipment aging and factory faults, within a desired range.
+ * 
+ * The accuracy of the measured drift is highly impacted by these factors:
+ * - the drift of the local machine's clock against the real time
+ * - the accuracy of pinning radio board samples to local machine timestamps
+ * - the time allocated for measuring the average sampling rate (a.k.a. baseline)
+ */
+class BrfVctcxoDiscipliner {
+
+public:
+    /// Create a discipliner with default settings, waiting to be activated and configured through control messages.
+    BrfVctcxoDiscipliner()
+	: m_trimsLeft(0), m_confSampleRate(0), m_freqOffset(0), m_resumePoint(0),
+	m_samples(0), m_timestamp(0), m_delay(0), m_bestDelay(0), m_maxDelay(0),
+	m_knownDelay(0), m_systemAccuracy(BRF_SYSTEM_ACCURACY_DEF), m_accuracyPpb(BRF_ACCURACY_PPB_DEF),
+	m_nextPinning(0), m_driftPpb(0), m_trace(false), m_dumpDelays(0)
+    { }
+
+    /// Handle clock discipline commands
+    bool onCmdFreqCal(Message& msg, bool start = true);
+
+    /// Postpone activity for the specified period and drop current data
+    void postponeActivity(unsigned minutes, bool dropData = false);
+
+    /// Stop activity and drop gathered data
+    void disableDiscipline();
+
+    /**
+     * Discipline the BladeRF's VCTCXO to local machine's clock
+     * This method should be called when the BrfModule catches an engine.timer message
+     * @param timestamp the call time in microseconds
+     * @param drift     a drift expressed in ppb, to be forcefully corrected
+     */
+    void trimVctcxo(uint64_t timestamp = Time::now(), int drift = 0);
+
+protected:
+    /// Update the baseline interval
+    void scheduleNextPinning(uint16_t delay);
+    /// Update parameters and drop current data if the configuration is outdated
+    bool outdatedConfig();
+    /// If it's missing, do the initial sample measurement
+    bool init();
+    /// Trim the VCTCXO based on the measured drift and dispatch a message with the new frequency offset
+    bool processData(int drift);
+    /// Compute the average radio sampling rate and return the drift (ppb) for the current interval
+    int measureDrift(uint64_t& samples, uint64_t& timestamp, uint16_t& delay);
+    /// Get the most accurate radio board sample measurement out of a given number
+    void samplesAndTimestamp(uint64_t& samples, uint64_t& timestamp, uint16_t& delay,
+	unsigned maxIter = 10);
+    /// Convert microseconds to minutes (floor division)
+    inline unsigned usToMin(uint64_t us)
+	{ return us / 60000000UL; }
+    /// The BladeRF device associated with this object
+    virtual BrfLibUsbDevice& dev() =0;
+
+    int m_trimsLeft;           ///< number of scheduled clock trims, 0 toggles to idle, -1 toggles to always active
+    unsigned m_confSampleRate; ///< configured sampling rate (Hz)
+    float m_freqOffset;        ///< frequency offset, as a number converted from VCTCXO's voltage to pass through a digital to analog converter
+    uint64_t m_resumePoint;    ///< when postponed, activity resumes after this timestamp (microsec)
+    uint64_t m_samples;        ///< initial pinning of radio board samples
+    uint64_t m_timestamp;      ///< initial pinning timestamp (microsec)
+    uint16_t m_delay;          ///< initial pinning duration (microsec)
+    uint16_t m_bestDelay;      ///< minimum pinning delay (microsec), used to identify highly accurate measurements
+    uint16_t m_maxDelay;       ///< maximum pinning delay (microsec), used to identify highly inaccurate measurements
+    uint16_t m_knownDelay;     ///< fixed, known pinning delay (microsec), used as reference for assuming delay variations
+    uint16_t m_systemAccuracy; ///< overall accuracy of the sync mechanism (microsec)
+    unsigned m_accuracyPpb;    ///< accuracy of the sampling rate measurement, expressed in ppb
+    uint64_t m_nextPinning;    ///< final pinning of samples is scheduled after this timestamp (microsec)
+    int m_driftPpb;            ///< drift of the sampling rate, expressed in ppb
+    bool m_trace;              ///< this variable is used in test mode to display debug messages
+    unsigned int m_dumpDelays; ///< number of delays to calculate and dump
+    String m_delayStat;        ///< store delays every few seconds, then dump it for analysis
+
+    static const float s_ppbPerUnit = 19000 * 1.25 / 256; ///< the unit of m_freqOffset expressed as ppb
+    // 1.9 for max ppm range, expressed in ppb
+    // 1.25 for voltage range conversion of 0.4 - 2.4V to 0 - 2.5V
+    // 2 ** 8 for integer range of m_freqOffset
+};
+
+
 class BrfThread;
 class BrfSerialize;
 
-class BrfLibUsbDevice : public GenObject
+class BrfLibUsbDevice : public GenObject, public BrfVctcxoDiscipliner
 {
     friend class BrfDevTmpAltSet;
     friend class BrfThread;
@@ -1576,6 +1669,7 @@ class BrfLibUsbDevice : public GenObject
     friend class BrfSerialize;
     friend class BrfDevState;
     friend class BrfBbCalData;
+    friend class BrfVctcxoDiscipliner;
 public:
     enum UartDev {
 	UartDevGPIO = 0,
@@ -1736,6 +1830,8 @@ public:
 	    BrfDevIO& io = getIO(tx);
 	    return io.buffers * io.bufSamples;
 	}
+    inline float freqOffset() const
+	{ return m_freqOffset; }
     // Open (on=false)/close RXOUTSW switch
     inline unsigned int setRxOut(bool on)
 	{ return writeLMS(0x09,on ? 0x80 : 0x00,0x80); }
@@ -1840,6 +1936,9 @@ public:
     unsigned int getFpgaCorr(bool tx, int corr, int16_t& value);
     // Retrieve TX/RX timestamp
     unsigned int getTimestamp(bool tx, uint64_t& ts);
+    // Retrieve TX radio timestamp (samples) with the current timestamp from the local machine
+    unsigned int samplesAndTimestamp(uint64_t& samples, uint64_t& timestamp, uint16_t& delay,
+	String* serializeErr);
     // Write LMS register(s)
     unsigned int writeLMS(uint8_t addr, uint8_t value, uint8_t* rst = 0,
 	String* error = 0, bool internal = false);
@@ -1864,6 +1963,8 @@ public:
     void runSend(BrfThread* th);
     // Utility: run device recv data
     void runRecv(BrfThread* th);
+    // Fill device identification info
+    void fillDevId(NamedList& params, const char* status = 0);
     // Release data
     virtual void destruct();
     // Create an interface
@@ -1965,6 +2066,10 @@ public:
     // Retrieve LMS PLL freq config addr
     static inline uint8_t lmsFreqAddr(bool tx)
 	{ return tx ? 0x10 : 0x20; }
+
+protected:
+    virtual BrfLibUsbDevice& dev()
+	{ return *this; }
 
 private:
     BrfLibUsbDevice(BrfInterface* owner);
@@ -2511,8 +2616,8 @@ public:
 	{ drop(); }
     inline void drop()
 	{ m_lock.drop(); }
-    inline void wait(String* error = 0) {
-	    if (m_lock.acquire(m_io.mutex)) {
+    inline void wait(String* error = 0, long maxwait = -1) {
+	    if (m_lock.acquire(m_io.mutex,maxwait)) {
 		if ((status = m_device->cancelled(error)) != 0)
 		    drop();
 	    }
@@ -2715,11 +2820,28 @@ protected:
     bool onCmdLmsWrite(BrfInterface* ifc, Message& msg);
     bool onCmdBufOutput(BrfInterface* ifc, Message& msg);
     bool onCmdShow(BrfInterface* ifc, Message& msg, const String& what = String::empty());
+    bool onCmdFreqOffs(BrfInterface* ifc, Message& msg);
+    bool onCmdFreqCal(BrfInterface* ifc, Message& msg, bool start = true);
     void setDebugPeripheral(const NamedList& list);
     void setSampleEnergize(const String& value);
+    inline bool waitDisciplineFree() {
+	    do {
+		Lock lck(this);
+		if (!m_disciplineBusy) {
+		    m_disciplineBusy = true;
+		    return true;
+		}
+		lck.drop();
+		Thread::idle();
+	    }
+	    while (!Thread::check(false));
+	    return false;
+	}
 
     unsigned int m_ifaceId;
     ObjList m_ifaces;
+    bool m_disciplineBusy;     ///< flag used to serialize the VCTCXO discipliner
+    unsigned m_lastDiscipline; ///< the timestamp (sec) of the last call on the discipliner
 };
 
 static bool s_usbContextInit = false;            // USB library init flag
@@ -2736,6 +2858,7 @@ static const String s_ifcCmds[] = {
     "cal_stop", "cal_abort",
     "balance",
     "gainexp", "phaseexp",
+     "freqoffs", "freqcalstart", "freqcalstop",
     ""};
 // libusb
 static unsigned int s_lusbSyncTransferTout = LUSB_SYNC_TIMEOUT; // Sync transfer timeout def val (in milliseconds)
@@ -3153,6 +3276,327 @@ unsigned int BrfDevTmpAltSet::restore()
     return status;
 }
 
+//
+// BrfVctcxoDiscipliner
+//
+bool BrfVctcxoDiscipliner::onCmdFreqCal(Message& msg, bool start)
+{
+    if (start) {
+	if (!m_trimsLeft) {
+	    Debug(dev().owner(),DebugNote,"Frequency calibration is starting [%p]",dev().owner());
+	    m_trimsLeft = -1;
+	}
+	const NamedString* s = msg.getParam(YSTRING("system_accuracy"));
+	if (s) {
+	    int us = s->toInteger(-1,0,0,2000);
+	    if (us >= 0) {
+		if (us != (int)m_systemAccuracy) {
+		    postponeActivity(1,true);
+		    m_systemAccuracy = us;
+		    scheduleNextPinning(m_delay);
+		}
+	    }
+	    else
+		Debug(dev().owner(),DebugNote,"VCTCXO discipliner: ignoring invalid %s='%s' [%p]",
+		    s->name().c_str(),s->c_str(),dev().owner());
+	}
+	s = msg.getParam(YSTRING("count"));
+	if (s) {
+	    int count = s->toInteger();
+	    if (count >= 0)
+		m_trimsLeft = (count) ? count : -1;
+	    else
+		Debug(dev().owner(),DebugNote,"VCTCXO discipliner: ignoring invalid %s='%s' [%p]",
+		    s->name().c_str(),s->c_str(),dev().owner());
+	}
+    }
+    else if (!m_trimsLeft) {
+	msg.retValue() << "frequency calibration is currently disabled";
+	return true;
+    }
+    // return current parameters
+    if (m_trimsLeft > 0)
+	msg.retValue() << "count=" << m_trimsLeft << " ";
+    uint64_t usec = Time::now();
+    unsigned int last = (!m_samples ? 0 : usToMin(m_nextPinning - m_timestamp));
+    unsigned int remains = (!m_samples ? 0 : usToMin(m_nextPinning - usec));
+    msg.retValue() << "measurement_interval=" << last << "min (" << remains <<
+	"min left) system_accuracy=" << m_systemAccuracy << "us measurement_accuracy=" <<
+	m_accuracyPpb << "ppb freqoffs=" << dev().m_freqOffset;
+    if (m_resumePoint > usec)
+	msg.retValue() << " (idling for " << usToMin(m_resumePoint - usec) << "min)";
+    else if (!start && m_samples) {
+	uint64_t samples = 0, timestamp = 0;
+	uint16_t delay = 0;
+	int ppb = measureDrift(samples,timestamp,delay);
+	if (samples) {
+	    String str;
+	    msg.retValue() << (str.printf(" (current drift: ppb=%d interval=%gmin delay=%uus",
+		ppb,(timestamp - m_timestamp) / 60.0e6F,delay));
+	}
+	else
+	    msg.retValue() << " (drift measurement failed)";
+    }
+    return true;
+}
+
+void BrfVctcxoDiscipliner::postponeActivity(unsigned minutes, bool dropData)
+{
+    if (minutes) {
+	m_resumePoint = usToMin(minutes) + Time::now();
+	if (m_trace)
+	    Debug(dev().owner(),DebugInfo,"VCTCXO discipliner: postpone %u min [%p]",minutes,dev().owner());
+    }
+    if (dropData && m_samples) {
+	m_samples = 0;
+	if (m_trace)
+	    Debug(dev().owner(),DebugInfo,"VCTCXO discipliner: dropping current data [%p]",dev().owner());
+    }
+}
+
+void BrfVctcxoDiscipliner::disableDiscipline()
+{
+    if (!m_trimsLeft)
+	return;
+    m_trimsLeft = 0;
+    postponeActivity(0,true);
+    Debug(dev().owner(),DebugNote,"Frequency calibration is stopping (disabled) [%p]",
+	dev().owner());
+}
+
+void BrfVctcxoDiscipliner::trimVctcxo(uint64_t timestamp, int drift)
+{
+    // process a previously measured drift or as forced input
+    if (processData(drift ? drift : m_driftPpb))
+	return;
+    // minimize activity until all prerequisites are met
+    if (!m_trimsLeft || outdatedConfig() || m_resumePoint > timestamp || init())
+	return;
+    // Dump delays ?
+    if (m_dumpDelays) {
+	uint64_t samples = 0;
+	uint64_t timestamp = 0;
+	uint16_t delay = 0;
+	String err;
+	Thread::yield();
+	dev().samplesAndTimestamp(samples,timestamp,delay,&err);
+	if (samples) {
+	    bool dump = (m_dumpDelays == 1);
+	    m_dumpDelays--;
+	    m_delayStat.append(String(delay)," ");
+	    if (dump) {
+		Output("VCTCXO discipliner delays: %s",m_delayStat.c_str());
+		m_delayStat.clear();
+	    }
+	}
+    }
+    // wait the passing of the baseline interval before trying to determine the current drift
+    if (m_nextPinning > timestamp)
+	return;
+    uint64_t samples = 0;
+    uint16_t delay = 0;
+    m_driftPpb = measureDrift(samples,timestamp,delay);
+    // update the baseline interval if the measurement is valid
+    if (!samples)
+	return;
+    scheduleNextPinning(delay);
+    // drop the measured drift if the measurement isn't accurate
+    if (m_nextPinning > timestamp) {
+	if (m_trace)
+	    Debug(dev().owner(),DebugInfo,
+		"VCTCXO discipliner: inaccurate measurement rescheduled in %umin [%p]",
+		usToMin(m_nextPinning - Time::now()),dev().owner());
+	m_driftPpb = 0;
+	return;
+    }
+    // replace the initial measurement
+    m_samples = samples;
+    m_timestamp = timestamp;
+    m_delay = delay;
+}
+
+void BrfVctcxoDiscipliner::scheduleNextPinning(uint16_t delay)
+{
+    m_nextPinning = m_systemAccuracy;
+    if (m_delay > m_knownDelay)
+	m_nextPinning += m_delay - m_knownDelay;
+    if (delay > m_knownDelay)
+	m_nextPinning += delay - m_knownDelay;
+    m_nextPinning *= 1000000000UL / m_accuracyPpb;
+    m_nextPinning += m_timestamp;
+    if (m_trace)
+	Debug(dev().owner(),DebugInfo,
+	    "VCTCXO discipliner: scheduled next pinning at %f (%umin) system_accuracy=%u "
+	    "accuracy_ppb=%u delay(initial/current/known)=%u/%u/%u [%p]",
+	    1.0e-6 * m_nextPinning,usToMin(m_nextPinning - m_timestamp),
+	    m_systemAccuracy,m_accuracyPpb,m_delay,delay,m_knownDelay,dev().owner());
+}
+
+bool BrfVctcxoDiscipliner::outdatedConfig()
+{
+    // check if current configuration is already valid
+    if (dev().getDirState(true).rfEnabled
+	&& dev().m_calibrateStatus != BrfLibUsbDevice::Calibrating
+	&& dev().m_freqOffset == m_freqOffset
+	&& dev().getDirState(true).sampleRate == m_confSampleRate
+	&& m_confSampleRate)
+	return false;
+    if (m_freqOffset != dev().m_freqOffset) {
+	if (m_trace && m_freqOffset)
+	    Debug(dev().owner(),DebugInfo,
+		"VCTCXO discipliner: voltageDAC changed %g -> %g [%p]",
+		m_freqOffset,dev().m_freqOffset,dev().owner());
+	m_freqOffset = dev().m_freqOffset;
+    }
+    if (m_confSampleRate != dev().getDirState(true).sampleRate) {
+	if (m_trace && m_confSampleRate)
+	    Debug(dev().owner(),DebugInfo,
+		"VCTCXO discipliner: configSampleRate changed %u -> %u [%p]",
+		m_confSampleRate,dev().getDirState(true).sampleRate,dev().owner());
+	m_confSampleRate = dev().getDirState(true).sampleRate;
+    }
+    postponeActivity(3,true);
+    return true;
+}
+
+bool BrfVctcxoDiscipliner::init()
+{
+    if (!m_samples) {
+	samplesAndTimestamp(m_samples,m_timestamp,m_delay,20);
+	scheduleNextPinning(m_delay);
+	return true;
+    }
+    return false;
+}
+
+bool BrfVctcxoDiscipliner::processData(int drift)
+{
+    if (!drift)
+	return false;
+    if (m_driftPpb && drift != m_driftPpb) {
+	Debug(dev().owner(),DebugNote,
+	    "VCTCXO discipliner: dropping last measured drift %dppb [%p]",
+	    m_driftPpb,dev().owner());
+	m_driftPpb = 0;
+    }
+    // transform the drift in voltageDAC units used for trimming the VCTCXO
+    float trimDAC = -drift / s_ppbPerUnit;
+    // limit the change in voltage (trimDAC = +/-10 => approx. +/-0.1V)
+    const int limit = 12; // arbitrary
+    if (trimDAC < -limit || trimDAC > limit) // clamp
+	trimDAC = (trimDAC > limit) ? limit : -limit;
+    float newOffs = dev().m_freqOffset + trimDAC;
+    if (m_trace)
+	Debug(dev().owner(),(!m_driftPpb) ? DebugInfo : DebugNote,
+	    "VCTCXO discipliner: changing FrequencyOffset %g -> %g drift=%dppb [%p]",
+	    dev().m_freqOffset,newOffs,drift,dev().owner());
+    // trim the VCTCXO
+    unsigned status = dev().setFreqOffset(newOffs);
+    if (status) {
+	// postpone activity for a minute to avoid a flood of debug messages
+	postponeActivity(1);
+	XDebug(dev().owner(),DebugNote,
+	    "VCTCXO discipliner: failed to set FrequencyOffset to %g status=%u %s [%p]",
+	    newOffs,status,RadioInterface::errorName(status),dev().owner());
+	return true;
+    }
+    postponeActivity(1,true);
+    // no more actions to be done if this was a forced drift correction
+    if (!m_driftPpb)
+	return true;
+    // enqueue a feedback message with the adjusted frequency offset
+    Message* feedback = new Message("module.update");
+    feedback->addParam("module",__plugin.name());
+    dev().fillDevId(*feedback);
+    feedback->addParam("RadioFrequencyOffset",String(dev().m_freqOffset));
+    Engine::enqueue(feedback);
+    // clear the pending drift
+    m_driftPpb = 0;
+    // decrease the number of scheduled trims, unless toggled on (-1)
+    if (m_trimsLeft > 0) {
+	m_trimsLeft--;
+	if (!m_trimsLeft)
+	    Debug(dev().owner(),DebugNote,
+		"Frequency calibration is stopping (count=0) [%p]",dev().owner());
+	else if (m_trace)
+	    Debug(dev().owner(),DebugInfo,"VCTCXO discipliner: %d trims left [%p]",
+		m_trimsLeft,dev().owner());
+    }
+    return true;
+}
+
+int BrfVctcxoDiscipliner::measureDrift(uint64_t& samples, uint64_t& timestamp, uint16_t& delay)
+{
+    samplesAndTimestamp(samples,timestamp,delay);
+    // revoke the measurement results for invalid samples or timestamp
+    if (samples < m_samples || timestamp < m_timestamp)
+	samples = 0;
+    if (!samples) {
+	XDebug(dev().owner(),DebugInfo,"VCTCXO discipliner: invalid sample to timestamp pinning,"
+	    " failed to measure drift [%p]",dev().owner());
+	return 0;
+    }
+    // compute the average sample rate for the current interval,
+    // expressed in Hz (the microsec timestamp gets converted to sec)
+    double sampleRate = (double)(samples - m_samples) / (1.0e-6 * (timestamp - m_timestamp));
+    int drift = 1.0e9 * (sampleRate / m_confSampleRate - 1);
+    if (m_trace)
+	Debug(dev().owner(),DebugInfo,"VCTCXO discipliner: measured drift=%dppb sampleRate "
+	    "current=%f configured=%u deltaSamples=" FMT64U " deltaTs=" FMT64U " [%p]",
+	drift,sampleRate,m_confSampleRate,samples - m_samples,timestamp - m_timestamp,dev().owner());
+    return drift;
+}
+
+void BrfVctcxoDiscipliner::samplesAndTimestamp(uint64_t& samples, uint64_t& timestamp,
+    uint16_t& delay, unsigned maxIter)
+{
+    static unsigned int s_stop = RadioInterface::NotInitialized | RadioInterface::NotCalibrated |
+	RadioInterface::Cancelled;
+    samples = 0;
+    delay = m_maxDelay + 1;
+    unsigned timeouts = 0;
+    unsigned i = 0;
+    for (; i < maxIter; i++) {
+	uint64_t tempSamples = 0;
+	uint64_t tempTs = 0;
+	uint16_t tempDelay = 0;
+	String serializeErr;
+	Thread::yield();
+	unsigned status = dev().samplesAndTimestamp(tempSamples,tempTs,tempDelay,&serializeErr);
+	if (status) {
+	    if (0 != (status & s_stop)) {
+		postponeActivity(1);
+		return;
+	    }
+	    if (status == RadioInterface::Failure && serializeErr)
+		timeouts++;
+	}
+	// drop invalid and imprecise measurements
+	if (!tempSamples || tempDelay > delay)
+	    continue;
+	// higher accuracy measurement
+	delay = tempDelay;
+	samples = tempSamples;
+	timestamp = tempTs;
+	if (delay < m_knownDelay) {
+	    if (m_trace)
+		Debug(dev().owner(),DebugInfo,"VCTCXO discipliner: known delay changed %u -> %u [%p]",
+		    m_knownDelay,delay * 19 / 20,dev().owner());
+	    m_knownDelay = delay * 19 / 20;
+	    scheduleNextPinning(m_delay);
+	}
+	// optimal measurement
+	if (delay < m_bestDelay)
+	    break;
+    }
+    if (m_trace)
+	Debug(dev().owner(),(delay < m_maxDelay) ? DebugInfo : DebugNote,
+	    "VCTCXO discipliner: got samples=" FMT64U " timestamp=%f delay=%u "
+	    "(max=%u best=%u known=%u) iteration %u/%u timeouts=%u [%p]",
+	    samples,1.0e-6 * timestamp,delay,m_maxDelay,m_bestDelay,
+	    m_knownDelay,i,maxIter,timeouts,dev().owner());
+}
+
 
 //
 // BrfLibUsbDevice
@@ -3508,6 +3952,9 @@ void BrfLibUsbDevice::reLoad(const NamedList* params)
     const NamedString* p = params->getParam(YSTRING("rxoutsw"));
     if (p)
 	setRxOut(p->toBoolean());
+    m_trace = params->getBoolValue(YSTRING("trace_discipliner"));
+    if (!m_dumpDelays)
+	m_dumpDelays = params->getIntValue(YSTRING("trace_discipliner_delays"),0,0);
 }
 
 // dir: 0=both negative=rx positive=tx
@@ -3602,9 +4049,19 @@ unsigned int BrfLibUsbDevice::open(const NamedList& params)
 	BRF_FUNC_CALL_BREAK(lmsRead(0x04,data,&e));
 	m_lmsVersion.printf("0x%x (%u.%u)",data,(data >> 4),(data & 0x0f));
 	BRF_FUNC_CALL_BREAK(tmpAltSet.restore());
-	m_freqOffset = clampFloatParam(params,"RadioFrequencyOffset",
+	m_freqOffset = clampFloatParam(params,YSTRING("RadioFrequencyOffset"),
 	    BRF_FREQ_OFFS_DEF,BRF_FREQ_OFFS_MIN,BRF_FREQ_OFFS_MAX);
 	m_txGainCorrSoftware = params.getBoolValue(YSTRING("tx_fpga_corr_gain_software"),true);
+	bool superSpeed = (speed() == LIBUSB_SPEED_SUPER);
+	m_maxDelay = clampIntParam(params,YSTRING("max_delay"),superSpeed ?
+	    BRF_MAX_DELAY_SUPER_SPEED_DEF : BRF_MAX_DELAY_HIGH_SPEED_DEF,100,2000);
+	m_bestDelay = clampIntParam(params,YSTRING("best_delay"),superSpeed ?
+	    BRF_BEST_DELAY_SUPER_SPEED_DEF : BRF_BEST_DELAY_HIGH_SPEED_DEF,100,m_maxDelay);
+	m_knownDelay = clampIntParam(params,YSTRING("known_delay"),superSpeed ?
+	    BRF_KNOWN_DELAY_SUPER_SPEED_DEF : BRF_KNOWN_DELAY_HIGH_SPEED_DEF,100,m_bestDelay);
+	m_systemAccuracy = clampIntParam(params,YSTRING("system_accuracy"),
+	    BRF_SYSTEM_ACCURACY_DEF,100,2000);
+	m_accuracyPpb = clampIntParam(params,YSTRING("accuracy_ppb"),BRF_ACCURACY_PPB_DEF,10,200);
 	// Init TX/RX buffers
 	m_rxResyncCandidate = 0;
 	m_state.m_rxDcAuto = params.getBoolValue("rx_dc_autocorrect",true);
@@ -3727,7 +4184,7 @@ unsigned int BrfLibUsbDevice::initialize(const NamedList& params)
 	    m_owner && m_owner->debugAt(DebugAll)) {
 	    String s;
 #ifdef DEBUG
-	    if (!txSerialize.status)
+	    if (!status)
 		internalDumpDev(s,false,true,"\r\n",true,true,true);
 #endif
 	    Debug(m_owner,DebugAll,"Initialized [%p]%s",m_owner,encloseDashes(s,true));
@@ -4067,6 +4524,9 @@ unsigned int BrfLibUsbDevice::calibrate(bool sync, const NamedList& params,
     if (!m_initialized)
 	status = setError(RadioInterface::NotInitialized,&e,"not initialized");
     BrfDuration duration;
+    // force the VCTCXO discipliner to drop it's data
+    if (sync)
+	postponeActivity(1,true);
     while (!status) {
 	if (!sync) {
 	    if (m_owner && fromInit)
@@ -4185,6 +4645,27 @@ unsigned int BrfLibUsbDevice::getTimestamp(bool tx, uint64_t& ts)
 {
     BRF_TX_SERIALIZE_CHECK_DEV("getTimestamp()");
     return internalGetTimestamp(tx,ts);
+}
+
+unsigned int BrfLibUsbDevice::samplesAndTimestamp(uint64_t& samples, uint64_t& timestamp,
+    uint16_t& delay, String* serializeErr)
+{
+    BrfSerialize txSerialize(this,true,false);
+    txSerialize.wait(serializeErr,12000);
+    if (!txSerialize.status)
+	txSerialize.status = checkDev("samplesAndTimestamp()");
+    if (!txSerialize.status) {
+	uint64_t initial = Time::now();
+	txSerialize.status = internalGetTimestamp(true,samples);
+	timestamp = Time::now();
+	if (!txSerialize.status && timestamp > initial) {
+	    delay = timestamp - initial;
+	    timestamp = (timestamp + initial) / 2;
+	    return 0;
+	}
+    }
+    samples = 0;
+    return txSerialize.status;
 }
 
 unsigned int BrfLibUsbDevice::writeLMS(uint8_t addr, uint8_t value, uint8_t* rst,
@@ -4389,6 +4870,17 @@ void BrfLibUsbDevice::runRecv(BrfThread* th)
 	m_internalIoSemaphore.unlock();
     }
     m_internalIoSemaphore.unlock();
+}
+
+// Fill device identification info
+void BrfLibUsbDevice::fillDevId(NamedList& params, const char* status)
+{
+    if (owner())
+	params.addParam("interface",owner()->toString());
+    params.addParam("serial",serial());
+    String str;
+    params.addParam("address",str.printf("USB/%d/%d",bus(),addr()));
+    params.addParam("status",status,false);
 }
 
 // Release data
@@ -7169,6 +7661,7 @@ const char* BrfLibUsbDevice::getBufField(String& value, const char* field)
 unsigned int BrfLibUsbDevice::getCalField(String& value, const String& name,
     const char* desc, String* error)
 {
+    // NOTE calibration cache may be obsolete, readCalCache is called at initialization only
     String e = getBufField(value,name);
     if (!e)
 	return 0;
@@ -9617,7 +10110,9 @@ void BrfInterface::destroyed()
 //
 BrfModule::BrfModule()
     : Module("bladerf","misc",true),
-    m_ifaceId(0)
+    m_ifaceId(0),
+    m_disciplineBusy(false),
+    m_lastDiscipline(0)
 {
     String tmp;
 #ifdef HAVE_LIBUSB_VER
@@ -9668,6 +10163,7 @@ void BrfModule::initialize()
     unlock();
     if (!relayInstalled(RadioCreate)) {
 	setup();
+	installRelay(Timer);
 	installRelay(Halt);
 	installRelay(Control);
 	installRelay(RadioCreate,"radio.create",gen.getIntValue("priority",90));
@@ -9718,6 +10214,29 @@ bool BrfModule::received(Message& msg, int id)
 	if (comp == name() || findIface(ifc,comp))
 	    return onCmdControl(ifc,msg);
 	return false;
+    }
+    if (id == Timer && msg.msgTime().sec() > m_lastDiscipline + 4) {
+	m_lastDiscipline = msg.msgTime().sec();
+	// protect BrfVctcxoDiscipliner objects from multiple threads
+	lock();
+	if (!m_disciplineBusy) {
+	    m_disciplineBusy = true;
+	    ListIterator iter(m_ifaces);
+	    for (GenObject* gen = iter.get(); gen != 0; gen = iter.get()) {
+		RefPointer<BrfInterface> ifc = static_cast<BrfInterface*>(gen);
+		if (!ifc)
+		    continue;
+		unlock();
+		BrfLibUsbDevice* dev = ifc->device();
+		// discipline VCTCXO according to BrfLibUsbDevice's local settings
+		if (dev)
+		    dev->trimVctcxo(msg.msgTime().usec());
+		ifc = 0;
+		lock();
+	    }
+	    m_disciplineBusy = false;
+	}
+	unlock();
     }
     return Module::received(msg,id);
 }
@@ -9851,8 +10370,14 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	"\r\n  Set or retrieve TX/RX VGA mixer gain"
 	"\r\ncontrol ifc_name correction tx=boolean corr={dc-i|dc-q|fpga-gain|fpga-phase} [value=]"
 	"\r\n  Set or retrieve TX/RX DC I/Q or FPGA GAIN/PHASE correction"
-	"\r\ncontrol ifc_name show [info=status|statistics|timestamps|boardstatus|peripheral] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]"
-	"\r\n  Verbose output various interface info";
+	"\r\ncontrol ifc_name freqoffs [{value|drift}=]"
+	"\r\n  Set (absolute value or a drift expressed in ppb to force a clock trim) or retrieve the frequency offset"
+	"\r\ncontrol ifc_name show [info=status|statistics|timestamps|boardstatus|peripheral|freqcal] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]"
+	"\r\n  Verbose output various interface info"
+	"\r\ncontrol ifc_name freqcalstart [system_accuracy=] [count=]"
+	"\r\n  Start or re-configure the frequency calibration process"
+	"\r\ncontrol ifc_name freqcalstop"
+	"\r\n  Stop the frequency calibration process";
 
     const String& cmd = msg[YSTRING("operation")];
     // Module commands
@@ -9944,6 +10469,15 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	return onCmdShow(ifc,msg,YSTRING("lms"));
     if (cmd == YSTRING("show"))
 	return onCmdShow(ifc,msg);
+    if (cmd == YSTRING("freqoffs"))
+	return onCmdFreqOffs(ifc,msg);
+    if (cmd == YSTRING("freqcalstart"))
+	return onCmdFreqCal(ifc,msg,true);
+    if (cmd == YSTRING("freqcalstop")) {
+	ifc->device()->disableDiscipline();
+	msg.retValue() << "frequency calibration disabled";
+	return true;
+    }
     bool calStop = (cmd == YSTRING("cal_stop"));
     if (calStop || cmd == YSTRING("cal_abort")) {
 	if (!ifc->device())
@@ -10132,7 +10666,7 @@ bool BrfModule::onCmdBufOutput(BrfInterface* ifc, Message& msg)
     return true;
 }
 
-// control ifc_name show [info=status|statistics|timestamps|boardstatus|peripheral] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]
+// control ifc_name show [info=status|statistics|timestamps|boardstatus|peripheral|freqcal] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]
 bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg, const String& what)
 {
     if (!ifc->device())
@@ -10142,6 +10676,8 @@ bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg, const String& what)
 	info = what;
     else
 	info = msg.getValue(YSTRING("info"),"status");
+    if (info == YSTRING("freqcal"))
+	return onCmdFreqCal(ifc,msg,false);
     String str;
     if (info == YSTRING("status"))
 	ifc->device()->dumpDev(str,true,true,"\r\n");
@@ -10187,6 +10723,47 @@ bool BrfModule::onCmdShow(BrfInterface* ifc, Message& msg, const String& what)
 	    ifc->debugName(),info.c_str(),buf,ifc,encloseDashes(str,true));
     }
     return true;
+}
+
+// control ifc_name freqoffs [{value|drift}=]
+bool BrfModule::onCmdFreqOffs(BrfInterface* ifc, Message& msg)
+{
+    if (!ifc->device())
+	return retMsgError(msg,"No device");
+    const String* strRet = msg.getParam(YSTRING("value"));
+    if (strRet) {
+	float freqoffs = strRet->toDouble(-1);
+	if (freqoffs > 0) {
+	    unsigned code = ifc->device()->setFreqOffset(freqoffs);
+	    if (code)
+		return retValFailure(msg,code);
+	}
+	else
+	    return retParamError(msg,"value");
+    }
+    else if ((strRet = msg.getParam(YSTRING("drift"))) != 0) {
+	int drift = strRet->toInteger();
+	if (!drift)
+	    return retParamError(msg,"drift");
+	if (!waitDisciplineFree())
+	    return false;
+	ifc->device()->trimVctcxo(Time::now(),drift);
+	m_disciplineBusy = false;
+    }
+    msg.retValue() << "freqoffs=" << ifc->device()->freqOffset();
+    return true;
+}
+
+// control ifc_name freqcalstart [system_accuracy=] [count=] or control ifc_name show info=freqcal
+bool BrfModule::onCmdFreqCal(BrfInterface* ifc, Message& msg, bool start)
+{
+    if (!ifc->device())
+	return retMsgError(msg,"No device");
+    if (!waitDisciplineFree())
+	return false;
+    bool ret = ifc->device()->onCmdFreqCal(msg,start);
+    m_disciplineBusy = false;
+    return ret;
 }
 
 void BrfModule::setDebugPeripheral(const NamedList& params)

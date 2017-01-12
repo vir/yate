@@ -74,6 +74,43 @@
 ; Defaults to yes
 ;tx_fpga_corr_gain_software=yes
 
+; max_delay: integer: Maximum delay (in microseconds) expected for pinning a sample measurement with
+;  its associated timestamp, used when disciplining the VCTCXO to the local machine clock
+; Allowed interval [100..2000]
+; Defaults to 550 microseconds on USB 3.0 or 750 on USB 2.0
+;max_delay=550
+
+; best_delay: integer: Best delay (in microseconds) expected for pinning a sample measurement with
+;  its associated timestamp, used when disciplining the VCTCXO to the local machine clock
+; Allowed interval [100..max_delay]
+; Defaults to 450 microseconds on USB 3.0 or 600 on USB 2.0
+;best_delay=450
+
+; known_delay: integer: Known delay (in microseconds) expected for pinning a sample measurement
+;  with its associated timestamp, used when disciplining the VCTCXO to the local machine clock
+; This parameter configures a known 'fixed' timestamp read time (i.e. the duration of USB
+;  transfer(s) needed to read board's timestamp)
+; Allowed interval [100..best_delay]
+; Defaults to 400 microseconds on USB 3.0 or 500 on USB 2.0
+;known_delay=400
+
+; system_accuracy: integer: Accuracy (in microseconds) of the whole sync mechanism to the real
+;  time (includes local clock's drift)
+; Used to calculate interval needed to do a frequency calibration
+; Allowed interval [100..2000]
+; Defaults to 300 microseconds
+;system_accuracy=300
+
+; accuracy_ppb: integer: Desired accuracy of the frequency calibration expressed in parts-per-billion
+; Used to calculate interval needed to do a frequency calibration
+; Allowed interval [10..200]
+; Defaults to 30 ppb
+;accuracy_ppb=30
+
+; trace_discipliner: boolean: Enable debug messages for VCTCXO discipliner behavior (trace)
+; Disabled by default
+;trace_discipliner=disable
+
 
 [libusb]
 ; This section configures libusb backend related data

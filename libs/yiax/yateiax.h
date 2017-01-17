@@ -2102,6 +2102,24 @@ public:
 	{ return sendConnected(IAXFullFrame::Proceeding); }
 
     /**
+     * Send a KEYRADIO frame to remote peer
+     * This method is thread safe
+     * @return False if the current transaction state is not Connected
+     */
+
+    inline bool sendKeyRadio()
+	{ return sendConnected(IAXFullFrame::KeyRadio); }
+
+    /**
+     * Send a UNKEYRADIO frame to remote peer
+     * This method is thread safe
+     * @return False if the current transaction state is not Connected
+     */
+
+    inline bool sendUnkeyRadio()
+	{ return sendConnected(IAXFullFrame::UnkeyRadio); }
+
+    /**
      * Send an ACCEPT/REGACK frame to remote peer
      * This method is thread safe
      * @param expires Optional pointer to expiring time for register transactions

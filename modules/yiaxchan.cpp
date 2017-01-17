@@ -558,6 +558,8 @@ public:
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
+    virtual bool keyRadio();
+    virtual bool unkeyRadio();
     virtual void disconnected(bool final, const char* reason);
     bool disconnect(const char* reason = 0);
     inline IAXTransaction* transaction() const
@@ -2643,6 +2645,26 @@ bool YIAXConnection::msgText(Message& msg, const char* text)
     Lock lock(&m_mutexTrans);
     if (m_transaction) {
 	m_transaction->sendText(text);
+	return true;
+    }
+    return false;
+}
+
+bool YIAXConnection::keyRadio()
+{
+    Lock lock(&m_mutexTrans);
+    if (m_transaction) {
+	m_transaction->sendKeyRadio();
+	return true;
+    }
+    return false;
+}
+
+bool YIAXConnection::unkeyRadio()
+{
+    Lock lock(&m_mutexTrans);
+    if (m_transaction) {
+	m_transaction->sendUnkeyRadio();
 	return true;
     }
     return false;

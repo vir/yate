@@ -57,6 +57,7 @@
 ;  $(message,name) = name of the message handled
 ;  $(message,time) = time of the message handled, seconds since UNIX Epoch
 ;  $(message,broadcast) = true if the message is a broadcast, false otherwise
+;  $(message,retval) = string return value of the cirrent message
 ;  $(message,count) = parameter count of the message handled
 ;  $(message,parameters) = parameter list of the message handled, comma separated
 ;  $(message,parameters,sep) = parameter list of the message handled, explicit separator
@@ -186,12 +187,14 @@
 ; jump, goto - jumps to another context, does not return to this context
 ; match - modify the matched string instead of specifying a target
 ; rename - changes the name of the message
+; retval - sets the returned string value of the message
 ; enqueue - puts a new message in the engine, parameters are taken from the
 ;   old message but placed in the new one
 ; dispatch - dispatches a new message in the engine waiting for it to return,
 ;   parameters are taken from the old message but placed in the new one
 ; echo, output - displays that line after making substitutions
 ; debug - displays line as a debug after making substitutions
+; noop - no action but evaluates rest of target for side effects
 ; { - starts a block that ends on another line with }
 ; The @jump, @goto, @include and @call forms suppress warning if missing target
 ;

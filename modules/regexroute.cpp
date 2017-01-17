@@ -381,6 +381,8 @@ static void evalFunc(String& str, Message& msg)
 		str = msg.msgTime().sec();
 	    else if (par == YSTRING("broadcast"))
 		str = msg.broadcast();
+	    else if (par == YSTRING("retval"))
+		str = msg.retValue();
 	    else if (par == YSTRING("count"))
 		str = msg.count();
 	    else if (par == YSTRING("parameters")) {
@@ -776,7 +778,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 	    setMessage(match,msg,val);
 	    warn = true;
 	    val.trimBlanks();
-	    if (val.null()) {
+	    if (val.null() || val.startSkip("noop")) {
 		// special case: do nothing on empty target
 		continue;
 	    }
@@ -814,6 +816,11 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			msg.c_str(),val.c_str(),i+1,n->name().c_str(),context.c_str());
 		    msg = val;
 		}
+	    }
+	    else if (val.startSkip("retval")) {
+		NDebug("RegexRoute",DebugAll,"Setting retValue length %u by rule #%u '%s' in context '%s'",
+			val.length(),i+1,n->name().c_str(),context.c_str());
+		ret = val;
 	    }
 	    else {
 		DDebug("RegexRoute",DebugAll,"Returning '%s' for '%s' in context '%s' by rule #%u '%s'",

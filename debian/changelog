@@ -1,3 +1,23 @@
+yate (5.5.1~svn6172) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6172:
+  * Fixed data member type.
+  * Moved static data member init outside class declaration.
+  * Fixed bug: removed semicolon after 'if' test. Fixed some debug
+    format specifiers.
+  * Added Engine methods for retrieving uptime from Javascript.
+  * These allow manipulating parameters whose name clashes with a
+    method.
+  * Added methods getParam and setParam to Javascript Message object.
+  * Added support to configure a test from handled message. Added
+    support for test to emit a notification message when terminated.
+  * Added support to notify device power on/off. Notify calibration
+    termination also (put calibration parameters on success). Load
+    calibration related parameters if returned in power on notification
+    message.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 21 Jan 2017 02:19:15 +0300
+
 yate (5.5.1~svn6165) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6165:

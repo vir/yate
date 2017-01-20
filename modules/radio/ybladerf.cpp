@@ -1651,7 +1651,7 @@ protected:
     unsigned int m_dumpDelays; ///< number of delays to calculate and dump
     String m_delayStat;        ///< store delays every few seconds, then dump it for analysis
 
-    static const float s_ppbPerUnit = 19000 * 1.25 / 256; ///< the unit of m_freqOffset expressed as ppb
+    static const float s_ppbPerUnit; ///< the unit of m_freqOffset expressed as ppb
     // 1.9 for max ppm range, expressed in ppb
     // 1.25 for voltage range conversion of 0.4 - 2.4V to 0 - 2.5V
     // 2 ** 8 for integer range of m_freqOffset
@@ -2845,6 +2845,7 @@ protected:
 };
 
 static bool s_usbContextInit = false;            // USB library init flag
+const float BrfVctcxoDiscipliner::s_ppbPerUnit = 19000 * 1.25 / 256;
 INIT_PLUGIN(BrfModule);
 static Configuration s_cfg;                      // Configuration file (protected by plugin mutex)
 static const String s_modCmds[] = {"help",""};

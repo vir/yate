@@ -282,9 +282,9 @@ static inline unsigned int checkCancelled(String* error = 0)
     return RadioInterface::Cancelled;
 }
 
-static inline float getSampleLimit(const NamedList& p, const char* name = "sample_limit")
+static inline float getSampleLimit(const NamedList& p, double defVal = (double)2040 / 2047)
 {
-    float limit = (float)p.getDoubleValue(name,(float)2040 / 2047);
+    float limit = (float)p.getDoubleValue(YSTRING("sample_limit"),defVal);
     return (limit < 0) ? -limit : ((limit <= 1.0F) ? limit : 1.0F);
 }
 
@@ -1108,7 +1108,6 @@ public:
     unsigned int showPowerBalanceChange; // Show power balance changed debug message
     bool rfEnabled;                      // RF enabled flag
     unsigned int frequency;              // Used frequency
-    unsigned int freqOffset;             // Used frequency offset
     int vga1;                            // VGA1 gain
     bool vga1Changed;                    // VGA1 was set by us
     int vga2;                            // VGA2 gain
@@ -1963,8 +1962,8 @@ public:
     void runSend(BrfThread* th);
     // Utility: run device recv data
     void runRecv(BrfThread* th);
-    // Fill device identification info
-    void fillDevId(NamedList& params, const char* status = 0);
+    // Build notification message
+    Message* buildNotify(const char* status = 0);
     // Release data
     virtual void destruct();
     // Create an interface
@@ -2501,12 +2500,15 @@ private:
 	    return 0;
 	}
     unsigned int waitCancel(const char* loc, const char* reason, String* error);
+    // Apply parameters from start notification message
+    unsigned int applyStartParams(const NamedList& params, String* error);
 
     BrfInterface* m_owner;               // The interface owning the device
     bool m_initialized;                  // Initialized flag
     bool m_exiting;                      // Exiting flag
     bool m_closing;                      // Closing flag
     bool m_closingDevice;                // Closing device flag
+    bool m_notifyOff;                    // Notify power off
     Mutex m_dbgMutex;
     // libusb
     libusb_context* m_context;           // libusb context
@@ -3506,9 +3508,7 @@ bool BrfVctcxoDiscipliner::processData(int drift)
     if (!m_driftPpb)
 	return true;
     // enqueue a feedback message with the adjusted frequency offset
-    Message* feedback = new Message("module.update");
-    feedback->addParam("module",__plugin.name());
-    dev().fillDevId(*feedback);
+    Message* feedback = dev().buildNotify();
     feedback->addParam("RadioFrequencyOffset",String(dev().m_freqOffset));
     Engine::enqueue(feedback);
     // clear the pending drift
@@ -3637,6 +3637,7 @@ BrfLibUsbDevice::BrfLibUsbDevice(BrfInterface* owner)
     m_exiting(false),
     m_closing(false),
     m_closingDevice(false),
+    m_notifyOff(false),
     m_dbgMutex(false,"BrfDevDbg"),
     m_context(0),
     m_list(0),
@@ -4173,13 +4174,32 @@ unsigned int BrfLibUsbDevice::initialize(const NamedList& params)
 	break;
     }
     if (!status) {
+	txSerialize.drop();
+	rxSerialize.drop();
 	m_initialized = true;
 	if (params.getBoolValue(YSTRING("calibrate"))) {
-	    txSerialize.drop();
-	    rxSerialize.drop();
 	    NamedList tmp("");
 	    tmp.copySubParams(params,"calibrate_");
 	    status = calibrate(tmp.getBoolValue(YSTRING("sync")),tmp,&e,true);
+	}
+	else {
+	    m_notifyOff = true;
+	    Message* m = buildNotify("start");
+	    BrfDevDirState& dir = getDirState(true);
+	    m->addParam("tx_frequency",String(dir.frequency));
+	    m->addParam("tx_samplerate",String(dir.sampleRate));
+	    m->addParam("tx_filter",String(dir.lpfBw));
+	    Engine::dispatch(*m);
+	    // Lock TX. Re-check our state. Apply params
+	    txSerialize.wait();
+	    if (!txSerialize.status) {
+		status = checkPubFuncEntry(false,"initialize()");
+		if (!status)
+		    status = applyStartParams(*m,&e);
+	    }
+	    else
+		status = txSerialize.status;
+	    TelEngine::destruct(m);
 	}
 	if ((!status || status == RadioInterface::Pending) &&
 	    m_owner && m_owner->debugAt(DebugAll)) {
@@ -4575,6 +4595,15 @@ unsigned int BrfLibUsbDevice::calibrate(bool sync, const NamedList& params,
 	    m_owner->setPending(RadioInterface::PendingInitialize,status);
 	// Calibration done
 	m_calibrateStatus = status ? Calibrate : Calibrated;
+	// Notify
+	Message* m = buildNotify("calibrated");
+	if (!status)
+	    m->copyParams(m_calibration);
+	else {
+	    const char* en = RadioInterface::errorName(status);
+	    m->addParam("error",en ? en : String(status).c_str());
+	}
+	Engine::enqueue(m);
 	if (!status) {
 	    Debug(m_owner,DebugInfo,"Calibration finished in %s [%p]",
 		duration.secStr(),m_owner);
@@ -4873,15 +4902,18 @@ void BrfLibUsbDevice::runRecv(BrfThread* th)
     m_internalIoSemaphore.unlock();
 }
 
-// Fill device identification info
-void BrfLibUsbDevice::fillDevId(NamedList& params, const char* status)
+// Build notification message
+Message* BrfLibUsbDevice::buildNotify(const char* status)
 {
+    Message* m = new Message("module.update");
+    m->addParam("module",__plugin.name());
     if (owner())
-	params.addParam("interface",owner()->toString());
-    params.addParam("serial",serial());
+	m->addParam("interface",owner()->toString());
+    m->addParam("serial",serial());
     String str;
-    params.addParam("address",str.printf("USB/%d/%d",bus(),addr()));
-    params.addParam("status",status,false);
+    m->addParam("address",str.printf("USB/%d/%d",bus(),addr()));
+    m->addParam("status",status,false);
+    return m;
 }
 
 // Release data
@@ -7538,6 +7570,10 @@ void BrfLibUsbDevice::closeDevice()
 {
     if (!m_devHandle)
 	return;
+    if (m_notifyOff) {
+	Engine::enqueue(buildNotify("stop"));
+	m_notifyOff = false;
+    }
     //Debugger d(DebugNote,"closeDevice "," %s [%p]",m_owner->debugName(),m_owner);
     m_closingDevice = true;
     stopThreads();
@@ -8394,6 +8430,7 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
     }
 
     float totalStop = data.m_params.getDoubleValue("stop_total_threshold",BRF_MAX_FLOAT);
+    float limit = getSampleLimit(data.m_params,1);
     const char* waitReason = 0;
 
     // Allow TX/RX threads to properly start and synchronize
@@ -8434,7 +8471,7 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 	    if (trace > 4)
 		showBuf(false,trace - 4,false);
 	    ok = data.calculate(res);
-	    status = checkSampleLimit(data.buf(),data.samples(),1,error);
+	    status = checkSampleLimit(data.buf(),data.samples(),limit,error);
 	    if (status) {
 		data.m_dump.appendFormatted(data.buffer(),false);
 		if (trace) {
@@ -8443,7 +8480,12 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 		    Output("  %s=%-5d [%10s] %s\tSAMPLE OUT OF RANGE",
 			lookup(corr,s_corr),calVal,String(ts).c_str(),s.c_str());
 		}
-		break;
+		if (i == (data.m_repeatRxLoop - 1))
+		    break;
+		status = 0;
+		if (error)
+		    error->clear();
+		continue;
 	    }
 	    if (data.m_dump.valid() &&
 		((ok && data.m_dump.dumpOk()) || (!ok && data.m_dump.dumpFail())))
@@ -8760,13 +8802,14 @@ unsigned int BrfLibUsbDevice::calibrateBaseband(String* error)
 	}
 	BRF_FUNC_CALL_BREAK(prepareCalibrateBb(data,false,&e));
 	BRF_FUNC_CALL_BREAK(calibrateBb(data,false,&e));
-	//
 	// Update calibrated data
-	m_calibration.assign(String(data.m_calFreq));
-	m_calibration.addParam("tx_dc_i",String(data.m_dcI));
-	m_calibration.addParam("tx_dc_q",String(data.m_dcQ));
-	m_calibration.addParam("tx_fpga_corr_phase",String(data.m_phase));
-	m_calibration.addParam("tx_fpga_corr_gain",String(data.m_gain));
+	m_calibration.addParam("frequency",String(data.m_calFreq));
+	m_calibration.addParam("samplerate",String(data.m_calSampleRate));
+	m_calibration.addParam("filter",String(m_state.m_tx.lpfBw));
+	m_calibration.addParam("cal_tx_dc_i",String(data.m_dcI));
+	m_calibration.addParam("cal_tx_dc_q",String(data.m_dcQ));
+	m_calibration.addParam("cal_tx_fpga_corr_phase",String(data.m_phase));
+	m_calibration.addParam("cal_tx_fpga_corr_gain",String(data.m_gain));
 	break;
     }
     Debug(m_owner,DebugAll,"Finalizing BB calibration [%p]",m_owner);
@@ -9802,6 +9845,60 @@ unsigned int BrfLibUsbDevice::waitCancel(const char* loc, const char* reason,
 	status = cancelled(error);
     }
     return status;
+}
+
+// Apply parameters from start notification message
+unsigned int BrfLibUsbDevice::applyStartParams(const NamedList& params, String* error)
+{
+    const NamedString* fOffs = 0;
+    const NamedString* dc[] = {0,0};
+    const NamedString* fpga[] = {0,0};
+    bool haveParams = false;
+    for (const ObjList* o = params.paramList()->skipNull(); o; o = o->skipNext()) {
+	const NamedString* ns = static_cast<const NamedString*>(o->get());
+	if (ns->name() == YSTRING("RadioFrequencyOffset"))
+	    fOffs = ns;
+	else if (ns->name() == YSTRING("tx_dc_i"))
+	    dc[0] = ns;
+	else if (ns->name() == YSTRING("tx_dc_q"))
+	    dc[1] = ns;
+	else if (ns->name() == YSTRING("tx_fpga_corr_phase"))
+	    fpga[0] = ns;
+	else if (ns->name() == YSTRING("tx_fpga_corr_gain"))
+	    fpga[1] = ns;
+	else
+	    continue;
+	haveParams = true;
+    }
+    if (!haveParams)
+	return 0;
+    unsigned int status = 0;
+    if (fOffs) {
+	float f = fOffs->toDouble(m_freqOffset);
+	f = clampFloat(f,BRF_FREQ_OFFS_MIN,BRF_FREQ_OFFS_MAX,fOffs->name());
+	BRF_FUNC_CALL_RET(internalSetFreqOffs(f,0,error));
+    }
+    if (dc[0] && dc[1]) {
+	for (int i = 0; i < 2; i++) {
+	    int val = dc[i]->toInteger();
+	    val = clampInt(val,BRF_TX_DC_OFFSET_MIN,BRF_TX_DC_OFFSET_MAX,dc[i]->name());
+	    BRF_FUNC_CALL_RET(internalSetDcOffset(true,i == 0,val,error));
+	}
+    }
+    else if (dc[0] || dc[1])
+	Debug(m_owner,DebugConf,"Initialize. Ignoring %s: tx_dc_%c is missing [%p]",
+	    (dc[0] ? dc[0] : dc[1])->name().c_str(),(dc[0] ? 'q' : 'i'),m_owner);
+    if (fpga[0] && fpga[1]) {
+	for (int i = 0; i < 2; i++) {
+	    int val = fpga[i]->toInteger();
+	    val = clampInt(val,-BRF_FPGA_CORR_MAX,BRF_FPGA_CORR_MAX,fpga[i]->name());
+	    BRF_FUNC_CALL_RET(internalSetFpgaCorr(true,i ? CorrFpgaGain : CorrFpgaPhase,val,error));
+	}
+    }
+    else if (fpga[0] || fpga[1])
+	Debug(m_owner,DebugConf,"Initialize. Ignoring %s: tx_fpga_corr_%s is missing [%p]",
+	    (fpga[0] ? fpga[0] : fpga[1])->name().c_str(),(fpga[0] ? "gain" : "phase"),m_owner);
+    return 0;
 }
 
 

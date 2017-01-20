@@ -1357,7 +1357,7 @@ public:
 	int calValMin, int calValMax);
     void dumpCorrEnd(bool dc);
 
-    bool m_stopOnRecvFail;               // Stop on data recv wrong result
+    int m_stopOnRecvFail;                // Stop on data recv wrong result
     unsigned int m_repeatRxLoop;         // Repeat data read on wrong result
     float m_best;
     BrfFloatMinMax m_cal;                // Calculated calibrating value

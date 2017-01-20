@@ -212,6 +212,7 @@ private:
 };
 
 #define MKDEBUG(lvl) params().addParam(new ExpOperation((int64_t)Debug ## lvl,"Debug" # lvl))
+#define MKTIME(typ) params().addParam(new ExpOperation((int64_t)SysUsage:: typ ## Time,# typ "Time"))
 class JsEngine : public JsObject, public DebugEnabler
 {
     YCLASS(JsEngine,JsObject)
@@ -233,6 +234,9 @@ public:
 	    MKDEBUG(Note);
 	    MKDEBUG(Info);
 	    MKDEBUG(All);
+	    MKTIME(Wall);
+	    MKTIME(User);
+	    MKTIME(Kernel);
 	    params().addParam(new ExpFunction("output"));
 	    params().addParam(new ExpFunction("debug"));
 	    params().addParam(new ExpFunction("alarm"));
@@ -250,6 +254,7 @@ public:
 	    params().addParam(new ExpFunction("debugEnabled"));
 	    params().addParam(new ExpFunction("debugAt"));
 	    params().addParam(new ExpFunction("setDebug"));
+	    params().addParam(new ExpFunction("uptime"));
 	    params().addParam(new ExpFunction("started"));
 	    params().addParam(new ExpFunction("accepting"));
 	    if (name)
@@ -282,6 +287,7 @@ private:
     String m_debugName;
 };
 #undef MKDEBUG
+#undef MKTIME
 
 class JsMessage : public JsObject
 {
@@ -1395,6 +1401,25 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	else
 	    Debug(&__plugin,DebugNote,"Engine restart is disabled by allow_abort configuration");
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
+    else if (oper.name() == YSTRING("uptime")) {
+	SysUsage::Type typ = SysUsage::WallTime;
+	bool msec = false;
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+		msec = static_cast<ExpOperation*>(args[1])->valBoolean();
+		// fall through
+	    case 1:
+		typ = (SysUsage::Type)static_cast<ExpOperation*>(args[0])->toInteger(typ);
+		// fall through
+	    case 0:
+		break;
+	    default:
+		return false;
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(
+	    msec ? (int64_t)SysUsage::msecRunTime(typ) : (int64_t)SysUsage::secRunTime(typ)));
     }
     else if (oper.name() == YSTRING("started")) {
 	if (oper.number() != 0)

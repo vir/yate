@@ -310,6 +310,8 @@ public:
 	    params().addParam(new ExpFunction("broadcast"));
 	    params().addParam(new ExpFunction("retValue"));
 	    params().addParam(new ExpFunction("msgTime"));
+	    params().addParam(new ExpFunction("getParam"));
+	    params().addParam(new ExpFunction("setParam"));
 	    params().addParam(new ExpFunction("getColumn"));
 	    params().addParam(new ExpFunction("getRow"));
 	    params().addParam(new ExpFunction("getResult"));
@@ -1747,6 +1749,46 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_message->msgTime().msec()));
 	else
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+    }
+    else if (oper.name() == YSTRING("getParam")) {
+	bool autoNum = true;
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 3:
+		// fall through
+		autoNum = static_cast<ExpOperation*>(args[2])->valBoolean();
+	    case 2:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	const String* val = m_message ? m_message->getParam(name) : 0;
+	if (val)
+	    ExpEvaluator::pushOne(stack,new ExpOperation(*val,name,autoNum));
+	else {
+	    if (args[1])
+		ExpEvaluator::pushOne(stack,static_cast<ExpOperation*>(args[1])->clone(name));
+	    else
+		ExpEvaluator::pushOne(stack,new ExpWrapper(0,name));
+	}
+    }
+    else if (oper.name() == YSTRING("setParam")) {
+	ObjList args;
+	if (extractArgs(stack,oper,context,args) != 2)
+	    return false;
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	const ExpOperation& val = *static_cast<const ExpOperation*>(args[1]);
+	if (m_message && name) {
+	    if (JsParser::isUndefined(val))
+		m_message->clearParam(name);
+	    else
+		m_message->setParam(name,val);
+	    ExpEvaluator::pushOne(stack,new ExpOperation(true));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
     }
     else if (oper.name() == YSTRING("getColumn")) {
 	ObjList args;

@@ -212,6 +212,7 @@ private:
 };
 
 #define MKDEBUG(lvl) params().addParam(new ExpOperation((int64_t)Debug ## lvl,"Debug" # lvl))
+#define MKTIME(typ) params().addParam(new ExpOperation((int64_t)SysUsage:: typ ## Time,# typ "Time"))
 class JsEngine : public JsObject, public DebugEnabler
 {
     YCLASS(JsEngine,JsObject)
@@ -233,6 +234,9 @@ public:
 	    MKDEBUG(Note);
 	    MKDEBUG(Info);
 	    MKDEBUG(All);
+	    MKTIME(Wall);
+	    MKTIME(User);
+	    MKTIME(Kernel);
 	    params().addParam(new ExpFunction("output"));
 	    params().addParam(new ExpFunction("debug"));
 	    params().addParam(new ExpFunction("alarm"));
@@ -250,6 +254,7 @@ public:
 	    params().addParam(new ExpFunction("debugEnabled"));
 	    params().addParam(new ExpFunction("debugAt"));
 	    params().addParam(new ExpFunction("setDebug"));
+	    params().addParam(new ExpFunction("uptime"));
 	    params().addParam(new ExpFunction("started"));
 	    params().addParam(new ExpFunction("accepting"));
 	    if (name)
@@ -282,6 +287,7 @@ private:
     String m_debugName;
 };
 #undef MKDEBUG
+#undef MKTIME
 
 class JsMessage : public JsObject
 {
@@ -304,6 +310,8 @@ public:
 	    params().addParam(new ExpFunction("broadcast"));
 	    params().addParam(new ExpFunction("retValue"));
 	    params().addParam(new ExpFunction("msgTime"));
+	    params().addParam(new ExpFunction("getParam"));
+	    params().addParam(new ExpFunction("setParam"));
 	    params().addParam(new ExpFunction("getColumn"));
 	    params().addParam(new ExpFunction("getRow"));
 	    params().addParam(new ExpFunction("getResult"));
@@ -1396,6 +1404,25 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    Debug(&__plugin,DebugNote,"Engine restart is disabled by allow_abort configuration");
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
+    else if (oper.name() == YSTRING("uptime")) {
+	SysUsage::Type typ = SysUsage::WallTime;
+	bool msec = false;
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+		msec = static_cast<ExpOperation*>(args[1])->valBoolean();
+		// fall through
+	    case 1:
+		typ = (SysUsage::Type)static_cast<ExpOperation*>(args[0])->toInteger(typ);
+		// fall through
+	    case 0:
+		break;
+	    default:
+		return false;
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(
+	    msec ? (int64_t)SysUsage::msecRunTime(typ) : (int64_t)SysUsage::secRunTime(typ)));
+    }
     else if (oper.name() == YSTRING("started")) {
 	if (oper.number() != 0)
 	    return false;
@@ -1722,6 +1749,46 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_message->msgTime().msec()));
 	else
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+    }
+    else if (oper.name() == YSTRING("getParam")) {
+	bool autoNum = true;
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 3:
+		// fall through
+		autoNum = static_cast<ExpOperation*>(args[2])->valBoolean();
+	    case 2:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	const String* val = m_message ? m_message->getParam(name) : 0;
+	if (val)
+	    ExpEvaluator::pushOne(stack,new ExpOperation(*val,name,autoNum));
+	else {
+	    if (args[1])
+		ExpEvaluator::pushOne(stack,static_cast<ExpOperation*>(args[1])->clone(name));
+	    else
+		ExpEvaluator::pushOne(stack,new ExpWrapper(0,name));
+	}
+    }
+    else if (oper.name() == YSTRING("setParam")) {
+	ObjList args;
+	if (extractArgs(stack,oper,context,args) != 2)
+	    return false;
+	const String& name = *static_cast<ExpOperation*>(args[0]);
+	const ExpOperation& val = *static_cast<const ExpOperation*>(args[1]);
+	if (m_message && name) {
+	    if (JsParser::isUndefined(val))
+		m_message->clearParam(name);
+	    else
+		m_message->setParam(name,val);
+	    ExpEvaluator::pushOne(stack,new ExpOperation(true));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(false));
     }
     else if (oper.name() == YSTRING("getColumn")) {
 	ObjList args;

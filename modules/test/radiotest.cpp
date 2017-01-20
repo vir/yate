@@ -50,15 +50,15 @@ class RadioTest : public Thread, public DebugEnabler
 public:
     RadioTest(const NamedList& params, const NamedList& radioParams);
     ~RadioTest()
-	{ terminated(); }
+	{ terminated(m_started ? "destroyed" : 0); }
     bool command(const String& cmd, const NamedList& params);
     static bool start(const NamedList& params, const NamedList& radioParams);
 
 protected:
     virtual void cleanup()
-	{ terminated(); }
+	{ terminated(m_started ? "cleanup" : 0); }
     virtual void run();
-    void terminated();
+    void terminated(const char* error);
     void initPulse();
     bool setTxData();
     void regenerateTxData();
@@ -79,6 +79,7 @@ protected:
 	    }
 	}
     bool wait(const String& param);
+    void notify(const char* state, const char* error = 0) const;
 
     RadioInterface* m_radio;
     RadioTestRecv* m_recv;
@@ -429,30 +430,40 @@ void RadioTest::run()
 {
     readStop();
     m_started = true;
+    notify("start");
     m_init.clearParams();
     bool ok = false;
     unsigned int repeat = m_params.getIntValue("repeat",1,1);
     Debug(this,DebugInfo,"Initializing repeat=%u [%p]",repeat,this);
+    String error;
     while (true) {
-	// Init
+#define TEST_FAIL_BREAK(str,warn) {\
+	error = str; \
+	if (warn) \
+	    Debug(this,DebugNote,"%s [%p]",error.c_str(),this); \
+	ok = false; \
+	break; \
+    }
 	// Init test data
-	m_tx.enabled = true;
-	if (!setTxData())
-	    break;
-	m_sendBufCount = m_params.getIntValue("send_buffers",0,0);
-	if (m_sendBufCount)
-	    m_init.addParam("send_buffers",String(m_sendBufCount));
-	m_rx.enabled = !m_params.getBoolValue("sendonly");
-	if (m_rx.enabled) {
-	    unsigned int n = m_params.getIntValue("readsamples",256,1);
-	    m_bufs.reset(n,0);
-	    m_crt.assign(0,samplesf2bytes(m_bufs.bufSamples()));
-	    m_aux = m_crt;
-	    m_extra = m_crt;
-	    m_bufs.crt.samples = (float*)m_crt.data(0);
-	    m_bufs.aux.samples = (float*)m_aux.data(0);
-	    m_bufs.extra.samples = (float*)m_extra.data(0);
-	    m_init.addParam("readsamples",String(n));
+	if (!m_params.getBoolValue("init_only")) {
+	    m_tx.enabled = true;
+	    if (!setTxData())
+		TEST_FAIL_BREAK("Failed to set TX data",false);
+	    m_sendBufCount = m_params.getIntValue("send_buffers",0,0);
+	    if (m_sendBufCount)
+		m_init.addParam("send_buffers",String(m_sendBufCount));
+	    m_rx.enabled = !m_params.getBoolValue("sendonly");
+	    if (m_rx.enabled) {
+		unsigned int n = m_params.getIntValue("readsamples",256,1);
+		m_bufs.reset(n,0);
+		m_crt.assign(0,samplesf2bytes(m_bufs.bufSamples()));
+		m_aux = m_crt;
+		m_extra = m_crt;
+		m_bufs.crt.samples = (float*)m_crt.data(0);
+		m_bufs.aux.samples = (float*)m_aux.data(0);
+		m_bufs.extra.samples = (float*)m_extra.data(0);
+		m_init.addParam("readsamples",String(n));
+	    }
 	}
 	// Create radio
 	Message m(m_radioParams);
@@ -462,10 +473,10 @@ void RadioTest::run()
 	NamedPointer* np = YOBJECT(NamedPointer,m.getParam(YSTRING("interface")));
 	m_radio = np ? YOBJECT(RadioInterface,np) : 0;
 	if (!m_radio) {
-	    const String& e = m[YSTRING("error")];
-	    Debug(this,DebugNote,"Failed to create radio interface: %s",
-		e.safe(radioOk ? "Missing interface" : "Message not handled"));
-	    break;
+	    error = m[YSTRING("error")];
+	    error.printf("Failed to create radio interface: %s",
+		error.safe(radioOk ? "Missing interface" : "Message not handled"));
+	    TEST_FAIL_BREAK(error,true);
 	}
 	np->takeData();
 	
@@ -485,7 +496,7 @@ void RadioTest::run()
 	m_params.copyParams(files);
 	
 	if (!execute(m_params,"init:"))
-	    break;
+	    TEST_FAIL_BREAK("Failed to execute initial command(s)",false);
 	unsigned int status = m_radio->initialize(m_radioParams);
 	if (status) {
 	    if (RadioInterface::Pending == status) {
@@ -503,26 +514,29 @@ void RadioTest::run()
 			status = RadioInterface::Cancelled;
 		}
 	    }
-	    if (status && status != RadioInterface::Cancelled) {
-		Debug(this,DebugNote,"Failed to initialize radio interface: %u %s [%p]",
-		    status,RadioInterface::errorName(status),this);
-		break;
+	    if (status) {
+		if (status != RadioInterface::Cancelled)
+		    error.printf("Failed to initialize radio interface: %u %s",
+			status,RadioInterface::errorName(status));
+		else if (Thread::check(false)) {
+		    TEST_FAIL_BREAK("cancelled",false);
+		}
+		else
+		    error = "device closed while initializing";
+		TEST_FAIL_BREAK(error,true);
 	    }
 	}
 	if (!execute(m_params,"cmd:"))
-	    break;
+	    TEST_FAIL_BREAK("Failed to execute post init command(s)",false);
 	if (!wait("wait_after_init"))
-	    break;
+	    TEST_FAIL_BREAK("cancelled",false);
 	ok = true;
-	if (m_params.getBoolValue("init_only"))
+	if (!(m_tx.enabled || m_rx.enabled))
 	    break;
-#define TEST_FAIL_BREAK { ok = false; break; }
 	if (m_rx.enabled) {
 	    m_recv = RadioTestRecv::start(this);
-	    if (!m_recv) {
-		Debug(this,DebugWarn,"Failed to start read data thread [%p]",this);
-		TEST_FAIL_BREAK;
-	    }
+	    if (!m_recv)
+		TEST_FAIL_BREAK("Failed to start read data thread",true);
 	}
 	String s;
 	m_init.dump(s,"\r\n");
@@ -530,22 +544,22 @@ void RadioTest::run()
 	// Run
 	while (!Thread::check(false)) {
 	    if (!write())
-		TEST_FAIL_BREAK;
-	    if (m_rx.enabled && !m_recv && !Thread::check(false)) {
-		Debug(this,DebugWarn,"Read data thread abnormally terminated [%p]",this);
-		TEST_FAIL_BREAK;
-	    }
+		TEST_FAIL_BREAK("Send data failed",false);
+	    if (m_rx.enabled && !m_recv && !Thread::check(false))
+		TEST_FAIL_BREAK("Read data thread abnormally terminated",true);
 	}
+	if (!error && Thread::check(false))
+	    error = "stopped";
 	readStop();
 #undef TEST_FAIL_BREAK
 	break;
     }
     if (ok && (repeat > 1) && !Thread::check(false))
 	m_repeat = --repeat;
-    terminated();
+    terminated(error);
 }
 
-void RadioTest::terminated()
+void RadioTest::terminated(const char* error)
 {
     readStop();
     s_testMutex.lock();
@@ -573,6 +587,7 @@ void RadioTest::terminated()
 	s << "\r\n" << prefix << "timestamp=" << io.ts;
     }
     Debug(this,DebugInfo,"Terminated [%p]%s",this,encloseDashes(s));
+    notify("stop",error);
     if (!m_repeat)
 	return;
     Debug(this,DebugNote,"Restarting repeat=%u [%p]",m_repeat,this);
@@ -810,6 +825,20 @@ bool RadioTest::wait(const String& param)
     return n == 0;
 }
 
+void RadioTest::notify(const char* state, const char* error) const
+{
+    const String& id = m_params[YSTRING("notify")];
+    if (!id)
+	return;
+    Message* m = new Message(m_params.getValue(YSTRING("notifymsg"),"chan.notify"));
+    m->addParam("module",__plugin.name());
+    m->addParam("test_name",debugName());
+    m->addParam("id",id);
+    m->addParam("state",state);
+    m->addParam("error",error,false);
+    Engine::enqueue(m);
+}
+
 
 //
 // RadioTestModule
@@ -902,6 +931,7 @@ bool RadioTestModule::test(const String& cmd, const NamedList& list)
 	    return false;
 	lck.acquire(s_testMutex);
     }
+    bool bRet = true;
     bool start = (cmd == YSTRING("start"));
     bool restart = !start && (cmd == YSTRING("restart"));
     if (start || restart || !cmd || cmd == YSTRING("stop")) {
@@ -926,20 +956,41 @@ bool RadioTestModule::test(const String& cmd, const NamedList& list)
 	    s_test = 0;
 	}
 	while (start || restart) {
-	    Configuration cfg(Engine::configFile(name()));
-	    String n = list.getValue("name",start ? "test" : 0);
-	    NamedList* sect = n ? cfg.getSection(n) : 0;
-	    if (!sect) {
-		Debug(this,DebugNote,"Failed to start test '%s': missing config section",
-		    n.c_str());
+	    bRet = false;
+	    const String& over = start ? list[YSTRING("override")] : String::empty();
+	    const char* n = 0;
+	    if (start)
+		n = list.getValue("test_name","test");
+	    NamedList params(list.getValue(YSTRING("name"),n));
+	    if (!params) {
+		Debug(this,DebugNote,"Failed to start test: missing name");
 		break;
 	    }
-	    NamedList params(sect->c_str());
-	    const char* inc = sect->getValue(YSTRING("include"));
-	    if (inc)
-		params.copyParams(*cfg.createSection(inc));
-	    params.copyParams(*sect);
-	    if (restart) {
+	    Configuration cfg(Engine::configFile(name()),!over);
+	    NamedList* sect = cfg.getSection(params);
+	    if (sect) {
+		const char* inc = sect->getValue(YSTRING("include"));
+		if (inc)
+		    params.copyParams(*cfg.createSection(inc));
+		params.copyParams(*sect);
+	    }
+	    else if (!over) {
+		Debug(this,DebugNote,"Failed to start test '%s': missing config section",
+		    params.c_str());
+		break;
+	    }
+	    const char* radioSect = params.getValue("radio_section","radio");
+	    NamedList radioParams(*cfg.createSection(radioSect));
+	    if (over) {
+		// Boolean true: copy all parameters
+		// Otherwise: it indicates a prefix
+		if (over.toBoolean())
+		    params.copyParams(list);
+		else
+		    params.copySubParams(list,over,true,true);
+		radioParams.copySubParams(list,"radio_",true,true);
+	    }
+	    else if (restart) {
 		unsigned int repeat = list.getIntValue("repeat",0,0);
 		if (!repeat)
 		    break;
@@ -948,17 +999,16 @@ bool RadioTestModule::test(const String& cmd, const NamedList& list)
 		params.copySubParams(list,"file:",false,true);
 	    }
 	    params.setParam(YSTRING("first"),String::boolText(start));
-	    const char* radioSect = params.getValue("radio_section","radio");
-	    RadioTest::start(params,*cfg.createSection(radioSect));
+	    bRet = RadioTest::start(params,radioParams);
 	    break;
 	}
     }
     else if (s_test)
-	s_test->command(cmd,list);
+	bRet = s_test->command(cmd,list);
     else
 	Debug(this,DebugInfo,"Test is not running");
     s_exec = false;
-    return true;
+    return bRet;
 }
 
 void RadioTestModule::processRadioDataFile(NamedList& params)

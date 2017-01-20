@@ -9922,7 +9922,7 @@ unsigned int BrfInterface::send(uint64_t when, float* samples, unsigned size,
 	float dB = 10.0F*log10f(sum/size);
 	float scaleDB = 0.0F;
 	if (powerScale) scaleDB = 20.0F*log10f(*powerScale);
-	XDebug(this,DebugAll,"Sending at time %lu power %f dB to be scaled %f dB [%p]",
+	XDebug(this,DebugAll,"Sending at time " FMT64U " power %f dB to be scaled %f dB [%p]",
 		when, dB, scaleDB, this);
     }
 #endif
@@ -10510,7 +10510,7 @@ bool BrfModule::onCmdStatus(String& retVal, String& line)
     if (ifcName) {
 	stats << "interface=" << ifcName;
 	RefPointer<BrfInterface> ifc;
-	if (findIface(ifc,ifcName) && ifc->device());
+	if (findIface(ifc,ifcName) && ifc->device())
 	    ifc->device()->dumpDev(info,devInfo,true,",",true,true);
     }
     else {
@@ -11027,7 +11027,7 @@ ComplexVector BrfLibUsbDevice::sweepPower(float startdB, float stopdB, float ste
 	// calculate and save the gain
 	unsigned base = (4 - (ts % 4)) % 4;
 	Complex sGain = meanComplexGain(rxBuf+2*base, m_txPatternBuffer.data(), 2000);
-	Debug(m_owner,DebugAll,"sweepPower[%u] result=(%g,%g) when=%lu base=%u"
+	Debug(m_owner,DebugAll,"sweepPower[%u] result=(%g,%g) when=" FMT64U " base=%u"
 	    " power=%4.2f (%4.2f linear) gain=%4.2f dB @ %4.2f deg",
 	    step,sGain.re(),sGain.im(),ts,base,dB,gain,
 	    10*log10(sGain.norm2()),sGain.arg()*180/M_PI);

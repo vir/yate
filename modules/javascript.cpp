@@ -385,9 +385,12 @@ public:
 	{
 	    XDebug(&__plugin,DebugAll,"JsHandler::~JsHandler() '%s' [%p]",c_str(),this);
 	}
-    virtual bool received(Message& msg);
+    virtual bool received(Message& msg)
+	{ return false; }
     inline const ExpFunction& function() const
 	{ return m_function; }
+protected:
+    virtual bool receivedInternal(Message& msg);
 private:
     ExpFunction m_function;
     RefPointer<ScriptContext> m_context;
@@ -2280,23 +2283,29 @@ void JsMessage::initialize(ScriptContext* context)
 }
 
 
-bool JsHandler::received(Message& msg)
+bool JsHandler::receivedInternal(Message& msg)
 {
-    if (s_engineStop || !m_code)
+    if (s_engineStop || !m_code) {
+	safeNowInternal();
 	return false;
+    }
     DDebug(&__plugin,DebugInfo,"Running %s(message) handler for '%s'",
 	m_function.name().c_str(),c_str());
 #ifdef DEBUG
     u_int64_t tm = Time::now();
 #endif
     ScriptRun* runner = m_code->createRunner(m_context,NATIVE_TITLE);
-    if (!runner)
+    if (!runner) {
+	safeNowInternal();
 	return false;
+    }
     JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),false);
     jm->ref();
+    String name = m_function.name();
+    safeNowInternal(); // Staring from here the handler may be safely uninstalled
     ObjList args;
     args.append(new ExpWrapper(jm,"message"));
-    ScriptRun::Status rval = runner->call(m_function.name(),args);
+    ScriptRun::Status rval = runner->call(name,args);
     jm->clearMsg();
     bool ok = false;
     if (ScriptRun::Succeeded == rval) {

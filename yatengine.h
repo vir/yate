@@ -487,7 +487,6 @@ private:
 class YATE_API MessageHandler : public String
 {
     friend class MessageDispatcher;
-    friend class MessageRelay;
     YNOCOPY(MessageHandler); // no automatic copies please
 public:
     /**
@@ -579,9 +578,19 @@ protected:
      */
     void cleanup();
 
-private:
+    /**
+     * Internal use received function, do not call or override!
+     * @param msg The received message
+     * @return True if message was processed
+     */
     virtual bool receivedInternal(Message& msg);
-    void safeNow();
+
+    /**
+     * Internal use handler unlock, do not call!
+     */
+    void safeNowInternal();
+
+private:
     String m_trackName;
     unsigned m_priority;
     int m_unsafe;
@@ -645,8 +654,14 @@ public:
     inline int id() const
 	{ return m_id; }
 
-private:
+    /**
+     * Internal use received function, do not call or override!
+     * @param msg The received message
+     * @return True if message was processed
+     */
     virtual bool receivedInternal(Message& msg);
+
+private:
     MessageReceiver* m_receiver;
     int m_id;
 };

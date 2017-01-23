@@ -256,7 +256,7 @@ void MessageHandler::destruct()
     String::destruct();
 }
 
-void MessageHandler::safeNow()
+void MessageHandler::safeNowInternal()
 {
     Lock lock(m_dispatcher);
     // when the unsafe counter reaches zero we're again safe to destroy
@@ -266,7 +266,7 @@ void MessageHandler::safeNow()
 bool MessageHandler::receivedInternal(Message& msg)
 {
     bool ok = received(msg);
-    safeNow();
+    safeNowInternal();
     return ok;
 }
 
@@ -290,7 +290,7 @@ bool MessageRelay::receivedInternal(Message& msg)
 {
     MessageReceiver* receiver = m_receiver;
     int id = m_id;
-    safeNow();
+    safeNowInternal(); // At this point the relay itself may be uninstalled
     return receiver && receiver->received(msg,id);
 }
 

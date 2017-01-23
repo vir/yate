@@ -1,3 +1,12 @@
+yate (5.5.1~svn6173) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6173:
+  * This required exposing some internal methods of MessageHandler.
+  * Fixed a JS deadlock caused by uninstalling a message handler from
+    itself (even indirectly).
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 24 Jan 2017 02:19:15 +0300
+
 yate (5.5.1~svn6172) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6172:

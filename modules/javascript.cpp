@@ -4161,8 +4161,10 @@ JsAssist::~JsAssist()
 	    }
 	}
 	m_message = 0;
-	if (context)
+	if (context) {
+	    Lock mylock(context->mutex());
 	    context->params().clearParams();
+	}
 	TelEngine::destruct(m_runner);
     }
     else
@@ -4434,8 +4436,10 @@ JsGlobal::~JsGlobal()
 	    TelEngine::destruct(runner);
 	}
     }
-    if (m_context)
+    if (m_context) {
+	Lock mylock(m_context->mutex());
 	m_context->params().clearParams();
+    }
 }
 
 bool JsGlobal::fileChanged(const char* fileName) const

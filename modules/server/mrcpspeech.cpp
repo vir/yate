@@ -246,15 +246,15 @@ bool AttachHandler::received(Message& msg)
 	if (snif) {
 	    RefPointer<DataEndpoint> de = ch->setEndpoint();
 	    // try to reinit sniffer if one already exists
-	    MrcpConsumer* c = static_cast<MrcpConsumer*>(de->getSniffer(snif));
+	    MrcpConsumer* c = static_cast<MrcpConsumer*>(de->getSniffer(snif,true));
 	    if (c)
 		c->init(msg);
 	    else {
 		c = new MrcpConsumer(ch->id(),snif,msg.getValue("format","slin"));
 		if (c->init(msg))
 		    de->addSniffer(c);
-		c->deref();
 	    }
+	    c->deref();
 	}
 	return msg.getBoolValue("single");
     }

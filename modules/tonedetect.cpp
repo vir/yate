@@ -555,7 +555,7 @@ bool AttachHandler::received(Message& msg)
 	if (snif) {
 	    de = ch->setEndpoint();
 	    // try to reinit sniffer if one already exists
-	    ToneConsumer* c = static_cast<ToneConsumer*>(de->getSniffer(snif));
+	    ToneConsumer* c = static_cast<ToneConsumer*>(de->getSniffer(snif,true));
 	    if (c) {
 		c->init();
 		c->setFaxDivert(msg);
@@ -564,8 +564,8 @@ bool AttachHandler::received(Message& msg)
 		c = new ToneConsumer(ch->id(),snif);
 		c->setFaxDivert(msg);
 		de->addSniffer(c);
-		c->deref();
 	    }
+	    c->deref();
 	}
 	return msg.getBoolValue("single");
     }

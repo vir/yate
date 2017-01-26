@@ -1013,6 +1013,15 @@ bool DataEndpoint::delSniffer(DataConsumer* sniffer)
     return true;
 }
 
+DataConsumer* DataEndpoint::getSniffer(const String& name, bool ref)
+{
+    if (name.null())
+	return 0;
+    Lock lock(s_dataMutex);
+    DataConsumer* sniffer = static_cast<DataConsumer*>(m_sniffers[name]);
+    return (ref && sniffer && !sniffer->ref()) ? 0 : sniffer;
+}
+
 void DataEndpoint::clearSniffers()
 {
     Lock lock(s_dataMutex);

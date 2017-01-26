@@ -1054,10 +1054,10 @@ public:
     /**
      * Find a sniffer by name
      * @param name Name of the sniffer to find
+     * @param ref Increment the reference counter before returning
      * @return Pointer to DataConsumer or NULL if not found
      */
-    inline DataConsumer* getSniffer(const String& name)
-	{ return static_cast<DataConsumer*>(m_sniffers[name]); }
+    DataConsumer* getSniffer(const String& name, bool ref = false);
 
     /**
      * Removes all sniffers from the list and dereferences them

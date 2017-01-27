@@ -1,3 +1,17 @@
+yate (5.5.1~svn6177) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6177:
+  * Keep the JS global object locked while cleaning up its attributes.
+  * Added option to return a data sniffer safe and referenced.
+  * Added a valgrind suppression file for harmless one-time memory
+    leaks.
+  * Added convenience static RefObject::alive() method to check a
+    RefObject pointer.
+  * Added extra checks for race conditions where
+    CallEndpoint::setEndpoint() may fail.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 28 Jan 2017 02:19:15 +0300
+
 yate (5.5.1~svn6174) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6174:

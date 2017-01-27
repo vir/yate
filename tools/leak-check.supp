@@ -1,0 +1,42 @@
+{
+   OpenSSL error strings
+   Memcheck:Leak
+   ...
+   fun:SSL_load_error_strings
+}
+{
+   OpenSSL error strings
+   Memcheck:Leak
+   ...
+   fun:ERR_load_SSL_strings
+}
+{
+   OpenSSL library init
+   Memcheck:Leak
+   ...
+   fun:SSL_library_init
+}
+{
+   Dynamic modules loader
+   Memcheck:Leak
+   ...
+   fun:dlopen
+}
+{
+   Dynamic modules loader
+   Memcheck:Leak
+   ...
+   fun:_dl_open
+}
+{
+   Dynamic modules loader
+   Memcheck:Leak
+   ...
+   fun:_dl_close
+}
+{
+   One time engine init
+   Memcheck:Leak
+   ...
+   fun:_ZN9TelEngine6Engine10engineInitEv
+}

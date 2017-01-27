@@ -664,8 +664,11 @@ bool AttachHandler::received(Message &msg)
     DataEndpoint *dd = static_cast<DataEndpoint*>(msg.userObject(YATOM("DataEndpoint")));
     if (!dd) {
 	CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject(YATOM("CallEndpoint")));
-	if (ch)
+	if (ch) {
 	    dd = ch->setEndpoint();
+	    if (!RefObject::alive(dd))
+		return false;
+	}
     }
     if (!dd) {
 	Debug(DebugWarn,"Alsa attach request with no control or data channel!");

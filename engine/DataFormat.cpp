@@ -981,7 +981,7 @@ void DataEndpoint::setCallRecord(DataConsumer* consumer)
 
 bool DataEndpoint::addSniffer(DataConsumer* sniffer)
 {
-    if (!sniffer)
+    if ((refcount() <= 0) || !sniffer)
 	return false;
     Lock lock(s_dataMutex);
     if (m_sniffers.find(sniffer))

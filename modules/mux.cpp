@@ -671,8 +671,11 @@ bool MuxModule::chanRecord(Message& msg)
 	return msg.getBoolValue(YSTRING("single"));
     }
 
-    if (ch && !de)
+    if (ch && !de) {
 	de = ch->setEndpoint();
+	if (!de)
+	    return false;
+    }
     if (!de) {
 	Debug(DebugWarn,"Consumer '%s' both record with no data channel!",both->c_str());
 	return false;

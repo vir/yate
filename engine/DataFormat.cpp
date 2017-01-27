@@ -981,7 +981,7 @@ void DataEndpoint::setCallRecord(DataConsumer* consumer)
 
 bool DataEndpoint::addSniffer(DataConsumer* sniffer)
 {
-    if (!sniffer)
+    if ((refcount() <= 0) || !sniffer)
 	return false;
     Lock lock(s_dataMutex);
     if (m_sniffers.find(sniffer))
@@ -1011,6 +1011,15 @@ bool DataEndpoint::delSniffer(DataConsumer* sniffer)
     sniffer->attached(false);
     sniffer->deref();
     return true;
+}
+
+DataConsumer* DataEndpoint::getSniffer(const String& name, bool ref)
+{
+    if (name.null())
+	return 0;
+    Lock lock(s_dataMutex);
+    DataConsumer* sniffer = static_cast<DataConsumer*>(m_sniffers[name]);
+    return (ref && sniffer && !sniffer->ref()) ? 0 : sniffer;
 }
 
 void DataEndpoint::clearSniffers()

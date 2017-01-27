@@ -1077,6 +1077,8 @@ bool AttachHandler::received(Message& msg)
 	    DataEndpoint::commonMutex().lock();
 	    dd = ch->setEndpoint();
 	    DataEndpoint::commonMutex().unlock();
+	    if (!dd)
+		return false;
 	}
     }
     if (!dd) {

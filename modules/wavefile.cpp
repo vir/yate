@@ -1075,8 +1075,11 @@ bool RecordHandler::received(Message &msg)
 
     CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     RefPointer<DataEndpoint> de = YOBJECT(DataEndpoint,msg.userData());
-    if (ch && !de)
+    if (ch && !de) {
 	de = ch->setEndpoint();
+	if (!de)
+	    return false;
+    }
 
     if (!de) {
 	if (!c1.null())

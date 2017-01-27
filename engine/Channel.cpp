@@ -290,7 +290,7 @@ DataEndpoint* CallEndpoint::getEndpoint(const String& type) const
 
 DataEndpoint* CallEndpoint::setEndpoint(const String& type)
 {
-    if (type.null())
+    if (type.null() || (refcount() <= 0))
 	return 0;
     DataEndpoint* dat = getEndpoint(type);
     if (!dat) {
@@ -303,7 +303,7 @@ DataEndpoint* CallEndpoint::setEndpoint(const String& type)
 
 void CallEndpoint::setEndpoint(DataEndpoint* endPoint)
 {
-    if (!(endPoint && endPoint->ref()))
+    if ((refcount() <= 0) || !(endPoint && endPoint->ref()))
 	return;
     if (m_data.find(endPoint)) {
 	endPoint->deref();
@@ -342,27 +342,27 @@ void CallEndpoint::clearEndpoint(const String& type)
 void CallEndpoint::setSource(DataSource* source, const String& type)
 {
     DataEndpoint* dat = source ? setEndpoint(type) : getEndpoint(type);
-    if (dat)
+    if (RefObject::alive(dat))
 	dat->setSource(source);
 }
 
 DataSource* CallEndpoint::getSource(const String& type) const
 {
     DataEndpoint* dat = getEndpoint(type);
-    return dat ? dat->getSource() : 0;
+    return RefObject::alive(dat) ? dat->getSource() : 0;
 }
 
 void CallEndpoint::setConsumer(DataConsumer* consumer, const String& type)
 {
     DataEndpoint* dat = consumer ? setEndpoint(type) : getEndpoint(type);
-    if (dat)
+    if (RefObject::alive(dat))
 	dat->setConsumer(consumer);
 }
 
 DataConsumer* CallEndpoint::getConsumer(const String& type) const
 {
     DataEndpoint* dat = getEndpoint(type);
-    return dat ? dat->getConsumer() : 0;
+    return RefObject::alive(dat) ? dat->getConsumer() : 0;
 }
 
 bool CallEndpoint::clearData(DataNode* node, const String& type)

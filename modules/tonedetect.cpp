@@ -554,8 +554,10 @@ bool AttachHandler::received(Message& msg)
 	}
 	if (snif) {
 	    de = ch->setEndpoint();
+	    if (!de)
+		return false;
 	    // try to reinit sniffer if one already exists
-	    ToneConsumer* c = static_cast<ToneConsumer*>(de->getSniffer(snif));
+	    ToneConsumer* c = static_cast<ToneConsumer*>(de->getSniffer(snif,true));
 	    if (c) {
 		c->init();
 		c->setFaxDivert(msg);
@@ -564,8 +566,8 @@ bool AttachHandler::received(Message& msg)
 		c = new ToneConsumer(ch->id(),snif);
 		c->setFaxDivert(msg);
 		de->addSniffer(c);
-		c->deref();
 	    }
+	    c->deref();
 	}
 	return msg.getBoolValue("single");
     }
@@ -604,8 +606,11 @@ bool RecordHandler::received(Message& msg)
     RefPointer<DataEndpoint> de = static_cast<DataEndpoint *>(msg.userObject(YATOM("DataEndpoint")));
     if (ch) {
 	id = ch->id();
-	if (!de)
+	if (!de) {
 	    de = ch->setEndpoint();
+	    if (!de)
+		return false;
+	}
     }
     if (de) {
 	ToneConsumer* c = new ToneConsumer(id,src);

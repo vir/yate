@@ -1005,6 +1005,14 @@ public:
     virtual void destruct();
 
     /**
+     * Check if a refcounted object is still alive
+     * @param obj Pointer to the object to check
+     * @return True if the pointer is not null and the object is referenced
+     */
+    inline static bool alive(const RefObject* obj)
+	{ return obj && (obj->refcount() > 0); }
+
+    /**
      * Check if reference counter manipulations are efficient on this platform.
      * If platform does not support atomic operations a mutex pool is used.
      * @return True if refcount uses atomic integer operations

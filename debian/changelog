@@ -1,3 +1,20 @@
+yate (5.5.1~svn6180) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6180:
+  * Added extra checks for race conditions where
+    CallEndpoint::setEndpoint() may fail.
+  * Added support for disabling portions of a configuration file.
+  * Added support for including other files or directories in
+    configuration files.
+  * Fixed a conflict for the MP4V-ES codec.
+  * Added SDP support for VP8 and some H.263 variants.
+  * Skip over some known backup or temporary files when including a
+    directory.
+  * Don't allow included config files to change current section, it is
+    too risky.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 02 Feb 2017 02:19:15 +0300
+
 yate (5.5.1~svn6177) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6177:

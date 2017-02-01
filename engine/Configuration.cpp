@@ -185,13 +185,12 @@ bool Configuration::load(bool warn)
     m_sections.clear();
     if (null())
 	return false;
-    String sect;
-    return loadFile(c_str(),sect,0,warn);
+    return loadFile(c_str(),"",0,warn);
 }
 
-bool Configuration::loadFile(const char* file, String& sect, unsigned int depth, bool warn)
+bool Configuration::loadFile(const char* file, String sect, unsigned int depth, bool warn)
 {
-    DDebug(DebugInfo,"Configuration::loadFile(\"%s\",\"%s\",%u,%s)",
+    DDebug(DebugInfo,"Configuration::loadFile(\"%s\",[%s],%u,%s)",
 	file,sect.c_str(),depth,String::boolText(warn));
     if (depth > MAX_DEPTH) {
 	Debug(DebugWarn,"Refusing to open config file '%s' at include depth %u",file,depth);
@@ -267,11 +266,17 @@ bool Configuration::loadFile(const char* file, String& sect, unsigned int depth,
 			ObjList files;
 			if (File::listDirectory(path,0,&files)) {
 			    path << Engine::pathSeparator();
-			    DDebug(DebugInfo,"Configuration loading %u files from '%s'",
+			    DDebug(DebugAll,"Configuration loading up to %u files from '%s'",
 				files.count(),path.c_str());
 			    files.sort(textSort);
 			    while (String* it = static_cast<String*>(files.remove(false))) {
-				ok = (loadFile(path + *it,sect,depth+1,warn) || noerr) && ok;
+				if (!(it->startsWith(".") || it->endsWith("~")
+					|| it->endsWith(".bak") || it->endsWith(".tmp")))
+				    ok = (loadFile(path + *it,sect,depth+1,warn) || noerr) && ok;
+#ifdef DEBUG
+				else
+				    Debug(DebugAll,"Configuration skipping over file '%s'",it->c_str());
+#endif
 				TelEngine::destruct(it);
 			    }
 			}

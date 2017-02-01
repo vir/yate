@@ -228,6 +228,7 @@ public:
 private:
     ObjList *getSectHolder(const String& sect) const;
     ObjList *makeSectHolder(const String& sect);
+    bool loadFile(const char* file, String& sect, unsigned int depth, bool warn);
     ObjList m_sections;
 };
 

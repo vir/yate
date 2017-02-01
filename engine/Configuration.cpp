@@ -22,7 +22,22 @@
 #include <stdio.h>
 #include <string.h>
 
+#define MAX_DEPTH 3
+
 using namespace TelEngine;
+
+// Text sort callback
+static int textSort(GenObject* obj1, GenObject* obj2, void* context)
+{
+    const String* s1 = static_cast<const String*>(obj1);
+    const String* s2 = static_cast<const String*>(obj2);
+    if (TelEngine::null(s1))
+	return TelEngine::null(s2) ? 0 : -1;
+    if (TelEngine::null(s2))
+	return 1;
+    return ::strcmp(s1->c_str(),s2->c_str());
+}
+
 
 Configuration::Configuration()
 {
@@ -133,7 +148,7 @@ void Configuration::clearKey(const String& sect, const String& key)
 
 void Configuration::addValue(const String& sect, const char* key, const char* value)
 {
-    DDebug(DebugInfo,"Configuration::addValue(\"%s\",\"%s\",\"%s\")",sect.c_str(),key,value);
+    DDebug(DebugAll,"Configuration::addValue(\"%s\",\"%s\",\"%s\")",sect.c_str(),key,value);
     ObjList *l = makeSectHolder(sect);
     if (!l)
 	return;
@@ -144,7 +159,7 @@ void Configuration::addValue(const String& sect, const char* key, const char* va
 
 void Configuration::setValue(const String& sect, const char* key, const char* value)
 {
-    DDebug(DebugInfo,"Configuration::setValue(\"%s\",\"%s\",\"%s\")",sect.c_str(),key,value);
+    DDebug(DebugAll,"Configuration::setValue(\"%s\",\"%s\",\"%s\")",sect.c_str(),key,value);
     ObjList *l = makeSectHolder(sect);
     if (!l)
 	return;
@@ -170,10 +185,23 @@ bool Configuration::load(bool warn)
     m_sections.clear();
     if (null())
 	return false;
-    FILE *f = ::fopen(c_str(),"r");
+    String sect;
+    return loadFile(c_str(),sect,0,warn);
+}
+
+bool Configuration::loadFile(const char* file, String& sect, unsigned int depth, bool warn)
+{
+    DDebug(DebugInfo,"Configuration::loadFile(\"%s\",\"%s\",%u,%s)",
+	file,sect.c_str(),depth,String::boolText(warn));
+    if (depth > MAX_DEPTH) {
+	Debug(DebugWarn,"Refusing to open config file '%s' at include depth %u",file,depth);
+	return false;
+    }
+    FILE *f = ::fopen(file,"r");
     if (f) {
-	String sect;
+	bool ok = true;
 	bool start = true;
+	bool enabled = true;
 	for (;;) {
 	    char buf[1024];
 	    if (!::fgets(buf,sizeof(buf),f))
@@ -202,11 +230,62 @@ bool Configuration::load(bool warn)
 	    if (s[0] == '[') {
 		int r = s.find(']');
 		if (r > 0) {
-		    sect = s.substr(1,r-1);
+		    s = s.substr(1,r-1);
+		    s.trimBlanks();
+		    if (s.null())
+			continue;
+		    if (s.startSkip("$enabled")) {
+			enabled = s.toBoolean(true);
+			continue;
+		    }
+		    if (!enabled)
+			continue;
+		    bool noerr = false;
+		    if (s.startSkip("$require") || (noerr = s.startSkip("$include"))) {
+			String path;
+			if (!s.startsWith(Engine::pathSeparator())) {
+			    path = file;
+			    int sep = path.rfind(Engine::pathSeparator());
+			    if ('/' != *Engine::pathSeparator()) {
+				int s2 = path.rfind('/');
+				if (sep < s2)
+				    sep = s2;
+			    }
+			    switch (sep) {
+				case -1:
+				    path.clear();
+				    break;
+				case 0:
+				    path = Engine::pathSeparator();
+				    break;
+				default:
+				    path = path.substr(0,sep);
+				    path << Engine::pathSeparator();
+			    }
+			}
+			path << s;
+			ObjList files;
+			if (File::listDirectory(path,0,&files)) {
+			    path << Engine::pathSeparator();
+			    DDebug(DebugInfo,"Configuration loading %u files from '%s'",
+				files.count(),path.c_str());
+			    files.sort(textSort);
+			    while (String* it = static_cast<String*>(files.remove(false))) {
+				ok = (loadFile(path + *it,sect,depth+1,warn) || noerr) && ok;
+				TelEngine::destruct(it);
+			    }
+			}
+			else
+			    ok = (loadFile(path,sect,depth+1,warn) || noerr) && ok;
+			continue;
+		    }
+		    sect = s;
 		    createSection(sect);
 		}
 		continue;
 	    }
+	    if (!enabled)
+		continue;
 	    int q = s.find('=');
 	    if (q == 0)
 		continue;
@@ -235,12 +314,16 @@ bool Configuration::load(bool warn)
 	    addValue(sect,key,s.trimBlanks());
 	}
 	::fclose(f);
-	return true;
+	return ok;
     }
     if (warn) {
 	int err = errno;
-	Debug(DebugNote,"Failed to open config file '%s', using defaults (%d: %s)",
-	    c_str(),err,strerror(err));
+	if (depth)
+	    Debug(DebugNote,"Failed to open included config file '%s' (%d: %s)",
+		file,err,strerror(err));
+	else
+	    Debug(DebugNote,"Failed to open config file '%s', using defaults (%d: %s)",
+		file,err,strerror(err));
     }
     return false;
 }

@@ -1,3 +1,12 @@
+yate (5.5.1~svn6181) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6181:
+  * Don't allow included config files to change current section, it is
+    too risky.
+  * Added support for RFC3325 P-Asserted-Identity and Privacy: id.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 03 Feb 2017 02:19:15 +0300
+
 yate (5.5.1~svn6180) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6180:

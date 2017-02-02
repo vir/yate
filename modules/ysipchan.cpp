@@ -1759,8 +1759,9 @@ static void copyPrivacy(NamedList& msg, const SIPMessage& sip)
 {
     bool anonip = (sip.getHeaderValue("Anonymity") &= "ipaddr");
     const MimeHeaderLine* hl = sip.getHeader("Remote-Party-ID");
+    const MimeHeaderLine* ai = sip.getHeader("P-Asserted-Identity");
     const MimeHeaderLine* pr = sip.getHeader("Privacy");
-    if (!(anonip || hl || pr))
+    if (!(anonip || hl || ai || pr))
 	return;
     const NamedString* p = hl ? hl->getParam("screen") : 0;
     if (p)
@@ -1798,6 +1799,8 @@ static void copyPrivacy(NamedList& msg, const SIPMessage& sip)
 	    priv.append("session",",");
 	if ((*pr &= "critical") || pr->getParam("critical"))
 	    priv.append("critical",",");
+	if ((*pr &= "id") || pr->getParam("id"))
+	    priv.append("id",",");
     }
     if (priv)
 	msg.setParam("privacy",priv);
@@ -1819,6 +1822,18 @@ static void copyPrivacy(NamedList& msg, const SIPMessage& sip)
 	if (!TelEngine::null(str))
 	    msg.setParam("remote_id_type",*str);
     }
+    if (ai) {
+	URI uri(*ai);
+	const char* tmp = uri.getDescription();
+	if (tmp)
+	    msg.setParam("asserted_callername",tmp);
+	tmp = uri.getUser();
+	if (tmp)
+	    msg.setParam("asserted_caller",tmp);
+	tmp = uri.getHost();
+	if (tmp)
+	    msg.setParam("asserted_domain",tmp);
+    }
 }
 
 // Copy privacy related information from Yate message to SIP message
@@ -1832,6 +1847,7 @@ static void copyPrivacy(SIPMessage& sip, const NamedList& msg)
     bool anonip = (privacy.find("addr") >= 0);
     bool privname = (privacy.find("name") >= 0);
     bool privuri = (privacy.find("uri") >= 0);
+    bool privid = (privacy.find("id") >= 0);
     String rfc3323;
     // allow for a simple "privacy=yes" or similar
     if (privacy.toBoolean(false) || (privacy == YSTRING("full")))
@@ -1848,7 +1864,7 @@ static void copyPrivacy(SIPMessage& sip, const NamedList& msg)
 	const char* domain = msg.getValue(YSTRING("privacy_domain"),msg.getValue(YSTRING("domain")));
 	if (!domain)
 	    domain = "domain";
-	String tmp = msg.getValue(YSTRING("privacy_callername"),msg.getValue(YSTRING("callername"),caller));
+	String tmp = msg.getValue(YSTRING("privacy_callername"),msg.getValue(YSTRING("callername")));
 	if (tmp) {
 	    MimeHeaderLine::addQuotes(tmp);
 	    tmp += " ";
@@ -1873,11 +1889,43 @@ static void copyPrivacy(SIPMessage& sip, const NamedList& msg)
 	    hl->setParam("id-type",str);
 	sip.addHeader(hl);
     }
+    if (privid) {
+	const char* caller = msg.getValue(YSTRING("asserted_caller"),msg.getValue(YSTRING("caller")));
+	if (caller) {
+	    const char* domain = msg.getValue(YSTRING("asserted_domain"),msg.getValue(YSTRING("domain")));
+	    String tmp;
+	    if (domain)
+		tmp << "<sip:" << caller << "@" << domain << ">";
+	    else if (isE164(caller))
+		tmp << "<tel:" << caller << ">";
+	    if (tmp) {
+		String desc = msg.getValue(YSTRING("asserted_callername"),msg.getValue(YSTRING("callername")));
+		if (desc) {
+		    MimeHeaderLine::addQuotes(desc);
+		    tmp = desc + " " + tmp;
+		}
+		sip.addHeader(new MimeHeaderLine("P-Asserted-Identity",tmp));
+		MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(sip.getHeader("From"));
+		if (hl) {
+		    static const Regexp r("\\(@[^>]\\+>\\)");
+		    tmp = *hl;
+		    if (tmp.matches(r))
+			*hl = "<sip:Anonymous" + tmp.matchString(1);
+		    else if (domain)
+			*hl = "<sip:Anonymous@" + String(domain) + ">";
+		    else
+			*hl = "<sip:Anonymous@anonymous.invalid>";
+		}
+	    }
+	}
+    }
     if (rfc3323.null()) {
 	if (privname)
 	    rfc3323.append("user",";");
 	if (privuri)
 	    rfc3323.append("header",";");
+	if (privid)
+	    rfc3323.append("id",";");
 	if (privacy.find("session") >= 0)
 	    rfc3323.append("session",";");
 	if (rfc3323 && (privacy.find("critical") >= 0))

@@ -6,6 +6,9 @@
 ; Defaults to 90
 ;priority=90
 
+; serial: string: Optional device serial number to use when opening one
+;serial=
+
 ; fpga_load: boolean: Load FPGA from file on device open
 ; Allowed values:
 ;  Boolean yes: Always load

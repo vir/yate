@@ -75,18 +75,22 @@ class BrfModule;                         // The module
 // Frequency bounds
 #define BRF_FREQUENCY_MIN 232500000u
 #define BRF_FREQUENCY_MAX 3800000000u
-static inline unsigned int validFrequency(uint32_t val, String* error = 0,
+static inline unsigned int validFrequency(uint64_t val, String* error = 0,
     const char* what = 0, const char* strVal = 0)
 {
     if ((val >= BRF_FREQUENCY_MIN) && (val <= BRF_FREQUENCY_MAX))
 	return 0;
-    if (error) {
+    if (!error)
+	return RadioInterface::OutOfRange;
+    if (what) {
 	*error << "invalid " << what << " ";
 	if (strVal)
 	    *error << strVal;
 	else
 	    *error << val;
     }
+    else
+	*error << "out of range";
     return RadioInterface::OutOfRange;
 }
 
@@ -2343,7 +2347,6 @@ private:
     unsigned int enableTimestamps(bool on = true, String* error = 0);
     unsigned int updateStatus(String* error = 0);
     unsigned int paSelect(int pa, String* error = 0);
-    void clampFrequency(uint32_t& val, bool tx, const char* loc);
     int clampInt(int val, int minVal, int maxVal, const char* what = 0,
 	int level = DebugNote);
     inline int clampIntParam(const NamedList& params, const String& param,
@@ -2356,6 +2359,7 @@ private:
 	{ return clampFloat(params.getDoubleValue(param,defVal),minVal,maxVal,param,level); }
     unsigned int openDevice(bool claim, String* error = 0);
     void closeDevice();
+    void closeUsbDev();
     void getDevStrDesc(String& data, uint8_t index, const char* what);
     // Read pages from device using contrt to 0 (from -35)ol transfer
     unsigned int ctrlTransferReadPage(uint8_t request, DataBlock& buf, String* error = 0);
@@ -2504,6 +2508,7 @@ private:
     unsigned int applyStartParams(const NamedList& params, String* error);
 
     BrfInterface* m_owner;               // The interface owning the device
+    String m_serial;                     // Serial number of device to use
     bool m_initialized;                  // Initialized flag
     bool m_exiting;                      // Exiting flag
     bool m_closing;                      // Closing flag
@@ -2718,7 +2723,6 @@ protected:
 
 private:
     BrfLibUsbDevice* m_dev;              // Used device
-    int m_txFreqCorr;
 };
 
 
@@ -4032,6 +4036,7 @@ unsigned int BrfLibUsbDevice::open(const NamedList& params)
     String e;
     unsigned int status = 0;
     while (true) {
+	m_serial = params[YSTRING("serial")];
 	BRF_FUNC_CALL_BREAK(resetUsb(&e));
 	BRF_FUNC_CALL_BREAK(openDevice(true,&e));
 	BRF_FUNC_CALL_BREAK(updateSpeed(params,&e));
@@ -5209,7 +5214,7 @@ unsigned int BrfLibUsbDevice::setState(BrfDevState& state, String* error)
 unsigned int BrfLibUsbDevice::setStateSync(String* error)
 {
     if (m_syncTxStateSet)
-	return setErrorFail(error,"Sync TS overlapping");
+	return setErrorFail(error,"Sync set state overlapping");
     m_syncTxStateCode = 0;
     m_syncTxStateSet = true;
     unsigned int intervals = threadIdleIntervals(m_syncTout);
@@ -5218,7 +5223,7 @@ unsigned int BrfLibUsbDevice::setStateSync(String* error)
 	m_syncSemaphore.lock(Thread::idleUsec());
 	status = cancelled(error);
 	if (!status && m_syncTxStateSet && (intervals--) == 0)
-	    status = setErrorTimeout(error,"Sync TS timeout");
+	    status = setErrorTimeout(error,"Sync set state timeout");
     }
     m_syncTxStateSet = false;
     if (status)
@@ -6345,9 +6350,9 @@ unsigned int BrfLibUsbDevice::internalSetFrequency(bool tx, uint32_t hz, String*
     unsigned int status = 0;
     BrfDevTmpAltSet tmpAltSet(this,status,&e,"frequency set");
     while (!status) {
+	BRF_FUNC_CALL_BREAK(validFrequency(hz,&e));
 	status = RadioInterface::Failure;
 	uint8_t addr = lmsFreqAddr(tx);
-	clampFrequency(hz,tx,"setFrequency");
 	uint8_t pllFreq = 0xff;
 	for (int i = 0; s_freqLimits[i]; i += 3)
 	    if (hz >= s_freqLimits[i] && hz <= s_freqLimits[i + 1]) {
@@ -7490,17 +7495,6 @@ unsigned int BrfLibUsbDevice::paSelect(int pa, String* error)
     return showError(status,e,0,error);
 }
 
-// Clamp frequency value
-void BrfLibUsbDevice::clampFrequency(uint32_t& val, bool tx, const char* loc)
-{
-    if (0 == validFrequency(val))
-	return;
-    uint32_t c = val < BRF_FREQUENCY_MIN ? BRF_FREQUENCY_MIN : BRF_FREQUENCY_MAX;
-    Debug(m_owner,DebugNote,"%s: clamping %s frequency %u to %u [%p]",
-	loc,brfDir(tx),val,c,m_owner);
-    val = c;
-}
-
 int BrfLibUsbDevice::clampInt(int val, int minVal, int maxVal, const char* what,
     int level)
 {
@@ -7530,40 +7524,74 @@ unsigned int BrfLibUsbDevice::openDevice(bool claim, String* error)
     unsigned int status = updateDeviceList(error);
     if (status)
 	return status;
+    bool haveMatch = !m_serial.null();
+    bool foundMatched = false;
     unsigned int failedDesc = 0;
-    libusb_device_descriptor desc;
-    for (unsigned int i = 0; !m_dev && i < m_listCount; i++) {
+    ObjList found;
+    for (unsigned int i = 0; i < m_listCount; i++) {
+	libusb_device_descriptor desc;
 	if (::libusb_get_device_descriptor(m_list[i],&desc)) {
 	    failedDesc++;
 	    continue;
 	}
 	// OpenMoko 0x1d50 Product=0x6066
 	// Nuand    0x2cf0 Product=0x5246
-	if ((desc.idVendor == 0x1d50 && desc.idProduct == 0x6066) ||
-	    (desc.idVendor == 0x2cf0 && desc.idProduct == 0x5246))
-	    m_dev = m_list[i];
+	if (!((desc.idVendor == 0x1d50 && desc.idProduct == 0x6066) ||
+	    (desc.idVendor == 0x2cf0 && desc.idProduct == 0x5246)))
+	    continue;
+	m_dev = m_list[i];
+	m_devBus = ::libusb_get_bus_number(m_dev);
+	m_devAddr = ::libusb_get_device_address(m_dev);
+	m_devSpeed = ::libusb_get_device_speed(m_dev);
+	DDebug(m_owner,DebugAll,"Opening device bus=%u addr=%u [%p]",bus(),addr(),m_owner);
+	String tmpError;
+	unsigned int tmpStatus = lusbCheckSuccess(::libusb_open(m_dev,&m_devHandle),
+	    &tmpError,"Failed to open the libusb device ");
+	while (!tmpStatus) {
+	    getDevStrDesc(m_devSerial,desc.iSerialNumber,"serial number");
+	    if (haveMatch) {
+		if (m_serial != m_devSerial)
+		    break;
+		foundMatched = true;
+	    }
+	    getDevStrDesc(m_devFwVerStr,4,"firmware version");
+	    if (claim)
+		tmpStatus = lusbCheckSuccess(::libusb_claim_interface(m_devHandle,0),
+		    &tmpError,"Failed to claim the interface ");
+	    if (!tmpStatus) {
+		Debug(m_owner,DebugAll,"Opened device bus=%u addr=%u [%p]",bus(),addr(),m_owner);
+		return 0;
+	    }
+	    break;
+	}
+	String* tmp = new String(m_devBus);
+	*tmp << "/" << m_devAddr << "/" << m_devSerial;
+	found.append(tmp);
+	closeUsbDev();
+	m_dev = 0;
+	if (tmpStatus) {
+	    status = tmpStatus;
+	    if (error)
+		*error = tmpError;
+	}
+	if (foundMatched)
+	    break;
     }
-    if (!m_dev) {
-	String e = "No device found";
-	if (failedDesc)
-	    e << " (failed to retrieve " << failedDesc <<
-		" device descriptor(s))";
-	return setError(RadioInterface::NotInitialized,error,e);
+    String e;
+    String failed;
+    failed.append(found,",");
+    if (haveMatch) {
+	e << "serial='" << m_serial << "' [";
+	if (!foundMatched)
+	    e << "not ";
+	e << "found] ";
     }
-    m_devBus = ::libusb_get_bus_number(m_dev);
-    m_devAddr = ::libusb_get_device_address(m_dev);
-    m_devSpeed = ::libusb_get_device_speed(m_dev);
-    DDebug(m_owner,DebugAll,"Opening device bus=%u addr=%u [%p]",bus(),addr(),m_owner);
-    status = lusbCheckSuccess(::libusb_open(m_dev,&m_devHandle),
-	error,"Failed to open the libusb device ");
-    if (status)
-	return status;
-    getDevStrDesc(m_devSerial,desc.iSerialNumber,"serial number");
-    getDevStrDesc(m_devFwVerStr,4,"firmware version");
-    if (claim)
-	status = lusbCheckSuccess(::libusb_claim_interface(m_devHandle,0),
-	    error,"Failed to claim the interface ");
-    return status;
+    e << "checked_devices=" << found.count();
+    if (failed)
+	e << " (" << failed << ")";
+    if (failedDesc)
+	e << " (failed_desc_retreival=" << failedDesc << " device descriptor(s))";
+    return setError(status ? status : RadioInterface::NotInitialized,error,e);
 }
 
 void BrfLibUsbDevice::closeDevice()
@@ -7579,8 +7607,21 @@ void BrfLibUsbDevice::closeDevice()
     stopThreads();
     internalPowerOn(false,false,false);
     m_closingDevice = false;
-    ::libusb_close(m_devHandle);
-    m_devHandle = 0;
+    closeUsbDev();
+    m_txIO.dataDumpFile.terminate(owner());
+    m_txIO.upDumpFile.terminate(owner());
+    m_rxIO.dataDumpFile.terminate(owner());
+    m_rxIO.upDumpFile.terminate(owner());
+    m_initialized = false;
+    Debug(m_owner,DebugAll,"Device closed [%p]",m_owner);
+}
+
+void BrfLibUsbDevice::closeUsbDev()
+{
+    if (m_devHandle) {
+	::libusb_close(m_devHandle);
+	m_devHandle = 0;
+    }
     m_devBus = -1;
     m_devAddr = -1;
     m_devSpeed = LIBUSB_SPEED_HIGH;
@@ -7590,12 +7631,6 @@ void BrfLibUsbDevice::closeDevice()
     m_devFpgaFile.clear();
     m_devFpgaMD5.clear();
     m_lmsVersion.clear();
-    m_txIO.dataDumpFile.terminate(owner());
-    m_txIO.upDumpFile.terminate(owner());
-    m_rxIO.dataDumpFile.terminate(owner());
-    m_rxIO.upDumpFile.terminate(owner());
-    m_initialized = false;
-    Debug(m_owner,DebugAll,"Device closed [%p]",m_owner);
 }
 
 void BrfLibUsbDevice::getDevStrDesc(String& data, uint8_t index, const char* what)
@@ -7609,7 +7644,7 @@ void BrfLibUsbDevice::getDevStrDesc(String& data, uint8_t index, const char* wha
     }
     data.clear();
     String tmp;
-    Debug(m_owner,DebugInfo,"Failed to retrieve device %s %s [%p]",
+    Debug(m_owner,DebugNote,"Failed to retrieve device %s %s [%p]",
 	what,appendLusbError(tmp,len).c_str(),m_owner);
 }
 
@@ -9907,8 +9942,7 @@ unsigned int BrfLibUsbDevice::applyStartParams(const NamedList& params, String* 
 //
 BrfInterface::BrfInterface(const char* name)
     : RadioInterface(name),
-    m_dev(0),
-    m_txFreqCorr(0)
+    m_dev(0)
 {
     debugChain(&__plugin);
     Debug(this,DebugAll,"Interface created [%p]",this);
@@ -10035,26 +10069,27 @@ unsigned int BrfInterface::setFrequency(uint64_t hz, bool tx)
 {
     XDebug(this,DebugAll,"BrfInterface::setFrequency(" FMT64U ",%s) [%p]",
 	hz,brfDir(tx),this);
-    if (hz > 0xffffffff) {
-	Debug(this,DebugNote,
-	    "Failed to set %s frequency " FMT64U ": out of range [%p]",
-	    brfDir(tx),hz,this);
-	return OutOfRange;
+    String error;
+    unsigned int status = validFrequency(hz,&error);
+    if (status) {
+	Debug(this,DebugNote,"Failed to set %s frequency " FMT64U ": %s [%p]",
+	    brfDir(tx),hz,error.c_str(),this);
+	return status;
     }
     uint32_t freq = (uint32_t)hz;
-    unsigned int status = m_dev->setFrequency(freq,tx);
+    status = m_dev->setFrequency(freq,tx);
     if (status)
 	return status;
     uint32_t tmp = 0;
     status = m_dev->getFrequency(tmp,tx);
     if (status)
 	return status;
-    if (tmp != freq) {
-	Debug(this,DebugNote,"Failed to set %s frequency requested=%u read=%u [%p]",
-	    brfDir(tx),freq,tmp,this);
-	return NotExact;
-    }
-    return 0;
+    if (tmp == freq)
+	return 0;
+    int delta = tmp - freq;
+    Debug(this,DebugNote,"Set %s frequency requested=%u read=%u delta=%d [%p]",
+	brfDir(tx),freq,tmp,delta,this);
+    return NotExact;
 }
 
 unsigned int BrfInterface::getFrequency(uint64_t& hz, bool tx) const

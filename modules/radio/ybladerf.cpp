@@ -75,18 +75,22 @@ class BrfModule;                         // The module
 // Frequency bounds
 #define BRF_FREQUENCY_MIN 232500000u
 #define BRF_FREQUENCY_MAX 3800000000u
-static inline unsigned int validFrequency(uint32_t val, String* error = 0,
+static inline unsigned int validFrequency(uint64_t val, String* error = 0,
     const char* what = 0, const char* strVal = 0)
 {
     if ((val >= BRF_FREQUENCY_MIN) && (val <= BRF_FREQUENCY_MAX))
 	return 0;
-    if (error) {
+    if (!error)
+	return RadioInterface::OutOfRange;
+    if (what) {
 	*error << "invalid " << what << " ";
 	if (strVal)
 	    *error << strVal;
 	else
 	    *error << val;
     }
+    else
+	*error << "out of range";
     return RadioInterface::OutOfRange;
 }
 
@@ -2343,7 +2347,6 @@ private:
     unsigned int enableTimestamps(bool on = true, String* error = 0);
     unsigned int updateStatus(String* error = 0);
     unsigned int paSelect(int pa, String* error = 0);
-    void clampFrequency(uint32_t& val, bool tx, const char* loc);
     int clampInt(int val, int minVal, int maxVal, const char* what = 0,
 	int level = DebugNote);
     inline int clampIntParam(const NamedList& params, const String& param,
@@ -2720,7 +2723,6 @@ protected:
 
 private:
     BrfLibUsbDevice* m_dev;              // Used device
-    int m_txFreqCorr;
 };
 
 
@@ -6348,9 +6350,9 @@ unsigned int BrfLibUsbDevice::internalSetFrequency(bool tx, uint32_t hz, String*
     unsigned int status = 0;
     BrfDevTmpAltSet tmpAltSet(this,status,&e,"frequency set");
     while (!status) {
+	BRF_FUNC_CALL_BREAK(validFrequency(hz,&e));
 	status = RadioInterface::Failure;
 	uint8_t addr = lmsFreqAddr(tx);
-	clampFrequency(hz,tx,"setFrequency");
 	uint8_t pllFreq = 0xff;
 	for (int i = 0; s_freqLimits[i]; i += 3)
 	    if (hz >= s_freqLimits[i] && hz <= s_freqLimits[i + 1]) {
@@ -7491,17 +7493,6 @@ unsigned int BrfLibUsbDevice::paSelect(int pa, String* error)
     else
 	e.printf(1024,"Failed to disable PAs - %s",e.c_str());
     return showError(status,e,0,error);
-}
-
-// Clamp frequency value
-void BrfLibUsbDevice::clampFrequency(uint32_t& val, bool tx, const char* loc)
-{
-    if (0 == validFrequency(val))
-	return;
-    uint32_t c = val < BRF_FREQUENCY_MIN ? BRF_FREQUENCY_MIN : BRF_FREQUENCY_MAX;
-    Debug(m_owner,DebugNote,"%s: clamping %s frequency %u to %u [%p]",
-	loc,brfDir(tx),val,c,m_owner);
-    val = c;
 }
 
 int BrfLibUsbDevice::clampInt(int val, int minVal, int maxVal, const char* what,
@@ -9951,8 +9942,7 @@ unsigned int BrfLibUsbDevice::applyStartParams(const NamedList& params, String* 
 //
 BrfInterface::BrfInterface(const char* name)
     : RadioInterface(name),
-    m_dev(0),
-    m_txFreqCorr(0)
+    m_dev(0)
 {
     debugChain(&__plugin);
     Debug(this,DebugAll,"Interface created [%p]",this);
@@ -10079,26 +10069,27 @@ unsigned int BrfInterface::setFrequency(uint64_t hz, bool tx)
 {
     XDebug(this,DebugAll,"BrfInterface::setFrequency(" FMT64U ",%s) [%p]",
 	hz,brfDir(tx),this);
-    if (hz > 0xffffffff) {
-	Debug(this,DebugNote,
-	    "Failed to set %s frequency " FMT64U ": out of range [%p]",
-	    brfDir(tx),hz,this);
-	return OutOfRange;
+    String error;
+    unsigned int status = validFrequency(hz,&error);
+    if (status) {
+	Debug(this,DebugNote,"Failed to set %s frequency " FMT64U ": %s [%p]",
+	    brfDir(tx),hz,error.c_str(),this);
+	return status;
     }
     uint32_t freq = (uint32_t)hz;
-    unsigned int status = m_dev->setFrequency(freq,tx);
+    status = m_dev->setFrequency(freq,tx);
     if (status)
 	return status;
     uint32_t tmp = 0;
     status = m_dev->getFrequency(tmp,tx);
     if (status)
 	return status;
-    if (tmp != freq) {
-	Debug(this,DebugNote,"Failed to set %s frequency requested=%u read=%u [%p]",
-	    brfDir(tx),freq,tmp,this);
-	return NotExact;
-    }
-    return 0;
+    if (tmp == freq)
+	return 0;
+    int delta = tmp - freq;
+    Debug(this,DebugNote,"Set %s frequency requested=%u read=%u delta=%d [%p]",
+	brfDir(tx),freq,tmp,delta,this);
+    return NotExact;
 }
 
 unsigned int BrfInterface::getFrequency(uint64_t& hz, bool tx) const

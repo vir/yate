@@ -1451,8 +1451,24 @@ String String::uriEscape(const char* str, char extraEsc, const char* noEsc)
 	return s;
     char c;
     while ((c=*str++)) {
-	if ((unsigned char)c <= ' ' || c == '%' || c == extraEsc ||
-	    ((c == '+' || c == '?' || c == '&') && !(noEsc && ::strchr(noEsc,c))))
+	if ((unsigned char)c < ' ' || c == '%' || c == extraEsc ||
+	    ((c == ' ' || c == '+' || c == '?' || c == '&') && !(noEsc && ::strchr(noEsc,c))))
+	    s << '%' << hexEncode(c >> 4) << hexEncode(c);
+	else
+	    s += c;
+    }
+    return s;
+}
+
+String String::uriEscape(const char* str, const char* extraEsc, const char* noEsc)
+{
+    String s;
+    if (TelEngine::null(str))
+	return s;
+    char c;
+    while ((c=*str++)) {
+	if ((unsigned char)c < ' ' || c == '%' || (extraEsc && ::strchr(extraEsc,c)) ||
+	    ((c == ' ' || c == '+' || c == '?' || c == '&') && !(noEsc && ::strchr(noEsc,c))))
 	    s << '%' << hexEncode(c >> 4) << hexEncode(c);
 	else
 	    s += c;

@@ -234,7 +234,7 @@ bool StatusHandler::received(Message &msg)
 		first = false;
 	    else
 		msg.retValue() << ",";
-	    msg.retValue() << *acct << "=" << user;
+	    msg.retValue() << *acct << "=" << String::uriEscape(user,",;|"," +?&");
 	}
     }
     msg.retValue() << "\r\n";

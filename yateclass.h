@@ -2740,6 +2740,15 @@ public:
     static String uriEscape(const char* str, char extraEsc = 0, const char* noEsc = 0);
 
     /**
+     * Create an escaped string suitable for use in URIs
+     * @param str String to convert to escaped format
+     * @param extraEsc Pointer to string of characters to escape other than the defaults
+     * @param noEsc Optional pointer to string of characters that shouldn't be escaped
+     * @return The string with special characters escaped
+     */
+    static String uriEscape(const char* str, const char* extraEsc, const char* noEsc = 0);
+
+    /**
      * Create an escaped string suitable for use in URI
      * @param extraEsc Character to escape other than the default ones
      * @param noEsc Optional pointer to string of characters that shouldn't be escaped

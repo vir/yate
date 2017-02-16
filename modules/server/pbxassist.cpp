@@ -42,7 +42,7 @@ public:
     virtual bool msgOperation(Message& msg, const String& operation);
     void chanReplaced(const String& initial, const String& final);
     inline void statusDetail(String& str) const
-	{ str.append(id() + "=" + m_state + "|" + m_tones,","); }
+	{ str.append(id() + "=" + m_state + "|" + String::uriEscape(m_tones,",;|"," +?&"),","); }
 protected:
     inline const String& state() const
 	{ return m_state; }

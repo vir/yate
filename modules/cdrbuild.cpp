@@ -415,8 +415,9 @@ void CdrBuilder::emit(const char *operation)
 String CdrBuilder::getStatus() const
 {
     String s(m_status);
-    s << "|" << getValue(YSTRING("caller")) << "|" << getValue(YSTRING("called")) <<
-	"|" << getValue(YSTRING("billid"));
+    s << "|" << String::uriEscape(getValue(YSTRING("caller")),",;|"," +?&")
+	<< "|" << String::uriEscape(getValue(YSTRING("called")),",;|"," +?&")
+	<< "|" << String::uriEscape(getValue(YSTRING("billid")),",;|"," +?&");
     unsigned int sec = 0;
     if (m_start)
 	sec = (int)((Time::now() - m_start + 500000) / 1000000);

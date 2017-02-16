@@ -1612,7 +1612,9 @@ void Driver::statusDetail(String& str)
     ObjList* l = m_chans.skipNull();
     for (; l; l=l->skipNext()) {
 	Channel* c = static_cast<Channel*>(l->get());
-	str.append(c->id(),",") << "=" << c->status() << "|" << c->address() << "|" << c->getPeerId();
+	str.append(c->id(),",") << "=" << c->status()
+	    << "|" << String::uriEscape(c->address(),",;|"," +?&")
+	    << "|" << c->getPeerId();
     }
 }
 

@@ -1,3 +1,14 @@
+yate (5.5.1~svn6187) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6187:
+  * Added method for URI escaping an entire list of characters.
+  * Unescape status values that might escaped characters (like ';', ','
+    or '|').
+  * Fixed SIP UAC handling of 4/5/6xx answers to a forked INVITE.
+  * Try to enable SCTP in default configuration.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 18 Feb 2017 02:19:15 +0300
+
 yate (5.5.1~svn6184) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6184:

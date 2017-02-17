@@ -537,8 +537,15 @@ SIPTransaction::Processed SIPTransaction::processMessage(SIPMessage* message, co
 	}
 	else if (m_tag != *ns) {
 	    // we have a dialog established and this message is out of it
-	    // discriminate forked answers to INVITEs for later processing
-	    return isInvite() ? NoDialog : NoMatch;
+	    if (!isInvite())
+		return NoMatch;
+	    if (message->code < 400)
+		// for 1/2/3xx answers to INVITE discriminate forked for later processing
+		return NoDialog;
+	    // we must answer any 4/5/6xx - and we're supposed to receive only one
+	    DDebug(getEngine(),DebugInfo,"SIPTransaction changing dialog tag '%s' -> '%s' in %u answer [%p]",
+		m_tag.c_str(),ns->c_str(),message->code,this);
+	    m_tag = *ns;
 	}
     }
 

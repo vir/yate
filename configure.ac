@@ -442,7 +442,7 @@ AC_SUBST(FDSIZE_HACK)
 HAVE_SCTP=no
 HAVE_SCTP_NETINET=no
 SCTP_FLAGS=""
-AC_ARG_ENABLE(sctp,AC_HELP_STRING([--enable-sctp],[Enable SCTP sockets (default: no)]),want_sctp=$enableval,want_sctp=no)
+AC_ARG_ENABLE(sctp,AC_HELP_STRING([--enable-sctp],[Enable SCTP sockets (default: yes)]),want_sctp=$enableval,want_sctp=yes)
 if [[ "x$want_sctp" = "xyes" ]]; then
 AC_LANG_SAVE
 AC_LANG_C

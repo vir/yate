@@ -1826,7 +1826,7 @@ bool ActiveCallsInfo::load()
 	    int pos = callInfo->find("=");
 	    NamedList* nl = new NamedList("");
 
-	    String id  = callInfo->substr(0,pos);
+	    String id = callInfo->substr(0,pos);
 	    callInfo->startSkip(String(id + "="));
 	    nl->setParam(lookup(ID,s_activeCallInfo,0),id);
 	    int i = 0;
@@ -1837,6 +1837,7 @@ bool ActiveCallsInfo::load()
 		    break;
 		String val = callInfo->substr(0,pos);
 		callInfo->startSkip(String(val + "|"),false);
+		val = val.uriUnescape();
 		int p = -1;
 		switch (i) {
 		    case 0:
@@ -2258,8 +2259,8 @@ bool AccountsInfo::load()
 	    int pos2 = account->find("|");
 	    if (pos1 < 0 || pos2 < 0)
 		continue;
-	    String name = account->substr(0,pos1);
-	    String username = account->substr(pos1 + 1,pos2 - pos1 -1);
+	    String name = account->substr(0,pos1).uriUnescape();
+	    String username = account->substr(pos1 + 1,pos2 - pos1 -1).uriUnescape();
 	    String status = account->substr(pos2 + 1);
 
 	    if (name.null())
@@ -2402,7 +2403,7 @@ bool ModuleInfo::load()
 		}
 		nl->setParam(lookup(type,s_moduleQuery,""),value);
 	    }
-	    nl->setParam(lookup(MODULE_INFO,s_moduleQuery,""),info);
+	    nl->setParam(lookup(MODULE_INFO,s_moduleQuery,""),info.uriUnescape());
 	    TelEngine::destruct(paramVal);
 	}
 	TelEngine::destruct(parts);

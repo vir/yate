@@ -2187,6 +2187,7 @@ private:
     int m_maxchans;
     int m_chanCount;
     bool m_dtmfDups;
+    volatile bool m_doExpire;
 
 public:
     /**

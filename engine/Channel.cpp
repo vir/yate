@@ -1350,7 +1350,8 @@ Driver::Driver(const char* name, const char* type)
       m_init(false), m_varchan(true),
       m_routing(0), m_routed(0), m_total(0),
       m_nextid(0), m_timeout(0),
-      m_maxroute(0), m_maxchans(0), m_chanCount(0), m_dtmfDups(false)
+      m_maxroute(0), m_maxchans(0), m_chanCount(0),
+      m_dtmfDups(false), m_doExpire(true)
 {
     m_prefix << name << "/";
 }
@@ -1411,20 +1412,25 @@ bool Driver::received(Message &msg, int id)
     String dest;
     switch (id) {
 	case Timer:
-	    {
-		// check each channel for timeouts
-		lock();
-		ListIterator iter(m_chans);
-		Time t;
-		for (;;) {
-		    RefPointer<Channel> c = static_cast<Channel*>(iter.get());
-		    unlock();
-		    if (!c)
-			break;
-		    c->checkTimers(msg,t);
-		    c = 0;
-		    lock();
+	    if (m_doExpire && lock(950000)) {
+		if (m_doExpire) {
+		    m_doExpire = false;
+		    // check each channel for timeouts
+		    ListIterator iter(m_chans);
+		    Time t;
+		    for (;;) {
+			RefPointer<Channel> c = static_cast<Channel*>(iter.get());
+			unlock();
+			if (!c)
+			    break;
+			c->checkTimers(msg,t);
+			c = 0;
+			lock();
+		    }
+		    m_doExpire = true;
 		}
+		else
+		    unlock();
 	    }
 	    return Module::received(msg,id);
 	case Status:

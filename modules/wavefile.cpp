@@ -127,7 +127,9 @@ private:
     AttachHandler* m_handler;
 };
 
-Mutex s_mutex(false,"WaveFile");
+Mutex s_statsMutex(false,"WaveFile::stats");
+Mutex s_srcMutex(false,"WaveFile::src");
+Mutex s_consMutex(false,"WaveFile::cons");
 int s_reading = 0;
 int s_writing = 0;
 bool s_dataPadding = true;
@@ -268,9 +270,9 @@ WaveSource::WaveSource(const char* file, CallEndpoint* chan, bool autoclose)
       m_nodata(false)
 {
     Debug(&__plugin,DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file,chan,this);
-    s_mutex.lock();
+    s_statsMutex.lock();
     s_reading++;
-    s_mutex.unlock();
+    s_statsMutex.unlock();
 }
 
 WaveSource::~WaveSource()
@@ -286,9 +288,9 @@ WaveSource::~WaveSource()
     }
     delete m_stream;
     m_stream = 0;
-    s_mutex.lock();
+    s_statsMutex.lock();
     s_reading--;
-    s_mutex.unlock();
+    s_statsMutex.unlock();
 }
 
 void WaveSource::detectAuFormat()
@@ -454,10 +456,10 @@ void WaveSource::cleanup()
 {
     RefPointer<CallEndpoint> chan;
     if (m_chan) {
-	DataEndpoint::commonMutex().lock();
+	s_srcMutex.lock();
 	chan = m_chan;
 	m_chan = 0;
-	DataEndpoint::commonMutex().unlock();
+	s_srcMutex.unlock();
     }
     Debug(&__plugin,DebugAll,"WaveSource cleanup, total=%u, chan=%p [%p]",
 	m_total,(void*)chan,this);
@@ -485,11 +487,11 @@ void WaveSource::notify(WaveSource* source, const char* reason)
 {
     RefPointer<CallEndpoint> chan;
     if (m_chan) {
-	DataEndpoint::commonMutex().lock();
+	s_srcMutex.lock();
 	if (source)
 	    chan = m_chan;
 	m_chan = 0;
-	DataEndpoint::commonMutex().unlock();
+	s_srcMutex.unlock();
     }
     if (!chan) {
 	if (m_id) {
@@ -519,9 +521,9 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 {
     Debug(&__plugin,DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u,\"%s\",%s,%p) [%p]",
 	file.c_str(),chan,maxlen,format,String::boolText(append),param,this);
-    s_mutex.lock();
+    s_statsMutex.lock();
     s_writing++;
-    s_mutex.unlock();
+    s_statsMutex.unlock();
     if (format) {
 	m_locked = true;
 	m_format = format;
@@ -610,9 +612,9 @@ WaveConsumer::~WaveConsumer()
     }
     delete m_stream;
     m_stream = 0;
-    s_mutex.lock();
+    s_statsMutex.lock();
     s_writing--;
-    s_mutex.unlock();
+    s_statsMutex.unlock();
 }
 
 void WaveConsumer::writeIlbcHeader() const
@@ -727,10 +729,10 @@ unsigned long WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	    m_stream = 0;
 	    RefPointer<CallEndpoint> chan;
 	    if (m_chan) {
-		DataEndpoint::commonMutex().lock();
+		s_consMutex.lock();
 		chan = m_chan;
 		m_chan = 0;
-		DataEndpoint::commonMutex().unlock();
+		s_consMutex.unlock();
 	    }
 	    if (chan) {
 		DDebug(&__plugin,DebugInfo,"Preparing 'maxlen' disconnector for '%s' chan %p '%s' in consumer [%p]",

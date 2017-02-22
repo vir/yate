@@ -1,3 +1,16 @@
+yate (5.5.1~svn6189) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6189:
+  * Use separate mutexes to protect the owner CallEndpoint pointer since
+    using DataEndpoint::commonMutex() from the data threads can lead to
+    deadlocks.
+  * This signifficantly reduces the pressure on the worker threads in
+    congestion conditions.
+  * Prevent multiple engine.timer messages from timing out Channels in
+    the same Driver.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 23 Feb 2017 02:19:15 +0300
+
 yate (5.5.1~svn6187) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6187:

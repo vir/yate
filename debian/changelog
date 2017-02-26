@@ -1,3 +1,13 @@
+yate (5.5.1~svn6190) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6190:
+  * Prevent multiple engine.timer messages from timing out Channels in
+    the same Driver.
+  * Added equivalent [$enabled else] and [$enabled toggle] syntaxes that
+    toggle config file processing.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Mon, 27 Feb 2017 02:19:15 +0300
+
 yate (5.5.1~svn6189) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6189:

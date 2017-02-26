@@ -234,7 +234,10 @@ bool Configuration::loadFile(const char* file, String sect, unsigned int depth, 
 		    if (s.null())
 			continue;
 		    if (s.startSkip("$enabled")) {
-			enabled = s.toBoolean(true);
+			if ((s == YSTRING("else")) || (s == YSTRING("toggle")))
+			    enabled = !enabled;
+			else
+			    enabled = s.toBoolean(true);
 			continue;
 		    }
 		    if (!enabled)

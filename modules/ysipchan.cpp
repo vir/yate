@@ -9304,8 +9304,9 @@ bool SIPDriver::sendMethod(Message& msg, const char* method, bool msgExec,
 	}
 	sip = new SIPMessage(method,uri);
 	YateSIPPartyHolder holder;
-	const char* host = msg.getValue("host");
-	int port = msg.getIntValue("port");
+	URI rUri(uri);
+	const char* host = msg.getValue("host",rUri.getHost());
+	int port = msg.getIntValue("port",rUri.getPort());
 	holder.setParty(msg,false,String::empty(),host,port);
 	holder.setSipParty(sip,line,true,host,port);
 	if (line)

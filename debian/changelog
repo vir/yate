@@ -1,3 +1,11 @@
+yate (5.5.1~svn6191) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6191:
+  * Pick default remote host:port from rURI so that connection_id gets
+    applied.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 28 Feb 2017 02:19:15 +0300
+
 yate (5.5.1~svn6190) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6190:

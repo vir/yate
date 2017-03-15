@@ -1,3 +1,10 @@
+yate (5.5.1~svn6192) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6192:
+  * Added setting for new CDR file permissions, defaults to 0640.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 16 Mar 2017 02:19:15 +0300
+
 yate (5.5.1~svn6191) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6191:

@@ -60,7 +60,7 @@ public:
 	{ }
     virtual ~CdrFileHandler();
     virtual bool received(Message &msg);
-    void init(const char *fname, bool tabsep, bool combined, const char* format);
+    void init(const char *fname, bool tabsep, bool combined, const char* format, int mode);
 private:
     int m_file;
     bool m_combined;
@@ -76,7 +76,7 @@ CdrFileHandler::~CdrFileHandler()
     }
 }
 
-void CdrFileHandler::init(const char *fname, bool tabsep, bool combined, const char* format)
+void CdrFileHandler::init(const char *fname, bool tabsep, bool combined, const char* format, int mode)
 {
     Lock lock(this);
     if (m_file >= 0) {
@@ -105,7 +105,7 @@ void CdrFileHandler::init(const char *fname, bool tabsep, bool combined, const c
 	      );
     }
     if (fname) {
-	m_file = ::open(fname,O_WRONLY|O_CREAT|O_APPEND|O_LARGEFILE,0640);
+	m_file = ::open(fname,O_WRONLY|O_CREAT|O_APPEND|O_LARGEFILE,mode);
 	if (m_file < 0)
 	    Alarm("cdrfile","system",DebugWarn,"Failed to open or create '%s': %s (%d)",
 		fname,::strerror(errno),errno);
@@ -156,7 +156,9 @@ void CdrFilePlugin::initialize()
     }
     if (m_handler)
 	m_handler->init(file,cfg.getBoolValue("general","tabs",true),
-	    cfg.getBoolValue("general","combined",false),cfg.getValue("general","format"));
+	    cfg.getBoolValue("general","combined",false),
+	    cfg.getValue("general","format"),
+	    cfg.getIntValue("general","mode",0640));
 }
 
 }; // anonymous namespace

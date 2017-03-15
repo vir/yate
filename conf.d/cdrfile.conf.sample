@@ -4,6 +4,11 @@
 ; Example: file=/var/log/yate-cdr.tsv
 ;file=
 
+; mode: integer: Permissions to apply to newly created file
+; Typically it is expressed in octal, default 0640 is [- rw- r-- ---]
+; Use 0644 to make the CDR files world readable
+;mode=0640
+
 ; tabs: bool: Use tab-separated instead of comma-separated if format is missing
 ;tabs=true
 

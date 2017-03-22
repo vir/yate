@@ -188,6 +188,7 @@ for small to large scale projects.
 %{_libdir}/yate/sig/camel_map.yate
 %{_libdir}/yate/sip/sip_cnam_lnp.yate
 %{_libdir}/yate/radio/dummyradio.yate
+%{_libdir}/yate/radio/radiotest.yate
 %dir %{_sysconfdir}/yate
 %config(noreplace) %{_sysconfdir}/yate/accfile.conf
 %config(noreplace) %{_sysconfdir}/yate/cdrbuild.conf

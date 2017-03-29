@@ -5369,6 +5369,23 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	return;
     }
 
+    String tmp(message->getHeader("Expires"));
+    if (tmp.null())
+	tmp = hl->getParam("expires");
+    int expires = tmp.toInteger(-1);
+    if (expires < 0)
+	expires = s_expires_def;
+    if (expires > s_expires_max)
+	expires = s_expires_max;
+    if (expires && (expires < s_expires_min) && (*hl != "*")) {
+	tmp = s_expires_min;
+	SIPMessage* r = new SIPMessage(t->initialMessage(),423);
+	r->addHeader("Min-Expires",tmp);
+	t->setResponse(r);
+	r->deref();
+	return;
+    }
+
     URI addr(*hl);
     String num = addr.getUser();
     if (!num) {
@@ -5382,14 +5399,6 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     msg.addParam("number",num,false);
     msg.addParam("sip_uri",t->getURI());
     msg.addParam("sip_callid",t->getCallID());
-    String tmp(message->getHeader("Expires"));
-    if (tmp.null())
-	tmp = hl->getParam("expires");
-    int expires = tmp.toInteger(-1);
-    if (expires < 0)
-	expires = s_expires_def;
-    if (expires > s_expires_max)
-	expires = s_expires_max;
     tmp = expires;
     msg.setParam("expires",tmp);
     String user;
@@ -5450,14 +5459,6 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     msg.setParam("ip_port",String(rport));
     msg.setParam("ip_transport",message->getParty()->getProtoName());
 
-    if (expires && (expires < s_expires_min)) {
-	tmp = s_expires_min;
-	SIPMessage* r = new SIPMessage(t->initialMessage(),423);
-	r->addHeader("Min-Expires",tmp);
-	t->setResponse(r);
-	r->deref();
-	return;
-    }
     bool dereg = false;
     if (!expires) {
 	msg = "user.unregister";

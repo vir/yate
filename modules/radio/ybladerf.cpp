@@ -4910,7 +4910,7 @@ void BrfLibUsbDevice::runRecv(BrfThread* th)
 // Build notification message
 Message* BrfLibUsbDevice::buildNotify(const char* status)
 {
-    Message* m = new Message("module.update");
+    Message* m = new Message("module.update",0,true);
     m->addParam("module",__plugin.name());
     if (owner())
 	m->addParam("interface",owner()->toString());

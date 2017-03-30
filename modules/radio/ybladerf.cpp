@@ -8449,6 +8449,8 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
     if (calValMax > maxV)
 	calValMax = maxV;
 
+    Debug(m_owner,DebugNote,"Calibrating %s pass=%d [%p]",
+	lookup(corr,s_corr),pass,this);
     unsigned int trace = data.uintParam(dc,"trace");
     if (trace)
 	Output("Pass #%u calibrating %s (crt: %d) %s=%d "

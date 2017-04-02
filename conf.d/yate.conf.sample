@@ -78,6 +78,9 @@
 ;  Set to boolean false to disable tracking only if you are sure what you want
 ;trackparam=handlers
 
+; abortinfo: boolean: Display some engine statistics during a process abort
+;abortinfo=enable
+
 ; msgsniff: bool: Activate message sniffer module (if loaded) at engine init time
 ;msgsniff=disable
 

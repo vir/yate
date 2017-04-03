@@ -1606,7 +1606,7 @@ public:
     void postponeActivity(unsigned minutes, bool dropData = false);
 
     /// Stop activity and drop gathered data
-    void disableDiscipline();
+    void disableDiscipline(bool onCmd = false);
 
     /**
      * Discipline the BladeRF's VCTCXO to local machine's clock
@@ -1876,7 +1876,7 @@ public:
     // Retrieve frequency
     unsigned int getFrequency(uint32_t& hz, bool tx);
     // Set frequency offset
-    unsigned int setFreqOffset(float offs, float* newVal = 0);
+    unsigned int setFreqOffset(float offs, float* newVal = 0, bool stopAutoCal = true);
     // Get frequency offset
     unsigned int getFreqOffset(float& offs);
     // Set the LPF bandwidth for a specific module
@@ -1968,6 +1968,11 @@ public:
     void runRecv(BrfThread* th);
     // Build notification message
     Message* buildNotify(const char* status = 0);
+    inline void notifyFreqOffs() {
+	Message* m = buildNotify();
+	m->addParam("RadioFrequencyOffset",String(m_freqOffset));
+	Engine::enqueue(m);
+    }
     // Release data
     virtual void destruct();
     // Create an interface
@@ -3361,14 +3366,16 @@ void BrfVctcxoDiscipliner::postponeActivity(unsigned minutes, bool dropData)
     }
 }
 
-void BrfVctcxoDiscipliner::disableDiscipline()
+void BrfVctcxoDiscipliner::disableDiscipline(bool onCmd)
 {
     if (!m_trimsLeft)
 	return;
     m_trimsLeft = 0;
     postponeActivity(0,true);
-    Debug(dev().owner(),DebugNote,"Frequency calibration is stopping (disabled) [%p]",
-	dev().owner());
+    Debug(dev().owner(),DebugNote,"Frequency calibration is stopping (%s) [%p]",
+	onCmd ? "changed by command" : "disabled",dev().owner());
+    if (onCmd)
+	dev().notifyFreqOffs();
 }
 
 void BrfVctcxoDiscipliner::trimVctcxo(uint64_t timestamp, int drift)
@@ -3498,7 +3505,7 @@ bool BrfVctcxoDiscipliner::processData(int drift)
 	    "VCTCXO discipliner: changing FrequencyOffset %g -> %g drift=%dppb [%p]",
 	    dev().m_freqOffset,newOffs,drift,dev().owner());
     // trim the VCTCXO
-    unsigned status = dev().setFreqOffset(newOffs);
+    unsigned status = dev().setFreqOffset(newOffs,0,false);
     if (status) {
 	// postpone activity for a minute to avoid a flood of debug messages
 	postponeActivity(1);
@@ -3512,9 +3519,7 @@ bool BrfVctcxoDiscipliner::processData(int drift)
     if (!m_driftPpb)
 	return true;
     // enqueue a feedback message with the adjusted frequency offset
-    Message* feedback = dev().buildNotify();
-    feedback->addParam("RadioFrequencyOffset",String(dev().m_freqOffset));
-    Engine::enqueue(feedback);
+    dev().notifyFreqOffs();
     // clear the pending drift
     m_driftPpb = 0;
     // decrease the number of scheduled trims, unless toggled on (-1)
@@ -4337,10 +4342,14 @@ unsigned int BrfLibUsbDevice::getFrequency(uint32_t& hz, bool tx)
 }
 
 // Set frequency offset
-unsigned int BrfLibUsbDevice::setFreqOffset(float offs, float* newVal)
+unsigned int BrfLibUsbDevice::setFreqOffset(float offs, float* newVal, bool stopAutoCal)
 {
     BRF_TX_SERIALIZE_CHECK_PUB_ENTRY(false,"setFreqOffset()");
-    return internalSetFreqOffs(offs,newVal);
+    unsigned int status = internalSetFreqOffs(offs,newVal);
+    txSerialize.drop();
+    if (!status && stopAutoCal && getDirState(true).rfEnabled)
+	disableDiscipline(true);
+    return status;
 }
 
 // Get frequency offset
@@ -10522,7 +10531,7 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	"\r\n  Set or retrieve TX/RX VGA mixer gain"
 	"\r\ncontrol ifc_name correction tx=boolean corr={dc-i|dc-q|fpga-gain|fpga-phase} [value=]"
 	"\r\n  Set or retrieve TX/RX DC I/Q or FPGA GAIN/PHASE correction"
-	"\r\ncontrol ifc_name freqoffs [{value|drift}=]"
+	"\r\ncontrol ifc_name freqoffs [{value= [stop=YES|no]}|drift=]"
 	"\r\n  Set (absolute value or a drift expressed in ppb to force a clock trim) or retrieve the frequency offset"
 	"\r\ncontrol ifc_name show [info=status|statistics|timestamps|boardstatus|peripheral|freqcal] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]"
 	"\r\n  Verbose output various interface info"
@@ -10886,7 +10895,8 @@ bool BrfModule::onCmdFreqOffs(BrfInterface* ifc, Message& msg)
     if (strRet) {
 	float freqoffs = strRet->toDouble(-1);
 	if (freqoffs > 0) {
-	    unsigned code = ifc->device()->setFreqOffset(freqoffs);
+	    bool stop = msg.getBoolValue(YSTRING("stop"),true);
+	    unsigned code = ifc->device()->setFreqOffset(freqoffs,0,stop);
 	    if (code)
 		return retValFailure(msg,code);
 	}

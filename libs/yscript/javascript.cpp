@@ -1690,6 +1690,7 @@ bool JsCode::parseFor(ParsePoint& expr, GenObject* nested)
     addOpcode((Opcode)OpcBegin);
     if ((skipComments(++expr) != ';') && !runCompile(expr,')'))
 	return false;
+    bool iter = false;
     int64_t cont = 0;
     int64_t jump = ++m_label;
     int64_t body = ++m_label;
@@ -1723,6 +1724,7 @@ bool JsCode::parseFor(ParsePoint& expr, GenObject* nested)
 	}
     }
     else {
+	iter = true;
 	cont = ++m_label;
 	addOpcode(OpcLabel,cont);
 	addOpcode((Opcode)OpcNext);
@@ -1732,6 +1734,11 @@ bool JsCode::parseFor(ParsePoint& expr, GenObject* nested)
 	return gotError("Expecting ')'",expr);
     ParseLoop parseStack(this,nested,OpcFor,cont,jump);
     addOpcode(OpcLabel,body);
+    if (!iter) {
+	// non-iterative version needs to avoid stack build-up
+	addOpcode((Opcode)OpcFlush);
+	addOpcode((Opcode)OpcBegin);
+    }
     if (!getOneInstruction(++expr,parseStack))
 	return false;
     addOpcode((Opcode)OpcJump,cont);
@@ -1754,6 +1761,8 @@ bool JsCode::parseWhile(ParsePoint& expr, GenObject* nested)
     int64_t jump = ++m_label;
     addOpcode((Opcode)OpcJumpFalse,jump);
     ParseLoop parseStack(this,nested,OpcWhile,cont,jump);
+    addOpcode((Opcode)OpcFlush);
+    addOpcode((Opcode)OpcBegin);
     if (!getOneInstruction(++expr,parseStack))
 	return false;
     addOpcode((Opcode)OpcJump,cont);

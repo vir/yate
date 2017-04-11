@@ -607,7 +607,7 @@ bool ETSIModem::createMsg(NamedList& params, DataBlock& data)
 
     // Build message
     unsigned char len = 0;
-    unsigned char hdr[2] = {type};
+    unsigned char hdr[2] = {(unsigned char)type};
     data.assign(&hdr,sizeof(hdr));
 
     for (ObjList* o = msg.skipNull(); o; o = o->skipNext()) {

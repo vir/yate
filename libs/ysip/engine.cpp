@@ -314,6 +314,7 @@ void SIPEngine::processEvent(SIPEvent *event)
 {
     if (!event)
 	return;
+#ifdef DEBUG
     const char* type = "unknown";
     if (event->isOutgoing())
 	type = "outgoing";
@@ -321,6 +322,7 @@ void SIPEngine::processEvent(SIPEvent *event)
 	type = "incoming";
     DDebug(this,DebugAll,"Processing %s event %p message %p [%p]",
 	type,event,event->getMessage(),this);
+#endif
     if (event->getMessage()) {
 	if (event->isOutgoing()) {
 	    switch (event->getState()) {

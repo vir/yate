@@ -90,7 +90,13 @@ public:
     inline unsigned int fileTime() const
 	{ return m_fileTime; }
     inline bool fileChanged() const
-	{ unsigned int t = 0; File::getFileTime(c_str(),t); return t != m_fileTime; }
+	{
+	    if (!m_fileTime)
+		return false;
+	    unsigned int t = 0;
+	    File::getFileTime(c_str(),t);
+	    return t != m_fileTime;
+	}
 private:
     unsigned int m_fileTime;
 };

@@ -1,3 +1,25 @@
+yate (5.5.1~svn6204) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6204:
+  * Check register interval before authentication: avoid useless auth
+    for interval too brief.
+  * Set broadcast for module.update sent to notify device events.
+  * Fixed calibration: use the same sampling rate and filter bw when
+    calibrating. Renamed device check to loopback check. Improved debug.
+  * Put a debug message when starting specific calibration type.
+  * Added option (default enabled) to display some engine stats when
+    aborting.
+  * Stop frequency offset calibration when frequency offset is set by
+    command after TX RF is enabled.
+  * Speed up the filling of large field names lists mainly used in
+    iteration over object properties.
+  * Clean up stack during for and while loops to prevent building up
+    useless values.
+  * Silenced some compiler warnings.
+  * Don't check changes in files that didn't had a valid timestamp.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 18 Apr 2017 02:19:16 +0300
+
 yate (5.5.1~svn6194) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6194:

@@ -197,18 +197,16 @@ void ScriptContext::fillFieldNames(ObjList& names)
 
 void ScriptContext::fillFieldNames(ObjList& names, const NamedList& list, const char* skip)
 {
-    unsigned int n = list.length();
-    for (unsigned int i = 0; i < n; i++) {
-	const NamedString* s = list.getParam(i);
-	if (!s)
-	    continue;
+    ObjList* tail = &names;
+    for (const ObjList* l = list.paramList()->skipNull(); l; l = l->skipNext()) {
+	const NamedString* s = static_cast<const NamedString*>(l->get());
 	if (s->name().null())
 	    continue;
 	if (skip && s->name().startsWith(skip))
 	    continue;
 	if (names.find(s->name()))
 	    continue;
-	names.append(new String(s->name()));
+	tail = tail->append(new String(s->name()));
     }
 }
 

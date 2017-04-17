@@ -24,6 +24,7 @@
 
 #include <process.h>
 #include <shlobj.h>
+typedef void (*sig_func_t)(int);
 #define RTLD_NOW 0
 #define dlopen(name,flags) LoadLibrary(name)
 #define dlclose !FreeLibrary
@@ -49,6 +50,7 @@ __declspec(dllimport) BOOL WINAPI SHGetSpecialFolderPathA(HWND,LPSTR,INT,BOOL);
 #include <sys/wait.h>
 #include <sys/resource.h>
 typedef void* HMODULE;
+#define sig_func_t sighandler_t
 #define PATH_SEP "/"
 #ifndef CFG_DIR
 #ifdef HAVE_MACOSX_SUPPORT
@@ -176,6 +178,7 @@ static bool s_interactive = true;
 static bool s_localsymbol = false;
 static bool s_logtruncate = false;
 static const char* s_logfile = 0;
+static sig_func_t s_abrt_handler = SIG_DFL;
 
 static void sighandler(int signal)
 {
@@ -210,6 +213,35 @@ static void sighandler(int signal)
 	    Engine::halt(0);
 	    break;
     }
+}
+
+static void abrthandler(int sig)
+{
+    ::signal(SIGABRT,s_abrt_handler);
+    Engine* eng = Engine::self();
+    if (eng) {
+	// TODO: retrieve all the information without getting any mutex locks
+	uint64_t enq,deq,disp,qmax;
+	eng->getStats(enq,deq,disp,qmax);
+	::fprintf(stderr,
+	    "*** ABORT INFO BEGIN ***\n"
+	    "  Messages:    " FMT64U "\n"
+	    "  MaxQueue:    " FMT64U "\n"
+	    "  Msg Rate:    %u\n"
+	    "  Max Rate:    %u\n"
+	    "  Threads:     %d\n"
+	    "  Workers:     %d\n"
+	    "  Mutexes:     %d\n"
+	    "  Locks:       %d\n"
+	    "  Congestion:  %u\n"
+	    "  Call Accept: %s\n"
+	    "*** ABORT INFO END ***\n",
+	    (enq - deq),qmax,eng->messageRate(),eng->messageMaxRate(),
+	    Thread::count(),EnginePrivate::count,Mutex::count(),Mutex::locks(),
+	    Engine::getCongestion(),lookup(Engine::accept(),Engine::getCallAcceptStates())
+	);
+    }
+    ::raise(SIGABRT);
 }
 
 String Engine::s_node;
@@ -1528,6 +1560,8 @@ int Engine::engineInit()
 	Debug(DebugWarn,"No supervisor - disabling automatic restarts");
 	s_restarts = 0;
     }
+    if (s_cfg.getBoolValue("general","abortinfo",true))
+	s_abrt_handler = ::signal(SIGABRT,abrthandler);
     initPlugins();
     checkPoint();
     ::signal(SIGINT,sighandler);

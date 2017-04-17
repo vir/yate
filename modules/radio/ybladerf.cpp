@@ -1322,7 +1322,7 @@ public:
 	    res.test /= samples();
 	    res.total /= samples();
 #endif
-	    return res.testOk && res.calOk;
+	    return res.testOk;
 	}
     inline String& dump(String& s, bool full) {
 	    float delta = 0;
@@ -1606,7 +1606,7 @@ public:
     void postponeActivity(unsigned minutes, bool dropData = false);
 
     /// Stop activity and drop gathered data
-    void disableDiscipline();
+    void disableDiscipline(bool onCmd = false);
 
     /**
      * Discipline the BladeRF's VCTCXO to local machine's clock
@@ -1876,7 +1876,7 @@ public:
     // Retrieve frequency
     unsigned int getFrequency(uint32_t& hz, bool tx);
     // Set frequency offset
-    unsigned int setFreqOffset(float offs, float* newVal = 0);
+    unsigned int setFreqOffset(float offs, float* newVal = 0, bool stopAutoCal = true);
     // Get frequency offset
     unsigned int getFreqOffset(float& offs);
     // Set the LPF bandwidth for a specific module
@@ -1968,6 +1968,11 @@ public:
     void runRecv(BrfThread* th);
     // Build notification message
     Message* buildNotify(const char* status = 0);
+    inline void notifyFreqOffs() {
+	Message* m = buildNotify();
+	m->addParam("RadioFrequencyOffset",String(m_freqOffset));
+	Engine::enqueue(m);
+    }
     // Release data
     virtual void destruct();
     // Create an interface
@@ -2408,7 +2413,7 @@ private:
     unsigned int findPhaseExpParams(const ComplexVector& swee, float startSweep, float stepSweepp);
     unsigned int calculateAmpTable();
     //
-    unsigned int deviceCheck(String* error);
+    unsigned int loopbackCheck(String* error);
     unsigned int testVga(const char* loc, bool tx, bool preMixer, float omega = 0,
 	String* error = 0);
     inline unsigned int testVgaCheck(const NamedList& p, const char* loc,
@@ -3361,14 +3366,16 @@ void BrfVctcxoDiscipliner::postponeActivity(unsigned minutes, bool dropData)
     }
 }
 
-void BrfVctcxoDiscipliner::disableDiscipline()
+void BrfVctcxoDiscipliner::disableDiscipline(bool onCmd)
 {
     if (!m_trimsLeft)
 	return;
     m_trimsLeft = 0;
     postponeActivity(0,true);
-    Debug(dev().owner(),DebugNote,"Frequency calibration is stopping (disabled) [%p]",
-	dev().owner());
+    Debug(dev().owner(),DebugNote,"Frequency calibration is stopping (%s) [%p]",
+	onCmd ? "changed by command" : "disabled",dev().owner());
+    if (onCmd)
+	dev().notifyFreqOffs();
 }
 
 void BrfVctcxoDiscipliner::trimVctcxo(uint64_t timestamp, int drift)
@@ -3498,7 +3505,7 @@ bool BrfVctcxoDiscipliner::processData(int drift)
 	    "VCTCXO discipliner: changing FrequencyOffset %g -> %g drift=%dppb [%p]",
 	    dev().m_freqOffset,newOffs,drift,dev().owner());
     // trim the VCTCXO
-    unsigned status = dev().setFreqOffset(newOffs);
+    unsigned status = dev().setFreqOffset(newOffs,0,false);
     if (status) {
 	// postpone activity for a minute to avoid a flood of debug messages
 	postponeActivity(1);
@@ -3512,9 +3519,7 @@ bool BrfVctcxoDiscipliner::processData(int drift)
     if (!m_driftPpb)
 	return true;
     // enqueue a feedback message with the adjusted frequency offset
-    Message* feedback = dev().buildNotify();
-    feedback->addParam("RadioFrequencyOffset",String(dev().m_freqOffset));
-    Engine::enqueue(feedback);
+    dev().notifyFreqOffs();
     // clear the pending drift
     m_driftPpb = 0;
     // decrease the number of scheduled trims, unless toggled on (-1)
@@ -4337,10 +4342,14 @@ unsigned int BrfLibUsbDevice::getFrequency(uint32_t& hz, bool tx)
 }
 
 // Set frequency offset
-unsigned int BrfLibUsbDevice::setFreqOffset(float offs, float* newVal)
+unsigned int BrfLibUsbDevice::setFreqOffset(float offs, float* newVal, bool stopAutoCal)
 {
     BRF_TX_SERIALIZE_CHECK_PUB_ENTRY(false,"setFreqOffset()");
-    return internalSetFreqOffs(offs,newVal);
+    unsigned int status = internalSetFreqOffs(offs,newVal);
+    txSerialize.drop();
+    if (!status && stopAutoCal && getDirState(true).rfEnabled)
+	disableDiscipline(true);
+    return status;
 }
 
 // Get frequency offset
@@ -4571,8 +4580,8 @@ unsigned int BrfLibUsbDevice::calibrate(bool sync, const NamedList& params,
 	txSerialize.drop();
 	rxSerialize.drop();
 	// Check
-	if (params.getBoolValue("device_check",true))
-	    BRF_FUNC_CALL_BREAK(deviceCheck(&e));
+	if (params.getBoolValue("loopback_check",true))
+	    BRF_FUNC_CALL_BREAK(loopbackCheck(&e));
 	// LMS autocalibration
 	// Pause I/O threads, lock external I/O while calibrating
 	BRF_FUNC_CALL_BREAK(calThreadsPause(true,&e));
@@ -4910,7 +4919,7 @@ void BrfLibUsbDevice::runRecv(BrfThread* th)
 // Build notification message
 Message* BrfLibUsbDevice::buildNotify(const char* status)
 {
-    Message* m = new Message("module.update");
+    Message* m = new Message("module.update",0,true);
     m->addParam("module",__plugin.name());
     if (owner())
 	m->addParam("interface",owner()->toString());
@@ -8449,6 +8458,8 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
     if (calValMax > maxV)
 	calValMax = maxV;
 
+    Debug(m_owner,DebugNote,"Calibrating %s pass=%d [%p]",
+	lookup(corr,s_corr),pass,this);
     unsigned int trace = data.uintParam(dc,"trace");
     if (trace)
 	Output("Pass #%u calibrating %s (crt: %d) %s=%d "
@@ -8636,13 +8647,15 @@ unsigned int BrfLibUsbDevice::prepareCalibrateBb(BrfBbCalData& data, bool dc,
 	    rxFreq = m_state.m_tx.frequency + (Fs / 4);
 	    data.resetOmega(M_PI,0);
 	}
+	s.m_tx.lpfBw = bw;
+	s.m_tx.sampleRate = Fs;
 	s.m_rx.lpfBw = bw;
 	s.m_rx.sampleRate = Fs;
 	s.m_rx.frequency = rxFreq;
 	s.m_tx.vga1 = data.intParam(dc,YSTRING("txvga1"),
 	    BRF_TXVGA1_GAIN_DEF,BRF_TXVGA1_GAIN_MIN,BRF_TXVGA1_GAIN_MAX);
 	s.m_tx.vga2 = data.intParam(dc,YSTRING("txvga2"),
-	    BRF_TXVGA2_GAIN_DEF,BRF_TXVGA2_GAIN_MIN,BRF_TXVGA2_GAIN_MAX);
+	    20,BRF_TXVGA2_GAIN_MIN,BRF_TXVGA2_GAIN_MAX);
 	s.m_rx.vga1 = data.intParam(dc,YSTRING("rxvga1"),
 	    BRF_RXVGA1_GAIN_DEF,BRF_RXVGA1_GAIN_MIN,BRF_RXVGA1_GAIN_MAX);
 	s.m_rx.vga2 = data.intParam(dc,YSTRING("rxvga2"),
@@ -8683,8 +8696,8 @@ unsigned int BrfLibUsbDevice::prepareCalibrateBb(BrfBbCalData& data, bool dc,
 
 unsigned int BrfLibUsbDevice::calibrateBb(BrfBbCalData& data, bool dc, String* error)
 {
-    const char* oper = dc ? "TX I/Q DC Offset (LO Leakage) calibration" :
-	"TX I/Q Imbalance calibration";
+    const char* oper = dc ? "TX I/Q DC Offset (LO Leakage)" :
+	"TX I/Q Imbalance";
     Debug(m_owner,DebugAll,"calibrateBb %s [%p]",oper,this);
 
     // VGA tests
@@ -8713,9 +8726,9 @@ unsigned int BrfLibUsbDevice::calibrateBb(BrfBbCalData& data, bool dc, String* e
 	if (data.boolParam(dc,"dump_status_start"))
 	    dumpState(s,data.m_params,true);
 	if (dbg)
-	    Debug(m_owner,level,"%s starting [%p]%s",oper,m_owner,encloseDashes(s,true));
+	    Debug(m_owner,level,"%s calibration starting [%p]%s",oper,m_owner,encloseDashes(s,true));
 	else
-	    Output("%s starting omega_cal=%f omega_test=%f [%p]%s",
+	    Output("%s calibration starting omega_cal=%f omega_test=%f [%p]%s",
 		oper,data.omega(true),data.omega(false),m_owner,encloseDashes(s,true));
     }
 
@@ -8753,7 +8766,7 @@ unsigned int BrfLibUsbDevice::calibrateBb(BrfBbCalData& data, bool dc, String* e
 	    result << "I=" << data.m_dcI << " " << "Q=" << data.m_dcQ;
 	else
 	    result << "PHASE=" << data.m_phase << " " << "GAIN=" << data.m_gain;
-	Debug(m_owner,level,"%s finished in %s %s [%p]",
+	Debug(m_owner,level,"%s calibration finished in %s %s [%p]",
 	    oper,duration.secStr(),result.c_str(),m_owner);
     }
 
@@ -8838,9 +8851,10 @@ unsigned int BrfLibUsbDevice::calibrateBaseband(String* error)
 	BRF_FUNC_CALL_BREAK(prepareCalibrateBb(data,false,&e));
 	BRF_FUNC_CALL_BREAK(calibrateBb(data,false,&e));
 	// Update calibrated data
-	m_calibration.addParam("frequency",String(data.m_calFreq));
-	m_calibration.addParam("samplerate",String(data.m_calSampleRate));
-	m_calibration.addParam("filter",String(m_state.m_tx.lpfBw));
+	// Use initial tunning values: we may change them during calibration
+	m_calibration.addParam("frequency",String(oldState.m_tx.frequency));
+	m_calibration.addParam("samplerate",String(oldState.m_tx.sampleRate));
+	m_calibration.addParam("filter",String(oldState.m_tx.lpfBw));
 	m_calibration.addParam("cal_tx_dc_i",String(data.m_dcI));
 	m_calibration.addParam("cal_tx_dc_q",String(data.m_dcQ));
 	m_calibration.addParam("cal_tx_fpga_corr_phase",String(data.m_phase));
@@ -8900,17 +8914,17 @@ unsigned int BrfLibUsbDevice::calibrateBaseband(String* error)
     return showError(status,e,0,error);
 }
 
-unsigned int BrfLibUsbDevice::deviceCheck(String* error)
+unsigned int BrfLibUsbDevice::loopbackCheck(String* error)
 {
     Configuration cfg;
     loadCfg(&cfg,false);
-    NamedList& p = *cfg.createSection(YSTRING("device-check"));
+    NamedList& p = *cfg.createSection(YSTRING("loopback-check"));
     // Prepare data dump
     m_dbgMutex.lock();
     BrfDumpFile dump(&p,m_devCheckFile);
     m_dbgMutex.unlock();
 
-    Debug(m_owner,DebugNote,"Device check starting ... [%p]",m_owner);
+    Debug(m_owner,DebugNote,"Loopback check starting ... [%p]",m_owner);
     BrfDuration duration;
     String e;
     unsigned int status = 0;
@@ -8923,7 +8937,7 @@ unsigned int BrfLibUsbDevice::deviceCheck(String* error)
 	    m_state.m_tx.frequency,0);
 	if (!txFreq)
 	    BRF_FUNC_CALL_BREAK(setErrorFail(&e,"Frequency not set"));
-	unsigned int nBuffs = p.getIntValue("buffers",5,1);
+	unsigned int nBuffs = p.getIntValue("buffers",10,1);
 	unsigned int bw = m_state.m_tx.lpfBw;
 	unsigned int sampleRate = m_state.m_tx.sampleRate;
 	bw = p.getIntValue(YSTRING("bandwidth"),bw ? bw : 1500000,1500000);
@@ -8942,7 +8956,7 @@ unsigned int BrfLibUsbDevice::deviceCheck(String* error)
 	    minDeltaFreq + (maxDeltaFreq - minDeltaFreq) / 2,minDeltaFreq,maxDeltaFreq);
 	if (deltaFreq == (sampleRate / 4)) {
 	    // TODO: Properly adjust it
-	    Debug(m_owner,DebugStub,"Device check adjusting delta freq [%p]",m_owner);
+	    Debug(m_owner,DebugStub,"Loopback check adjusting delta freq [%p]",m_owner);
 	    deltaFreq += 1000;
 	}
 	// Sanity check
@@ -9041,7 +9055,7 @@ unsigned int BrfLibUsbDevice::deviceCheck(String* error)
 		}
 	    }
 	    t.append(tmp,"\r\n");
-	    Output("Device check: frequency tx=%u rx=%u (delta=%u omega=%f) "
+	    Output("Loopback check: frequency tx=%u rx=%u (delta=%u omega=%f) "
 		"samplerate=%u bandwidth=%u samples=%u buffers=%u [%p]%s",
 		txFreq,rxFreq,deltaFreq,omega,sampleRate,bw,buf.length(),
 		nBuffs,m_owner,encloseDashes(t,true));
@@ -9060,8 +9074,11 @@ unsigned int BrfLibUsbDevice::deviceCheck(String* error)
 	// Run it
 	int dumpRxBeforeRead = p.getIntValue(YSTRING("dump_before_read_rx"),0,0);
 	int dumpTxBeforeRead = p.getIntValue(YSTRING("dump_before_read_tx"),0,0);
-	unsigned int allowFail = p.getIntValue(YSTRING("allow_fail"),0,0,nBuffs - 1);
-	for (unsigned int i = 0; i < nBuffs; i++) {
+	unsigned int tmp = nBuffs / 4;
+	unsigned int limitFailures =
+	    p.getIntValue(YSTRING("sample_limit_allow_fail"),tmp,0,nBuffs - 1);
+	unsigned int allowFail = p.getIntValue(YSTRING("allow_fail"),tmp,0,nBuffs - 1);
+	for (int i = 0; i < (int)nBuffs; i++) {
 	    if (dumpRxBeforeRead) {
 		dumpRxBeforeRead--;
 		showBuf(false,1,false);
@@ -9075,8 +9092,19 @@ unsigned int BrfLibUsbDevice::deviceCheck(String* error)
 	    uint64_t ts = m_syncTxState.m_tx.m_timestamp + m_radioCaps.rxLatency;
 	    BRF_FUNC_CALL_BREAK(capture(false,(float*)buf.data(),buf.length(),ts,&e));
 	    // Check for out of range values
-	    BRF_FUNC_CALL_BREAK(checkSampleLimit((float*)buf.data(),buf.length(),
-		limit,&e));
+	    status = checkSampleLimit((float*)buf.data(),buf.length(),limit,&e);
+	    if (status) {
+		if (trace)
+		    Output("%-5u [%10s]\tsample invalid (remains=%d): %s",
+			i,String(ts).c_str(),limitFailures,e.c_str());
+		if (!limitFailures)
+		    break;
+		limitFailures--;
+		i--;
+		e.clear();
+		status = 0;
+		continue;
+	    }
 	    // Apply test pattern (check algorithm)
 	    if (testPattern.length())
 		buf.copy(testPattern,testPattern.length());
@@ -9116,18 +9144,18 @@ unsigned int BrfLibUsbDevice::deviceCheck(String* error)
 		break;
 	    }
 	    allowFail--;
-	    DDebug(m_owner,DebugInfo,"Device check failure %s [%p]",e.safe(),m_owner);
+	    DDebug(m_owner,DebugInfo,"Loopback check failure %s [%p]",e.safe(),m_owner);
 	    e.clear();
 	}
 	if (status)
 	    break;
 	if (trace == 1)
-	    Output("Device check succesfully ended");
+	    Output("Loopback check succesfully ended");
 	// VGA test
-	BRF_FUNC_CALL_BREAK(testVgaCheck(p,"Device check",omega,&e));
+	BRF_FUNC_CALL_BREAK(testVgaCheck(p,"Loopback check",omega,&e));
 	break;
     }
-    Debug(m_owner,DebugAll,"Finalizing device check [%p]",m_owner);
+    Debug(m_owner,DebugAll,"Finalizing loopback check [%p]",m_owner);
     if (!status) {
 	calThreadsPause(true);
 	status = setState(oldState,&e);
@@ -9135,11 +9163,11 @@ unsigned int BrfLibUsbDevice::deviceCheck(String* error)
     }
     duration.stop();
     if (status == 0) {
-	Debug(m_owner,DebugNote,"Device check ended duration=%s [%p]",
+	Debug(m_owner,DebugNote,"Loopback check ended duration=%s [%p]",
 	    duration.secStr(),m_owner);
 	return 0;
     }
-    e.printf(1024,"Device check failed: %s",e.c_str());
+    e.printf(1024,"Loopback check failed: %s",e.c_str());
     return showError(status,e,0,error);
 }
 
@@ -10503,7 +10531,7 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
 	"\r\n  Set or retrieve TX/RX VGA mixer gain"
 	"\r\ncontrol ifc_name correction tx=boolean corr={dc-i|dc-q|fpga-gain|fpga-phase} [value=]"
 	"\r\n  Set or retrieve TX/RX DC I/Q or FPGA GAIN/PHASE correction"
-	"\r\ncontrol ifc_name freqoffs [{value|drift}=]"
+	"\r\ncontrol ifc_name freqoffs [{value= [stop=YES|no]}|drift=]"
 	"\r\n  Set (absolute value or a drift expressed in ppb to force a clock trim) or retrieve the frequency offset"
 	"\r\ncontrol ifc_name show [info=status|statistics|timestamps|boardstatus|peripheral|freqcal] [peripheral=all|list(lms,gpio,vctcxo,si5338)] [addr=] [len=]"
 	"\r\n  Verbose output various interface info"
@@ -10867,7 +10895,8 @@ bool BrfModule::onCmdFreqOffs(BrfInterface* ifc, Message& msg)
     if (strRet) {
 	float freqoffs = strRet->toDouble(-1);
 	if (freqoffs > 0) {
-	    unsigned code = ifc->device()->setFreqOffset(freqoffs);
+	    bool stop = msg.getBoolValue(YSTRING("stop"),true);
+	    unsigned code = ifc->device()->setFreqOffset(freqoffs,0,stop);
 	    if (code)
 		return retValFailure(msg,code);
 	}

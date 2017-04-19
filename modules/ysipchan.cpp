@@ -804,6 +804,9 @@ public:
     void cancelListener(const String& name = String::empty(), const char* reason = 0);
     // This method is called by the driver when start/end initializing
     void initializing(bool start);
+    // Complete transport names
+    void completeTransports(Message& msg, const String& partWord,
+	bool udp = true, bool tcp = true, bool tls = true);
     inline YateSIPEngine* engine() const
 	{ return m_engine; }
     inline void incFailedAuths()
@@ -1137,6 +1140,7 @@ public:
     unsigned int transportTerminated(YateSIPTransport* trans);
     bool validLine(const String& line);
     bool commandComplete(Message& msg, const String& partLine, const String& partWord);
+    virtual bool commandExecute(String& retVal, const String& line);
     virtual void msgStatus(Message& msg);
     virtual void statusParams(String& str);
     // Build and dispatch a socket.ssl message
@@ -1150,6 +1154,7 @@ protected:
     void setupListener(const String& name, const NamedList& params, bool isGeneral,
 	const NamedList& defs = NamedList::empty());
 private:
+    bool onHelp(Message& msg);
     // Add status methods
     void msgStatusAccounts(Message& msg);
     void msgStatusTransports(Message& msg, bool showUdp, bool showTcp, bool showTls);
@@ -5159,6 +5164,31 @@ void YateSIPEndPoint::initializing(bool start)
 	removeUdpTransport(o->get()->toString(),"Deleted");
 }
 
+// Complete transport names
+void YateSIPEndPoint::completeTransports(Message& msg, const String& partWord,
+    bool udp, bool tcp, bool tls)
+{
+    Lock lock(m_mutex);
+    for (ObjList* o = m_transports.skipNull(); o; o = o->skipNext()) {
+	YateSIPTransport* t = static_cast<YateSIPTransport*>(o->get());
+	switch (t->protocol()) {
+	    case ProtocolHolder::Udp:
+		if (!udp)
+		    continue;
+		break;
+	    case ProtocolHolder::Tcp:
+		if (!tcp)
+		    continue;
+		break;
+	    case ProtocolHolder::Tls:
+		if (!tls)
+		    continue;
+		break;
+	}
+	Module::itemComplete(msg.retValue(),t->toString(),partWord);
+    }
+}
+
 bool YateSIPEndPoint::Init()
 {
     m_engine = new YateSIPEngine(this);
@@ -8920,6 +8950,8 @@ bool SIPDriver::received(Message& msg, int id)
 	    return sendMethod(msg,"MESSAGE",true,dest.substr(prefix().length()));
 	return false;
     }
+    else if (id == Help)
+	return onHelp(msg);
     return Driver::received(msg,id);
 }
 
@@ -9070,6 +9102,7 @@ void SIPDriver::initialize()
 	installRelay(Stop,"engine.stop");
 	installRelay(Start,"engine.start");
 	installRelay(MsgExecute);
+	installRelay(Help);
 	Engine::install(new UserHandler);
 	if (s_cfg.getBoolValue("general","generate"))
 	    Engine::install(new SipHandler);
@@ -9164,6 +9197,24 @@ void SIPDriver::setupListener(const String& name, const NamedList& params,
 
 bool SIPDriver::commandComplete(Message& msg, const String& partLine, const String& partWord)
 {
+    if (!partLine || partLine == YSTRING("help")) {
+	itemComplete(msg.retValue(),name(),partWord);
+	return false;
+    }
+    if (partLine.startsWith(name())) {
+	String tmp = partLine;
+	if (!tmp.startSkip(name()))
+	    return Driver::commandComplete(msg,partLine,partWord);
+	if (!tmp)
+	    itemComplete(msg.retValue(),YSTRING("drop"),partWord);
+	else if (tmp == YSTRING("drop"))
+	    itemComplete(msg.retValue(),YSTRING("transport"),partWord);
+	else if (tmp == YSTRING("drop transport")) {
+	    if (m_endpoint)
+		m_endpoint->completeTransports(msg,partWord,false);
+	}
+	return true;
+    }
     String cmd = s_statusCmd + " " + name();
     String overviewCmd = s_statusCmd + " overview " + name();
     if (partLine == cmd || partLine == overviewCmd) {
@@ -9174,20 +9225,37 @@ bool SIPDriver::commandComplete(Message& msg, const String& partLine, const Stri
     String cmdTrans = cmd + " transports";
     String cmdOverViewTrans = overviewCmd + " transports";
     if (partLine == cmdTrans || partLine == cmdOverViewTrans) {
-	itemComplete(msg.retValue(),YSTRING("all"),partWord);
-	itemComplete(msg.retValue(),YSTRING("udp"),partWord);
-	itemComplete(msg.retValue(),YSTRING("tcp"),partWord);
-	itemComplete(msg.retValue(),YSTRING("tls"),partWord);
-	if (partLine == cmdTrans) {
-	    Lock lock(m_endpoint->m_mutex);
-	    for (ObjList* o = m_endpoint->m_transports.skipNull(); o; o = o->skipNext()) {
-		YateSIPTransport* t = static_cast<YateSIPTransport*>(o->get());
-		itemComplete(msg.retValue(),t->toString(),partWord);
-	    }
+	if (m_endpoint) {
+	    itemComplete(msg.retValue(),YSTRING("all"),partWord);
+	    itemComplete(msg.retValue(),YSTRING("udp"),partWord);
+	    itemComplete(msg.retValue(),YSTRING("tcp"),partWord);
+	    itemComplete(msg.retValue(),YSTRING("tls"),partWord);
+	    if (partLine == cmdTrans)
+		m_endpoint->completeTransports(msg,partWord);
 	}
     }
     else
     	return Driver::commandComplete(msg,partLine,partWord);
+    return false;
+}
+
+bool SIPDriver::commandExecute(String& retVal, const String& line)
+{
+    if (!line.startsWith(name()))
+	return Driver::commandExecute(retVal,line);
+    String tmp = line;
+    if (!tmp.startSkip(name()))
+	return Driver::commandExecute(retVal,line);
+    if (tmp.startSkip("drop transport")) {
+	if (!tmp)
+	    return false;
+	YateSIPTransport* t = m_endpoint ? m_endpoint->findTransport(tmp) : 0;
+	YateSIPTCPTransport* trans = t ? t->tcpTransport() : 0;
+	if (trans)
+	    trans->terminate("dropped");
+	TelEngine::destruct(t);
+	return trans != 0;
+    }
     return false;
 }
 
@@ -9351,6 +9419,27 @@ bool SIPDriver::sendMethod(Message& msg, const char* method, bool msgExec,
     else
 	msg.clearParam("code");
     return true;
+}
+
+bool SIPDriver::onHelp(Message& msg)
+{
+    static String s_cmds;
+    static String s_cmdsFull;
+    
+    if (!s_cmds) {
+	Lock lck(this);
+	if (!s_cmds) {
+	    s_cmds << "  sip drop transport <name>\r\n";
+	    s_cmdsFull << "  sip drop transport <name>\r\n" <<
+		"Drop a tcp/tls transport\r\n";
+	}
+    }
+    if (msg[YSTRING("line")] == name()) {
+	msg.retValue() << s_cmdsFull;
+	return true;
+    }
+    msg.retValue() << s_cmds;
+    return false;
 }
 
 // Add accounts status

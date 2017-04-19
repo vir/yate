@@ -1,3 +1,10 @@
+yate (5.5.1~svn6205) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6205:
+  * Added sip command used to drop a tcp/tls transport.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 20 Apr 2017 02:19:15 +0300
+
 yate (5.5.1~svn6204) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6204:

@@ -9423,19 +9423,11 @@ bool SIPDriver::sendMethod(Message& msg, const char* method, bool msgExec,
 
 bool SIPDriver::onHelp(Message& msg)
 {
-    static String s_cmds;
-    static String s_cmdsFull;
+    static const char* s_cmds = "  sip drop transport <name>\r\n";
+    static const char* s_cmdsDesc = "Drop a tcp/tls transport\r\n";
     
-    if (!s_cmds) {
-	Lock lck(this);
-	if (!s_cmds) {
-	    s_cmds << "  sip drop transport <name>\r\n";
-	    s_cmdsFull << "  sip drop transport <name>\r\n" <<
-		"Drop a tcp/tls transport\r\n";
-	}
-    }
     if (msg[YSTRING("line")] == name()) {
-	msg.retValue() << s_cmdsFull;
+	msg.retValue() << s_cmds << s_cmdsDesc;
 	return true;
     }
     msg.retValue() << s_cmds;

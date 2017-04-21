@@ -1746,12 +1746,38 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	}
     }
     else if (oper.name() == YSTRING("msgTime")) {
-	if (oper.number() != 0)
-	    return false;
-	if (m_message)
-	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_message->msgTime().msec()));
-	else
-	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+	switch (oper.number()) {
+	    case 0:
+		if (m_message)
+		    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_message->msgTime().msec()));
+		else
+		    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+		break;
+	    case 1:
+		{
+		    ExpOperation* op = popValue(stack,context);
+		    if (!op)
+			return false;
+		    uint64_t newTime = 0;
+		    if (op->isBoolean()) {
+			if (op->valBoolean())
+			    newTime = Time::now();
+		    }
+		    else if (op->isInteger()) {
+			if (op->number() > 0)
+			    newTime = 1000 * op->number();
+		    }
+		    TelEngine::destruct(op);
+		    if (newTime && m_message && !frozen())
+			m_message->msgTime() = newTime;
+		    else
+			newTime = 0;
+		    ExpEvaluator::pushOne(stack,new ExpOperation(0 != newTime));
+		}
+		break;
+	    default:
+		return false;
+	}
     }
     else if (oper.name() == YSTRING("getParam")) {
 	bool autoNum = true;

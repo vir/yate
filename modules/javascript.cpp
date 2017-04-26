@@ -987,7 +987,7 @@ static void copyObjParams(NamedList& dest, const NamedList* src)
     unsigned int n = src->length();
     for (unsigned int i = 0; i < n; i++) {
 	const NamedString* p = src->getParam(i);
-	if (p && !p->name().startsWith("__"))
+	if (p && !p->name().startsWith("__") && !p->getObject(YATOM("ExpWrapper")))
 	    dest.setParam(p->name(),*p);
     }
 }
@@ -2281,17 +2281,24 @@ JsObject* JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, Ge
     switch (extractArgs(stack,oper,context,args)) {
 	case 1:
 	case 2:
+	case 3:
 	    break;
 	default:
 	    return 0;
     }
     ExpOperation* name = static_cast<ExpOperation*>(args[0]);
     ExpOperation* broad = static_cast<ExpOperation*>(args[1]);
+    JsObject* objParams = YOBJECT(JsObject,args[2]);
     if (!name)
 	return 0;
     if (!ref())
 	return 0;
     Message* m = new Message(*name,0,broad && broad->valBoolean());
+    if (objParams) {
+	copyObjParams(*m,&objParams->params());
+	if (objParams->nativeParams())
+	    copyObjParams(*m,objParams->nativeParams());
+    }
     JsMessage* obj = new JsMessage(m,mutex(),true);
     obj->params().addParam(new ExpWrapper(this,protoName()));
     return obj;
@@ -3860,8 +3867,17 @@ bool JsEngineWorker::removeEvent(unsigned int id, bool repeatable)
 
 void JsEngineWorker::run()
 {
-    while (true) {
+    unsigned int failedLock = 0;
+    uint64_t nextNotify = 0;
+    while (!Thread::check(false)) {
 	Time t;
+	if (failedLock && nextNotify < t.msec()) {
+	    Debug(&__plugin,DebugMild,"Failed to lock context mutex for %u times in: 5000 msec",
+		    failedLock);
+	    failedLock = 0;
+	    nextNotify = 0;
+	}
+
 	Lock myLock(m_eventsMutex);
 	ObjList* o = m_events.skipNull();
 	if (!o) {
@@ -3876,6 +3892,16 @@ void JsEngineWorker::run()
 	    Thread::idle(true);
 	    continue;
 	}
+	if (!myLock.acquire(m_context->mutex(),500000)) {
+	    if (!failedLock)
+		nextNotify = Time::msecNow() + 5000;
+	    failedLock++;
+	    continue;
+	}
+	RefPointer<JsEngine> eng = m_engine;
+	myLock.drop();
+	if (!eng)
+	    return;
 	ev->processTimeout(t);
 	if (!ev->repeatable()) {
 	    myLock.acquire(m_eventsMutex);

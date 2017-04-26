@@ -1,3 +1,14 @@
+yate (5.5.1~svn6209) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6209:
+  * Fixed deadlock at JS script instance destruction.
+  * Fix function that was copying properties to message to not copy
+    objects, null or undefined.
+  * Extend JS Message constructor to copy parameters from a given
+    object.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 27 Apr 2017 02:19:15 +0300
+
 yate (5.5.1~svn6207) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6207:

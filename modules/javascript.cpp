@@ -3860,8 +3860,17 @@ bool JsEngineWorker::removeEvent(unsigned int id, bool repeatable)
 
 void JsEngineWorker::run()
 {
-    while (true) {
+    unsigned int failedLock = 0;
+    uint64_t nextNotify = 0;
+    while (!Thread::check(false)) {
 	Time t;
+	if (failedLock && nextNotify < t.msec()) {
+	    Debug(&__plugin,DebugMild,"Failed to lock context mutex for %u times in: 5000 msec",
+		    failedLock);
+	    failedLock = 0;
+	    nextNotify = 0;
+	}
+
 	Lock myLock(m_eventsMutex);
 	ObjList* o = m_events.skipNull();
 	if (!o) {
@@ -3876,6 +3885,16 @@ void JsEngineWorker::run()
 	    Thread::idle(true);
 	    continue;
 	}
+	if (!myLock.acquire(m_context->mutex(),500000)) {
+	    if (!failedLock)
+		nextNotify = Time::msecNow() + 5000;
+	    failedLock++;
+	    continue;
+	}
+	RefPointer<JsEngine> eng = m_engine;
+	myLock.drop();
+	if (!eng)
+	    return;
 	ev->processTimeout(t);
 	if (!ev->repeatable()) {
 	    myLock.acquire(m_eventsMutex);

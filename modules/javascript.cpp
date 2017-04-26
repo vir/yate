@@ -987,7 +987,7 @@ static void copyObjParams(NamedList& dest, const NamedList* src)
     unsigned int n = src->length();
     for (unsigned int i = 0; i < n; i++) {
 	const NamedString* p = src->getParam(i);
-	if (p && !p->name().startsWith("__"))
+	if (p && !p->name().startsWith("__") && !p->getObject(YATOM("ExpWrapper")))
 	    dest.setParam(p->name(),*p);
     }
 }
@@ -2281,17 +2281,24 @@ JsObject* JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, Ge
     switch (extractArgs(stack,oper,context,args)) {
 	case 1:
 	case 2:
+	case 3:
 	    break;
 	default:
 	    return 0;
     }
     ExpOperation* name = static_cast<ExpOperation*>(args[0]);
     ExpOperation* broad = static_cast<ExpOperation*>(args[1]);
+    JsObject* objParams = YOBJECT(JsObject,args[2]);
     if (!name)
 	return 0;
     if (!ref())
 	return 0;
     Message* m = new Message(*name,0,broad && broad->valBoolean());
+    if (objParams) {
+	copyObjParams(*m,&objParams->params());
+	if (objParams->nativeParams())
+	    copyObjParams(*m,objParams->nativeParams());
+    }
     JsMessage* obj = new JsMessage(m,mutex(),true);
     obj->params().addParam(new ExpWrapper(this,protoName()));
     return obj;

@@ -311,6 +311,7 @@ public:
 	    params().addParam(new ExpFunction("broadcast"));
 	    params().addParam(new ExpFunction("retValue"));
 	    params().addParam(new ExpFunction("msgTime"));
+	    params().addParam(new ExpFunction("msgAge"));
 	    params().addParam(new ExpFunction("getParam"));
 	    params().addParam(new ExpFunction("setParam"));
 	    params().addParam(new ExpFunction("getColumn"));
@@ -1784,6 +1785,15 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    default:
 		return false;
 	}
+    }
+    else if (oper.name() == YSTRING("msgAge")) {
+	if (oper.number())
+	    return false;
+	if (m_message)
+	    ExpEvaluator::pushOne(stack,new ExpOperation(
+		    (int64_t)(Time::msecNow() - m_message->msgTime().msec())));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("getParam")) {
 	bool autoNum = true;

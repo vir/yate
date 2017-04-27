@@ -256,6 +256,7 @@ public:
 	    params().addParam(new ExpFunction("setDebug"));
 	    params().addParam(new ExpFunction("uptime"));
 	    params().addParam(new ExpFunction("started"));
+	    params().addParam(new ExpFunction("exiting"));
 	    params().addParam(new ExpFunction("accepting"));
 	    if (name)
 		params().addParam(new ExpOperation(name,"name"));
@@ -1430,6 +1431,11 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	if (oper.number() != 0)
 	    return false;
 	ExpEvaluator::pushOne(stack,new ExpOperation(Engine::started()));
+    }
+    else if (oper.name() == YSTRING("exiting")) {
+	if (oper.number() != 0)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(Engine::exiting()));
     }
     else if (oper.name() == YSTRING("accepting")) {
 	ObjList args;
@@ -5001,7 +5007,7 @@ void JsModule::initialize()
 void JsModule::init(int priority)
 {
     ChanAssistList::init(priority);
-    installRelay(Halt);
+    installRelay(Halt,120);
     installRelay(Route,priority);
     installRelay(Ringing,priority);
     installRelay(Answered,priority);

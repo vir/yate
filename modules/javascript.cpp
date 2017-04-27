@@ -256,6 +256,7 @@ public:
 	    params().addParam(new ExpFunction("setDebug"));
 	    params().addParam(new ExpFunction("uptime"));
 	    params().addParam(new ExpFunction("started"));
+	    params().addParam(new ExpFunction("exiting"));
 	    params().addParam(new ExpFunction("accepting"));
 	    if (name)
 		params().addParam(new ExpOperation(name,"name"));
@@ -310,6 +311,7 @@ public:
 	    params().addParam(new ExpFunction("broadcast"));
 	    params().addParam(new ExpFunction("retValue"));
 	    params().addParam(new ExpFunction("msgTime"));
+	    params().addParam(new ExpFunction("msgAge"));
 	    params().addParam(new ExpFunction("getParam"));
 	    params().addParam(new ExpFunction("setParam"));
 	    params().addParam(new ExpFunction("getColumn"));
@@ -1431,6 +1433,11 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    return false;
 	ExpEvaluator::pushOne(stack,new ExpOperation(Engine::started()));
     }
+    else if (oper.name() == YSTRING("exiting")) {
+	if (oper.number() != 0)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(Engine::exiting()));
+    }
     else if (oper.name() == YSTRING("accepting")) {
 	ObjList args;
 	switch (extractArgs(stack,oper,context,args)) {
@@ -1778,6 +1785,15 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    default:
 		return false;
 	}
+    }
+    else if (oper.name() == YSTRING("msgAge")) {
+	if (oper.number())
+	    return false;
+	if (m_message)
+	    ExpEvaluator::pushOne(stack,new ExpOperation(
+		    (int64_t)(Time::msecNow() - m_message->msgTime().msec())));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("getParam")) {
 	bool autoNum = true;
@@ -5001,7 +5017,7 @@ void JsModule::initialize()
 void JsModule::init(int priority)
 {
     ChanAssistList::init(priority);
-    installRelay(Halt);
+    installRelay(Halt,120);
     installRelay(Route,priority);
     installRelay(Ringing,priority);
     installRelay(Answered,priority);

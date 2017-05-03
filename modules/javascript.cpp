@@ -197,8 +197,7 @@ public:
     ~JsEngineWorker();
     unsigned int addEvent(const ExpFunction& callback, unsigned int interval, bool repeat);
     bool removeEvent(unsigned int id, bool repeatable);
-    ScriptContext* getContext();
-    ScriptCode* getCode();
+    ScriptRun* getRunner();
 protected:
     virtual void run();
     void postponeEvent(JsTimeEvent* ev);
@@ -206,9 +205,8 @@ private:
     ObjList m_events;
     Mutex m_eventsMutex;
     unsigned int m_id;
-    ScriptContext* m_context;
-    ScriptCode* m_code;
-    JsEngine* m_engine;
+    ScriptRun* m_runner;
+    RefPointer<JsEngine> m_engine;
 };
 
 #define MKDEBUG(lvl) params().addParam(new ExpOperation((int64_t)Debug ## lvl,"Debug" # lvl))
@@ -3823,19 +3821,11 @@ void JsTimeEvent::processTimeout(const Time& when)
 {
     if (m_repeat)
 	m_fire = when.msec() + m_interval;
-    ScriptCode* code = m_worker->getCode();
-    ScriptContext* context = m_worker->getContext();
-    while (code && context) {
-	ScriptRun* runner = code->createRunner(context,NATIVE_TITLE);
-	if (!runner)
-	    break;
-	ObjList args;
-	runner->call(m_callbackFunction.name(),args);
-	TelEngine::destruct(runner);
-	break;
-    }
-    TelEngine::destruct(code);
-    TelEngine::destruct(context);
+    ScriptRun* runner = m_worker->getRunner();
+    if (!runner)
+	return;
+    ObjList args;
+    runner->call(m_callbackFunction.name(),args);
 }
 
 /**
@@ -3843,17 +3833,19 @@ void JsTimeEvent::processTimeout(const Time& when)
  */
 
 JsEngineWorker::JsEngineWorker(JsEngine* engine, ScriptContext* context, ScriptCode* code)
-    : Thread("JsScheduler"), m_eventsMutex(false,"JsEngine"), m_id(0), m_context(context), m_code(code),
-    m_engine(engine)
+    : Thread("JsScheduler"), m_eventsMutex(false,"JsEngine"), m_id(0),
+    m_runner(code->createRunner(context,NATIVE_TITLE)), m_engine(engine)
 {
-    DDebug(&__plugin,DebugAll,"Creating JsEngineWorker engine=%p [%p]",m_engine,this);
+    DDebug(&__plugin,DebugAll,"Creating JsEngineWorker engine=%p [%p]",(void*)m_engine,this);
 }
 
 JsEngineWorker::~JsEngineWorker()
 {
-    DDebug(&__plugin,DebugAll,"Destroying JsEngineWorker engine=%p [%p]",m_engine,this);
+    DDebug(&__plugin,DebugAll,"Destroying JsEngineWorker engine=%p [%p]",(void*)m_engine,this);
     if (m_engine)
 	m_engine->resetWorker();
+    m_engine = 0;
+    TelEngine::destruct(m_runner);
 }
 
 unsigned int JsEngineWorker::addEvent(const ExpFunction& callback, unsigned int interval, bool repeat)
@@ -3883,17 +3875,12 @@ bool JsEngineWorker::removeEvent(unsigned int id, bool repeatable)
 
 void JsEngineWorker::run()
 {
-    unsigned int failedLock = 0;
-    uint64_t nextNotify = 0;
     while (!Thread::check(false)) {
-	Time t;
-	if (failedLock && nextNotify < t.msec()) {
-	    Debug(&__plugin,DebugMild,"Failed to lock context mutex for %u times in: 5000 msec",
-		    failedLock);
-	    failedLock = 0;
-	    nextNotify = 0;
+	if (m_engine->refcount() == 1) {
+	    m_engine->resetWorker();
+	    return;
 	}
-
+	Time t;
 	Lock myLock(m_eventsMutex);
 	ObjList* o = m_events.skipNull();
 	if (!o) {
@@ -3908,16 +3895,6 @@ void JsEngineWorker::run()
 	    Thread::idle(true);
 	    continue;
 	}
-	if (!myLock.acquire(m_context->mutex(),500000)) {
-	    if (!failedLock)
-		nextNotify = Time::msecNow() + 5000;
-	    failedLock++;
-	    continue;
-	}
-	RefPointer<JsEngine> eng = m_engine;
-	myLock.drop();
-	if (!eng)
-	    return;
 	ev->processTimeout(t);
 	if (!ev->repeatable()) {
 	    myLock.acquire(m_eventsMutex);
@@ -3944,19 +3921,13 @@ void JsEngineWorker::postponeEvent(JsTimeEvent* evnt)
     m_events.append(evnt);
 }
 
-ScriptCode* JsEngineWorker::getCode()
+ScriptRun* JsEngineWorker::getRunner()
 {
-    if (m_code && m_code->ref())
-	return m_code;
-    return 0;
+    if (m_runner)
+	m_runner->reset();
+    return m_runner;
 }
 
-ScriptContext* JsEngineWorker::getContext()
-{
-    if (m_context && m_context->ref())
-	return m_context;
-    return 0;
-}
 
 bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {

@@ -1,3 +1,10 @@
+yate (5.5.1~svn6212) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6212:
+  * Fixed deadlock while destroying JsEngineWorker.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 04 May 2017 02:19:15 +0300
+
 yate (5.5.1~svn6211) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6211:

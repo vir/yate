@@ -1,3 +1,13 @@
+yate (5.5.1~svn6215) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6215:
+  * Build RegExp object with properly set prototypes.
+  * Build JS Message objects with properly set prototypes.
+  * Do not attempt to build an JS XML object from another object when
+    the expected parameter should be a string.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 09 May 2017 02:19:15 +0300
+
 yate (5.5.1~svn6212) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6212:

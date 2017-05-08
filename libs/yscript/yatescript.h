@@ -2456,6 +2456,13 @@ public:
      */
     virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
+    /**
+     * Deep copy method
+     * @param mtx Pointer to the mutex that serializes the copied regexp
+     * @return New object instance, does not keep references to old regexp
+     */
+    virtual JsObject* copy(Mutex* mtx) const;
+
 protected:
     /**
      * Clone and rename method

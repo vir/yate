@@ -1144,7 +1144,7 @@ bool JsCode::getString(ParsePoint& expr)
     XDebug(this,DebugInfo,"Regexp '%s' flags '%s%s'",str.c_str(),
 	(insensitive ? "i" : ""),(extended ? "" : "b"));
     JsRegExp* obj = new JsRegExp(0,str,str,insensitive,extended);
-    addOpcode(new ExpWrapper(obj));
+    addOpcode(new ExpWrapper(ExpEvaluator::OpcCopy,obj));
     return true;
 }
 
@@ -2636,8 +2636,21 @@ void JsCode::resolveObjectParams(JsObject* object, ObjList& stack, GenObject* co
     JsContext* ctx = YOBJECT(JsContext,sr->context());
     if (!ctx)
 	return;
+    JsFunction* objCtr = 0;
+    // check first for regexp built /expr/ syntax
+    JsRegExp* reg = YOBJECT(JsRegExp,object);
+    if (reg) {
+	objCtr = YOBJECT(JsFunction,ctx->params().getParam(YSTRING("RegExp")));
+	if (objCtr) {
+	    JsRegExp* regexpProto = YOBJECT(JsRegExp,objCtr->params().getParam(YSTRING("prototype")));
+	    if (regexpProto && regexpProto->ref())
+		object->params().addParam(new ExpWrapper(regexpProto,JsObject::protoName()));
+	}
+	return;
+    }
+
     JsObject* objProto = 0;
-    JsFunction* objCtr = YOBJECT(JsFunction,ctx->params().getParam(YSTRING("Object")));
+    objCtr = YOBJECT(JsFunction,ctx->params().getParam(YSTRING("Object")));
     if (objCtr)
 	objProto = YOBJECT(JsObject,objCtr->params().getParam(YSTRING("prototype")));
 

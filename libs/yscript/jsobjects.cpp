@@ -1152,20 +1152,25 @@ JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool insensit
     : JsObject(mtx,name,frozen),
       m_regexp(rexp,extended,insensitive)
 {
-    params().addParam(new ExpFunction("test"));
-    params().addParam(new ExpFunction("valid"));
+    XDebug(DebugAll,"JsRegExp::JsRegExp('%s',%p,%s) [%p]",
+	name,mtx,String::boolText(frozen),this);
     params().addParam("ignoreCase",String::boolText(insensitive));
     params().addParam("basicPosix",String::boolText(!extended));
 }
 
 JsRegExp::JsRegExp(Mutex* mtx, const Regexp& rexp, bool frozen)
-    : JsObject("RegExp",mtx),
+    : JsObject(mtx,rexp.c_str()),
       m_regexp(rexp)
 {
-    params().addParam(new ExpFunction("test"));
-    params().addParam(new ExpFunction("valid"));
-    params().addParam("ignoreCase",String::boolText(rexp.isCaseInsensitive()));
-    params().addParam("basicPosix",String::boolText(!rexp.isExtended()));
+    XDebug(DebugAll,"JsRegExp::JsRegExp('%s',%p,%s) [%p]",
+	toString().c_str(),mtx,String::boolText(frozen),this);
+}
+
+JsObject* JsRegExp::copy(Mutex* mtx) const
+{
+    JsRegExp* reg = new JsRegExp(mtx,m_regexp,frozen());
+    deepCopyParams(reg->params(),params(),mtx);
+    return reg;
 }
 
 bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)

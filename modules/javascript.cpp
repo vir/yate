@@ -297,12 +297,6 @@ public:
 	  m_message(0), m_owned(false), m_trackPrio(true)
 	{
 	    XDebug(&__plugin,DebugAll,"JsMessage::JsMessage() [%p]",this);
-	}
-    inline JsMessage(Message* message, Mutex* mtx, bool owned)
-	: JsObject("Message",mtx),
-	  m_message(message), m_owned(owned), m_trackPrio(true)
-	{
-	    XDebug(&__plugin,DebugAll,"JsMessage::JsMessage(%p) [%p]",message,this);
 	    params().addParam(new ExpFunction("enqueue"));
 	    params().addParam(new ExpFunction("dispatch"));
 	    params().addParam(new ExpFunction("name"));
@@ -315,6 +309,12 @@ public:
 	    params().addParam(new ExpFunction("getColumn"));
 	    params().addParam(new ExpFunction("getRow"));
 	    params().addParam(new ExpFunction("getResult"));
+	}
+    inline JsMessage(Message* message, Mutex* mtx, bool owned)
+	: JsObject(mtx,"[object Message]"),
+	  m_message(message), m_owned(owned), m_trackPrio(true)
+	{
+	    XDebug(&__plugin,DebugAll,"JsMessage::JsMessage(%p) [%p]",message,this);
 	}
     virtual ~JsMessage()
 	{
@@ -2347,6 +2347,7 @@ bool JsHandler::receivedInternal(Message& msg)
 	return false;
     }
     JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),false);
+    jm->setPrototype(runner->context(),YSTRING("Message"));
     jm->ref();
     String name = m_function.name();
     safeNowInternal(); // Staring from here the handler may be safely uninstalled
@@ -2385,6 +2386,7 @@ void JsMessageQueue::received(Message& msg)
     if (!runner)
 	return;
     JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),false);
+    jm->setPrototype(runner->context(),YSTRING("Message"));
     jm->ref();
     ObjList args;
     args.append(new ExpWrapper(jm,"message"));
@@ -3392,7 +3394,7 @@ XmlElement* JsXML::getXml(const String* obj, bool take)
 
 XmlElement* JsXML::buildXml(const String* name, const String* text)
 {
-    if (TelEngine::null(name))
+    if (TelEngine::null(name) || name->getObject(YSTRING("JsObject")))
 	return 0;
     static const Regexp s_elemName("^[[:alpha:]_][[:alnum:]_.-]*$");
     if (name->startsWith("xml",false,true) || !s_elemName.matches(*name))
@@ -4233,6 +4235,7 @@ bool JsAssist::init()
 		return false;
 	}
 	if (jsm && jsm->ref()) {
+	    jsm->setPrototype(ctx,YSTRING("Message"));
 	    JsObject* cc = JsObject::buildCallContext(ctx->mutex(),jsm);
 	    jsm->ref();
 	    cc->params().setParam(new ExpWrapper(jsm,"message"));
@@ -4372,6 +4375,7 @@ bool JsAssist::runFunction(const String& name, Message& msg, bool* handled)
 	return false;
 
     JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),false);
+    jm->setPrototype(runner->context(),YSTRING("Message"));
     jm->ref();
     ObjList args;
     args.append(new ExpWrapper(jm,"message"));

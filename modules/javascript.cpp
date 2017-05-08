@@ -3394,7 +3394,7 @@ XmlElement* JsXML::getXml(const String* obj, bool take)
 
 XmlElement* JsXML::buildXml(const String* name, const String* text)
 {
-    if (TelEngine::null(name))
+    if (TelEngine::null(name) || name->getObject(YSTRING("JsObject")))
 	return 0;
     static const Regexp s_elemName("^[[:alpha:]_][[:alnum:]_.-]*$");
     if (name->startsWith("xml",false,true) || !s_elemName.matches(*name))

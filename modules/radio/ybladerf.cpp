@@ -25,6 +25,10 @@
 #include <yatemath.h>
 #include <libusb-1.0/libusb.h>
 
+#ifdef __MMX__
+#include <mmintrin.h>
+#endif
+
 #ifndef M_PI_2
 #define M_PI_2 (M_PI / 2)
 #endif
@@ -793,46 +797,94 @@ static inline int16_t sampleScale(float value, float scale)
     value *= scale;
     return (int16_t)((value >= 0.0F) ? (value + 0.5F) : (value - 0.5F));
 }
-static inline int16_t energize(float value, float scale, int16_t refVal, unsigned int& clamp)
+
+// len is number of complex samples (I&Q pairs)
+static bool energize(const float* samples, int16_t* dest,
+    const float iScale, const float qScale, const unsigned len)
 {
-    int16_t v = sampleScale(value,scale);
-    if (v > refVal) {
-	clamp++;
-	return refVal;
+    if (len % 2 != 0) {
+	Debug("bladerf",DebugFail,"Energize len %u must be a multiple of 2",len);
+	return false;
     }
-    if (v < -refVal) {
-	clamp++;
-	return -refVal;
+    // len is number of complex pairs
+    // N is number of scalars
+    const unsigned N = len * 2;
+#ifdef __MMX__
+    const float rescale = 32767.0 / s_sampleEnergize;
+    const float is2 = iScale * rescale;
+    const float qs2 = qScale * rescale;
+
+    // Intel intrinstics
+    int32_t i32[4];
+    const __m64* s32A = (__m64*) &i32[0];
+    const __m64* s32B = (__m64*) &i32[2];
+    for (unsigned i = 0; i < N; i += 4) {
+	// apply I/Q correction and scaling and convert samples to 32 bits
+	// gcc -O2/-O3 on intel uses cvttss2si or cvttps2dq depending on the processor
+	i32[0] = is2 * samples[i + 0];
+	i32[1] = qs2 * samples[i + 1];
+	i32[2] = is2 * samples[i + 2];
+	i32[3] = qs2 * samples[i + 3];
+	// saturate 32 bits to 16
+	// process 4 16-bit samples in a 64-bit block
+	__m64* d64 = (__m64*) &dest[i];
+	*d64 = _mm_packs_pi32(*s32A, *s32B);
     }
-    return v;
+    // shift 16 bit down to 12 bits for BladeRF
+    // This has to be done after saturation.
+    for (unsigned i = 0; i < N; i++)
+	dest[i] = dest[i] >> 4;
+#else
+    for (unsigned i = 0; i < N; i += 2) {
+	// scale and saturate
+	float iv = iScale * samples[i];
+	if (iv > 2047)
+	    iv = 2047;
+	else if (iv < -2047)
+	    iv = -2047;
+	float qv = qScale * samples[i + 1];
+	if (qv > 2047)
+	    qv = 2047;
+	else if (qv < -2047)
+	    qv = -2047;
+	// convert and save
+	dest[i] = iv;
+	dest[i + 1] = qv;
+    }
+#endif
+    return true;
 }
 
-static inline void brfCopyTxData(int16_t* dest, float* src, unsigned int samples,
-    float scaleI, int16_t maxI, float scaleQ, int16_t maxQ, unsigned int& clamped,
+static inline void brfCopyTxData(int16_t* dest, const float* src, const unsigned samples,
+    const float scaleI, int16_t maxI, const float scaleQ, int16_t maxQ, unsigned int& clamped,
     const long* ampTable=NULL)
 {
+    // scale and convert to 12-bit integers
+    if (!energize(src, dest, scaleI, scaleQ, samples)) {
+	::memset(dest,0,2 * samples * sizeof(int16_t));
+	return;
+    }
     if (ampTable) {
-	for (; samples; samples--) {
-	    // IQ gain balance control
-	    long xRe = energize(*src++,scaleI,maxI,clamped);
-	    long xIm = energize(*src++,scaleQ,maxQ,clamped);
+	int16_t *d1 = dest;
+	const int16_t *s1 = dest;
+	for (unsigned i = 0;  i < samples;  i++) {
 	    // amplifier predistortion
 	    // power of the sample, normalized to the energy scale
 	    // this has a range of 0 .. (2*scale)-1
-	    unsigned p = (xRe*xRe + xIm*xIm)/1024; // 2 * (xRe*xRe + xIm*xIm)/2048
+	    long xRe = *s1++;
+	    long xIm = *s1++;
+	    unsigned p = (xRe * xRe + xIm * xIm) >> 10; // 2 * (xRe*xRe + xIm*xIm)/2048
 	    // get the correction factor, abs of 0..1
 	    long corrRe = ampTable[p];
 	    long corrIm = ampTable[p+1];
-	    // apply the correction factor
-	    *dest++ = htole16((corrRe*xRe - corrIm*xIm)/2048);
-	    *dest++ = htole16((corrRe*xIm + corrIm*xRe)/2048);
+	    // apply the correction factor (complex multiplication), rescaled by 2048
+	    *d1++ = (corrRe * xRe - corrIm * xIm) >> 11;
+	    *d1++ = (corrRe * xIm + corrIm * xRe) >> 11;
 	}
-	return;
     }
-    for (; samples; samples--) {
-	*dest++ = htole16(energize(*src++,scaleI,maxI,clamped));
-	*dest++ = htole16(energize(*src++,scaleQ,maxQ,clamped));
-    }
+    if (htole16(0x1234) != 0x1234)
+	for (unsigned i = 0;  i < samples;  i++)
+	    dest[i] = htole16(dest[i]);
 }
 
 class BrfDuration
@@ -7788,17 +7840,15 @@ String& BrfLibUsbDevice::dumpCalCache(String& dest)
 unsigned int BrfLibUsbDevice::updateSpeed(const NamedList& params, String* error)
 {
     if (speed() == LIBUSB_SPEED_SUPER || speed() == LIBUSB_SPEED_HIGH) {
-	unsigned int brfBufSamples = 508;
-	unsigned int nBuffers = 4;
-	if (speed() == LIBUSB_SPEED_HIGH) {
-	    brfBufSamples = 252;
-	    nBuffers = 8;
-	}
+	unsigned int brfBufSamples = (speed() == LIBUSB_SPEED_HIGH) ? 252 : 508;
+	unsigned int nBuffers = clampIntParam(params,"buffered_samples",2048,1024,16384) / brfBufSamples;
 	m_txIO.resetSamplesBuffer(brfBufSamples,16,nBuffers);
 	if (m_minBufsSend > nBuffers)
 	    m_minBufsSend = nBuffers;
 	m_rxIO.resetSamplesBuffer(brfBufSamples,16,nBuffers);
 	m_minBufsSend = clampIntParam(params,"tx_min_buffers",nBuffers,1,nBuffers);
+	Debug(m_owner,DebugAll,"Set buffers=%u tx_min_buffers=%u [%p]",
+	    nBuffers,m_minBufsSend,m_owner);
 	if (speed() == LIBUSB_SPEED_SUPER) {
 	    m_radioCaps.rxLatency = clampIntParam(params,"rx_latency_super",4000,0,150000);
 	    m_radioCaps.txLatency = clampIntParam(params,"tx_latency_super",10000,0,150000);

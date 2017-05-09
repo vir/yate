@@ -1,3 +1,11 @@
+yate (5.5.1~svn6216) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6216:
+  * The number of buffers to use with libusb is now configurable. Use
+    MMX if available to scale and saturate sent samples.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 10 May 2017 02:19:15 +0300
+
 yate (5.5.1~svn6215) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6215:

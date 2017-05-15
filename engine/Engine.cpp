@@ -227,6 +227,7 @@ static void abrthandler(int sig)
 	    "*** ABORT INFO BEGIN ***\n"
 	    "  Messages:    " FMT64U "\n"
 	    "  MaxQueue:    " FMT64U "\n"
+	    "  Msg Age:     %u\n"
 	    "  Msg Rate:    %u\n"
 	    "  Max Rate:    %u\n"
 	    "  Threads:     %d\n"
@@ -236,7 +237,7 @@ static void abrthandler(int sig)
 	    "  Congestion:  %u\n"
 	    "  Call Accept: %s\n"
 	    "*** ABORT INFO END ***\n",
-	    (enq - deq),qmax,eng->messageRate(),eng->messageMaxRate(),
+	    (enq - deq),qmax,eng->messageAge(),eng->messageRate(),eng->messageMaxRate(),
 	    Thread::count(),EnginePrivate::count,Mutex::count(),Mutex::locks(),
 	    Engine::getCongestion(),lookup(Engine::accept(),Engine::getCallAcceptStates())
 	);
@@ -268,6 +269,7 @@ static int s_minworkers = 1;
 static int s_maxworkers = 10;
 static int s_addworkers = 1;
 static int s_maxmsgrate = 0;
+static int s_maxmsgage = 0;
 static int s_maxqueued = 0;
 static int s_exit = -1;
 unsigned int Engine::s_congestion = 0;
@@ -523,6 +525,7 @@ bool EngineStatusHandler::received(Message &msg)
     uint64_t enq,deq,disp,qmax;
     Engine::self()->getStats(enq,deq,disp,qmax);
     msg.retValue() << ",messages=" << (enq - deq) << ",maxqueue=" << qmax;
+    msg.retValue() << ",messageage=" << Engine::self()->messageAge();
     msg.retValue() << ",messagerate=" << Engine::self()->messageRate();
     msg.retValue() << ",maxmsgrate=" << Engine::self()->messageMaxRate();
     msg.retValue() << ",enqueued=" << enq << ",dequeued=" << deq << ",dispatched=" << disp ;
@@ -1396,7 +1399,7 @@ unsigned int SharedVars::dec(const String& name, unsigned int wrap)
 
 Engine::Engine()
     : m_dispatchedLast(0), m_messageRate(0), m_maxMsgRate(0),
-      m_rateCongested(false), m_queueCongested(false)
+      m_rateCongested(false), m_queueCongested(false), m_ageCongested(false)
 {
     DDebug(DebugAll,"Engine::Engine() [%p]",this);
     initUsrPath(s_usrpath);
@@ -1486,6 +1489,7 @@ int Engine::engineInit()
     s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers,s_minworkers,500);
     s_addworkers = s_cfg.getIntValue("general","addworkers",s_addworkers,1,10);
     s_maxmsgrate = s_cfg.getIntValue("general","maxmsgrate",s_maxmsgrate,0,50000);
+    s_maxmsgage = s_cfg.getIntValue("general","maxmsgage",s_maxmsgage,0,5000);
     s_maxqueued = s_cfg.getIntValue("general","maxqueued",s_maxqueued,0,10000);
     s_maxevents = s_cfg.getIntValue("general","maxevents",s_maxevents,0,1000);
     s_restarts = s_cfg.getIntValue("general","restarts");
@@ -1517,6 +1521,7 @@ int Engine::engineInit()
     s_params.addParam("maxworkers",String(s_maxworkers));
     s_params.addParam("addworkers",String(s_addworkers));
     s_params.addParam("maxmsgrate",String(s_maxmsgrate));
+    s_params.addParam("maxmsgage",String(s_maxmsgage));
     s_params.addParam("maxqueued",String(s_maxqueued));
     s_params.addParam("maxevents",String(s_maxevents));
     if (track)
@@ -1622,6 +1627,8 @@ int Engine::run()
 		= s_cfg.getIntValue("general","addworkers",s_addworkers,1,10))));
 	    s_params.setParam("maxmsgrate",String((s_maxmsgrate
 		= s_cfg.getIntValue("general","maxmsgrate",s_maxmsgrate,0,50000))));
+	    s_params.setParam("maxmsgage",String((s_maxmsgage
+		= s_cfg.getIntValue("general","maxmsgage",s_maxmsgage,0,5000))));
 	    s_params.setParam("maxqueued",String((s_maxqueued
 		= s_cfg.getIntValue("general","maxqueued",s_maxqueued,0,10000))));
 	    s_params.setParam("maxevents",String((s_maxevents
@@ -1697,6 +1704,11 @@ int Engine::run()
 	if (cong != m_rateCongested) {
 	    m_rateCongested = cong;
 	    setCongestion(cong ? "message rate over limit" : 0);
+	}
+	cong = s_maxmsgage && (m_dispatcher.messageAge() > (unsigned)s_maxmsgage);
+	if (cong != m_ageCongested) {
+	    m_ageCongested = cong;
+	    setCongestion(cong ? "message age over limit" : 0);
 	}
 	cong = s_maxqueued && (m_dispatcher.messageCount() > (unsigned)s_maxqueued);
 	if (cong != m_queueCongested) {
@@ -1808,6 +1820,9 @@ void Engine::setCongestion(const char* reason)
 	    if (reason)
 		Alarm("engine","performance",DebugWarn,"Engine is congested: %s",reason);
 	    break;
+	default:
+	    if (reason)
+		Debug("engine",DebugNote,"Engine extra congestion: %s",reason);
     }
 }
 

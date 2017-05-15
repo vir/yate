@@ -836,6 +836,14 @@ public:
 	{ return m_queuedMax; }
 
     /**
+     * Get the average dequeued message age in milliseconds or microseconds
+     * @param usec True to return microseconds instead of milliseconds
+     * @return Average age of dequeued messages
+     */
+    u_int64_t messageAge(bool usec = false) const
+	{ return usec ? m_msgAvgAge : ((m_msgAvgAge + 500) / 1000); }
+
+    /**
      * Retrieve all statistics counters
      * @param enqueued Returns count of enqueued messages
      * @param dequeued Returns count of dequeued messages
@@ -873,6 +881,7 @@ private:
     u_int64_t m_dequeueCount;
     u_int64_t m_dispatchCount;
     u_int64_t m_queuedMax;
+    u_int64_t m_msgAvgAge;
     int m_hookCount;
     bool m_hookHole;
 };
@@ -1545,6 +1554,14 @@ public:
 	{ return m_maxMsgRate; }
 
     /**
+     * Get the average dequeued message age in milliseconds or microseconds
+     * @param usec True to return microseconds instead of milliseconds
+     * @return Average age of dequeued messages
+     */
+    unsigned int messageAge(bool usec = false) const
+	{ return m_dispatcher.messageAge(usec); }
+
+    /**
      * Retrieve dispatcher's statistics counters
      * @param enqueued Returns count of enqueued messages
      * @param dequeued Returns count of dequeued messages
@@ -1648,6 +1665,7 @@ private:
     unsigned int m_maxMsgRate;
     bool m_rateCongested;
     bool m_queueCongested;
+    bool m_ageCongested;
     static Engine* s_self;
     static String s_node;
     static String s_shrpath;

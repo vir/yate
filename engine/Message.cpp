@@ -300,7 +300,8 @@ MessageDispatcher::MessageDispatcher(const char* trackParam)
       m_hookMutex(false,"PostHooks"),
       m_msgAppend(&m_messages), m_hookAppend(&m_hooks),
       m_trackParam(trackParam), m_changes(0), m_warnTime(0),
-      m_enqueueCount(0), m_dequeueCount(0), m_dispatchCount(0), m_queuedMax(0),
+      m_enqueueCount(0), m_dequeueCount(0), m_dispatchCount(0),
+      m_queuedMax(0), m_msgAvgAge(0),
       m_hookCount(0), m_hookHole(false)
 {
     XDebug(DebugInfo,"MessageDispatcher::MessageDispatcher('%s') [%p]",trackParam,this);
@@ -533,8 +534,12 @@ bool MessageDispatcher::dequeueOne()
     if (m_messages.next() == m_msgAppend)
 	m_msgAppend = &m_messages;
     Message* msg = static_cast<Message *>(m_messages.remove(false));
-    if (msg)
+    if (msg) {
 	m_dequeueCount++;
+	uint64_t age = Time::now() - msg->msgTime();
+	if (age < 60000000)
+	    m_msgAvgAge = (3 * m_msgAvgAge + age) >> 2;
+    }
     unlock();
     if (!msg)
 	return false;

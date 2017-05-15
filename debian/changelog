@@ -1,3 +1,11 @@
+yate (5.5.1~svn6217) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6217:
+  * Added computation and congestion limit for average dequeued messages
+    age.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 16 May 2017 02:19:15 +0300
+
 yate (5.5.1~svn6216) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6216:

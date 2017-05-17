@@ -245,6 +245,7 @@ public:
 	{ return m_listener->cfg(); }
     void checkTimer(u_int64_t time);
 private:
+    void disconnect();
     NamedList m_aliases;
     Level m_auth;
     bool m_debug;
@@ -457,8 +458,16 @@ Connection::~Connection()
     s_connList.remove(this,false);
     s_mutex.unlock();
     Output("Closing connection to %s",m_address.c_str());
-    delete m_socket;
+    Socket* tmp = m_socket;
     m_socket = 0;
+    yield();
+    delete tmp;
+}
+
+void Connection::disconnect()
+{
+    if (m_socket)
+	m_socket->terminate();
 }
 
 void Connection::run()
@@ -513,18 +522,21 @@ void Connection::run()
 	Thread::check();
 	bool readok = false;
 	bool error = false;
+	HANDLE sh = m_socket->handle();
 	if (m_socket->select(&readok,0,&error,10000)) {
 	    // rearm the error beep
 	    m_beeping = false;
 	    if (error) {
-		Debug("RManager",DebugInfo,"Socket exception condition on %d",m_socket->handle());
+		disconnect();
+		Debug("RManager",DebugInfo,"Socket exception condition on %d",sh);
 		return;
 	    }
 	    if (!readok)
 		continue;
 	    int readsize = m_socket->readData(buffer,sizeof(buffer));
 	    if (!readsize) {
-		Debug("RManager",DebugInfo,"Socket condition EOF on %d",m_socket->handle());
+		disconnect();
+		Debug("RManager",DebugInfo,"Socket condition EOF on %d",sh);
 		return;
 	    }
 	    else if (readsize > 0) {
@@ -533,12 +545,14 @@ void Connection::run()
 			return;
 	    }
 	    else if (!m_socket->canRetry()) {
-		Debug("RManager",DebugWarn,"Socket read error %d on %d",errno,m_socket->handle());
+		disconnect();
+		Debug("RManager",DebugWarn,"Socket read error %d on %d",errno,sh);
 		return;
 	    }
 	}
 	else if (!m_socket->canRetry()) {
-	    Debug("RManager",DebugWarn,"socket select error %d on %d",errno,m_socket->handle());
+	    disconnect();
+	    Debug("RManager",DebugWarn,"socket select error %d on %d",errno,sh);
 	    return;
 	}
     }
@@ -1804,8 +1818,12 @@ void Connection::writeStr(const char *str, int len)
 	len = ::strlen(str);
     else if (len == 0)
 	return;
+    if (!(m_socket && m_socket->valid()))
+	return;
+    HANDLE sh = m_socket->handle();
     if (int written = m_socket->writeData(str,len) != len) {
-	Debug("RManager",DebugInfo,"Socket %d wrote only %d out of %d bytes",m_socket->handle(),written,len);
+	disconnect();
+	Debug("RManager",DebugInfo,"Socket %d wrote only %d out of %d bytes",sh,written,len);
 	// Destroy the thread, will kill the connection
 	cancel();
     }
@@ -1818,8 +1836,7 @@ void Connection::checkTimer(u_int64_t time)
     if (time < m_timeout)
 	return;
     m_timeout = 0;
-    if (m_socket)
-	m_socket->terminate();
+    disconnect();
 }
 
 

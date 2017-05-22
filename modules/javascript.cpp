@@ -309,6 +309,7 @@ public:
 	    params().addParam(new ExpFunction("getColumn"));
 	    params().addParam(new ExpFunction("getRow"));
 	    params().addParam(new ExpFunction("getResult"));
+	    params().addParam(new ExpFunction("copyParams"));
 	}
     inline JsMessage(Message* message, Mutex* mtx, bool owned)
 	: JsObject(mtx,"[object Message]"),
@@ -2041,6 +2042,74 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 		break;
 	    default:
 		return false;
+	}
+    }
+    else if (oper.name() == YSTRING("copyParams")) {
+	if (!(m_message && m_owned))
+	    return true;
+	ObjList args;
+	bool skip = true;
+	String prefix;
+	NamedList* from = 0;
+	NamedList* fromNative = 0;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 3:
+		skip = static_cast<ExpOperation*>(args[2])->valBoolean(skip);
+	        // intentional
+	    case 2:
+		prefix = static_cast<ExpOperation*>(args[1]);
+		// intentional
+	    case 1:
+	    {
+		ExpOperation* op = static_cast<ExpOperation*>(args[0]);
+		if (JsParser::isUndefined(*op) || JsParser::isNull(*op))
+		    return true;
+		JsObject* obj = YOBJECT(JsObject,op);
+		if (obj) {
+		    if (prefix) {
+			from = new NamedList("");
+			JsObject* subObj = YOBJECT(JsObject,obj->getField(stack,prefix,context));
+			if (subObj) {
+			    copyObjParams(*from,&subObj->params());
+			    if (subObj->nativeParams())
+				copyObjParams(*from,subObj->nativeParams());
+
+			    for (ObjList* o = from->paramList()->skipNull(); o; o = o->skipNext()) {
+				NamedString* ns = static_cast<NamedString*>(o->get());
+				const_cast<String&>(ns->name()) = prefix + "." + ns->name();
+			    }
+			    prefix += ".";
+			}
+			else {
+			    copyObjParams(*from,&obj->params());
+			    if (obj->nativeParams())
+				copyObjParams(*from,obj->nativeParams());
+			}
+		    }
+		    else {
+			from = &obj->params();
+			fromNative = obj->nativeParams();
+		    }
+		}
+		else
+		    from = YOBJECT(NamedList,op);
+		if (!(from || fromNative))
+		    return false;
+		break;
+	    }
+	    default:
+		return false;
+	}
+
+	if (prefix) {
+	    m_message->copySubParams(*from,prefix,skip,true);
+	    TelEngine::destruct(from);
+	}
+	else {
+	    if (from)
+		copyObjParams(*m_message,from);
+	    if (fromNative)
+		copyObjParams(*m_message,fromNative);
 	}
     }
     else

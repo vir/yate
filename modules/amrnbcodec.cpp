@@ -576,7 +576,8 @@ bool AmrDecoder::pushData(unsigned long& tStamp, unsigned long& flags)
 	len--;
     // now len holds how many bytes we should keep in data buffer
     m_data.cut(len-(int)m_data.length());
-    if (cmr != m_cmr) {
+    // RFC 4687: CMR 15 means no codec mode change
+    if (cmr != 15 && cmr != m_cmr) {
 	Debug(MODNAME,DebugNote,"Remote CMR changed from %d to %d [%p]",
 	    m_cmr,cmr,this);
 	m_cmr = (Mode)cmr;

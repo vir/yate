@@ -99,6 +99,27 @@ const TokenDict SDPParser::s_rtpmap[] = {
     { 0,                    0 },
 };
 
+enum SdpFormat
+{
+    SdpFmtUnknown = 0,
+    SdpIlbc,
+    SdpG729,
+    SdpAmr
+};
+
+// We need to check parameters (fmtp line) for these formats to detect variants
+static const TokenDict s_sdpFmtParamsCheck[] = {
+    { "g729",         SdpG729 },
+    { "ilbc",         SdpIlbc },
+    { "ilbc20",       SdpIlbc },
+    { "ilbc30",       SdpIlbc },
+    { "amr",          SdpAmr },
+    { "amr-o",        SdpAmr },
+    { "amr/16000",    SdpAmr },
+    { "amr-o/16000",  SdpAmr },
+    { 0,              0 },
+};
+
 // Parse a received SDP body
 ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedia,
     const String& media, bool force)
@@ -243,29 +264,58 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 		    int num = var - 1;
 		    line >> num;
 		    if ((num == var) && line.trimSpaces()) {
-			if (line.startSkip("mode=",false))
-			    line >> mode;
-			else if (line.startSkip("annexb=",false))
-			    line >> annexB;
-			else if (line.startSkip("octet-align=",false)) {
-			    int val = 0;
-			    line >> val;
-			    amrOctet = (0 != val);
-			    if (amrOctet) {
-				if (payload == YSTRING("amr"))
-				    payload = "amr-o";
-				else if (payload == YSTRING("amr/16000"))
-				    payload = "amr-o/16000";
-			    }
-			    else {
-				if (payload == YSTRING("amr-o"))
-				    payload = "amr";
-				else if (payload == YSTRING("amr-o/16000"))
-				    payload = "amr/16000";
+			bool found = false;
+			ObjList* params = 0;
+			int checkParams = lookup(payload,s_sdpFmtParamsCheck);
+			if (checkParams) {
+			    params = line.split(';',false);
+			    for (ObjList* o = params->skipNull(); o; o = o->skipNext()) {
+				String& s = *static_cast<String*>(o->get());
+				switch (checkParams) {
+				    case SdpIlbc:
+					if (!s.startSkip("mode=",false))
+					    continue;
+					s >> mode;
+					break;
+				    case SdpG729:
+					if (!s.startSkip("annexb=",false))
+					    continue;
+					s >> annexB;
+					break;
+				    case SdpAmr:
+					if (s.startSkip("octet-align=",false)) {
+					    int val = 0;
+					    s >> val;
+					    amrOctet = (0 != val);
+					    if (amrOctet) {
+						if (payload == YSTRING("amr"))
+						    payload = "amr-o";
+						else if (payload == YSTRING("amr/16000"))
+						    payload = "amr-o/16000";
+					    }
+					    else if (payload == YSTRING("amr-o"))
+						payload = "amr";
+					    else if (payload == YSTRING("amr-o/16000"))
+						payload = "amr/16000";
+					    break;
+					}
+					continue;
+				    default:
+					continue;
+				}
+				found = true;
+				o->set(0);
+				// Done: we are searching for a single parameter
+				break;
 			    }
 			}
-			else
+			if (!found)
 			    dest = dest->append(new NamedString("fmtp:" + payload,line));
+			else if (params && params->skipNull()) {
+			    line.clear();
+			    dest = dest->append(new NamedString("fmtp:" + payload,line.append(params,";")));
+			}
+			TelEngine::destruct(params);
 		    }
 		}
 		else if (first) {

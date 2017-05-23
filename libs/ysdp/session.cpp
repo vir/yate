@@ -320,6 +320,18 @@ static int addIP(String& buf, const char* addr, int family = SocketAddr::Unknown
     return family;
 }
 
+// Utility used in createSDP
+// Build a 'fmtp' line if not already done. Add a parameter to it
+static inline void setFmtpLine(String*& line, int payload, const char* param)
+{
+    if (line)
+	line->append(param,";");
+    else {
+	line = new String("fmtp:");
+	*line << payload << " " << param;
+    }
+}
+
 // Creates a SDP body from transport address and list of media descriptors
 // Use own list if given media list is 0
 MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
@@ -382,7 +394,6 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	for (; f; f = f->next()) {
 	    const String* s = static_cast<const String*>(f->get());
 	    if (s) {
-		int mode = 0;
 		if (*s == "g729b")
 		    continue;
 		int payload = s->toInteger(SDPParser::s_payloads,-1);
@@ -456,41 +467,32 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 			defcode = payload;
 		    const char* map = lookup(defcode,SDPParser::s_rtpmap);
 		    if (map && m_parser->m_codecs.getBoolValue(*s,defcodecs && DataTranslator::canConvert(*s))) {
-			if (*s == "ilbc20")
-			    ptime = mode = 20;
-			else if (*s == "ilbc30")
-			    ptime = mode = 30;
 			frm << " " << payload;
 			String* temp = new String("rtpmap:");
 			*temp << payload << " " << map;
 			dest = dest->append(temp);
-			if (mode) {
-			    temp = new String("fmtp:");
-			    *temp << payload << " mode=" << mode;
-			    dest = dest->append(temp);
+			temp = 0;
+			if (*s == YSTRING("ilbc20")) {
+			    ptime = 20;
+			    setFmtpLine(temp,payload,"mode=20");
 			}
-			if (*s == "g729") {
-			    temp = new String("fmtp:");
-			    *temp << payload << " annexb=" <<
-				((0 != l->find("g729b")) ? "yes" : "no");
-			    dest = dest->append(temp);
+			else if (*s == YSTRING("ilbc30")) {
+			    ptime = 30;
+			    setFmtpLine(temp,payload,"mode=30");
 			}
-			else if (*s == "amr" || s->startsWith("amr/")) {
-			    temp = new String("fmtp:");
-			    *temp << payload << " octet-align=0";
-			    dest = dest->append(temp);
+			else if (*s == YSTRING("g729")) {
+			    setFmtpLine(temp,payload,"annexb=");
+			    *temp << ((0 != l->find("g729b")) ? "yes" : "no");
 			}
-			else if (*s == "amr-o" || s->startsWith("amr-o/")) {
-			    temp = new String("fmtp:");
-			    *temp << payload << " octet-align=1";
-			    dest = dest->append(temp);
-			}
+			else if (*s == YSTRING("amr") || s->startsWith("amr/"))
+			    setFmtpLine(temp,payload,"octet-align=0");
+			else if (*s == YSTRING("amr-o") || s->startsWith("amr-o/"))
+			    setFmtpLine(temp,payload,"octet-align=1");
 			const String* fmtp = m->getParam("fmtp:" + *s);
-			if (fmtp) {
-			    temp = new String("fmtp:");
-			    *temp << payload << " " << *fmtp;
+			if (fmtp)
+			    setFmtpLine(temp,payload,*fmtp);
+			if (temp)
 			    dest = dest->append(temp);
-			}
 		    }
 		}
 	    }

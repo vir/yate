@@ -1,3 +1,12 @@
+yate (5.5.1~svn6222) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6222:
+  * Expect more parameters in a 'fmtp' line. Remove only parameters we
+    are using to detect format variant(s).
+  * Avoid building multiple 'fmtp' lines for a single format.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 24 May 2017 02:19:15 +0300
+
 yate (5.5.1~svn6220) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6220:

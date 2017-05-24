@@ -1,3 +1,11 @@
+yate (5.5.1~svn6223) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6223:
+  * Added capability to set amr 'fmtp' parameters in SDP session: set
+    them in each offer when rtp forward is not enabled.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 25 May 2017 02:19:16 +0300
+
 yate (5.5.1~svn6222) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6222:

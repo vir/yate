@@ -629,6 +629,13 @@ protected:
      */
     void printRtpMedia(const char* reason);
 
+    /**
+     * Set extra parameters for formats
+     * @param list List of parameters
+     * @param out True if session is outgoing, false otherwise
+     */
+    void setFormatsExtra(const NamedList& list, bool out);
+
     SDPParser* m_parser;
     int m_mediaStatus;
     bool m_rtpForward;                   // Forward RTP flag
@@ -646,8 +653,12 @@ protected:
     bool m_secure;
     int m_rfc2833;                       // Payload of RFC 2833 for remote party
     bool m_ipv6;                         // IPv6 support
+    NamedList m_amrExtra;                // Extra AMR codec parameters
 
 private:
+    // Add extra AMR params to fmtp line
+    void addFmtpAmrExtra(String& buf, const String* fmtp);
+
     DebugEnabler* m_enabler;             // Debug enabler used for output
     void* m_ptr;                         // Pointer to show in debug messages
 };

@@ -31,7 +31,7 @@ SDPSession::SDPSession(SDPParser* parser)
       m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_sdpHash(YSTRING_INIT_HASH),
       m_secure(m_parser->m_secure), m_rfc2833(m_parser->m_rfc2833),
-      m_ipv6(false), m_enabler(0), m_ptr(0)
+      m_ipv6(false), m_amrExtra(""), m_enabler(0), m_ptr(0)
 {
     setSdpDebug();
 }
@@ -40,7 +40,7 @@ SDPSession::SDPSession(SDPParser* parser, NamedList& params)
     : m_parser(parser), m_mediaStatus(MediaMissing),
       m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_sdpHash(YSTRING_INIT_HASH),
-      m_ipv6(false), m_enabler(0), m_ptr(0)
+      m_ipv6(false), m_amrExtra(""), m_enabler(0), m_ptr(0)
 {
     setSdpDebug();
     m_rtpForward = params.getBoolValue("rtp_forward");
@@ -471,6 +471,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 			String* temp = new String("rtpmap:");
 			*temp << payload << " " << map;
 			dest = dest->append(temp);
+			const String* fmtp = m->getParam("fmtp:" + *s);
 			temp = 0;
 			if (*s == YSTRING("ilbc20")) {
 			    ptime = 20;
@@ -484,11 +485,20 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 			    setFmtpLine(temp,payload,"annexb=");
 			    *temp << ((0 != l->find("g729b")) ? "yes" : "no");
 			}
-			else if (*s == YSTRING("amr") || s->startsWith("amr/"))
+			else if (*s == YSTRING("amr") || s->startsWith("amr/")) {
 			    setFmtpLine(temp,payload,"octet-align=0");
-			else if (*s == YSTRING("amr-o") || s->startsWith("amr-o/"))
+			    if (!m_rtpForward && m_amrExtra) {
+				addFmtpAmrExtra(*temp,fmtp);
+				fmtp = 0;
+			    }
+			}
+			else if (*s == YSTRING("amr-o") || s->startsWith("amr-o/")) {
 			    setFmtpLine(temp,payload,"octet-align=1");
-			const String* fmtp = m->getParam("fmtp:" + *s);
+			    if (!m_rtpForward && m_amrExtra) {
+				addFmtpAmrExtra(*temp,fmtp);
+				fmtp = 0;
+			    }
+			}
 			if (fmtp)
 			    setFmtpLine(temp,payload,*fmtp);
 			if (temp)
@@ -986,6 +996,73 @@ void SDPSession::printRtpMedia(const char* reason)
 	tmp << m->c_str() << "=" << m->formats();
     }
     Debug(m_enabler,DebugAll,"%s: %s [%p]",reason,tmp.c_str(),m_ptr);
+}
+
+// Set extra parameters for formats
+void SDPSession::setFormatsExtra(const NamedList& list, bool out)
+{
+    const String* amr = list.getParam(out ? YSTRING("oamr_extra") : YSTRING("iamr_extra"));
+    m_amrExtra.assign("");
+    m_amrExtra.clearParams();
+    if (!TelEngine::null(amr)) {
+	ObjList* l = amr->split(';',false);
+	ObjList* o = l->skipNull();
+	if (o) {
+	    m_amrExtra.assign(*amr);
+	    for (; o; o = o->skipNext()) {
+		const String* s = static_cast<String*>(o->get());
+		int pos = s->find('=');
+		if (pos >= 0) {
+		    String n = s->substr(0,pos + 1).trimBlanks();
+		    if (n) {
+			m_amrExtra.addParam(n,s->substr(pos + 1));
+			continue;
+		    }
+		}
+		m_amrExtra.addParam(*s,0);
+	    }
+	}
+	TelEngine::destruct(l);
+    }
+}
+
+// Add extra AMR params to fmtp line
+void SDPSession::addFmtpAmrExtra(String& buf, const String* fmtp)
+{
+    if (TelEngine::null(fmtp)) {
+	buf.append(m_amrExtra,";");
+	return;
+    }
+    // Remove from 'fmtp' parameters we are setting from extra
+    ObjList* l = fmtp->split(';',false);
+    for (ObjList* f = l->skipNull(); f;) {
+	String& s = *static_cast<String*>(f->get());
+	s = s.trimBlanks();
+	NamedString* found = 0;
+	if (s) {
+	    int pos = s.find('=');
+	    if (pos >= 0) {
+		for (ObjList* o = m_amrExtra.paramList()->skipNull(); o; o = o->skipNext()) {
+		    NamedString* ns = static_cast<NamedString*>(o->get());
+		    if (s.startsWith(ns->name())) {
+			found = ns;
+			break;
+		    }
+		}
+	    }
+	    else
+		found = m_amrExtra.getParam(s);
+	}
+	if (found) {
+	    f->remove();
+	    f = f->skipNull();
+	}
+	else
+	    f = f->skipNext();
+    }
+    buf.append(m_amrExtra,";");
+    buf.append(l,";");
+    TelEngine::destruct(l);
 }
 
 };   // namespace TelEngine

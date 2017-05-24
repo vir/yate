@@ -6100,6 +6100,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     }
     m_ipv6 = msg.getBoolValue(YSTRING("ipv6_support"),s_ipv6);
     setSdpDebug(this,this);
+    setFormatsExtra(msg,true);
     m_targetid = target;
     setReason();
     m_checkAllowInfo = msg.getBoolValue(YSTRING("ocheck_allow_info"),m_checkAllowInfo);
@@ -7881,6 +7882,7 @@ bool YateSIPConnection::callRouted(Message& msg)
 	    return false;
 	}
 
+	setFormatsExtra(msg,false);
 	updateFormats(msg);
 	if (msg.getBoolValue(YSTRING("progress"),s_progress))
 	    m_tr->setResponse(183);

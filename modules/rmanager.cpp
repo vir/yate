@@ -1503,6 +1503,14 @@ bool Connection::processLine(const char *line, bool saveLine)
 	if (str.startSkip("level")) {
 	    int dbg = debugLevel();
 	    str >> dbg;
+	    if (str.startSkip("+")) {
+		if (debugLevel() > dbg)
+		    dbg = debugLevel();
+	    }
+	    else if (str.startSkip("-")) {
+		if (debugLevel() < dbg)
+		    dbg = debugLevel();
+	    }
 	    debugLevel(dbg);
 	}
 	NamedCounter* counter = 0;

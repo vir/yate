@@ -1011,6 +1011,14 @@ bool Channel::setDebug(Message& msg)
     if (str.startSkip("level")) {
 	int dbg = debugLevel();
 	str >> dbg;
+	if (str == "+") {
+	    if (debugLevel() > dbg)
+		dbg = debugLevel();
+	}
+	else if (str == "-") {
+	    if (debugLevel() < dbg)
+		dbg = debugLevel();
+	}
 	debugLevel(dbg);
     }
     else if (str == "reset")
@@ -1308,6 +1316,14 @@ bool Module::setDebug(Message& msg, const String& target)
     if (str.startSkip("level")) {
 	int dbg = debugLevel();
 	str >> dbg;
+	if (str == "+") {
+	    if (debugLevel() > dbg)
+		dbg = debugLevel();
+	}
+	else if (str == "-") {
+	    if (debugLevel() < dbg)
+		dbg = debugLevel();
+	}
 	debugLevel(dbg);
     }
     else if (str == "reset") {

@@ -10,7 +10,15 @@
 ;addr=127.0.0.1
 
 ; header: string: Header string to display on connect
+;  Engine ${parameters} will be replaced in this string
 ;header=YATE ${version}-${release} r${revision} (http://YATE.null.ro) ready on ${nodename}.
+
+; prompt: string: Prompt to display when entering commands interactively
+;  Engine ${parameters} will be replaced in this string
+;  To add initial or final spaces " enclose string in quotes "
+;  Note that setting a prompt suppresses status command markers
+;  Example: prompt="${configname}@${nodename}> "
+;prompt=
 
 ; password: string: Password required to authenticate as admin, default empty!
 ;password=
@@ -22,6 +30,9 @@
 ;  Defaults to waiting 30s until closing an unauthenticated connection
 ;  Set to zero to disable else enforced minimum value is 5000 ms (5s)
 ;timeout=30000
+
+; logged: bool: Log normal socket connects and disconnects
+;logged=yes
 
 ; telnet: bool: Initiate TELNET negotiation on connect
 ;telnet=yes
@@ -37,6 +48,12 @@
 ; color: bool: Enable colorization debug as soon as connecting
 ;  This setting is ignored if telnet negotiation is disabled
 ;color=no
+
+; echoing: bool: By default remote echo individual characters enabling line edit
+;  This setting is ignored if TELNET negotiation is enabled in which case
+;   received options WILL / WON'T ECHO take precedence
+;  The ^E character toggles echoing mode interactively
+;echoing=no
 
 ; interactive: bool: Disable the TCP coalescing to improve interactivity
 ;  This is almost never required and needs Yate to run as superuser
@@ -58,6 +75,11 @@
 ;  For acceptable values see the documentation of the openssl module
 ;  By default no client certificate is required
 ;verify=
+
+; goodbye: string: What to display in response to a quit command before closing socket
+;  Engine ${parameters} will be replaced in this string
+;  An empty string will suppress displaying even an empty line at exit
+;goodbye=Goodbye!
 
 ; Initial aliases can be created for each connection
 ; Each declaration line starts with alias: and may include \0 as placeholder

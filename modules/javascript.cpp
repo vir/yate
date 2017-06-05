@@ -1265,6 +1265,14 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    if (op->startSkip("level")) {
 		int dbg = debugLevel();
 		*op >> dbg;
+		if (*op == "+") {
+		    if (debugLevel() > dbg)
+			dbg = debugLevel();
+		}
+		else if (*op == "-") {
+		    if (debugLevel() < dbg)
+			dbg = debugLevel();
+		}
 		debugLevel(dbg);
 	    }
 	    else if (*op == "reset")

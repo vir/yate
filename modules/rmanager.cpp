@@ -266,6 +266,7 @@ private:
     bool m_beeping;
     u_int64_t m_timeout;
     String m_buffer;
+    String m_prompt;
     String m_address;
     ObjList m_history;
     RefPointer<RManagerListener> m_listener;
@@ -446,6 +447,10 @@ Connection::Connection(Socket* sock, const char* addr, RManagerListener* listene
       m_timeout(0), m_address(addr), m_listener(listener),
       m_cursorPos(0), m_histLen(DEF_HISTORY), m_width(0), m_height(24)
 {
+    m_prompt = cfg().getValue("prompt");
+    if ((m_prompt.length() > 1) && (m_prompt.startsWith("\"")) && (m_prompt.endsWith("\"")))
+	m_prompt = m_prompt.substr(1,m_prompt.length() - 2);
+    Engine::runParams().replaceParams(m_prompt);
     s_mutex.lock();
     s_connList.append(this);
     s_mutex.unlock();
@@ -507,10 +512,14 @@ void Connection::run()
 	// WILL SUPPRESS GO AHEAD, WILL ECHO, DO NAWS - and enough BS and blanks to hide them
 	writeStr("\377\373\003\377\373\001\377\375\037\r         \b\b\b\b\b\b\b\b\b");
     }
+    else
+	m_echoing = cfg().getBoolValue("echoing",false);
     if (hdr) {
 	writeStr("\r" + hdr + "\r\n");
 	hdr.clear();
     }
+    if (m_prompt && m_echoing)
+	writeBuffer();
     NamedIterator iter(cfg());
     while (const NamedString* s = iter.get()) {
 	if (s->null() || !s->name().startsWith("alias:"))
@@ -591,11 +600,11 @@ void Connection::writeBufferTail(bool eraseOne)
 void Connection::writeBuffer()
 {
     if (m_cursorPos == m_buffer.length()) {
-	writeStr(m_buffer);
+	writeStr(m_prompt + m_buffer);
 	return;
     }
     if (m_cursorPos)
-	writeStr(m_buffer,m_cursorPos);
+	writeStr(m_prompt + m_buffer,m_prompt.length() + m_cursorPos);
     writeBufferTail();
 }
 
@@ -670,7 +679,7 @@ bool Connection::processTelnetChar(unsigned char c)
 		switch (c) {
 		    case 1: // ECHO
 			m_echoing = true;
-			writeStr("\377\373\001"); // WILL ECHO
+			writeStr("\377\373\001" + m_prompt); // WILL ECHO
 			break;
 		    case 3: // SUPPRESS GO AHEAD
 			writeStr("\377\373\003"); // WILL SUPPRESS GO AHEAD
@@ -751,6 +760,8 @@ bool Connection::processChar(unsigned char c)
 		return true;
 	    m_buffer.clear();
 	    m_cursorPos = 0;
+	    if (m_echoing && m_prompt)
+		writeBuffer();
 	    return false;
 	case 0x03: // ^C, BREAK
 	    m_escmode = 0;
@@ -762,6 +773,8 @@ bool Connection::processChar(unsigned char c)
 		errorBeep();
 		return false;
 	    }
+	    if (m_echoing && m_prompt)
+		writeStr("\r\n");
 	    return processLine("quit",false);
 	case 0x1C: // ^backslash
 	    if (m_buffer)
@@ -806,8 +819,10 @@ bool Connection::processChar(unsigned char c)
 	    m_escmode = 0;
 	    m_buffer.clear();
 	    m_cursorPos = 0;
-	    if (m_echoing)
+	    if (m_echoing) {
 		clearLine();
+		writeBuffer();
+	    }
 	    return false;
 	case 0x17: // ^W
 	    if (m_cursorPos <= 0)
@@ -854,8 +869,12 @@ bool Connection::processChar(unsigned char c)
 	    return false;
 	case 0x09: // ^I, TAB
 	    m_escmode = 0;
-	    if (m_buffer.null())
-		return processLine("help",false);
+	    if (m_buffer.null()) {
+		processLine("help",false);
+		if (m_echoing)
+		    writeBuffer();
+		return false;
+	    }
 	    if (!atEol) {
 		if (m_echoing)
 		    writeStr(m_buffer.c_str()+m_cursorPos,m_buffer.length()-m_cursorPos);
@@ -941,7 +960,7 @@ bool Connection::processChar(unsigned char c)
 		if (pagedCommand(true,true))
 		    return false;
 		if (m_echoing)
-		    writeStr("\r");
+		    writeStr("\r" + m_prompt);
 		m_cursorPos = 0;
 		return false;
 	    case 'F': // End
@@ -959,7 +978,7 @@ bool Connection::processChar(unsigned char c)
 			if (pagedCommand(true,true))
 			    return false;
 			if (m_echoing)
-			    writeStr("\r");
+			    writeStr("\r" + m_prompt);
 			m_cursorPos = 0;
 			return false;
 		    case '4': // End
@@ -1055,6 +1074,8 @@ bool Connection::pagedCommand(bool up, bool skip)
 	    m_offset = last;
     }
     execCommand(*s,true);
+    if (m_echoing && m_prompt)
+	writeBuffer();
     return true;
 }
 
@@ -1364,9 +1385,13 @@ bool Connection::processLine(const char *line, bool saveLine)
 	}
 	putConnInfo(m);
 	Engine::dispatch(m);
-	str = "%%+status" + str + "\r\n";
-	str << m.retValue() << "%%-status\r\n";
-	writeStr(str);
+	if (m_echoing && m_prompt)
+	    writeStr(m.retValue());
+	else {
+	    str = "%%+status" + str + "\r\n";
+	    str << m.retValue() << "%%-status\r\n";
+	    writeStr(str);
+	}
 	return false;
     }
     else if (str.startSkip("uptime"))
@@ -1783,10 +1808,10 @@ void Connection::writeStr(const Message &msg, bool received)
 	return;
     String s = msg.encode(received,"");
     s << "\r\n";
-    if (m_echoing && m_buffer)
+    if (m_echoing && (m_buffer || m_prompt))
 	clearLine();
     writeStr(s.c_str());
-    if (m_echoing && m_buffer)
+    if (m_echoing && (m_buffer || m_prompt))
 	writeBuffer();
 }
 
@@ -1802,7 +1827,7 @@ void Connection::writeEvent(const char *str, int level)
 {
     if (null(str))
 	return;
-    if (m_echoing && m_buffer)
+    if (m_echoing && (m_buffer || m_prompt))
 	clearLine();
     const char* col = m_colorize ? debugColor(level) : 0;
     if (col)
@@ -1818,7 +1843,7 @@ void Connection::writeEvent(const char *str, int level)
 	col = debugColor(-2);
     if (col)
 	writeStr(col,::strlen(col));
-    if (m_echoing && m_buffer)
+    if (m_echoing && (m_buffer || m_prompt))
 	writeBuffer();
 }
 

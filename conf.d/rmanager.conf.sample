@@ -13,6 +13,13 @@
 ;  Engine ${parameters} will be replaced in this string
 ;header=YATE ${version}-${release} r${revision} (http://YATE.null.ro) ready on ${nodename}.
 
+; prompt: string: Prompt to display when entering commands interactively
+;  Engine ${parameters} will be replaced in this string
+;  To add initial or final spaces " enclose string in quotes "
+;  Note that setting a prompt suppresses status command markers
+;  Example: prompt="${configname}@${nodename}> "
+;prompt=
+
 ; password: string: Password required to authenticate as admin, default empty!
 ;password=
 
@@ -41,6 +48,12 @@
 ; color: bool: Enable colorization debug as soon as connecting
 ;  This setting is ignored if telnet negotiation is disabled
 ;color=no
+
+; echoing: bool: By default remote echo individual characters enabling line edit
+;  This setting is ignored if TELNET negotiation is enabled in which case
+;   received options WILL / WON'T ECHO take precedence
+;  The ^E character toggles echoing mode interactively
+;echoing=no
 
 ; interactive: bool: Disable the TCP coalescing to improve interactivity
 ;  This is almost never required and needs Yate to run as superuser

@@ -6,7 +6,7 @@
  * administrating interface.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2014 Null Team
+ * Copyright (C) 2004-2017 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -423,8 +423,9 @@ Connection* RManagerListener::checkCreate(Socket* sock, const char* addr)
 	return 0;
     }
     // should check IP address here
-    Output("Remote%s connection from %s to %s",
-	(secure ? " secure" : ""),addr,m_address.c_str());
+    if (m_cfg.getBoolValue("logged",true))
+	Output("Remote%s connection from %s to %s",
+	    (secure ? " secure" : ""),addr,m_address.c_str());
     Connection* conn = new Connection(sock,addr,this);
     if (conn->error()) {
 	conn->destruct();
@@ -457,7 +458,8 @@ Connection::~Connection()
     s_mutex.lock();
     s_connList.remove(this,false);
     s_mutex.unlock();
-    Output("Closing connection to %s",m_address.c_str());
+    if (cfg().getBoolValue("logged",true))
+	Output("Closing connection to %s",m_address.c_str());
     Socket* tmp = m_socket;
     m_socket = 0;
     yield();
@@ -1250,7 +1252,16 @@ bool Connection::processLine(const char *line, bool saveLine)
 
     if (str.startSkip("quit"))
     {
-	writeStr(m_machine ? "%%=quit\r\n" : "Goodbye!\r\n");
+	if (m_machine)
+	    writeStr("%%=quit\r\n");
+	else {
+	    String txt(cfg().getValue("goodbye","Goodbye!"));
+	    Engine::runParams().replaceParams(txt);
+	    if (txt) {
+		txt << "\r\n";
+		writeStr(txt);
+	    }
+	}
 	return true;
     }
     else if (str.startSkip("echo"))

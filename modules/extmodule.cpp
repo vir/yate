@@ -5,7 +5,7 @@
  * External module handler
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2014 Null Team
+ * Copyright (C) 2004-2017 Null Team
  * Portions copyright (C) 2005 Maciek Kaminski
  *
  * This software is distributed under multiple licenses;
@@ -219,7 +219,7 @@ public:
 	File* ain = 0, File* aout = 0, ExtModChan *chan = 0);
     static ExtModReceiver* build(const char* name, Stream* io, ExtModChan* chan = 0,
 	int role = RoleUnknown, const char* conn = 0);
-    static ExtModReceiver* find(const String& script);
+    static ExtModReceiver* find(const String& script, const String& arg);
     virtual void destruct();
     virtual bool received(Message& msg, int id);
     bool processLine(const char* line);
@@ -739,14 +739,16 @@ ExtModReceiver* ExtModReceiver::build(const char* name, Stream* io, ExtModChan* 
     return recv->start() ? recv : 0;
 }
 
-ExtModReceiver* ExtModReceiver::find(const String& script)
+ExtModReceiver* ExtModReceiver::find(const String& script, const String& arg)
 {
     Lock lock(s_mutex);
     ObjList *l = &s_modules;
     for (; l; l=l->next()) {
 	ExtModReceiver *r = static_cast<ExtModReceiver *>(l->get());
-	if (r && (r->scriptFile() == script))
-	    return r;
+	if (r && (r->scriptFile() == script)) {
+	    if (arg.null() || (r->commandArg() == arg))
+		return r;
+	}
     }
     return 0;
 }
@@ -1768,7 +1770,10 @@ bool ExtModCommand::received(Message& msg)
 	if (line.null())
 	    return false;
 	blank = line.find(' ');
-	ExtModReceiver *r = ExtModReceiver::find(line.substr(0,blank));
+	String arg;
+	if (blank >= 0)
+	    arg = line.substr(blank+1);
+	ExtModReceiver *r = ExtModReceiver::find(line.substr(0,blank),arg);
 	if (r) {
 	    if (start) {
 		msg.retValue() = "External already running\r\n";
@@ -1830,6 +1835,27 @@ bool ExtModCommand::complete(const String& partLine, const String& partWord, Str
 	}
 	s_mutex.unlock();
 	for (l = mod.skipNull(); l; l = l->skipNext())
+	    Module::itemComplete(rval,l->get()->toString(),partWord);
+    }
+    else if (partLine.startsWith("external ")) {
+	String scr = partLine.substr(9);
+	if (!(scr.startSkip("restart") || scr.startSkip("stop")))
+	    return false;
+	if (scr.null() || (scr.find(' ') >= 0))
+	    return false;
+	ObjList arg;
+	s_mutex.lock();
+	ObjList *l = &s_modules;
+	for (; l; l=l->next()) {
+	    ExtModReceiver *r = static_cast<ExtModReceiver *>(l->get());
+	    if (!r || r->commandArg().null() || (r->scriptFile() != scr))
+		continue;
+	    if (arg.find(r->commandArg()))
+		continue;
+	    arg.append(new String(r->commandArg()));
+	}
+	s_mutex.unlock();
+	for (l = arg.skipNull(); l; l = l->skipNext())
 	    Module::itemComplete(rval,l->get()->toString(),partWord);
     }
     return false;

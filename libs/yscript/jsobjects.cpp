@@ -74,6 +74,7 @@ public:
     virtual void initConstructor(JsFunction* construct)
 	{
 	    construct->params().addParam(new ExpFunction("now"));
+	    construct->params().addParam(new ExpFunction("UTC"));
 	}
     virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
 protected:
@@ -1335,13 +1336,16 @@ JsObject* JsDate::runConstructor(ObjList& stack, const ExpOperation& oper, GenOb
 		    obj = new JsDate(mutex(),val->number());
 	    }
 	    break;
+	case 2:
 	case 3:
+	case 4:
+	case 5:
 	case 6:
 	case 7:
 	    {
 		unsigned int parts[7];
 		for (int i = 0; i < 7; i++) {
-		    parts[i] = 0;
+		    parts[i] = (2 == i) ? 1 : 0;
 		    ExpOperation* val = static_cast<ExpOperation*>(args[i]);
 		    if (val) {
 			if (val->isInteger())
@@ -1350,9 +1354,10 @@ JsObject* JsDate::runConstructor(ObjList& stack, const ExpOperation& oper, GenOb
 			    return 0;
 		    }
 		}
-		// Date components use local time, month starts from 0
-		if (parts[1] < 12)
-		    parts[1]++;
+		// Date components use local time, year can be 0-99, month starts from 0
+		if (parts[0] < 100)
+		    parts[0] += 1900;
+		parts[1]++;
 		u_int64_t time = Time::toEpoch(parts[0],parts[1],parts[2],parts[3],parts[4],parts[5]);
 		obj = new JsDate(mutex(),1000 * time + parts[6],true);
 	    }
@@ -1372,6 +1377,46 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
     if (oper.name() == YSTRING("now")) {
 	// Returns the number of milliseconds elapsed since 1 January 1970 00:00:00 UTC.
 	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)Time::msecNow()));
+    }
+    else if (oper.name() == YSTRING("UTC")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+	    case 3:
+	    case 4:
+	    case 5:
+	    case 6:
+	    case 7:
+		{
+		    unsigned int parts[7];
+		    for (int i = 0; i < 7; i++) {
+			parts[i] = (2 == i) ? 1 : 0;
+			ExpOperation* val = static_cast<ExpOperation*>(args[i]);
+			if (val) {
+			    if (val->isInteger())
+				parts[i] = (int)val->number();
+			    else
+				return 0;
+			}
+		    }
+		    // Year can be 0-99, month starts from 0
+		    if (parts[0] < 100)
+			parts[0] += 1900;
+		    parts[1]++;
+		    unsigned int time = Time::toEpoch(parts[0],parts[1],parts[2],parts[3],parts[4],parts[5]);
+		    if (time != (unsigned int)-1) {
+			ExpEvaluator::pushOne(stack,new ExpOperation(1000 * (int64_t)time + parts[6]));
+			break;
+		    }
+		}
+		// fall through
+	    case 0:
+	    case 1:
+		ExpEvaluator::pushOne(stack,new ExpOperation(ExpOperation::nonInteger(),"NaN"));
+		break;
+	    default:
+		return false;
+	}
     }
     else if (oper.name() == YSTRING("getDate")) {
 	// Returns the day of the month for the specified date according to local time.

@@ -1,3 +1,14 @@
+yate (5.5.1~svn6229) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6229:
+  * Added line completion for external command arguments.
+  * Added possibility to stop and restart specific external instances.
+  * Added the Date.UTC static method.
+  * Fixed behavior of Date constructor with missing parameters or with
+    two digits year.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 08 Jun 2017 02:19:15 +0300
+
 yate (5.5.1~svn6227) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6227:

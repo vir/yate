@@ -785,8 +785,10 @@ public:
      *  afterwards as the transaction takes ownership
      * @param engine A pointer to the SIP engine this transaction belongs
      * @param outgoing True if this transaction is for an outgoing request
+     * @param autoChangeParty Optional pointer to auto change party flag (use engine's flag if missing)
      */
-    SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outgoing = true);
+    SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outgoing = true,
+	bool* autoChangeParty = 0);
 
     /**
      * Copy constructor to be used with forked INVITEs
@@ -1133,6 +1135,7 @@ protected:
     String m_callid;
     String m_tag;
     void *m_private;
+    bool m_autoChangeParty;
 };
 
 /**
@@ -1296,9 +1299,10 @@ public:
      * Add a message into the transaction list
      * This method is thread safe
      * @param message A parsed SIP message to add to the transactions
+     * @param autoChangeParty Optional auto change party to set in transaction if a new one is created
      * @return Pointer to the transaction or NULL if message was invalid
      */
-    SIPTransaction* addMessage(SIPMessage* message);
+    SIPTransaction* addMessage(SIPMessage* message, bool* autoChangeParty = 0);
 
     /**
      * Get a SIPEvent from the queue.

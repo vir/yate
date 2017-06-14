@@ -27,10 +27,12 @@
 using namespace TelEngine;
 
 // Constructor from new message
-SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outgoing)
+SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outgoing,
+    bool* autoChangeParty)
     : m_outgoing(outgoing), m_invite(false), m_transmit(false), m_state(Invalid),
       m_response(0), m_timeouts(0), m_timeout(0),
-      m_firstMessage(message), m_lastMessage(0), m_pending(0), m_engine(engine), m_private(0)
+      m_firstMessage(message), m_lastMessage(0), m_pending(0), m_engine(engine), m_private(0),
+      m_autoChangeParty(autoChangeParty ? *autoChangeParty : engine->autoChangeParty())
 {
     DDebug(getEngine(),DebugAll,"SIPTransaction::SIPTransaction(%p,%p,%d) [%p]",
 	message,engine,outgoing,this);
@@ -77,7 +79,7 @@ SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
       m_firstMessage(original.m_firstMessage), m_lastMessage(original.m_lastMessage),
       m_pending(0), m_engine(original.m_engine),
       m_branch(original.m_branch), m_callid(original.m_callid), m_tag(original.m_tag),
-      m_private(0)
+      m_private(0), m_autoChangeParty(original.m_autoChangeParty)
 {
     DDebug(getEngine(),DebugAll,"SIPTransaction::SIPTransaction(&%p,%p) [%p]",
 	&original,answer,this);
@@ -122,7 +124,7 @@ SIPTransaction::SIPTransaction(const SIPTransaction& original, const String& tag
       m_firstMessage(original.m_firstMessage), m_lastMessage(0),
       m_pending(0), m_engine(original.m_engine),
       m_branch(original.m_branch), m_callid(original.m_callid), m_tag(tag),
-      m_private(0)
+      m_private(0), m_autoChangeParty(original.m_autoChangeParty)
 {
     if (m_firstMessage)
 	m_firstMessage->ref();
@@ -588,7 +590,7 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 		if (isInvite()) {
 		    // build the ACK
 		    SIPMessage* m = new SIPMessage(m_firstMessage,message);
-		    if (m_engine->autoChangeParty() && message->getParty())
+		    if (m_autoChangeParty && message->getParty())
 			m->setParty(message->getParty());
 		    setLatestMessage(m);
 		    m_lastMessage->deref();

@@ -161,6 +161,7 @@
 
 ; ignorevia: bool: Ignore Via headers and send answer back to the source
 ;  This violates RFC 3261 but is required to support NAT over UDP transport.
+; This parameter can be overridden in listener sections
 ;ignorevia=enable
 
 ; lazy100: bool: Do not generate an initial "100 Trying" for non-INVITE

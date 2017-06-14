@@ -207,7 +207,7 @@ SIPTransaction* SIPEngine::addMessage(SIPParty* ep, const char* buf, int len)
     return 0;
 }
 
-SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
+SIPTransaction* SIPEngine::addMessage(SIPMessage* message, bool* autoChangeParty)
 {
     DDebug(this,DebugInfo,"addMessage(%p) [%p]",message,this);
     if (!message)
@@ -257,7 +257,7 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
 	return 0;
     }
     message->complete(this);
-    return new SIPTransaction(message,this,message->isOutgoing());
+    return new SIPTransaction(message,this,message->isOutgoing(),autoChangeParty);
 }
 
 SIPTransaction* SIPEngine::forkInvite(SIPMessage* answer, SIPTransaction* trans)

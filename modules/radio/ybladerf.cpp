@@ -1280,7 +1280,10 @@ public:
 struct BrfBbCalDataResult
 {
     inline BrfBbCalDataResult()
-	{ ::memset(this,0,sizeof(*this)); }
+	: status(0), cal(0), test(0), total(0),
+	test_total(0), cal_test(0),testOk(false), calOk(false)
+	{}
+    unsigned int status;
     float cal;
     float test;
     float total;
@@ -1295,8 +1298,9 @@ class BrfBbCalData
 public:
     inline BrfBbCalData(unsigned int nSamples, const NamedList& p)
 	: m_stopOnRecvFail(0), m_repeatRxLoop(5), 
-	m_best(0), m_test_total(0), m_cal_test(0),
+	m_best(0), m_cal_test(0),
 	m_prevCal(0), m_testOk(false), m_calOk(false), m_params(p),
+	m_tx(true), m_rx(false),
 	m_calFreq(0), m_calSampleRate(0),
 	m_dcI(0), m_dcQ(0), m_phase(0), m_gain(0),
 	m_buffer(nSamples), m_calTone(nSamples), m_testTone(nSamples),
@@ -1345,7 +1349,7 @@ public:
 	    m_test.set(res.test);
 	    m_total.set(res.total);
 	    m_cal_test = res.cal_test;
-	    m_test_total = res.test_total;
+	    m_test_total.set(res.test_total);
 	    m_calOk = res.calOk;
 	    m_testOk = res.testOk;
 	}
@@ -1385,7 +1389,7 @@ public:
 		return s.printf(1024,"%s cal:%-10f test:%-10f total:%-10f "
 		    "test/total:%3s %.2f%% cal/test:%3s %.2f%%",
 		    dir,m_cal.value,m_test.value,m_total.value,
-		    (m_testOk ? "OK" : "BAD"),m_test_total * 100,
+		    (m_testOk ? "OK" : "BAD"),m_test_total.value * 100,
 		    (m_calOk ? "OK" : "BAD"),m_cal_test * 100);
 	    return s.printf(1024,"%s cal:%-10f delta=%-10f",dir,m_cal.value,delta);
 	}
@@ -1418,7 +1422,7 @@ public:
     BrfFloatMinMax m_cal;                // Calculated calibrating value
     BrfFloatMinMax m_total;              // Calculated total value
     BrfFloatMinMax m_test;               // Calculated test value
-    float m_test_total;                  // test / total
+    BrfFloatMinMax m_test_total;         // Calculated test/total value
     float m_cal_test;                    // cal / test
     float m_prevCal;                     // Previous calibrating value
     bool m_testOk;
@@ -1429,6 +1433,9 @@ public:
     BrfFloatAccum m_totalAccum;
     BrfDumpFile m_dump;
 
+    // Initial state
+    BrfDevDirState m_tx;
+    BrfDevDirState m_rx;
     // Calibration params
     unsigned int m_calFreq;
     unsigned int m_calSampleRate;
@@ -2680,7 +2687,9 @@ public:
 	{ drop(); }
     inline void drop()
 	{ m_lock.drop(); }
-    inline void wait(String* error = 0, long maxwait = -1) {
+    inline bool devLocked() const
+	{ return m_io.mutex.locked(); }
+    inline unsigned int wait(String* error = 0, long maxwait = -1) {
 	    if (m_lock.acquire(m_io.mutex,maxwait)) {
 		if ((status = m_device->cancelled(error)) != 0)
 		    drop();
@@ -2688,6 +2697,7 @@ public:
 	    else
 		status = m_device->showError(RadioInterface::Failure,
 		    "Failed to serialize",brfDir(m_io.tx()),error,DebugWarn);
+	    return status;
 	}
     unsigned int status;
 protected:
@@ -4226,7 +4236,7 @@ unsigned int BrfLibUsbDevice::initialize(const NamedList& params)
 	    const NamedString* ns = params.getParam(tx ? "txfrequency" : "rxfrequency");
 	    if (!ns)
 		continue;
-	    unsigned int tmp = ns->toInteger();
+	    uint64_t tmp = ns->toInt64();
 	    BRF_FUNC_CALL_BREAK(validFrequency(tmp,&e,ns->name(),*ns));
 	    BRF_FUNC_CALL_BREAK(internalSetFrequency(tx,tmp,&e));
 	}
@@ -4631,20 +4641,12 @@ unsigned int BrfLibUsbDevice::calibrate(bool sync, const NamedList& params,
 	// Drop lock. We are going to use public functions to calibrate
 	txSerialize.drop();
 	rxSerialize.drop();
+	// LMS autocalibration
+	if (params.getBoolValue("device_autocal",true))
+	    BRF_FUNC_CALL_BREAK(calibrateAuto(&e));
 	// Check
 	if (params.getBoolValue("loopback_check",true))
 	    BRF_FUNC_CALL_BREAK(loopbackCheck(&e));
-	// LMS autocalibration
-	// Pause I/O threads, lock external I/O while calibrating
-	BRF_FUNC_CALL_BREAK(calThreadsPause(true,&e));
-	rxSerialize.wait(&e);
-	BRF_FUNC_CALL_BREAK(rxSerialize.status);
-	txSerialize.wait(&e);
-	BRF_FUNC_CALL_BREAK(txSerialize.status);
-	BRF_FUNC_CALL_BREAK(calibrateAuto(&e));
-	txSerialize.drop();
-	rxSerialize.drop();
-	BRF_FUNC_CALL_BREAK(calThreadsPause(false,&e));
 	// Baseband calibration
 	BRF_FUNC_CALL_BREAK(calibrateBaseband(&e));
 	break;
@@ -5382,8 +5384,10 @@ unsigned int BrfLibUsbDevice::internalPowerOn(bool rfLink, bool tx, bool rx, Str
 	status = tmpAltSet.set(&e,"Power ON/OFF");
     bool warn = (tx != m_state.m_tx.rfEnabled) || (rx != m_state.m_rx.rfEnabled);
     while (status == 0) {
-	if (tx || rx)
+	if (tx || rx) {
 	    BRF_FUNC_CALL_BREAK(enableTimestamps(true,&e));
+	    BRF_FUNC_CALL_BREAK(calibrateAuto(&e));
+	}
 	BRF_FUNC_CALL_BREAK(enableRf(true,tx,false,&e));
 	BRF_FUNC_CALL_BREAK(enableRf(false,rx,false,&e))
 	if (tx || rx) {
@@ -8092,9 +8096,15 @@ unsigned int BrfLibUsbDevice::calLPFBandwidth(const BrfCalData& bak, uint8_t sub
 
 void BrfLibUsbDevice::dumpState(String& s, const NamedList& p, bool lockPub, bool force)
 {
-    BrfSerialize txSerialize(this,true,lockPub);
-    if (txSerialize.status)
-	return;
+    BrfSerialize txSerialize(this,true,false);
+    if (lockPub) {
+	txSerialize.wait(0,5000000);
+	if (txSerialize.status) {
+	    if (RadioInterface::Failure == txSerialize.status)
+		s << "Failed to retrieve state: lock failed";
+	    return;
+	}
+    }
 
     String lmsModules, lpStatus, lms, lmsStr;
     if (p.getBoolValue(YSTRING("dump_dev"),force)) {
@@ -8141,8 +8151,22 @@ void BrfLibUsbDevice::dumpState(String& s, const NamedList& p, bool lockPub, boo
     }
 }
 
+// LMS autocalibration
 unsigned int BrfLibUsbDevice::calibrateAuto(String* error)
 {
+    BrfSerialize txSerialize(this,true,false);
+    BrfSerialize rxSerialize(this,false,false);
+    unsigned int status = 0;
+    // Pause I/O threads if calibration is running
+    if (m_calibrateStatus == Calibrating) {
+	BRF_FUNC_CALL_RET(calThreadsPause(true,error));
+    }
+    if (!rxSerialize.devLocked()) {
+	BRF_FUNC_CALL_RET(rxSerialize.wait(error));
+    }
+    if (!txSerialize.devLocked()) {
+	BRF_FUNC_CALL_RET(txSerialize.wait(error));
+    }
 #ifdef DEBUG_DEVICE_AUTOCAL
     Debugger debug(DebugAll,"AUTOCALIBRATION"," '%s' [%p]",m_owner->debugName(),m_owner);
 #endif
@@ -8153,7 +8177,7 @@ unsigned int BrfLibUsbDevice::calibrateAuto(String* error)
     BrfDevState oldState(m_state,0,DevStatDc,DevStatDc);
     // Set TX/RX DC I/Q to 0
     BrfDevState set0(DevStatAbortOnFail,DevStatDc,DevStatDc);
-    unsigned int status = setState(set0,&e);
+    status = setState(set0,&e);
     int8_t calVal[BRF_CALIBRATE_LAST][BRF_CALIBRATE_MAX_SUBMODULES];
     ::memset(calVal,-1,sizeof(calVal));
     for (int m = BRF_CALIBRATE_FIRST; !status && m <= BRF_CALIBRATE_LAST; m++) {
@@ -8216,7 +8240,11 @@ unsigned int BrfLibUsbDevice::calibrateAuto(String* error)
 #endif
     Debug(m_owner,DebugInfo,"LMS autocalibration finished in %s [%p]%s",
 	duration.secStr(),m_owner,encloseDashes(s));
-    return 0;
+    if (m_calibrateStatus != Calibrating)
+	return 0;
+    txSerialize.drop();
+    rxSerialize.drop();
+    return calThreadsPause(false,error);
 }
 
 unsigned int BrfLibUsbDevice::calBackupRestore(BrfCalData& bak, bool backup,
@@ -8533,7 +8561,8 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
     Thread::msleep(100);
     data.prepareCalculate();
     int dumpTx = data.intParam(dc,"trace_dump_tx");
-    BrfBbCalDataResult res;
+    BrfBbCalDataResult* res = new BrfBbCalDataResult[data.m_repeatRxLoop];
+    unsigned int i = 0;
     // Disable DC/FPGA change debug message
     unsigned int& showCorrChange = dc ? m_state.m_tx.showDcOffsChange :
 	m_state.m_tx.showFpgaCorrChange;
@@ -8543,16 +8572,18 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
     if (!dc)
 	tsOffs += m_radioCaps.txLatency;
     for (; !status && calVal <= calValMax; calVal += step) {
+	i = 0;
 	*syncSet[corr] = calVal;
 	BRF_FUNC_CALL_BREAK(setStateSyncTx(syncFlags[corr],error));
 	ts = m_syncTxState.m_tx.m_timestamp + tsOffs;
 	bool ok = false;
-	for (unsigned int i = 0; i < data.m_repeatRxLoop; ++i) {
+	for (; i < data.m_repeatRxLoop; ++i) {
+	    res[i].status = 0;
 	    if (trace && i) {
 		String s;
 		Output("  REPEAT[%u/%u] [%10s] %s=%-5d %s",i + 1,data.m_repeatRxLoop,
 		    String(ts).c_str(),lookup(corr,s_corr),
-		    calVal,data.dump(s,res).c_str());
+		    calVal,data.dump(s,res[i-1]).c_str());
 	    }
 	    if (dumpTx) {
 		if (dumpTx > 0)
@@ -8566,7 +8597,7 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 		break;
 	    if (trace > 4)
 		showBuf(false,trace - 4,false);
-	    ok = data.calculate(res);
+	    ok = data.calculate(res[i]);
 	    status = checkSampleLimit(data.buf(),data.samples(),limit,error);
 	    if (status) {
 		data.m_dump.appendFormatted(data.buffer(),false);
@@ -8576,6 +8607,7 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 		    Output("  %s=%-5d [%10s] %s\tSAMPLE OUT OF RANGE",
 			lookup(corr,s_corr),calVal,String(ts).c_str(),s.c_str());
 		}
+		res[i].status = status;
 		if (i == (data.m_repeatRxLoop - 1))
 		    break;
 		status = 0;
@@ -8586,12 +8618,13 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 	    if (data.m_dump.valid() &&
 		((ok && data.m_dump.dumpOk()) || (!ok && data.m_dump.dumpFail())))
 		data.m_dump.appendFormatted(data.buffer(),ok);
+	    res[i].status = ok ? 0 : RadioInterface::Failure;
 	    if (ok)
 		break;
 	}
 	if (status || m_calibrateStop)
 	    break;
-	data.setResult(res);
+	data.setResult(res[i]);
 	bool better = (data.m_best > data.m_cal.value);
 	if (accum) {
 	    data.m_calAccum.append(data.m_cal);
@@ -8611,11 +8644,13 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 	if (!ok && data.m_stopOnRecvFail) {
 	    if (data.m_stopOnRecvFail < 0)
 		waitReason = "Recv data check failure";
-	    BRF_FUNC_CALL_BREAK(setErrorFail(error,"Recv data check failure"));
+	    res[i].status = status = setErrorFail(error,"Recv data check failure");
+	    break;
 	}
 	if (totalStop < data.m_total) {
 	    waitReason = "Total error threshold reached";
-	    BRF_FUNC_CALL_BREAK(setErrorFail(error,waitReason));
+	    res[i].status = status = setErrorFail(error,waitReason);
+	    break;
 	}
 	// Update best values
 	if (better) {
@@ -8623,14 +8658,39 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 	    *corrVal[corr] = calVal;
 	}
     }
+    // Print last failures if we stopped due to data check failure
+    if (status && !m_calibrateStop && status != RadioInterface::Cancelled &&
+	(i == data.m_repeatRxLoop || res[i].status)) {
+	String s;
+	if (i < data.m_repeatRxLoop)
+	    i++;
+	for (unsigned int j = 0; j < i; j++) {
+	    BrfBbCalDataResult& r = res[j];
+	    String tmp;
+	    s << tmp.printf(512,"\r\ntest_tone=%f total=%f test/total=%.2f cal_tone=%f cal/test=%.2f",
+		r.test,r.total,r.test_total,r.cal,r.cal_test);
+	    if (r.status == RadioInterface::Saturation)
+		s << " (Sample out of range)";
+	    else if (r.status) {
+		if (error)
+		    s << " (" << *error << ")";
+		else
+		    s << " (" << r.status << " " << RadioInterface::errorName(r.status) << ")";
+	    }
+	}
+	Debug(owner(),DebugWarn,"BB Calibration (%s) stopping on data check failure."
+	    " Signal values (test/total interval=(0.5-1]): [%p]\r\n-----%s\r\n-----",
+	    lookup(corr,s_corr),this,s.c_str());
+    }
+    delete[] res;
     showCorrChange--;
     duration.stop();
     if (trace)
-	Output("  %d/%d [%s]: min/max - cal=%f/%f test=%f/%f total=%f/%f",
+	Output("  %d/%d [%s]: min/max - cal=%f/%f test=%f/%f total=%f/%f test/total=%.2f/%.2f",
 	    (dc ? data.m_dcI : data.m_phase),(dc ? data.m_dcQ : data.m_gain),
 	    duration.secStr(),
 	    data.m_cal.min,data.m_cal.max,data.m_test.min,data.m_test.max,
-	    data.m_total.min,data.m_total.max);
+	    data.m_total.min,data.m_total.max,data.m_test_total.min,data.m_test_total.max);
     if (data.m_dump.valid())
 	data.dumpCorrEnd(dc);
     if (waitReason)
@@ -8648,14 +8708,14 @@ unsigned int BrfLibUsbDevice::prepareCalibrateBb(BrfBbCalData& data, bool dc,
 	BRF_FUNC_CALL_BREAK(isInitialized(true,true,error));
 	unsigned int flags = DevStatFreq | DevStatLpfBw | DevStatSampleRate | DevStatVga;
 	BrfDevState s(DevStatAbortOnFail | DevStatLoopback,flags,flags);
-	s.m_tx.frequency = m_state.m_tx.frequency;
-	s.m_tx.lpfBw = m_state.m_tx.lpfBw;
-	s.m_tx.sampleRate = m_state.m_tx.sampleRate;
-	data.m_calFreq = m_state.m_tx.frequency;
-	data.m_calSampleRate = m_state.m_tx.sampleRate;
+	s.m_tx.frequency = data.m_tx.frequency;
+	s.m_tx.lpfBw = data.m_tx.lpfBw;
+	s.m_tx.sampleRate = data.m_tx.sampleRate;
+	data.m_calFreq = data.m_tx.frequency;
+	data.m_calSampleRate = data.m_tx.sampleRate;
 	unsigned int rxFreq = 0;
 	unsigned int Fs = data.m_calSampleRate;
-	unsigned int bw = m_state.m_rx.sampleRate;
+	unsigned int bw = data.m_rx.sampleRate;
 	// Prepare device
 	if (dc) {
 	    // TX/RX frequency difference MUST be greater than 1MHz to avoid interferences
@@ -8676,9 +8736,9 @@ unsigned int BrfLibUsbDevice::prepareCalibrateBb(BrfBbCalData& data, bool dc,
 			Fs = Fs + 4 - (Fs % 4);
 		}
 		// Choose next upper filter bandwidth after TX
-		uint8_t bwIndex = bw2index(m_state.m_tx.lpfBw + 1);
+		uint8_t bwIndex = bw2index(data.m_tx.lpfBw + 1);
 		bw = index2bw(bwIndex);
-		if (bw <= m_state.m_tx.lpfBw) {
+		if (bw <= data.m_tx.lpfBw) {
 		    // !!! OOPS !!!
 		    return setErrorFail(error,"Unable to choose RX filter bandwidth");
 		}
@@ -8686,7 +8746,7 @@ unsigned int BrfLibUsbDevice::prepareCalibrateBb(BrfBbCalData& data, bool dc,
 	    // cal, test
 	    // For DC, test and cal differ by pi/2
 	    // FIXME - This works only for RX and TX same sample rate.
-	    rxFreq = m_state.m_tx.frequency - (Fs / 4);
+	    rxFreq = data.m_tx.frequency - (Fs / 4);
 	    data.resetOmega(-M_PI_2,-M_PI);
 	}
 	else {
@@ -8694,7 +8754,7 @@ unsigned int BrfLibUsbDevice::prepareCalibrateBb(BrfBbCalData& data, bool dc,
 	    // cal, test
 	    // For phase/gain, test and cal differ by pi 
 	    // FIXME - This works only for RX and TX same sample rate.
-	    rxFreq = m_state.m_tx.frequency + (Fs / 4);
+	    rxFreq = data.m_tx.frequency + (Fs / 4);
 	    data.resetOmega(M_PI,0);
 	}
 	s.m_tx.lpfBw = bw;
@@ -8859,6 +8919,8 @@ unsigned int BrfLibUsbDevice::calibrateBaseband(String* error)
     BrfDevState oldState(m_state,chg,dirChg,dirChg);
     setTxPattern(p.getValue(YSTRING("txpattern"),"circle"));
     BrfBbCalData data(getRxSamples(p),p);
+    data.m_tx = m_state.m_tx;
+    data.m_rx = m_state.m_rx;
     while (status == 0) {
 	m_calibration.assign("");
 	m_calibration.clearParams();
@@ -9081,8 +9143,8 @@ unsigned int BrfLibUsbDevice::loopbackCheck(String* error)
 
 	unsigned int trace = p.getIntValue(YSTRING("trace"),0,0);
 	bool dumpTxTs = (trace > 1) && p.getBoolValue("dump_tx_ts");
+	String t;
 	if (trace) {
-	    String t;
 	    if (p.getBoolValue("dump_status_start"))
 		dumpState(t,p,true);
 	    String tmp;
@@ -9109,6 +9171,11 @@ unsigned int BrfLibUsbDevice::loopbackCheck(String* error)
 		"samplerate=%u bandwidth=%u samples=%u buffers=%u [%p]%s",
 		txFreq,rxFreq,deltaFreq,omega,sampleRate,bw,buf.length(),
 		nBuffs,m_owner,encloseDashes(t,true));
+	}
+	else if (p.getBoolValue("dump_dev")) {
+	    String t;
+	    dumpState(t,p,true);
+	    Debug(m_owner,DebugNote,"Loopback check. Device params: [%p]%s",this,encloseDashes(t));
 	}
 	// Dump header to file
 	if (dump.dumpHeader()) {
@@ -9169,13 +9236,10 @@ unsigned int BrfLibUsbDevice::loopbackCheck(String* error)
 	    }
 	    float test = testSum.norm2() / buf.length();
 	    bool ok = ((0.5 * total) < test) && (test <= total);
-	    if (trace > 1) {
-		float percent = -1;
-		if (total)
-		    percent = 100 * test / total;
-		Output("%-5u [%10s]\ttest:%-15f total:%-15f %.2f%% %s",
-		    i,String(ts).c_str(),test,total,percent,(ok ? "" : "FAILURE"));
-	    }
+	    float ratio = total ? test / total : -1;
+	    if (trace > 1)
+		Output("%-5u [%10s]\ttest:%-15f total:%-15f %.2f %s",
+		    i,String(ts).c_str(),test,total,ratio,(ok ? "" : "FAILURE"));
 
 	    // Dump to file
 	    if ((ok && dump.dumpOk()) || (!ok && dump.dumpFail())) {
@@ -9188,7 +9252,7 @@ unsigned int BrfLibUsbDevice::loopbackCheck(String* error)
 
 	    if (ok)
 		continue;
-	    e.printf("test=%f total=%f",test,total);
+	    e.printf("test_tone_power=%f total_energy=%f (%.2f)",test,total,ratio);
 	    if (!allowFail) {
 		status = RadioInterface::Failure;
 		break;

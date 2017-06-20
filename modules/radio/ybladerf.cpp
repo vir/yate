@@ -8569,6 +8569,8 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
     unsigned int& showCorrChange = dc ? m_state.m_tx.showDcOffsChange :
 	m_state.m_tx.showFpgaCorrChange;
     showCorrChange++;
+    if (!dc)
+	m_state.m_tx.showPowerBalanceChange++;
     uint64_t ts = 0;
     uint64_t tsOffs = m_radioCaps.rxLatency;
     if (!dc)
@@ -8626,6 +8628,8 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 	}
 	if (status || m_calibrateStop)
 	    break;
+	if (i >= data.m_repeatRxLoop)
+	    i = data.m_repeatRxLoop - 1;
 	data.setResult(res[i]);
 	bool better = (data.m_best > data.m_cal.value);
 	if (accum) {
@@ -8686,6 +8690,8 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
     }
     delete[] res;
     showCorrChange--;
+    if (!dc)
+	m_state.m_tx.showPowerBalanceChange--;
     duration.stop();
     if (trace)
 	Output("  %d/%d [%s]: min/max - cal=%f/%f test=%f/%f total=%f/%f test/total=%.2f/%.2f",

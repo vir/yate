@@ -2255,7 +2255,7 @@ private:
     // Select amplifier (PA/LNA) from low/high frequency
     inline unsigned int selectPaLna(bool tx, bool lowBand, String* error) {
 	    if (tx)
-		return paSelect(lowBand ? LmsPa1 : LmsPa2,error);
+		return paSelect(lowBand,error);
 	    return lnaSelect(lowBand ? LmsLna1 : LmsLna2,error);
 	}
     // Read the value of a specific GPIO register
@@ -2410,6 +2410,8 @@ private:
     unsigned int internalGetDcOffset(bool tx, bool i, int16_t* value, String* error = 0);
     unsigned int enableTimestamps(bool on = true, String* error = 0);
     unsigned int updateStatus(String* error = 0);
+    inline unsigned int paSelect(bool lowBand, String* error = 0)
+	{ return paSelect(lowBand ? LmsPa1 : LmsPa2,error); }
     unsigned int paSelect(int pa, String* error = 0);
     int clampInt(int val, int minVal, int maxVal, const char* what = 0,
 	int level = DebugNote);

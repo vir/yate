@@ -90,6 +90,7 @@ protected:
     NamedList m_radioParams;
     // TX
     RadioTestIO m_tx;
+    bool m_txYield;
     bool m_newTxData;
     unsigned int m_phase;
     unsigned int m_sendBufCount;
@@ -397,6 +398,7 @@ RadioTest::RadioTest(const NamedList& params, const NamedList& radioParams)
     m_params(params),
     m_radioParams(radioParams),
     m_tx(true),
+    m_txYield(true),
     m_newTxData(false),
     m_phase(0),
     m_sendBufCount(0),
@@ -447,6 +449,7 @@ void RadioTest::run()
 	// Init test data
 	if (!m_params.getBoolValue("init_only")) {
 	    m_tx.enabled = true;
+	    m_txYield = m_params.getBoolValue("tx_yield",true);
 	    if (!setTxData())
 		TEST_FAIL_BREAK("Failed to set TX data",false);
 	    m_sendBufCount = m_params.getIntValue("send_buffers",0,0);
@@ -740,6 +743,8 @@ bool RadioTest::write()
 	m_tx.startTime = Time::now();
     if (m_newTxData)
 	regenerateTxData();
+    else if (m_txYield)
+	Thread::yield(false);
     if (!m_tx.ts)
 	updateTs(true);
     unsigned int code = m_radio->send(m_tx.ts,(float*)m_sendBufData.data(),

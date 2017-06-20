@@ -378,7 +378,7 @@ static bool buildVector(String& error, const String& pattern, ComplexVector& vec
 	else if ((len < v.length()) || ((len % v.length()) != 0))
 	    return boolSetError(error,"required/actual length mismatch");
 	vector.resetStorage(len);
-	for (unsigned int i = 0; (i + v.length()) < len; i += v.length())
+	for (unsigned int i = 0; (i + v.length()) <= len; i += v.length())
 	    vector.slice(i,v.length()).copy(v,v.length());
     }
     return true;

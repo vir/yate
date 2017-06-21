@@ -8547,6 +8547,8 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 	    pass,lookup(corr,s_corr),*corrVal[corr],
 	    lookup(corrPeer[corr],s_corr),*corrVal[corrPeer[corr]],
 	    data.samples(),range,step,calVal,calValMax);
+    bool traceRepeat = trace && data.boolParam(dc,"trace_repeat",true);
+    bool traceFailed = trace && data.boolParam(dc,"trace_failed",true);
     bool accum = false;
     if (data.m_dump.valid()) {
 	data.dumpCorrStart(pass,corr,*corrVal[corr],corrPeer[corr],
@@ -8583,7 +8585,7 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 	bool ok = false;
 	for (; i < data.m_repeatRxLoop; ++i) {
 	    res[i].status = 0;
-	    if (trace && i) {
+	    if (traceRepeat && i) {
 		String s;
 		Output("  REPEAT[%u/%u] [%10s] %s=%-5d %s",i + 1,data.m_repeatRxLoop,
 		    String(ts).c_str(),lookup(corr,s_corr),
@@ -8641,7 +8643,7 @@ unsigned int BrfLibUsbDevice::calibrateBbCorrection(BrfBbCalData& data,
 	    String s;
 	    if (trace > 1 && ok && (better || trace > 2))
 		data.dump(s,trace > 2);
-	    else if (!ok)
+	    else if (!ok && traceFailed)
 		data.dump(s,true);
 	    if (s)
 		Output("  %s=%-5d [%10s] %s%s",lookup(corr,s_corr),calVal,
@@ -9160,7 +9162,7 @@ unsigned int BrfLibUsbDevice::loopbackCheck(String* error)
 	    if (h) {
 		if (h > testTone.length())
 		    h = testTone.length();
-		tmp.printf("TEST TONE HEAD(%d):",h);;
+		tmp.printf("TEST TONE HEAD(%d):",h);
 		testTone.head(h).dump(tmp,Math::dumpComplex," ","(%g,%g)");
 	    }
 	    if (testPattern.length()) {

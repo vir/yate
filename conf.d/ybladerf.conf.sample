@@ -195,3 +195,219 @@
 ; See the corresponding TX parameters
 ; rx-data-file: The data is dumped after read from device, before applying any changes
 ; rx-app-file: The data is dumped before returning it to upper layer
+
+
+[calibrate-bb]
+; This section configures the baseband calibration process (TX DC offset and I/Q Imbalance)
+; Parameters should be changed for debug purposes only!
+; 'dc_' or 'imbalance_' prefix means the parameter is applied per calibration category
+; NOTE: the following combination would allow the calibration process to run longer
+;       when failing (TX/RX data can be checked with an oscilloscope or spectrum analyzer):
+;       dc_loops=10
+;       recv_fail_stop=0
+;       recv_fail_loops=1000
+
+; dc_disable/imbalance_disable: boolean: Disable specific process
+; Defaults to no
+
+; {dc_|imbalance_}loops: integer: Number of specific calibration loops to execute
+; Interval allowed: 1..10
+;loops=2
+
+; {dc_|imbalance_}trace: integer: DC/Imbalance process trace
+; Values:
+;  1: Output params at start and result at end
+;  2,3,4: Output more data
+;  Greater than 4: Output data as read from device (e.g. 6 means output 2 read buffers in each loop)
+; Defaults to 0
+
+; {dc_|imbalance_}trace_repeat: boolean: Output repeated data check loops
+; Defaults to yes
+
+; {dc_|imbalance_}trace_failed: boolean: Output failed data check
+; Defaults to yes
+
+; {dc_|imbalance_}dump_status_start: boolean: Output state data if trace is enabled
+; Defaults to no
+
+; dump_dev: boolean: Output device info on start. Ignored if 'dump_status_start' is disabled
+;dump_dev=no
+
+; dump_lms_modules: boolean: Output some LMS info on start. Ignored if 'dump_status_start' is disabled
+;dump_lms_modules=no
+
+; dump_loopback_status: boolean: Output loopback switches on start. Ignored if 'dump_status_start' is disabled
+;dump_loopback_status=no
+
+; dump_lms: boolean: Output all LMS registers. Ignored if 'dump_status_start' is disabled
+; dump_lms_str: string: Hex string with specific LMS address(es) to output on start.
+;  Ignored if 'dump_status_start' is disabled
+; dump_lms=no
+; dump_lms_str=
+
+; recv_fail_loops: integer: Number of retries if signal check fails
+; This apply for each calibrated value. E.g. for a specific DC I and specific DC Q
+; Allowed interval: 1..1000
+;recv_fail_loops=5
+
+; recv_fail_stop: integer: Stop (fail) the process on data check failure
+; A negative value leads to calibration stop and wait in a loop to be
+;  cancelled (data send/receive are not stopped)
+;recv_fail_stop=1
+
+; loopback: string: Override default loopback
+; Possible values: lpf-to-rxout, lpf-to-vga2, vga1-to-vga2, lpf-to-lpf, vga1-to-lpf,
+;   pa-to-lna1, pa-to-lna2, pa-to-lna3, none
+;loopback=pa-to-lna1/pa-to-lna2
+
+; loopback_transmit: boolean: Enable TX RF during calibration
+;loopback_transmit=enabled for loopback=none, disabled for all other values
+
+; txpattern: string: Transmit pattern to use
+; May be:
+;  - circle: 1,0,0,1,-1,0,0,-1
+;  - circle_reverse: Reversed circle: 1,0,0,-1,-1,0,0,1
+;  - circle_div[_reverse]_{divisor}: [reversed] circle pattern divided by requested divisor (must be at least 1)
+;  - circle_points[_reverse]_{length}[_div_{divisor}]: Build a [reversed] circle using given length
+;      (which must be a multiple of 4). Use optional divisor
+;  - Comma separated list of values (e.g. 1,0.5,-0.4,0.3). The number of values MUST be an even one.
+;      Each value must be in interval [-1..1]
+;  - zero: same as 0,0
+;txpattern=circle
+
+; {dc_|imbalance_}txvga1, txvga2, rxvga1, rxvga2: integer: Override default VGA gains
+; Defaults: txvga1=-14, txvga2=20, rxvga1=30, rxvga2=3
+
+; lms_write: string: Hex string describing LMS values to be wrote to chip
+;  before setting up specific calibration
+; Must contain addr/value pairs (e.g. 1248 writes 0x48 at address 0x12)
+;lms_write=
+
+; lms_write_alter: string: Hex string describing LMS values to be wrote to chip
+;  after setup, before starting specific calibration
+; Must contain addr/value pairs (e.g. 1248 writes 0x48 at address 0x12)
+;lms_write_alter=
+
+; sample_limit: float: Allowed range for read data
+; Read data is validated for interval [-sample_limit .. sample_limit]
+; Positive value (clamped to interval [0 ..1]): data must be inside configured interval
+; Negative value: data must be outside configured interval
+;sample_limit=1
+
+; {dc_|imbalance_}file_dump: string: File used to dump results
+
+; dump_filter_test: string: Format to use to dump test filter vector values
+; The following parameters are replaced: ${newline}, ${tab}, ${time}
+; Values are set in ${data} location
+;dump_filter_test=
+
+; dump_buf_ok_format, dump_buf_fail_format: string: Format used to dump read data values
+; The following parameters are replaced: ${newline}, ${tab}, ${time}
+; If set, read data values are set in ${data} location
+
+; dump_buf_ok: integer: Number of valid buffers to dump
+; dump_buf_fail: integer: Number of failed buffers to dump
+; These parameters are ignored 'dump_buf_ok_format'/'dump_buf_fail_format' are not set
+; 0: none, negative: all
+;dump_buf_ok=0
+;dump_buf_fail=0
+
+
+[loopback-check]
+; This section configures the loopback check process (runs when calibrating)
+; Parameters should be changed for debug purposes only!
+
+; trace: integer: Loopback check process trace
+; Values:
+;  1: Output params at start and result at end
+;  Greater than 1: Output values calculated for each buffer
+;trace=0
+
+; dump_status_start: boolean: Output state data if trace is enabled
+;dump_status_start=no
+
+; dump_dev: boolean: Output device info on start. Ignored if 'dump_status_start' is disabled
+;dump_dev=no
+
+; dump_lms_modules: boolean: Output some LMS info on start. Ignored if 'dump_status_start' is disabled
+;dump_lms_modules=no
+
+; dump_loopback_status: boolean: Output loopback switches on start. Ignored if 'dump_status_start' is disabled
+;dump_loopback_status=no
+
+; dump_lms: boolean: Output all LMS registers. Ignored if 'dump_status_start' is disabled
+; dump_lms_str: string: Hex string with specific LMS address(es) to output on start.
+;  Ignored if 'dump_status_start' is disabled
+; dump_lms=no
+; dump_lms_str=
+
+; buffers: integer: The number of buffers to check
+;buffers=10
+
+; allow_fail: integer: How many data check failures are allowed
+; Allowed interval: [0 .. buffers)
+;allow_fail=buffers/4
+
+; loopback: string: Override default loopback
+; Possible values: lpf-to-rxout, lpf-to-vga2, vga1-to-vga2, lpf-to-lpf, vga1-to-lpf,
+;   pa-to-lna1, pa-to-lna2, pa-to-lna3, none
+;loopback=pa-to-lna1/pa-to-lna2
+
+; loopback_transmit: boolean: Enable TX RF during loopback check
+;loopback_transmit=enabled for loopback=none, disabled for all other values
+
+; delta_freq: integer: Override TX/RX frequency difference
+;delta_freq=
+
+; txpattern: string: Transmit pattern to use
+; May be:
+;  - circle: 1,0,0,1,-1,0,0,-1
+;  - circle_reverse: Reversed circle: 1,0,0,-1,-1,0,0,1
+;  - circle_div[_reverse]_{divisor}: [reversed] circle pattern divided by requested divisor (must be at least 1)
+;  - circle_points[_reverse]_{length}[_div_{divisor}]: Build a [reversed] circle using given length
+;      (which must be a multiple of 4). Use optional divisor
+;  - Comma separated list of values (e.g. 1,0.5,-0.4,0.3). The number of values MUST be an even one.
+;      Each value must be in interval [-1..1]
+;  - zero: same as 0,0
+;txpattern=circle
+
+; txfrequency: integer: TX tune frequency
+; samplerate: integer: Sampling rate to use
+; bandwidth: integer: Filter bandwidth to use
+; These parameters default to values required by calibration
+
+; txvga1, txvga2, rxvga1, rxvga2: integer: Override default VGA gains
+; Defaults: txvga1=-14, txvga2=0, rxvga1=30, rxvga2=3
+
+; lms_write: string: Hex string describing LMS values to be wrote to chip
+;  after setup, before starting the loopback check process
+; Must contain addr/value pairs (e.g. 1248 writes 0x48 at address 0x12)
+;lms_write=
+
+; test_pattern: string: Algorithm test pattern. Replaces data read from board
+; See txpattern for format
+;test_pattern=
+
+; sample_limit: float: Allowed range for read data
+; Read data is validated for interval [-sample_limit .. sample_limit]
+; Positive value (clamped to interval [0 ..1]): data must be inside configured interval
+; Negative value: data must be outside configured interval
+;sample_limit=0.9965 (2040/2047)
+
+; sample_limit_allow_fail: integer: How many sample limit failures are allowed
+; Allowed interval: [0 .. buffers)
+;sample_limit_allow_fail=buffers/4
+
+; dump_file: string: File used to dump results
+;dump_file=
+
+; dump_buf_ok_format, dump_buf_fail_format: string: Format used to dump read data values
+; The following parameters are replaced: ${newline}, ${tab}, ${time}
+; If set, read data values are set in ${data} location
+
+; dump_buf_ok: integer: Number of valid buffers to dump
+; dump_buf_fail: integer: Number of failed buffers to dump
+; These parameters are ignored 'dump_buf_ok_format'/'dump_buf_fail_format' are not set
+; 0: none, negative: all
+;dump_buf_ok=0
+;dump_buf_fail=0

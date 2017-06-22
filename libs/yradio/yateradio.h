@@ -488,9 +488,15 @@ public:
 	Pending = (1 << 16),             // Operation is pending
 	Cancelled = (1 << 17),           // Operation cancelled
 	Timeout = (1 << 18),             // Operation timeout
+	HardwareNotAvailable = (1 << 19),// Device not found
+	InsufficientSpeed = (1 << 20),   // Device has insufficient speed to fulfill required transfer rate
 	// Masks
+	// Errors indicating automatic application restart should not be performed
+	// These may indicate misconfig or hardware failures requiring system restart
+	NoAutoRestartMask = HardwareNotAvailable | InsufficientSpeed,
 	// Errors requiring radio or port shutdown
-	FatalErrorMask = HardwareIOError | RFHardwareFail | EnvironmentalFault | Failure,
+	FatalErrorMask = HardwareIOError | RFHardwareFail | EnvironmentalFault | Failure |
+	    NoAutoRestartMask,
 	// Errors that can be cleared
 	ClearErrorMask = TooEarly | TooLate | NotExact | DataLost | Saturation |
 	    InvalidPort | Timeout,

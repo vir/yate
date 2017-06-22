@@ -52,6 +52,12 @@
 ; cmd:loopback: Set radio interface loopback
 ; cmd:calibrate: Execute the calibrate operation on radio interface
 
+; priority/recv_priority: Send and receive threads prioriy
+; Allowed values: lowest, low, normal, high, highest
+; Defaults to 'normal'
+;priority=normal
+;recv_priority=normal
+
 
 [radiodatafile]
 ; This section configures radio data file processing

@@ -96,6 +96,8 @@ static const TokenDict s_errorName[] = {
     MAKE_NAME(Cancelled),
     MAKE_NAME(Failure),
     MAKE_NAME(Timeout),
+    MAKE_NAME(HardwareNotAvailable),
+    MAKE_NAME(InsufficientSpeed),
     MAKE_NAME(NoError),
     {0,0}
 };

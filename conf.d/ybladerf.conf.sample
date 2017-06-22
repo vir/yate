@@ -114,6 +114,13 @@
 ; Disabled by default
 ;trace_discipliner=disable
 
+; max_samplerate_super: integer: Maximum allowed sampling rate for super speed (USB3)
+; max_samplerate_high: integer: Maximum allowed sampling rate for high speed (USB2)
+; Trying to set a sampling rate higher than this leads to failure
+; This is not a global sampling rate (TX+RX), it configures max sampling rate per direction
+;max_samplerate_super=40000000
+;max_samplerate_high=4000000
+
 
 [libusb]
 ; This section configures libusb backend related data

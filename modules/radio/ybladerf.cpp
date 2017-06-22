@@ -74,7 +74,10 @@ class BrfModule;                         // The module
 #define BRF_USB_CMD_READ_CAL_CACHE          110
 
 #define BRF_SAMPLERATE_MIN 80000u
-#define BRF_SAMPLERATE_MAX 0xffffffffu
+#define BRF_SAMPLERATE_MAX 40000000 // Max supported by LMS6002D
+
+#define MAX_SAMPLERATE_HIGH  4000000
+#define MAX_SAMPLERATE_SUPER 40000000
 
 // Frequency bounds
 #define BRF_FREQUENCY_MIN 232500000u
@@ -1909,7 +1912,7 @@ public:
     void setDataDump(int dir = 0, int level = 0, const NamedList* params = 0);
     // Open the device
     // Call the reset method in order to set the device to a known state
-    unsigned int open(const NamedList& params);
+    unsigned int open(const NamedList& params, String& error);
     // Initialize operating parameters
     unsigned int initialize(const NamedList& params);
     // Check if parameters are set
@@ -2035,7 +2038,8 @@ public:
     // Release data
     virtual void destruct();
     // Create an interface
-    static BrfLibUsbDevice* create(BrfInterface* owner);
+    static BrfLibUsbDevice* create(BrfInterface* owner, unsigned int& status,
+	String& error);
     // Utilities
     static const char* speedStr(int speed) {
 	    switch (speed) {
@@ -2413,11 +2417,11 @@ private:
     inline unsigned int paSelect(bool lowBand, String* error = 0)
 	{ return paSelect(lowBand ? LmsPa1 : LmsPa2,error); }
     unsigned int paSelect(int pa, String* error = 0);
-    int clampInt(int val, int minVal, int maxVal, const char* what = 0,
+    int64_t clampInt(int64_t val, int64_t minVal, int64_t maxVal, const char* what = 0,
 	int level = DebugNote);
-    inline int clampIntParam(const NamedList& params, const String& param,
-	int defVal, int minVal, int maxVal, int level = DebugConf)
-	{ return clampInt(params.getIntValue(param,defVal),minVal,maxVal,param,level); }
+    inline int64_t clampIntParam(const NamedList& params, const String& param,
+	int64_t defVal, int64_t minVal, int64_t maxVal, int level = DebugConf)
+	{ return clampInt(params.getInt64Value(param,defVal),minVal,maxVal,param,level); }
     float clampFloat(float val, float minVal, float maxVal, const char* what = 0,
 	int level = DebugNote);
     inline float clampFloatParam(const NamedList& params, const String& param,
@@ -2786,8 +2790,9 @@ public:
 
 protected:
     BrfInterface(const char* name);
-    // Method to call after creation to init the interface
-    virtual BrfLibUsbDevice* init();
+    // Methods to call after creation to init the interface
+    unsigned int init(String& error);
+    unsigned int openDevice(const NamedList& params, String& error);
     virtual void destroyed();
 
 private:
@@ -2877,6 +2882,10 @@ public:
 		iface = static_cast<BrfInterface*>(o->get());
 	    return iface != 0;
 	}
+    void fillError(NamedList& p, unsigned int status, const char* str);
+    void fillDevInfo(NamedList& p, BrfInterface* ifc, BrfLibUsbDevice* dev = 0);
+    void notifyError(BrfInterface* ifc, unsigned int status, const char* str,
+	const char* oper);
 
 protected:
     virtual void initialize();
@@ -2886,7 +2895,7 @@ protected:
     virtual void statusDetail(String& str);
     virtual bool commandComplete(Message& msg, const String& partLine,
 	const String& partWord);
-    BrfInterface* createIface(const NamedList& params);
+    bool createIface(NamedList& params);
     void completeIfaces(String& dest, const String& partWord);
     bool onCmdControl(BrfInterface* ifc, Message& msg);
     bool onCmdStatus(String& retVal, String& line);
@@ -4097,7 +4106,7 @@ void BrfLibUsbDevice::setDataDump(int dir, int level, const NamedList* p)
 
 // Initialize the device.
 // Call the reset method in order to set the device to a known state
-unsigned int BrfLibUsbDevice::open(const NamedList& params)
+unsigned int BrfLibUsbDevice::open(const NamedList& params, String& error)
 {
     BRF_RX_SERIALIZE;
     BRF_TX_SERIALIZE;
@@ -4197,6 +4206,7 @@ unsigned int BrfLibUsbDevice::open(const NamedList& params)
 	Debug(m_owner,DebugWarn,"Failed to open USB device: %s [%p]",
 	    e.safe("Unknown error"),m_owner);
 	doClose();
+	error = e;
 	return status;
     }
     String s;
@@ -4977,11 +4987,7 @@ Message* BrfLibUsbDevice::buildNotify(const char* status)
 {
     Message* m = new Message("module.update",0,true);
     m->addParam("module",__plugin.name());
-    if (owner())
-	m->addParam("interface",owner()->toString());
-    m->addParam("serial",serial());
-    String str;
-    m->addParam("address",str.printf("USB/%d/%d",bus(),addr()));
+    __plugin.fillDevInfo(*m,owner(),this);
     m->addParam("status",status,false);
     return m;
 }
@@ -4996,18 +5002,15 @@ void BrfLibUsbDevice::destruct()
 }
 
 // Create an interface
-BrfLibUsbDevice* BrfLibUsbDevice::create(BrfInterface* owner)
+BrfLibUsbDevice* BrfLibUsbDevice::create(BrfInterface* owner, unsigned int& status,
+    String& error)
 {
     if (!s_usbContextInit) {
 	Lock lck(__plugin);
 	if (!s_usbContextInit) {
-	    int status = ::libusb_init(0);
-	    if (status != LIBUSB_SUCCESS) {
-		String tmp;
-		Debug(&__plugin,DebugNote,"Failed to initialize libusb %s",
-		    appendLusbError(tmp,status).c_str());
+	    status = lusbCheckSuccess(::libusb_init(0),&error,"libusb init failed");
+	    if (status)
 		return 0;
-	    }
 	    Debug(&__plugin,DebugAll,"Initialized libusb context");
 	    s_usbContextInit = true;
 	    lusbSetDebugLevel();
@@ -5170,7 +5173,7 @@ unsigned int BrfLibUsbDevice::lusb2ifaceError(int code)
 	case LIBUSB_ERROR_NOT_FOUND:     // Entity not found
 	case LIBUSB_ERROR_NO_DEVICE:     // No such device (it may have been disconnected)
 	case LIBUSB_TRANSFER_NO_DEVICE:  // Device was disconnected
-	    return RadioInterface::HardwareIOError;
+	    return RadioInterface::HardwareNotAvailable;
 	case LIBUSB_ERROR_IO:            // Input/output error
 	case LIBUSB_ERROR_PIPE:          // Pipe error
 	    return RadioInterface::HardwareIOError;
@@ -5876,7 +5879,13 @@ unsigned int BrfLibUsbDevice::internalSetSampleRate(bool tx, uint32_t value,
     String* error)
 {
     String e;
-    unsigned int status = lusbSetAltInterface(BRF_ALTSET_RF_LINK,&e);
+    unsigned int status = 0;
+    if (value <= m_radioCaps.maxSampleRate)
+	status = lusbSetAltInterface(BRF_ALTSET_RF_LINK,&e);
+    else {
+	status = RadioInterface::InsufficientSpeed;
+	e << "insufficient speed required=" << value << " max=" << m_radioCaps.maxSampleRate;
+    }
     while (!status) {
 	Si5338MultiSynth synth;
 	BrfRationalRate rate;
@@ -7562,14 +7571,14 @@ unsigned int BrfLibUsbDevice::paSelect(int pa, String* error)
     return showError(status,e,0,error);
 }
 
-int BrfLibUsbDevice::clampInt(int val, int minVal, int maxVal, const char* what,
+int64_t BrfLibUsbDevice::clampInt(int64_t val, int64_t minVal, int64_t maxVal, const char* what,
     int level)
 {
     if (val >= minVal && val <= maxVal)
 	return val;
-    int c = val < minVal ? minVal : maxVal;
+    int64_t c = val < minVal ? minVal : maxVal;
     if (what)
-	Debug(m_owner,level,"Clamping %s %d -> %d [%p]",what,val,c,m_owner);
+	Debug(m_owner,level,"Clamping %s " FMT64 " -> " FMT64 " [%p]",what,val,c,m_owner);
     return c;
 }
 
@@ -7645,20 +7654,27 @@ unsigned int BrfLibUsbDevice::openDevice(bool claim, String* error)
 	    break;
     }
     String e;
-    String failed;
-    failed.append(found,",");
     if (haveMatch) {
 	e << "serial='" << m_serial << "' [";
 	if (!foundMatched)
 	    e << "not ";
 	e << "found] ";
     }
-    e << "checked_devices=" << found.count();
-    if (failed)
+    if (found.count()) {
+	e << "checked_devices=" << found.count();
+	String failed;
+	failed.append(found,",");
 	e << " (" << failed << ")";
+    }
+    else if (!haveMatch)
+	e << "no device found";
     if (failedDesc)
-	e << " (failed_desc_retreival=" << failedDesc << " device descriptor(s))";
-    return setError(status ? status : RadioInterface::NotInitialized,error,e);
+	e << " (failed_desc_retrieval=" << failedDesc << " device descriptor(s))";
+    if (status)
+	return setError(status,error,e);
+    if (found.skipNull() && (!haveMatch || foundMatched))
+	return setError(RadioInterface::NotInitialized,error,e);
+    return setError(RadioInterface::HardwareNotAvailable,error,e);
 }
 
 void BrfLibUsbDevice::closeDevice()
@@ -7858,11 +7874,15 @@ unsigned int BrfLibUsbDevice::updateSpeed(const NamedList& params, String* error
 	if (speed() == LIBUSB_SPEED_SUPER) {
 	    m_radioCaps.rxLatency = clampIntParam(params,"rx_latency_super",4000,0,150000);
 	    m_radioCaps.txLatency = clampIntParam(params,"tx_latency_super",10000,0,150000);
+	    m_radioCaps.maxSampleRate = clampIntParam(params,"max_samplerate_super",
+		MAX_SAMPLERATE_SUPER,2 * BRF_SAMPLERATE_MIN,BRF_SAMPLERATE_MAX);
 	    m_ctrlTransferPage = BRF_FLASH_PAGE_SIZE;
 	}
 	else {
 	    m_radioCaps.rxLatency = clampIntParam(params,"rx_latency_high",7000,0,150000);
 	    m_radioCaps.txLatency = clampIntParam(params,"tx_latency_high",20000,0,150000);
+	    m_radioCaps.maxSampleRate = clampIntParam(params,"max_samplerate_high",
+		MAX_SAMPLERATE_HIGH,2 * BRF_SAMPLERATE_MIN,BRF_SAMPLERATE_MAX);
 	    m_ctrlTransferPage = 64;
 	}
 	return 0;
@@ -7870,10 +7890,11 @@ unsigned int BrfLibUsbDevice::updateSpeed(const NamedList& params, String* error
     m_minBufsSend = 1;
     m_radioCaps.rxLatency = 0;
     m_radioCaps.txLatency = 0;
+    m_radioCaps.maxSampleRate = BRF_SAMPLERATE_MAX;
     m_ctrlTransferPage = 0;
     String e;
     e << "Unsupported USB speed " << m_devSpeed;
-    return setError(RadioInterface::OutOfRange,error,e);
+    return setError(RadioInterface::InsufficientSpeed,error,e);
 }
 
 // Check timestamps before send / after read
@@ -10105,12 +10126,24 @@ BrfInterface::~BrfInterface()
     Debug(this,DebugAll,"Interface destroyed [%p]",this);
 }
 
-BrfLibUsbDevice* BrfInterface::init()
+unsigned int BrfInterface::init(String& error)
 {
-    m_dev = BrfLibUsbDevice::create(this);
-    m_radioCaps = &m_dev->capabilities();
-    Debug(this,DebugAll,"Created device (%p) [%p]",m_dev,this);
-    return m_dev;
+    if (m_dev)
+	return 0;
+    unsigned int status = 0;
+    m_dev = BrfLibUsbDevice::create(this,status,error);
+    if (m_dev) {
+	m_radioCaps = &m_dev->capabilities();
+	Debug(this,DebugAll,"Created device (%p) [%p]",m_dev,this);
+	return 0;
+    }
+    Debug(this,DebugNote,"Failed to create device: %s [%p]",error.c_str(),this);
+    return status;
+}
+
+unsigned int BrfInterface::openDevice(const NamedList& params, String& error)
+{
+    return m_dev ? m_dev->open(params,error) : RadioInterface::Failure;
 }
 
 unsigned int BrfInterface::initialize(const NamedList& params)
@@ -10438,6 +10471,47 @@ bool BrfModule::findIfaceByDevice(RefPointer<BrfInterface>& iface, void* dev)
     return false;
 }
 
+void BrfModule::fillDevInfo(NamedList& p, BrfInterface* ifc, BrfLibUsbDevice* dev)
+{
+    if (ifc) {
+	p.addParam("interface",ifc->toString());
+	if (!dev)
+	    dev = ifc->device();
+    }
+    if (dev) {
+	p.addParam("serial",dev->serial(),false);
+	if (dev->bus() >= 0) {
+	    String str;
+	    p.addParam("address",str.printf("USB/%d/%d",dev->bus(),dev->addr()));
+	}
+    }
+}
+
+void BrfModule::fillError(NamedList& p, unsigned int status, const char* str)
+{
+    if (!status)
+	return;
+    p.setParam(YSTRING("code"),String(status));
+    p.setParam(YSTRING("reason"),RadioInterface::errorName(status));
+    p.setParam(YSTRING("error"),str);
+    if (status & RadioInterface::NoAutoRestartMask)
+	p.setParam(YSTRING("canretry"),String::boolText(false));
+}
+
+void BrfModule::notifyError(BrfInterface* ifc, unsigned int status, const char* str,
+    const char* oper)
+{
+    if (!status)
+	return;
+    Message* m = new Message("module.update",0,true);
+    m->addParam("module",name());
+    m->addParam("status","device_failure");
+    m->addParam("operation",oper,false);
+    fillDevInfo(*m,ifc);
+    fillError(*m,status,str);
+    Engine::enqueue(m);
+}
+
 void BrfModule::initialize()
 {
     Output("Initializing module BladeRF");
@@ -10486,12 +10560,7 @@ bool BrfModule::received(Message& msg, int id)
 	const String& what = msg[YSTRING("radio_driver")];
 	if (what && what != YSTRING("bladerf"))
 	    return false;
-	BrfInterface* ifc = createIface(msg);
-	if (ifc)
-	    msg.setParam(new NamedPointer("interface",ifc,name()));
-	else
-	    msg.setParam(YSTRING("error"),"failure");
-	return ifc != 0;
+	return createIface(msg);
     }
     if (id == Control) {
 	const String& comp = msg[YSTRING("component")];
@@ -10562,7 +10631,7 @@ bool BrfModule::commandComplete(Message& msg, const String& partLine,
     return Module::commandComplete(msg,partLine,partWord);
 }
 
-BrfInterface* BrfModule::createIface(const NamedList& params)
+bool BrfModule::createIface(NamedList& params)
 {
 //    Debugger d(debugLevel(),"BrfModule::createIface()");
     Lock lck(this);
@@ -10581,12 +10650,20 @@ BrfInterface* BrfModule::createIface(const NamedList& params)
 	p.copySubParams(params,prefix,true,true);
     BrfInterface* ifc = new BrfInterface(name() + "/" + String(++m_ifaceId));
     m_ifaces.append(ifc)->setDelete(false);
-    BrfLibUsbDevice* dev = ifc->init();
+    String error;
+    unsigned int status = ifc->init(error);
     lck.drop();
-    if (dev && (0 == dev->open(p)))
-	return ifc;
+    if (!status) {
+	status = ifc->openDevice(p,error);
+	if (!status) {
+	    params.setParam(new NamedPointer("interface",ifc,name()));
+	    return true;
+	}
+    }
+    fillError(params,status,error);
+    notifyError(ifc,status,error,"create");
     TelEngine::destruct(ifc);
-    return 0;
+    return false;
 }
 
 void BrfModule::completeIfaces(String& dest, const String& partWord)

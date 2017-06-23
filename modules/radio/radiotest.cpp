@@ -469,9 +469,9 @@ void RadioTest::run()
 	    }
 	}
 	// Create radio
-	Message m(m_radioParams);
-	m.assign("radio.create");
+	Message m("radio.create");
 	m.setParam("module",__plugin.name());
+	m.copyParams(m_radioParams);
 	bool radioOk = Engine::dispatch(m);
 	NamedPointer* np = YOBJECT(NamedPointer,m.getParam(YSTRING("interface")));
 	m_radio = np ? YOBJECT(RadioInterface,np) : 0;
@@ -595,7 +595,7 @@ void RadioTest::terminated(const char* error)
 	report.addParam("rx_skipped_samples",String(m_rxSkippedSamples));
     String s;
     report.dump(s,"\r\n");
-    Debug(this,DebugInfo,"Terminated [%p]%s",this,encloseDashes(s));
+    Debug(this,DebugInfo,"Terminated [%p]%s",this,encloseDashes(s,true));
     notify("stop",error,&report);
     if (!m_repeat)
 	return;

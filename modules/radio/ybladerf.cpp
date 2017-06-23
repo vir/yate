@@ -10479,6 +10479,8 @@ void BrfModule::fillDevInfo(NamedList& p, BrfInterface* ifc, BrfLibUsbDevice* de
 	    dev = ifc->device();
     }
     if (dev) {
+	String tmp = BrfLibUsbDevice::speedStr(dev->speed());
+	p.addParam("speed",tmp.toLower(),false);
 	p.addParam("serial",dev->serial(),false);
 	if (dev->bus() >= 0) {
 	    String str;

@@ -346,6 +346,30 @@ const String& RadioInterface::toString() const
     return m_name;
 }
 
+void RadioInterface::completeDevInfo(NamedList& p, bool full, bool retData)
+{
+    if (retData)
+	p.setParam(new NamedPointer("interface",this,m_name));
+    else
+	p.addParam("interface",m_name);
+}
+
+void RadioInterface::setError(NamedList& p, unsigned int code, const char* str)
+{
+    if (!code)
+	return;
+    p.setParam(YSTRING("code"),String(code));
+    p.setParam(YSTRING("reason"),errorName(code));
+    if (TelEngine::null(str))
+	p.clearParam(YSTRING("error"));
+    else
+	p.setParam(YSTRING("error"),str);
+    unsigned int tmp = code & NoAutoRestartMask;
+    p.setParam(YSTRING("canretry"),String::boolText(!tmp));
+    if (!tmp)
+	p.setParam(YSTRING("fatal"),String::boolText(code & FatalErrorMask));
+}
+
 const TokenDict* RadioInterface::errorNameDict()
 {
     return s_errorName;

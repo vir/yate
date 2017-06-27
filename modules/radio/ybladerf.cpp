@@ -82,24 +82,6 @@ class BrfModule;                         // The module
 // Frequency bounds
 #define BRF_FREQUENCY_MIN 232500000u
 #define BRF_FREQUENCY_MAX 3800000000u
-static inline unsigned int validFrequency(uint64_t val, String* error = 0,
-    const char* what = 0, const char* strVal = 0)
-{
-    if ((val >= BRF_FREQUENCY_MIN) && (val <= BRF_FREQUENCY_MAX))
-	return 0;
-    if (!error)
-	return RadioInterface::OutOfRange;
-    if (what) {
-	*error << "invalid " << what << " ";
-	if (strVal)
-	    *error << strVal;
-	else
-	    *error << val;
-    }
-    else
-	*error << "out of range";
-    return RadioInterface::OutOfRange;
-}
 
 // Frequency offset interval
 #define BRF_FREQ_OFFS_DEF 128.0
@@ -1731,6 +1713,7 @@ class BrfLibUsbDevice : public GenObject, public BrfVctcxoDiscipliner
     friend class BrfDevTmpAltSet;
     friend class BrfThread;
     friend class BrfModule;
+    friend class BrfInterface;
     friend class BrfSerialize;
     friend class BrfDevState;
     friend class BrfBbCalData;
@@ -1840,10 +1823,14 @@ public:
 	{ return port < m_radioCaps.currPorts; }
     inline int speed() const
 	{ return m_devSpeed; }
+    inline const char* speedStr() const
+	{ return speedStr(speed()); }
     inline int bus() const
 	{ return m_devBus; }
     inline int addr() const
 	{ return m_devAddr; }
+    inline const String& address() const
+	{ return m_address; }
     inline const String& serial() const
 	{ return m_devSerial; }
     inline const String& fwVerStr() const
@@ -1934,7 +1921,7 @@ public:
     unsigned int capture(bool tx, float* buf, unsigned int samples, uint64_t& ts,
 	String* error = 0);
     // Set the frequency on the Tx or Rx side
-    unsigned int setFrequency(uint32_t hz, bool tx);
+    unsigned int setFrequency(uint64_t hz, bool tx);
     // Retrieve frequency
     unsigned int getFrequency(uint32_t& hz, bool tx);
     // Set frequency offset
@@ -2037,9 +2024,6 @@ public:
     }
     // Release data
     virtual void destruct();
-    // Create an interface
-    static BrfLibUsbDevice* create(BrfInterface* owner, unsigned int& status,
-	String& error);
     // Utilities
     static const char* speedStr(int speed) {
 	    switch (speed) {
@@ -2235,7 +2219,7 @@ private:
 	    return status;
 	}
     unsigned int internalSetFreqOffs(float val, float* newVal, String* error = 0);
-    unsigned int internalSetFrequency(bool tx, uint32_t hz, String* error = 0);
+    unsigned int internalSetFrequency(bool tx, uint64_t val, String* error = 0);
     unsigned int internalGetFrequency(bool tx, uint32_t* hz = 0, String* error = 0);
     // Retrieve TX/RX timestamp
     unsigned int internalGetTimestamp(bool tx, uint64_t& ts, String* error = 0);
@@ -2596,6 +2580,7 @@ private:
     int m_devBus;                        // Device bus
     int m_devAddr;                       // Device address
     int m_devSpeed;                      // Device speed
+    String m_address;                    // Device address
     String m_devSerial;                  // Device serial number
     String m_devFwVerStr;                // Device firmware version string
     String m_devFpgaVerStr;              // Device FPGA version string
@@ -2729,6 +2714,7 @@ public:
 	}
     inline void setPending(unsigned int oper, unsigned int code = Pending)
 	{ RadioInterface::setPending(oper,code); }
+    void notifyError(unsigned int status, const char* str, const char* oper);
     virtual unsigned int initialize(const NamedList& params = NamedList::empty());
     virtual unsigned int setParams(NamedList& params, bool shareFate = true);
     virtual unsigned int setDataDump(int dir = 0, int level = 0,
@@ -2787,12 +2773,12 @@ public:
 	{ return m_dev ? m_dev->setLoopback(name) : NotInitialized; }
     virtual unsigned int calibrate()
 	{ return m_dev->calibrate(); }
+    virtual void completeDevInfo(NamedList& p, bool full = false, bool retData = false);
 
 protected:
     BrfInterface(const char* name);
-    // Methods to call after creation to init the interface
-    unsigned int init(String& error);
-    unsigned int openDevice(const NamedList& params, String& error);
+    // Method to call after creation to init the interface
+    unsigned int init(const NamedList& params, String& error);
     virtual void destroyed();
 
 private:
@@ -2882,10 +2868,6 @@ public:
 		iface = static_cast<BrfInterface*>(o->get());
 	    return iface != 0;
 	}
-    void fillError(NamedList& p, unsigned int status, const char* str);
-    void fillDevInfo(NamedList& p, BrfInterface* ifc, BrfLibUsbDevice* dev = 0);
-    void notifyError(BrfInterface* ifc, unsigned int status, const char* str,
-	const char* oper);
 
 protected:
     virtual void initialize();
@@ -4248,9 +4230,7 @@ unsigned int BrfLibUsbDevice::initialize(const NamedList& params)
 	    const NamedString* ns = params.getParam(tx ? "txfrequency" : "rxfrequency");
 	    if (!ns)
 		continue;
-	    uint64_t tmp = ns->toInt64();
-	    BRF_FUNC_CALL_BREAK(validFrequency(tmp,&e,ns->name(),*ns));
-	    BRF_FUNC_CALL_BREAK(internalSetFrequency(tx,tmp,&e));
+	    BRF_FUNC_CALL_BREAK(internalSetFrequency(tx,ns->toInt64(),&e));
 	}
 	if (status)
 	    break;
@@ -4403,7 +4383,7 @@ unsigned int BrfLibUsbDevice::capture(bool tx, float* buf, unsigned int samples,
     return status;
 }
 
-unsigned int BrfLibUsbDevice::setFrequency(uint32_t hz, bool tx)
+unsigned int BrfLibUsbDevice::setFrequency(uint64_t hz, bool tx)
 {
     BRF_TX_SERIALIZE_CHECK_PUB_ENTRY(false,"setFrequency()");
     return internalSetFrequency(tx,hz);
@@ -4679,10 +4659,8 @@ unsigned int BrfLibUsbDevice::calibrate(bool sync, const NamedList& params,
 	Message* m = buildNotify("calibrated");
 	if (!status)
 	    m->copyParams(m_calibration);
-	else {
-	    const char* en = RadioInterface::errorName(status);
-	    m->addParam("error",en ? en : String(status).c_str());
-	}
+	else
+	    m_owner->setError(*m,status,e);
 	Engine::enqueue(m);
 	if (!status) {
 	    Debug(m_owner,DebugInfo,"Calibration finished in %s [%p]",
@@ -4987,7 +4965,7 @@ Message* BrfLibUsbDevice::buildNotify(const char* status)
 {
     Message* m = new Message("module.update",0,true);
     m->addParam("module",__plugin.name());
-    __plugin.fillDevInfo(*m,owner(),this);
+    m_owner->completeDevInfo(*m,true);
     m->addParam("status",status,false);
     return m;
 }
@@ -4999,24 +4977,6 @@ void BrfLibUsbDevice::destruct()
     for (unsigned int i = 0; i < EpCount; i++)
 	m_usbTransfer[i].reset();
     GenObject::destruct();
-}
-
-// Create an interface
-BrfLibUsbDevice* BrfLibUsbDevice::create(BrfInterface* owner, unsigned int& status,
-    String& error)
-{
-    if (!s_usbContextInit) {
-	Lock lck(__plugin);
-	if (!s_usbContextInit) {
-	    status = lusbCheckSuccess(::libusb_init(0),&error,"libusb init failed");
-	    if (status)
-		return 0;
-	    Debug(&__plugin,DebugAll,"Initialized libusb context");
-	    s_usbContextInit = true;
-	    lusbSetDebugLevel();
-	}
-    }
-    return new BrfLibUsbDevice(owner);
 }
 
 uint64_t BrfLibUsbDevice::reduceFurther(uint64_t v1, uint64_t v2)
@@ -5355,9 +5315,9 @@ void BrfLibUsbDevice::internalDumpDev(String& buf, bool info, bool state,
     if (!info)
 	return;
     if (withHdr) {
-	buf.append("Address=",sep) << "USB/" << bus() << "/" << addr();
+	buf.append("Address=",sep) << address();
 	buf << sep << "Serial=" << serial();
-	buf << sep << "Speed=" << speedStr(speed());
+	buf << sep << "Speed=" << speedStr();
 	buf << sep << "Firmware=" << fwVerStr();
 	buf << sep << "FPGA=" << fpgaVerStr();
 	if (!fromStatus) {
@@ -5369,9 +5329,9 @@ void BrfLibUsbDevice::internalDumpDev(String& buf, bool info, bool state,
     else {
 	if (buf)
 	    buf << "|";
-	buf << "USB/" << bus() << "/" << addr();
+	buf << address();
 	buf << "|" << serial();
-	buf << "|" << speedStr(speed());
+	buf << "|" << speedStr();
 	buf << "|" << fwVerStr();
 	buf << "|" << fpgaVerStr();
 	buf << "|" << lmsVersion();
@@ -6418,16 +6378,17 @@ unsigned int BrfLibUsbDevice::internalSetFreqOffs(float val, float* newVal, Stri
     return 0;
 }
 
-unsigned int BrfLibUsbDevice::internalSetFrequency(bool tx, uint32_t hz, String* error)
+unsigned int BrfLibUsbDevice::internalSetFrequency(bool tx, uint64_t val, String* error)
 {
-    XDebug(m_owner,DebugAll,"BrfLibUsbDevice::setFrequency(%u,%s) [%p]",
-	hz,brfDir(tx),m_owner);
+    XDebug(m_owner,DebugAll,"BrfLibUsbDevice::setFrequency("FMT64U",%s) [%p]",
+	val,brfDir(tx),m_owner);
     String e;
     unsigned int status = 0;
     BrfDevTmpAltSet tmpAltSet(this,status,&e,"frequency set");
+    if (val < BRF_FREQUENCY_MIN || val > BRF_FREQUENCY_MAX)
+	status = RadioInterface::OutOfRange;
+    uint32_t hz = (uint32_t)val;
     while (!status) {
-	BRF_FUNC_CALL_BREAK(validFrequency(hz,&e));
-	status = RadioInterface::Failure;
 	uint8_t addr = lmsFreqAddr(tx);
 	uint8_t pllFreq = 0xff;
 	for (int i = 0; s_freqLimits[i]; i += 3)
@@ -6492,7 +6453,7 @@ unsigned int BrfLibUsbDevice::internalSetFrequency(bool tx, uint32_t hz, String*
 	break;
     }
     if (status) {
-	e.printf(1024,"Failed to set %s frequency to %uHz - %s",brfDir(tx),hz,e.c_str());
+	e.printf(1024,"Failed to set %s frequency to "FMT64U"Hz - %s",brfDir(tx),val,e.c_str());
 	return showError(status,e,0,error);
     }
     if (getDirState(tx).frequency != hz) {
@@ -7635,6 +7596,8 @@ unsigned int BrfLibUsbDevice::openDevice(bool claim, String* error)
 		tmpStatus = lusbCheckSuccess(::libusb_claim_interface(m_devHandle,0),
 		    &tmpError,"Failed to claim the interface ");
 	    if (!tmpStatus) {
+		m_address.clear();
+		m_address << "USB/" << bus() << "/" << addr();
 		Debug(m_owner,DebugAll,"Opened device bus=%u addr=%u [%p]",bus(),addr(),m_owner);
 		return 0;
 	    }
@@ -8143,7 +8106,7 @@ void BrfLibUsbDevice::dumpState(String& s, const NamedList& p, bool lockPub, boo
 	s << "\r\nloopback:   " << lookup(m_state.m_loopback,s_loopback);
 	if (force) {
 	    s << "\r\nSerial:     " << serial();
-	    s << "\r\nSpeed:      " << speedStr(speed());
+	    s << "\r\nSpeed:      " << speedStr();
 	    s << "\r\nFirmware:   " << fwVerStr();
 	    s << "\r\nFPGA:       " << fpgaVerStr();
 	}
@@ -10126,24 +10089,44 @@ BrfInterface::~BrfInterface()
     Debug(this,DebugAll,"Interface destroyed [%p]",this);
 }
 
-unsigned int BrfInterface::init(String& error)
+void BrfInterface::notifyError(unsigned int status, const char* str, const char* oper)
+{
+    if (!status)
+	return;
+    Message* m = new Message("module.update",0,true);
+    m->addParam("module",__plugin.name());
+    m->addParam("status","failure");
+    m->addParam("operation",oper,false);
+    completeDevInfo(*m);
+    setError(*m,status,str);
+    Engine::enqueue(m);
+}
+
+unsigned int BrfInterface::init(const NamedList& params, String& error)
 {
     if (m_dev)
 	return 0;
     unsigned int status = 0;
-    m_dev = BrfLibUsbDevice::create(this,status,error);
-    if (m_dev) {
+    if (!s_usbContextInit) {
+	Lock lck(__plugin);
+	if (!s_usbContextInit) {
+	    status = BrfLibUsbDevice::lusbCheckSuccess(::libusb_init(0),&error,"libusb init failed");
+	    if (!status) {
+		Debug(&__plugin,DebugAll,"Initialized libusb context");
+		s_usbContextInit = true;
+		lusbSetDebugLevel();
+	    }
+	    else
+		Debug(this,DebugNote,"Failed to create device: %s [%p]",error.c_str(),this);
+	}
+    }
+    if (!status) {
+	m_dev = new BrfLibUsbDevice(this);
 	m_radioCaps = &m_dev->capabilities();
 	Debug(this,DebugAll,"Created device (%p) [%p]",m_dev,this);
-	return 0;
+	status = m_dev->open(params,error);
     }
-    Debug(this,DebugNote,"Failed to create device: %s [%p]",error.c_str(),this);
     return status;
-}
-
-unsigned int BrfInterface::openDevice(const NamedList& params, String& error)
-{
-    return m_dev ? m_dev->open(params,error) : RadioInterface::Failure;
 }
 
 unsigned int BrfInterface::initialize(const NamedList& params)
@@ -10254,21 +10237,14 @@ unsigned int BrfInterface::setFrequency(uint64_t hz, bool tx)
 {
     XDebug(this,DebugAll,"BrfInterface::setFrequency(" FMT64U ",%s) [%p]",
 	hz,brfDir(tx),this);
-    String error;
-    unsigned int status = validFrequency(hz,&error);
-    if (status) {
-	Debug(this,DebugNote,"Failed to set %s frequency " FMT64U ": %s [%p]",
-	    brfDir(tx),hz,error.c_str(),this);
-	return status;
-    }
-    uint32_t freq = (uint32_t)hz;
-    status = m_dev->setFrequency(freq,tx);
+    unsigned int status = m_dev->setFrequency(hz,tx);
     if (status)
 	return status;
     uint32_t tmp = 0;
     status = m_dev->getFrequency(tmp,tx);
     if (status)
 	return status;
+    uint32_t freq = (uint32_t)hz;
     if (tmp == freq)
 	return 0;
     int delta = tmp - freq;
@@ -10375,7 +10351,7 @@ unsigned int BrfInterface::setRxGain(int val, unsigned port, bool preMixer)
     XDebug(this,DebugAll,"BrfInterface::setRxGain(%d,%u,VGA%c) [%p]",
 	val,port,mixer(preMixer),this);
     if (!m_dev->validPort(port))
-	return OutOfRange;
+	return InvalidPort;
     unsigned int status = m_dev->enableRxVga(true,preMixer);
     if (status)
 	return status;
@@ -10387,7 +10363,7 @@ unsigned int BrfInterface::setTxGain(int val, unsigned port, bool preMixer)
     XDebug(this,DebugAll,"BrfInterface::setTxGain(%d,%u,VGA%c) [%p]",
 	val,port,mixer(preMixer),this);
     if (!m_dev->validPort(port))
-	return OutOfRange;
+	return InvalidPort;
     unsigned int status = m_dev->setTxVga(val,preMixer);
     if (status)
 	return status;
@@ -10402,13 +10378,23 @@ unsigned int BrfInterface::setTxGain(int val, unsigned port, bool preMixer)
     return NotExact;
 }
 
+void BrfInterface::completeDevInfo(NamedList& p, bool full, bool retData)
+{
+    RadioInterface::completeDevInfo(p,full,retData);
+    if (full && m_dev) {
+	p.addParam("address",m_dev->address(),false);
+	p.addParam("speed",String(m_dev->speedStr()).toLower());
+	p.addParam("serial",m_dev->serial(),false);
+    }
+}
+
 // Calibration. Automatic tx/rx gain setting
 // Set pre and post mixer value
 unsigned int BrfInterface::setGain(bool tx, int val, unsigned int port,
     int* newVal) const
 {
     if (!m_dev->validPort(port))
-	return OutOfRange;
+	return InvalidPort;
     return m_dev->setGain(tx,val,newVal);
 }
 
@@ -10471,49 +10457,6 @@ bool BrfModule::findIfaceByDevice(RefPointer<BrfInterface>& iface, void* dev)
     return false;
 }
 
-void BrfModule::fillDevInfo(NamedList& p, BrfInterface* ifc, BrfLibUsbDevice* dev)
-{
-    if (ifc) {
-	p.addParam("interface",ifc->toString());
-	if (!dev)
-	    dev = ifc->device();
-    }
-    if (dev) {
-	String tmp = BrfLibUsbDevice::speedStr(dev->speed());
-	p.addParam("speed",tmp.toLower(),false);
-	p.addParam("serial",dev->serial(),false);
-	if (dev->bus() >= 0) {
-	    String str;
-	    p.addParam("address",str.printf("USB/%d/%d",dev->bus(),dev->addr()));
-	}
-    }
-}
-
-void BrfModule::fillError(NamedList& p, unsigned int status, const char* str)
-{
-    if (!status)
-	return;
-    p.setParam(YSTRING("code"),String(status));
-    p.setParam(YSTRING("reason"),RadioInterface::errorName(status));
-    p.setParam(YSTRING("error"),str);
-    if (status & RadioInterface::NoAutoRestartMask)
-	p.setParam(YSTRING("canretry"),String::boolText(false));
-}
-
-void BrfModule::notifyError(BrfInterface* ifc, unsigned int status, const char* str,
-    const char* oper)
-{
-    if (!status)
-	return;
-    Message* m = new Message("module.update",0,true);
-    m->addParam("module",name());
-    m->addParam("status","device_failure");
-    m->addParam("operation",oper,false);
-    fillDevInfo(*m,ifc);
-    fillError(*m,status,str);
-    Engine::enqueue(m);
-}
-
 void BrfModule::initialize()
 {
     Output("Initializing module BladeRF");
@@ -10558,6 +10501,8 @@ void BrfModule::initialize()
 bool BrfModule::received(Message& msg, int id)
 {
     if (id == RadioCreate) {
+	if (Engine::exiting())
+	    return false;
 	// Override parameters from received params
 	const String& what = msg[YSTRING("radio_driver")];
 	if (what && what != YSTRING("bladerf"))
@@ -10651,19 +10596,17 @@ bool BrfModule::createIface(NamedList& params)
     if (prefix)
 	p.copySubParams(params,prefix,true,true);
     BrfInterface* ifc = new BrfInterface(name() + "/" + String(++m_ifaceId));
-    m_ifaces.append(ifc)->setDelete(false);
-    String error;
-    unsigned int status = ifc->init(error);
     lck.drop();
+    String error;
+    unsigned int status = ifc->init(p,error);
     if (!status) {
-	status = ifc->openDevice(p,error);
-	if (!status) {
-	    params.setParam(new NamedPointer("interface",ifc,name()));
-	    return true;
-	}
+	ifc->completeDevInfo(params,true,true);
+	Lock lck(this);
+	m_ifaces.append(ifc)->setDelete(false);
+	return true;
     }
-    fillError(params,status,error);
-    notifyError(ifc,status,error,"create");
+    ifc->setError(params,status,error);
+    ifc->notifyError(status,error,"create");
     TelEngine::destruct(ifc);
     return false;
 }

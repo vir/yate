@@ -121,6 +121,10 @@
 ;max_samplerate_super=40000000
 ;max_samplerate_high=4000000
 
+; rxoutsw: boolean: Enable (close) the RXOUTSW switch
+; This parameter is applied on reload
+;rxoutsw=no
+
 
 [libusb]
 ; This section configures libusb backend related data
@@ -216,6 +220,11 @@
 
 ; dc_disable/imbalance_disable: boolean: Disable specific process
 ; Defaults to no
+
+; samples: integer: Number of samples to use (read buffer length)
+; Minimum allowed: 1000
+; Defaults to the number of samples read from device in one request
+;samples=
 
 ; {dc_|imbalance_}loops: integer: Number of specific calibration loops to execute
 ; Interval allowed: 1..10
@@ -323,6 +332,11 @@
 [loopback-check]
 ; This section configures the loopback check process (runs when calibrating)
 ; Parameters should be changed for debug purposes only!
+
+; samples: integer: Number of samples to use (read buffer length)
+; Minimum allowed: 1000
+; Defaults to the number of samples read from device in one request
+;samples=
 
 ; trace: integer: Loopback check process trace
 ; Values:

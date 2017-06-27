@@ -788,6 +788,22 @@ public:
     virtual const String& toString() const;
 
     /**
+     * Complete device info parameters
+     * @param p Destination list
+     * @param full Put full device info
+     * @param retData True to set out pointer in destination, false to add name only
+     */
+    virtual void completeDevInfo(NamedList& p, bool full = false, bool retData = false);
+
+    /**
+     * Fill (set) error related parameters
+     * @param p Destination list
+     * @param code Error code
+     * @param str Optional error string (not error name)
+     */
+    virtual void setError(NamedList& p, unsigned int code, const char* str = 0);
+
+    /**
      * Retrieve the error string associated with a specific code
      * @param code Error code
      * @param defVal Optional default value to retrieve if not found

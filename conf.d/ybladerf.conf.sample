@@ -48,11 +48,27 @@
 ;   positive: the number of times to check
 ;rxcheckts=-1
 
+; buffered_samples: integer: Length of internal I/O buffers in samples
+; This value will be decreased to fit an integral number of USB frames
+; With timestamps enabled: 252 samples on USB2 and 508 samples on USB3
+; Interval allowed [1024 .. 16384]
+;buffered_samples=2048
+
 ; tx_min_buffers: integer: Minimum number of buffers (USB frames) to send
 ; This option is used to accumulate data before sending it (avoid short write operations)
 ; Minimum allowed value is 1
 ; Defaults to the number of allocated buffers
 ;tx_min_buffers=
+
+; srate_buffered_samples: string: Comma separated list of sampling rate thresholds,
+;  'buffered_samples' and optional 'tx_min_buffers'
+; This parameter can be used to adjust 'buffered_samples' and/or 'tx_min_buffers'
+;  from sampling rates configured at runtime
+; List item format: samplerate/buffered_samples[/tx_min_buffers]
+; E.g. 2166667/2048,4000000/4000/5
+; NOTE: If no threshold is found when sampling rate changes the initial values of
+;       'buffered_samples' and 'tx_min_buffers' will be used
+;srate_buffered_samples=
 
 ; silence_time: integer: Interval (in milliseconds) to silence timestamp related debug messages
 ; Allowed interval [0..60000]

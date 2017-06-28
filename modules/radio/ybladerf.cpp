@@ -76,7 +76,7 @@ class BrfModule;                         // The module
 #define BRF_SAMPLERATE_MIN 80000u
 #define BRF_SAMPLERATE_MAX 40000000 // Max supported by LMS6002D
 
-#define MAX_SAMPLERATE_HIGH  4000000
+#define MAX_SAMPLERATE_HIGH  4100000
 #define MAX_SAMPLERATE_SUPER 40000000
 
 // Frequency bounds
@@ -1072,6 +1072,21 @@ public:
     uint8_t nFrac3;
 };
 
+// Thresholds used to adjust the number of internal buffers from sampling rate
+class BrfBufsThreshold
+{
+public:
+    inline BrfBufsThreshold()
+	: sampleRate(0), bufferedSamples(0), txMinBufs(0)
+	{}
+    unsigned int sampleRate;
+    unsigned int bufferedSamples;
+    unsigned int txMinBufs;
+
+    static const char* init(DataBlock& db, const String& str, const RadioCapability& caps);
+    static BrfBufsThreshold* findThres(DataBlock& db, unsigned int sampleRate);
+};
+
 // libusb transfer
 class LusbTransfer : public Mutex
 {
@@ -1566,6 +1581,7 @@ public:
     unsigned int crtBufSampOffs;         // Current buffer samples offset
     bool newBuffer;                      // New buffer to process
     DataBlock buffer;                    // I/O buffer
+    BrfBufsThreshold firstBufsThres;     // Initial samplerate/bufs data
     // File dump
     NamedList dataDumpParams;
     int dataDump;
@@ -2429,6 +2445,8 @@ private:
     String& dumpCalCache(String& dest);
     // Update speed related data
     unsigned int updateSpeed(const NamedList& params, String* error = 0);
+    // Set I/O buffers
+    void initBuffers(bool* txSet, unsigned int totalSamples, unsigned int txMinSend);
     // Compute Rx avg values, autocorrect offsets if configured
     void computeRx(uint64_t ts);
     // Check io timestamps
@@ -2603,6 +2621,7 @@ private:
     bool m_txGainCorrSoftware;           // Use software TX GAIN correction
     BrfDevIO m_txIO;
     BrfDevIO m_rxIO;
+    DataBlock m_bufThres;                // Thresholds for used buffers adjustment (BrfBufsThreshold)
     LusbTransfer m_usbTransfer[EpCount]; // List of USB transfers
     BrfDevState m_state;                 // State data used for current operation and backup / restore
     bool m_syncTxStateSet;               // 
@@ -3158,6 +3177,95 @@ void BrfPeripheral::setTrack(bool tx, bool rx, const String& addr, int level)
     }
     else
 	Debug(&__plugin,DebugAll,"%s peripheral debug is disabled",c_str());
+}
+
+
+//
+// BrfBufsThreshold
+//
+const char* BrfBufsThreshold::init(DataBlock& db, const String& str,
+    const RadioCapability& caps)
+{
+    db.clear();
+    if (!str)
+	return 0;
+    ObjList* list = str.split(',',false);
+    unsigned int n = list->count();
+    const char* result = 0;
+    if (!n) {
+	TelEngine::destruct(list);
+	return 0;
+    }
+    db.assign(0,n * sizeof(BrfBufsThreshold));
+    BrfBufsThreshold* t = (BrfBufsThreshold*)db.data(0);
+    unsigned int i = 0;
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext(), ++i) {
+	String& s = *static_cast<String*>(o->get());
+	int pos1 = s.find('/');
+	if (pos1 < 0) {
+	    result = "invalid format";
+	    break;
+	}
+	int64_t sRate = s.substr(0,pos1).trimBlanks().toInt64();
+	int64_t bSamples = 0;
+	int txMinBufs = 0;
+	int pos2 = s.find('/',pos1 + 1);
+	if (pos2 > pos1) {
+	    String tmp = s.substr(pos2 + 1).trimBlanks();
+	    if (tmp)
+		txMinBufs = tmp.toInteger(-1);
+	    bSamples = s.substr(pos1 + 1,pos2 - pos1 - 1).trimBlanks().toInt64(-1);
+	}
+	else
+	    bSamples = s.substr(pos1 + 1).trimBlanks().toInt64(-1);
+	XDebug(&__plugin,DebugAll,"BrfBufsThreshold::init() %u/%u '%s' -> "FMT64"/"FMT64"/%d",
+	    i + 1,n,s.c_str(),sRate,bSamples,txMinBufs);
+	if (sRate < caps.minSampleRate || sRate > caps.maxSampleRate)
+	    result = "samplerate out of range";
+	else if (bSamples <= 0 || bSamples > 0xffffffff)
+	    result = "invalid buffered_samples";
+	else if (txMinBufs < 0)
+	    result = "invalid tx_min_buffers";
+	else {
+	    t[i].sampleRate = sRate;
+	    t[i].bufferedSamples = bSamples;
+	    t[i].txMinBufs = txMinBufs;
+	    if (!i || t[i].sampleRate > t[i - 1].sampleRate ||
+		t[i].bufferedSamples > t[i - 1].bufferedSamples)
+		continue;
+	    result = "not in ascending order";
+	}
+	break;
+    }
+    TelEngine::destruct(list);
+    if (result) {
+	db.clear();
+	return result;
+    }
+#ifdef XDEBUG
+    String s;
+    for (i = 0; i < n; i++, t++)
+	s << "\r\n" << t->sampleRate << "\t" << t->bufferedSamples << "\t" << t->txMinBufs;
+    Output("Got %u BrfBufsThreshold:%s",n,encloseDashes(s));
+#endif
+    return 0;
+}
+
+BrfBufsThreshold* BrfBufsThreshold::findThres(DataBlock& db, unsigned int sampleRate)
+{
+    if (!(db.length() && sampleRate))
+	return 0;
+    unsigned int n = db.length() / sizeof(BrfBufsThreshold);
+    BrfBufsThreshold* t = (BrfBufsThreshold*)db.data(0);
+    for (unsigned int i = 0; i < n; i++, t++) {
+	if (t->sampleRate <= sampleRate) {
+	    // Last entry or less than next one: return it
+	    if (i == n - 1 || sampleRate < t[1].sampleRate)
+		return t;
+	    continue;
+	}
+    }
+    return 0;
 }
 
 
@@ -3823,14 +3931,14 @@ unsigned int BrfLibUsbDevice::setTxPattern(const String& pattern, float gain)
 		s.clear();
 	    else
 		s.printf(1024,"HEAD[%u]: %s",pLen,s.c_str());
-	    Debug(m_owner,DebugNote,"TX pattern set to '%s' gain=%.3f len=%u [%p]%s",
+	    Debug(m_owner,DebugInfo,"TX pattern set to '%s' gain=%.3f len=%u [%p]%s",
 		m_state.m_txPattern.substr(0,100).c_str(),m_state.m_txPatternGain,
 		m_txPattern.length(),m_owner,encloseDashes(s,true));
 	}
     }
     else {
 	if (m_state.m_txPattern)
-	    Debug(m_owner,DebugNote,"TX pattern cleared [%p]",m_owner);
+	    Debug(m_owner,DebugInfo,"TX pattern cleared [%p]",m_owner);
 	m_txPattern.resetStorage(0);
 	m_state.m_txPattern.clear();
 	m_state.m_txPatternGain = 1;
@@ -4182,6 +4290,13 @@ unsigned int BrfLibUsbDevice::open(const NamedList& params, String& error)
 	    params.getBoolValue("rxbufoutput_nodata"));
 	m_silenceTimeMs = clampIntParam(params,"silence_time",5000,0,60000);
 	m_rxTsPastIntervalMs = clampIntParam(params,"rx_ts_past_error_interval",200,50,10000);
+	const String& sRateSamples = params[YSTRING("srate_buffered_samples")];
+	if (sRateSamples) {
+	    const char* s = BrfBufsThreshold::init(m_bufThres,sRateSamples,m_radioCaps);
+	    if (s)
+		Debug(m_owner,DebugConf,"Failed to parse srate_buffered_samples='%s': %s [%p]",
+		    sRateSamples.c_str(),s,m_owner);
+	}
 	break;
     }
     if (status) {
@@ -4845,17 +4960,18 @@ static inline unsigned int ts2buffers(uint64_t ts, unsigned int len)
 // Utility: run device send data
 void BrfLibUsbDevice::runSend(BrfThread* th)
 {
-    unsigned int samples = totalSamples(true);
-    if (!(th && samples))
+    if (!th)
 	return;
-    unsigned int rxLatency = (m_radioCaps.rxLatency + samples - 1) / samples;
-    unsigned int txBuffers = (m_radioCaps.txLatency + samples - 1) / samples;
-    ComplexVector buf(samples);
+    unsigned int samples = 0;
+    unsigned int rxLatency = 0;
+    unsigned int txBuffers = 0;
+    ComplexVector buf;
     bool wait = true;
     uint64_t rxTs = 0;
     uint64_t ts = 0;
     unsigned int status = getTimestamp(true,ts);
     uint64_t silence = ts + 200000;
+    bool paused = true;
     while (!status && (0 == cancelled())) {
 	if (th->paused(true,ts,status) || status) {
 	    if (!status)
@@ -4863,7 +4979,19 @@ void BrfLibUsbDevice::runSend(BrfThread* th)
 	    silence = ts + 200000;
 	    wait = true;
 	    setIoDontWarnTs(true);
+	    paused = true;
 	    continue;
+	}
+	else if (paused) {
+	    paused = false;
+	    samples = totalSamples(true);
+	    if (!samples)
+		break;
+	    if (samples != buf.length()) {
+		rxLatency = (m_radioCaps.rxLatency + samples - 1) / samples;
+		txBuffers = (m_radioCaps.txLatency + samples - 1) / samples;
+		buf.resetStorage(samples);
+	    }
 	}
 	// Wait for RX
 	if (wait) {
@@ -4929,6 +5057,7 @@ void BrfLibUsbDevice::runRecv(BrfThread* th)
     unsigned int txRate = 0;
     unsigned int rxRate = 0;
     m_internalIoRateChanged = true;
+    bool paused = true;
     while (!status && (0 == cancelled())) {
 	if (th->paused(false,ts,status) || status) {
 	    if (!status) {
@@ -4936,7 +5065,13 @@ void BrfLibUsbDevice::runRecv(BrfThread* th)
 		Thread::idle();
 		setIoDontWarnTs(false);
 	    }
+	    paused = true;
 	    continue;
+	}
+	else if (paused) {
+	    paused = false;
+	    if (totalSamples(false) != buf.length())
+		buf.resetStorage(totalSamples(false));
 	}
 	// Simulate some processing to avoid keeping the RX mutex locked
 	generateExpTone(buf,0);
@@ -5532,7 +5667,7 @@ void BrfLibUsbDevice::sendTxPatternChanged()
     m_txPatternChanged = false;
     m_txPatternBuffer.steal(m_txPattern);
     if (m_txPatternBuffer.length())
-	Debug(m_owner,DebugNote,
+	Debug(m_owner,DebugInfo,
 	    "Using send pattern '%s' %u samples at TS=" FMT64U " [%p]",
 	    m_state.m_txPattern.substr(0,50).c_str(),m_txPatternBuffer.length(),
 	    m_txIO.timestamp,m_owner);
@@ -5912,6 +6047,20 @@ unsigned int BrfLibUsbDevice::internalSetSampleRate(bool tx, uint32_t value,
 	    // Calculate RX timestamp silence
 	    m_silenceTs = m_silenceTimeMs * samplesMs;
 	}
+	BrfDevIO& io = getIO(tx);
+	bool first = !io.firstBufsThres.sampleRate;
+	if (first) {
+	    io.firstBufsThres.sampleRate = value;
+	    io.firstBufsThres.bufferedSamples = totalSamples(tx);
+	    io.firstBufsThres.txMinBufs = m_minBufsSend;
+	}
+	// Check for I/O buffers info
+	const BrfBufsThreshold* t = BrfBufsThreshold::findThres(m_bufThres,value);
+	if (!t && !first)
+	    // No threshold set: rollback to first values
+	    t = &io.firstBufsThres;
+	if (t)
+	    initBuffers(&tx,t->bufferedSamples,t->txMinBufs);
 	return 0;
     }
     e.printf(1024,"Failed to set %s samplerate %u: %s",brfDir(tx),value,e.c_str());
@@ -6385,8 +6534,10 @@ unsigned int BrfLibUsbDevice::internalSetFrequency(bool tx, uint64_t val, String
     String e;
     unsigned int status = 0;
     BrfDevTmpAltSet tmpAltSet(this,status,&e,"frequency set");
-    if (val < BRF_FREQUENCY_MIN || val > BRF_FREQUENCY_MAX)
+    if (val < BRF_FREQUENCY_MIN || val > BRF_FREQUENCY_MAX) {
 	status = RadioInterface::OutOfRange;
+	e = "Value out of range";
+    }
     uint32_t hz = (uint32_t)val;
     while (!status) {
 	uint8_t addr = lmsFreqAddr(tx);
@@ -6461,6 +6612,9 @@ unsigned int BrfLibUsbDevice::internalSetFrequency(bool tx, uint64_t val, String
 	Debug(m_owner,DebugInfo,"%s frequency set to %gMHz offset=%g [%p]",
 	    brfDir(tx),(double)hz / 1000000,m_freqOffset,m_owner);
     }
+    else
+	Debug(m_owner,DebugAll,"%s frequency set to %gMHz offset=%g [%p]",
+	    brfDir(tx),(double)hz / 1000000,m_freqOffset,m_owner);
     return 0;
 }
 
@@ -7825,15 +7979,8 @@ String& BrfLibUsbDevice::dumpCalCache(String& dest)
 unsigned int BrfLibUsbDevice::updateSpeed(const NamedList& params, String* error)
 {
     if (speed() == LIBUSB_SPEED_SUPER || speed() == LIBUSB_SPEED_HIGH) {
-	unsigned int brfBufSamples = (speed() == LIBUSB_SPEED_HIGH) ? 252 : 508;
-	unsigned int nBuffers = clampIntParam(params,"buffered_samples",2048,1024,16384) / brfBufSamples;
-	m_txIO.resetSamplesBuffer(brfBufSamples,16,nBuffers);
-	if (m_minBufsSend > nBuffers)
-	    m_minBufsSend = nBuffers;
-	m_rxIO.resetSamplesBuffer(brfBufSamples,16,nBuffers);
-	m_minBufsSend = clampIntParam(params,"tx_min_buffers",nBuffers,1,nBuffers);
-	Debug(m_owner,DebugAll,"Set buffers=%u tx_min_buffers=%u [%p]",
-	    nBuffers,m_minBufsSend,m_owner);
+	initBuffers(0,params.getIntValue("buffered_samples",2048),
+	    params.getIntValue("tx_min_buffers"));
 	if (speed() == LIBUSB_SPEED_SUPER) {
 	    m_radioCaps.rxLatency = clampIntParam(params,"rx_latency_super",4000,0,150000);
 	    m_radioCaps.txLatency = clampIntParam(params,"tx_latency_super",10000,0,150000);
@@ -7858,6 +8005,56 @@ unsigned int BrfLibUsbDevice::updateSpeed(const NamedList& params, String* error
     String e;
     e << "Unsupported USB speed " << m_devSpeed;
     return setError(RadioInterface::InsufficientSpeed,error,e);
+}
+
+// Set I/O buffers
+void BrfLibUsbDevice::initBuffers(bool* txSet, unsigned int totalSamples, unsigned int txMinSend)
+{
+    totalSamples = clampInt(totalSamples,1024,16384,"buffered_samples",DebugConf);
+    unsigned int bufSamples = (speed() == LIBUSB_SPEED_HIGH) ? 252 : 508;
+    unsigned int nBuffs = totalSamples / bufSamples;
+    if (!nBuffs)
+	nBuffs = 1;
+    for (int tx = 1; tx > -1; tx--) {
+	if (txSet && *txSet != tx)
+	    continue;
+	BrfDevIO& io = getIO(tx);
+	if (io.buffers == nBuffs && io.bufSamples == bufSamples)
+	    continue;
+	// Lock I/O to make sure we don't use the buffers
+	BrfSerialize lck(this,tx,false);
+	String error;
+	for (unsigned int i = 0; !lck.devLocked() && i < 3; i++)
+	    lck.wait(&error,1000000);
+	if (!lck.devLocked()) {
+	    Debug(m_owner,DebugGoOn,"Failed to initialize %s buffers: serialize [%p]",
+		brfDir(tx),m_owner);
+	    continue;
+	}
+	bool first = !io.buffers;
+	io.resetSamplesBuffer(bufSamples,16,nBuffs);
+	String extra;
+	if (tx) {
+	    if (txMinSend)
+		m_minBufsSend = clampInt(txMinSend,1,nBuffs,"tx_min_buffers",DebugConf);
+	    else
+		m_minBufsSend = nBuffs;
+	    extra << " tx_min_buffers=" << m_minBufsSend;
+	}
+	Debug(m_owner,first ? DebugAll : DebugInfo,
+	    "Initialized I/O %s buffers=%u samples/buffer=%u total_bytes=%u%s [%p]",
+	    brfDir(tx),io.buffers,io.bufSamples,io.buffer.length(),extra.safe(),m_owner);
+	lck.drop();
+	if (tx) {
+	    // Regenerate TX pattern: it may have the same length as used buffers
+	    Lock d(m_dbgMutex);
+	    String pattern = m_state.m_txPattern;
+	    m_state.m_txPattern = "";
+	    float gain = m_state.m_txPatternGain;
+	    d.drop();
+	    setTxPattern(pattern,gain);
+	}
+    }
 }
 
 // Check timestamps before send / after read
@@ -8786,6 +8983,10 @@ unsigned int BrfLibUsbDevice::prepareCalibrateBb(BrfBbCalData& data, bool dc,
 	// Stop I/O threads (use internal functions to set params)
 	BRF_FUNC_CALL_BREAK(calThreadsPause(true,error));
 	BRF_FUNC_CALL_BREAK(setState(s,error));
+	// RX buffers may change: adjust it in cal data!
+	unsigned int samples = getRxSamples(data.m_params);
+	if (samples != data.samples())
+	    data.resetBuffer(samples);
 	// Toggle timestamps (reset FPGA timestamps)
 	enableRfFpgaBoth(false);
 	enableTimestamps(false);
@@ -8909,7 +9110,7 @@ unsigned int BrfLibUsbDevice::calibrateBaseband(String* error)
     String e;
     unsigned int status = 0;
     unsigned int chg = DevStatLoopback | DevStatTxPattern;
-    unsigned int dirChg = DevStatFreq | DevStatVga | DevStatLpfBw;
+    unsigned int dirChg = DevStatFreq | DevStatSampleRate | DevStatVga | DevStatLpfBw;
     BrfDevState oldState(m_state,chg,dirChg,dirChg);
     setTxPattern(p.getValue(YSTRING("txpattern"),"circle"));
     BrfBbCalData data(getRxSamples(p),p);
@@ -8995,18 +9196,18 @@ unsigned int BrfLibUsbDevice::calibrateBaseband(String* error)
 	    return status;
     }
 
-    m_syncTxState = oldState;
+    calThreadsPause(true);
     if (!status) {
-	m_syncTxState.m_tx.dcOffsetI = data.m_dcI;
-	m_syncTxState.m_tx.dcOffsetQ = data.m_dcQ;
-	m_syncTxState.m_tx.fpgaCorrPhase = data.m_phase;
-	m_syncTxState.m_tx.fpgaCorrGain = data.m_gain;
-	m_syncTxState.m_txChanged |= DevStatDc | DevStatFpga;
-	m_syncTxState.m_changed |= DevStatAbortOnFail;
-	status = setStateSync(&e);
+	oldState.m_tx.dcOffsetI = data.m_dcI;
+	oldState.m_tx.dcOffsetQ = data.m_dcQ;
+	oldState.m_tx.fpgaCorrPhase = data.m_phase;
+	oldState.m_tx.fpgaCorrGain = data.m_gain;
+	oldState.m_txChanged |= DevStatDc | DevStatFpga;
+	oldState.m_changed |= DevStatAbortOnFail;
+	status = setState(oldState,&e);
     }
     else
-	setStateSync();
+	setState(oldState);
     writeLMS(p[YSTRING("lms_write_post")],0,true);
     duration.stop();
     if (status == 0) {

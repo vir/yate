@@ -1,3 +1,10 @@
+yate (5.5.1~svn6245) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6245:
+  * Disable frequency offset calibration on fatal error.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 04 Jul 2017 02:19:17 +0300
+
 yate (5.5.1~svn6244) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6244:

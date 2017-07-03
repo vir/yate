@@ -3743,6 +3743,10 @@ void BrfVctcxoDiscipliner::samplesAndTimestamp(uint64_t& samples, uint64_t& time
 	    }
 	    if (status == RadioInterface::Failure && serializeErr)
 		timeouts++;
+	    else if (status & RadioInterface::FatalErrorMask) {
+		disableDiscipline();
+		return;
+	    }
 	}
 	// drop invalid and imprecise measurements
 	if (!tempSamples || tempDelay > delay)
@@ -10982,7 +10986,7 @@ bool BrfModule::onCmdControl(BrfInterface* ifc, Message& msg)
     if (cmd == YSTRING("freqcalstart"))
 	return onCmdFreqCal(ifc,msg,true);
     if (cmd == YSTRING("freqcalstop")) {
-	ifc->device()->disableDiscipline();
+	ifc->device()->disableDiscipline(true);
 	msg.retValue() << "frequency calibration disabled";
 	return true;
     }

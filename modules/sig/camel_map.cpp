@@ -9119,6 +9119,7 @@ void TcapXModule::initUsers(Configuration& cfg)
 	    TcapXUser* usr = (o ? static_cast<TcapXUser*>(o->get()) : 0);
 	    if (!usr) {
 		usr = new TcapXUser(name);
+		usr->debugChain(&__plugin);
 		m_users.append(usr);
 	    }
 	    if (!usr->initialize(*sect)) {

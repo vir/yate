@@ -2666,6 +2666,7 @@ private:
     ComplexVector m_txPatternBuffer;
     unsigned int m_txPatternBufPos;
     // Check & calibration
+    bool m_calLms;                       // Run LMS auto cal
     int m_calibrateStatus;
     int m_calibrateStop;
     NamedList m_calibration;             // Calibration parameters
@@ -3867,6 +3868,7 @@ BrfLibUsbDevice::BrfLibUsbDevice(BrfInterface* owner)
     m_rxAlterTsJumpPos(0),
     m_txPatternChanged(false),
     m_txPatternBufPos(0),
+    m_calLms(false),
     m_calibrateStatus(0),
     m_calibrateStop(0),
     m_calibration(""),
@@ -4208,6 +4210,7 @@ unsigned int BrfLibUsbDevice::open(const NamedList& params, String& error)
     String e;
     unsigned int status = 0;
     while (true) {
+	m_calLms = params.getBoolValue(YSTRING("lms_autocal"));
 	m_serial = params[YSTRING("serial")];
 	BRF_FUNC_CALL_BREAK(resetUsb(&e));
 	BRF_FUNC_CALL_BREAK(openDevice(true,&e));
@@ -5490,7 +5493,8 @@ unsigned int BrfLibUsbDevice::internalPowerOn(bool rfLink, bool tx, bool rx, Str
     while (status == 0) {
 	if (tx || rx) {
 	    BRF_FUNC_CALL_BREAK(enableTimestamps(true,&e));
-	    BRF_FUNC_CALL_BREAK(calibrateAuto(&e));
+	    if (m_calLms)
+		BRF_FUNC_CALL_BREAK(calibrateAuto(&e));
 	}
 	BRF_FUNC_CALL_BREAK(enableRf(true,tx,false,&e));
 	BRF_FUNC_CALL_BREAK(enableRf(false,rx,false,&e))

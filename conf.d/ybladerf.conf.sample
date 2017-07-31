@@ -137,6 +137,10 @@
 ;max_samplerate_super=40000000
 ;max_samplerate_high=4000000
 
+; lms_autocal: boolean: Run LMS chip auto-calibration on power on
+; Defaults to 'no'
+;lms_autocal=no
+
 ; rxoutsw: boolean: Enable (close) the RXOUTSW switch
 ; This parameter is applied on reload
 ;rxoutsw=no

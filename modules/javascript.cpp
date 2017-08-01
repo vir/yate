@@ -209,6 +209,52 @@ private:
     RefPointer<JsEngine> m_engine;
 };
 
+class JsSemaphore : public JsObject
+{
+    YCLASS(JsSemaphore,JsObject)
+public:
+    inline JsSemaphore(Mutex* mtx)
+	: JsObject("Semaphore",mtx,true), m_constructor(0), m_exit(false)
+	{
+	    XDebug(DebugAll,"JsSemaphore::JsSemaphore() [%p]",this);
+	}
+
+    inline JsSemaphore(JsSemaphore* constructor, Mutex* mtx, unsigned int maxCount, unsigned int initialCount,
+	    const char* name)
+	: JsObject("Semaphore",mtx,true), m_name(name),
+	  m_semaphore(maxCount,m_name.c_str(),initialCount), m_constructor(constructor), m_exit(false)
+	{
+	    XDebug(DebugAll,"JsSemaphore::JsSemaphore(%u,'%s',%u) [%p]",maxCount, 
+		   name,initialCount,this);
+	    params().addParam(new ExpFunction("wait"));
+	    params().addParam(new ExpFunction("signal"));
+	}
+    virtual ~JsSemaphore()
+	{
+	    XDebug(DebugAll,"~JsSemaphore() [%p]",this);
+	    if (m_constructor)
+		m_constructor->removeSemaphore(this);
+	    // Notify all the semaphores that we are exiting.
+	    Lock myLock(mutex());
+	    JsSemaphore* js = 0;;
+	    while ((js = static_cast<JsSemaphore*>(m_semaphores.remove(false))))
+		js->forceExit();
+	}
+
+    void runAsync(ObjList& stack, long maxWait);
+    virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    void removeSemaphore(JsSemaphore* sem);
+    void forceExit();
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+private:
+    String m_name;
+    Semaphore m_semaphore;
+    JsSemaphore* m_constructor;
+    ObjList m_semaphores;
+    bool m_exit;
+};
+
 #define MKDEBUG(lvl) params().addParam(new ExpOperation((int64_t)Debug ## lvl,"Debug" # lvl))
 #define MKTIME(typ) params().addParam(new ExpOperation((int64_t)SysUsage:: typ ## Time,# typ "Time"))
 class JsEngine : public JsObject, public DebugEnabler
@@ -274,6 +320,7 @@ public:
 	    params().addParam(new ExpFunction("htoa"));
 	    params().addParam(new ExpFunction("btoh"));
 	    params().addParam(new ExpFunction("htob"));
+	    addConstructor(params(), "Semaphore", new JsSemaphore(mtx));
 	}
     static void initialize(ScriptContext* context, const char* name = 0);
     inline void resetWorker()
@@ -736,6 +783,29 @@ private:
     ObjList* m_stack;
     RefPointer<JsMessage> m_msg;
     Message* m_message;
+};
+
+class JsSemaphoreAsync : public ScriptAsync
+{
+    YCLASS(JsSemaphoreAsync,ScriptAsync)
+public:
+    inline JsSemaphoreAsync(ScriptRun* runner, ObjList* stack, JsSemaphore* se, long wait)
+	: ScriptAsync(runner), m_stack(stack), m_semaphore(se), m_wait(wait)
+	{ XDebug(DebugAll,"JsSemaphoreAsync(%p, %ld) [%p]",se,wait,this); }
+
+    virtual ~JsSemaphoreAsync()
+	{ XDebug(DebugAll,"~JsSemaphoreAsync() [%p]",this); }
+    virtual bool run()
+    {
+	if (m_wait > 0)
+	    m_wait *= 1000;
+	m_semaphore->runAsync(*m_stack, m_wait);
+	return true;
+    }
+private:
+    ObjList* m_stack;
+    RefPointer<JsSemaphore> m_semaphore;
+    long m_wait;
 };
 
 class JsDnsAsync : public ScriptAsync
@@ -2622,6 +2692,91 @@ void JsFile::initialize(ScriptContext* context)
 	addObject(params,"File",new JsFile(mtx));
 }
 
+void JsSemaphore::runAsync(ObjList& stack, long maxWait)
+{
+    if (m_exit) {
+	ExpEvaluator::pushOne(stack,new ExpOperation(false));
+	return;
+    }
+    bool ret = m_semaphore.lock(maxWait);
+    if (m_exit)
+	ret = false;
+    ExpEvaluator::pushOne(stack,new ExpOperation(ret));
+}
+
+bool JsSemaphore::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsSemaphore::runNative '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
+    if (oper.name() == YSTRING("wait")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	long wait = 0;
+	if (JsParser::isNull(*op))
+	    wait = -1;
+	else if ((wait = op->toInteger()) < 0)
+	    wait = 0;
+	TelEngine::destruct(op);
+	ScriptRun* runner = YOBJECT(ScriptRun,context);
+	if (!runner)
+	    return false;
+	runner->insertAsync(new JsSemaphoreAsync(runner,&stack,this,wait));
+	runner->pause();
+    }
+    else if (oper.name() == YSTRING("signal")) {
+	if (oper.number())
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_semaphore.unlock()));
+    }
+    else
+	return false;
+    return true;
+}
+
+void JsSemaphore::removeSemaphore(JsSemaphore* sem)
+{
+    Lock myLock(mutex());
+    m_semaphores.remove(sem,false);
+}
+
+void JsSemaphore::forceExit()
+{
+    m_exit = true;
+    m_constructor = 0;
+    m_semaphore.unlock();
+}
+
+JsObject* JsSemaphore::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    ObjList args;
+    int maxcount = 1;
+    int initialCount = 0;
+    const char* name = "JsSemaphore";
+    switch (extractArgs(stack,oper,context,args)) {
+	case 3:
+	    name = static_cast<ExpOperation*>(args[2])->c_str();
+	    // Intentional
+	case 2:
+	    initialCount = static_cast<ExpOperation*>(args[1])->toInteger(-1);
+	    if (initialCount < 0)
+		initialCount = 0;
+	    // Intentional
+	case 1:
+	    maxcount = static_cast<ExpOperation*>(args[0])->toInteger();
+	    if (maxcount < 1)
+		maxcount = 1;
+	    // Intentional
+	case 0:
+	    break;
+	default:
+	    return 0;
+    }
+    JsSemaphore* sem = new JsSemaphore(this,mutex(),maxcount,initialCount,name);
+    mutex()->lock();
+    m_semaphores.append(sem);
+    mutex()->unlock();
+    return sem;
+}
 
 void* JsConfigFile::getObject(const String& name) const
 {

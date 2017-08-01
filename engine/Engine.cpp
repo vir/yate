@@ -1279,7 +1279,7 @@ SLib::~SLib()
 	if (fini || m_nounload) {
 	    count -= plugins.count();
 	    if (count != m_count)
-		Debug(DebugGoOn,"Finalizing '%s' removed %u out of %u plugins",
+		Debug(DebugCrit,"Finalizing '%s' removed %u out of %u plugins",
 		    c_str(),count,m_count);
 	    checkPoint();
 	    return;
@@ -1288,19 +1288,19 @@ SLib::~SLib()
     }
     int err = dlclose(m_handle);
     if (err)
-	Debug(DebugGoOn,"Error %d on dlclose(%p) of '%s'",err,m_handle,c_str());
+	Debug(DebugCrit,"Error %d on dlclose(%p) of '%s'",err,m_handle,c_str());
     else if (s_keepclosing) {
 	int tries;
 	for (tries=0; tries<10; tries++)
 	    if (dlclose(m_handle))
 		break;
 	if (tries)
-	    Debug(DebugGoOn,"Made %d attempts to dlclose(%p) '%s'",
+	    Debug(DebugCrit,"Made %d attempts to dlclose(%p) '%s'",
 		tries,m_handle,c_str());
     }
     count -= plugins.count();
     if (count != m_count)
-	Debug(DebugGoOn,"Unloading '%s' removed %u out of %u plugins",
+	Debug(DebugWarn,"Unloading '%s' removed %u out of %u plugins",
 	    c_str(),count,m_count);
     checkPoint();
 }
@@ -1427,7 +1427,7 @@ int Engine::engineInit()
     WSADATA wsaData;
     int errc = ::WSAStartup(MAKEWORD(2,2), &wsaData);
     if (errc) {
-	Debug(DebugGoOn,"Failed to initialize the Windows Sockets library, error code %d",errc);
+	Debug(DebugCrit,"Failed to initialize the Windows Sockets library, error code %d",errc);
 	return errc & 127;
     }
 #else
@@ -1776,7 +1776,7 @@ int Engine::engineCleanup()
     unsigned int cnt = plugins.count();
     plugins.clear();
     if (mux || cnt)
-	Debug(DebugGoOn,"Exiting with %d locked mutexes and %u plugins loaded!",mux,cnt);
+	Debug(DebugWarn,"Exiting with %d locked mutexes and %u plugins loaded!",mux,cnt);
     if (GenObject::getObjCounting()) {
 	String str;
 	int obj = EngineStatusHandler::objects(str);
@@ -2353,7 +2353,7 @@ int Engine::cleanupLibrary()
     if (mux < 0)
 	mux = 0;
     if (mux)
-	Debug(DebugGoOn,"Exiting with %d locked mutexes!",mux);
+	Debug(DebugCrit,"Exiting with %d locked mutexes!",mux);
     if (GenObject::getObjCounting()) {
 	String str;
 	int obj = EngineStatusHandler::objects(str);

@@ -782,7 +782,7 @@ Disconnector::~Disconnector()
 bool Disconnector::init()
 {
     if (error() || !startup()) {
-	Debug(&__plugin,DebugGoOn,"Error starting disconnector thread %p",this);
+	Debug(&__plugin,DebugCrit,"Error starting disconnector thread %p",this);
 	delete this;
 	return false;
     }

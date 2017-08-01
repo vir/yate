@@ -418,7 +418,7 @@ SslSocket::SslSocket(SOCKET handle, bool server, int verify, SslContext* context
 	::SSL_set_fd(m_ssl,handle);
 	BIO* bio = ::SSL_get_rbio(m_ssl);
 	if (!(bio && BIO_set_close(bio,BIO_NOCLOSE)))
-	    Debug(&__plugin,DebugGoOn,"SslSocket::SslSocket(%d) no BIO or cannot set NOCLOSE [%p]",
+	    Debug(&__plugin,DebugCrit,"SslSocket::SslSocket(%d) no BIO or cannot set NOCLOSE [%p]",
 		handle,this);
 	if (server)
 	    ::SSL_set_accept_state(m_ssl);
@@ -555,12 +555,12 @@ bool SslHandler::received(Message& msg)
     addRand(msg.msgTime());
     Socket** ppSock = static_cast<Socket**>(msg.userObject(YATOM("Socket*")));
     if (!ppSock) {
-	Debug(&__plugin,DebugGoOn,"SslHandler: No pointer to Socket");
+	Debug(&__plugin,DebugCrit,"SslHandler: No pointer to Socket");
 	return false;
     }
     Socket* pSock = *ppSock;
     if (!pSock) {
-	Debug(&__plugin,DebugGoOn,"SslHandler: NULL Socket pointer");
+	Debug(&__plugin,DebugCrit,"SslHandler: NULL Socket pointer");
 	return false;
     }
     if (!pSock->valid()) {

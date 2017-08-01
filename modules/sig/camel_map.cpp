@@ -673,7 +673,7 @@ static bool encodeParam(const Parameter* param, DataBlock& data, XmlElement* ele
 		!(param->type == TcapXApplication::HexString || param->type == TcapXApplication::SequenceOf
 		|| param->type == TcapXApplication::Sequence || param->type == TcapXApplication::Choice
 		|| param->type == TcapXApplication::SetOf))
-		Debug(&__plugin,DebugGoOn,"Encoding definition conflict for param='%s', tag is defined as contructor"
+		Debug(&__plugin,DebugCrit,"Encoding definition conflict for param='%s', tag is defined as contructor"
 		    " while its type is primitive",param->name.c_str());
 	    ok = type->encode(param,type,data,child,err);
 	}
@@ -7272,7 +7272,7 @@ bool XMLConnListener::createConn(Socket* skt, String& addr)
 	return false;
     }
     if (!skt->setBlocking(false)) {
-	Debug(m_user,DebugGoOn, "Failed to set TCP socket to nonblocking mode: %s",
+	Debug(m_user,DebugCrit, "Failed to set TCP socket to nonblocking mode: %s",
 	    strerror(skt->error()));
 	delete skt;
 	return false;

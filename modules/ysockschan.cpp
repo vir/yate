@@ -1899,7 +1899,7 @@ SOCKSPacket* SOCKSConn::processSocks(const Time& now, bool& error, bool& timeout
 	return 0;
     // Sanity check
     if (!m_waitMsg) {
-	Debug(m_engine,DebugGoOn,
+	Debug(m_engine,DebugCrit,
 	    "SOCKSConn(%s) inconsistent status (no msg in %s status) [%p]",
 	    m_id.c_str(),statusName(m_status),this);
 	error = true;
@@ -3447,7 +3447,7 @@ bool YSocksWrapper::startWorker()
     if (m_thread->startup())
 	return true;
     m_thread = 0;
-    Debug(this,DebugGoOn,"Failed to start worker thread [%p]",this);
+    Debug(this,DebugCrit,"Failed to start worker thread [%p]",this);
     return false;
 }
 

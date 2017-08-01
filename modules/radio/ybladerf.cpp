@@ -2562,11 +2562,11 @@ private:
     void stopThreads();
     inline unsigned int checkDev(const char* loc) {
 	    return m_devHandle ? 0 :
-		showError(RadioInterface::NotInitialized,"not open",loc,0,DebugGoOn);
+		showError(RadioInterface::NotInitialized,"not open",loc,0,DebugCrit);
 	}
     inline unsigned int checkCalStatus(const char* loc) {
 	    return (Calibrating != m_calibrateStatus) ? 0 :
-		showError(RadioInterface::NotCalibrated,"calibrating",loc,0,DebugGoOn);
+		showError(RadioInterface::NotCalibrated,"calibrating",loc,0,DebugCrit);
 	}
     inline unsigned int checkPubFuncEntry(bool internal, const char* loc) {
 	    unsigned int status = 0;
@@ -3445,7 +3445,7 @@ unsigned int BrfDevTmpAltSet::restore()
 	    "Restored alt interface to %s after '%s' [%p]",
 	    altSetName(m_tmpAltSet),m_oper,m_device->owner());
     else
-	Debug(m_device->owner(),DebugGoOn,
+	Debug(m_device->owner(),DebugCrit,
 	    "Failed to restore alt interface after '%s': %s [%p]",
 	    m_oper,e.c_str(),m_device->owner());
     m_tmpAltSet = BRF_ALTSET_INVALID;
@@ -4400,7 +4400,7 @@ unsigned int BrfLibUsbDevice::initialize(const NamedList& params)
 	    return 0;
     }
     if (status != RadioInterface::Pending)
-	Debug(m_owner,DebugGoOn,"Failed to initialize: %s [%p]",
+	Debug(m_owner,DebugCrit,"Failed to initialize: %s [%p]",
 	    e.safe("Unknown error"),m_owner);
     return status;
 }
@@ -5999,7 +5999,7 @@ unsigned int BrfLibUsbDevice::internalSetSampleRate(bool tx, uint32_t value,
 	// Enforce minimum sample rate
 	reduceRational(rate);
 	if (rate.integer < BRF_SAMPLERATE_MIN)
-	    Debug(m_owner,DebugGoOn,
+	    Debug(m_owner,DebugConf,
 		"Requested %s sample rate %u is smaller than allowed minimum value [%p]",
 		brfDir(tx),value,m_owner);
 	// Setup the multisynth enables and index
@@ -6808,7 +6808,7 @@ unsigned int BrfLibUsbDevice::syncTransfer(int ep, uint8_t* data, unsigned int l
 unsigned int BrfLibUsbDevice::gpioRead(uint8_t addr, uint32_t& value, uint8_t len,
     String* error, const char* loc)
 {
-    len = clampInt(len,1,sizeof(value),"GPIO read items",DebugGoOn);
+    len = clampInt(len,1,sizeof(value),"GPIO read items",DebugCrit);
     uint8_t t[sizeof(value)];
     unsigned int status = accessPeripheral(UartDevGPIO,false,addr,t,error,len,loc);
     if (status)
@@ -6835,9 +6835,9 @@ unsigned int BrfLibUsbDevice::gpioWrite(uint8_t addr, uint32_t value, uint8_t le
 	else if (m_devSpeed == LIBUSB_SPEED_HIGH)
 	    value |= BRF_GPIO_SMALL_DMA_XFER;
 	else
-	    Debug(m_owner,DebugGoOn,"GPIO write: unhandled speed [%p]",m_owner);
+	    Debug(m_owner,DebugStub,"GPIO write: unhandled speed [%p]",m_owner);
     }
-    len = clampInt(len,1,sizeof(value),"GPIO write items",DebugGoOn);
+    len = clampInt(len,1,sizeof(value),"GPIO write items",DebugCrit);
     uint8_t t[sizeof(value)];
     // Data is in little endian order
 #ifdef LITTLE_ENDIAN
@@ -8035,7 +8035,7 @@ void BrfLibUsbDevice::initBuffers(bool* txSet, unsigned int totalSamples, unsign
 	for (unsigned int i = 0; !lck.devLocked() && i < 3; i++)
 	    lck.wait(&error,1000000);
 	if (!lck.devLocked()) {
-	    Debug(m_owner,DebugGoOn,"Failed to initialize %s buffers: serialize [%p]",
+	    Debug(m_owner,DebugCrit,"Failed to initialize %s buffers: serialize [%p]",
 		brfDir(tx),m_owner);
 	    continue;
 	}
@@ -8123,7 +8123,7 @@ void BrfLibUsbDevice::ioBufCheckLimit(bool tx, unsigned int nBufs)
 	    }
     }
     if (invalid)
-	Debug(m_owner,DebugGoOn,"%s: sample value out of range buffers=%u:%s [%p]",
+	Debug(m_owner,DebugConf,"%s: sample value out of range buffers=%u:%s [%p]",
 	    brfDir(tx),nBufs,invalid.c_str(),m_owner);
 }
 
@@ -10218,7 +10218,7 @@ void BrfLibUsbDevice::stopThreads()
 unsigned int BrfLibUsbDevice::waitCancel(const char* loc, const char* reason,
     String* error)
 {
-    Debug(m_owner,DebugGoOn,"%s: %s. Waiting for cancel... [%p]",loc,reason,m_owner);
+    Debug(m_owner,DebugCrit,"%s: %s. Waiting for cancel... [%p]",loc,reason,m_owner);
     unsigned int status = 0;
     while (!status && !m_calibrateStop) {
 	Thread::idle();

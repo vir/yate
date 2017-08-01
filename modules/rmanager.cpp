@@ -338,13 +338,13 @@ bool RManagerListener::initSocket()
 
     m_socket.create(AF_INET, SOCK_STREAM);
     if (!m_socket.valid()) {
-	Alarm("RManager","socket",DebugGoOn,"Unable to create the listening socket: %s",
+	Alarm("RManager","socket",DebugCrit,"Unable to create the listening socket: %s",
 	    strerror(m_socket.error()));
 	return false;
     }
 
     if (!m_socket.setBlocking(false)) {
-	Alarm("RManager","socket",DebugGoOn, "Failed to set listener to nonblocking mode: %s",
+	Alarm("RManager","socket",DebugCrit, "Failed to set listener to nonblocking mode: %s",
 	    strerror(m_socket.error()));
 	return false;
     }
@@ -355,12 +355,12 @@ bool RManagerListener::initSocket()
     m_address << sa.host() << ":" << sa.port();
     m_socket.setReuse();
     if (!m_socket.bind(sa)) {
-	Alarm("RManager","socket",DebugGoOn,"Failed to bind to %s : %s",
+	Alarm("RManager","socket",DebugCrit,"Failed to bind to %s : %s",
 	    m_address.c_str(),strerror(m_socket.error()));
 	return false;
     }
     if (!m_socket.listen(2)) {
-	Alarm("RManager","socket",DebugGoOn,"Unable to listen on socket: %s",
+	Alarm("RManager","socket",DebugCrit,"Unable to listen on socket: %s",
 	    strerror(m_socket.error()));
 	return false;
     }
@@ -420,7 +420,7 @@ Connection* RManagerListener::checkCreate(Socket* sock, const char* addr)
 	}
     }
     else if (!sock->setBlocking(false)) {
-	Debug("RManager",DebugGoOn, "Failed to set tcp socket to nonblocking mode: %s",
+	Debug("RManager",DebugCrit, "Failed to set tcp socket to nonblocking mode: %s",
 	    strerror(sock->error()));
 	delete sock;
 	return 0;

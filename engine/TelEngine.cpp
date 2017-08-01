@@ -101,6 +101,7 @@ namespace TelEngine {
 
 #define DebugMin DebugFail
 #define DebugVis DebugConf
+#define DebugDef DebugNote
 #define DebugMax DebugAll
 
 #define OUT_BUFFER_SIZE 8192
@@ -111,7 +112,7 @@ namespace TelEngine {
 #define REFOBJECT_MUTEX_COUNT 47
 #endif
 
-static int s_debug = DebugWarn;
+static int s_debug = DebugDef;
 static int s_indent = 0;
 static bool s_debugging = true;
 static bool s_abort = false;
@@ -122,13 +123,13 @@ static Debugger::Formatting s_fmtstamp = Debugger::None;
 static const char* const s_colors[11] = {
     "\033[5;41;1;33m\033[K",// DebugFail - blinking yellow on red
     "\033[44;1;37m\033[K",  // DebugTest - white on blue
-    "\033[41;1;37m\033[K",  // DebugGoOn - white on red
+    "\033[41;1;37m\033[K",  // DebugCrit - white on red
     "\033[41;37m\033[K",    // DebugConf - gray on red
     "\033[40;31m\033[K",    // DebugStub - red on black
     "\033[40;1;31m\033[K",  // DebugWarn - light red on black
     "\033[40;1;33m\033[K",  // DebugMild - yellow on black
-    "\033[40;1;37m\033[K",  // DebugCall - white on black
     "\033[40;1;32m\033[K",  // DebugNote - light green on black
+    "\033[40;1;37m\033[K",  // DebugCall - white on black
     "\033[40;1;36m\033[K",  // DebugInfo - light cyan on black
     "\033[40;36m\033[K"     // DebugAll  - cyan on black
 };
@@ -136,13 +137,13 @@ static const char* const s_colors[11] = {
 static const char* const s_levels[11] = {
     "FAIL",
     "TEST",
-    "GOON",
+    "CRIT",
     "CONF",
     "STUB",
     "WARN",
     "MILD",
-    "CALL",
     "NOTE",
+    "CALL",
     "INFO",
     "ALL",
 };

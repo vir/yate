@@ -182,23 +182,23 @@ bool DSoundPlay::init()
 {
     HRESULT hr;
     if (FAILED(hr = ::CoInitializeEx(NULL,COINIT_MULTITHREADED))) {
-	Debug(DebugGoOn,"Could not initialize the COM library, code 0x%X",hr);
+	Debug(DebugCrit,"Could not initialize the COM library, code 0x%X",hr);
 	return false;
     }
     if (FAILED(hr = ::CoCreateInstance(CLSID_DirectSound, NULL, CLSCTX_INPROC_SERVER,
 	IID_IDirectSound, (void**)&m_ds)) || !m_ds) {
-	Debug(DebugGoOn,"Could not create the DirectSound object, code 0x%X",hr);
+	Debug(DebugCrit,"Could not create the DirectSound object, code 0x%X",hr);
 	return false;
     }
     if (FAILED(hr = m_ds->Initialize(m_device))) {
-	Debug(DebugGoOn,"Could not initialize the DirectSound object, code 0x%X",hr);
+	Debug(DebugWarn,"Could not initialize the DirectSound object, code 0x%X",hr);
 	return false;
     }
     HWND wnd = GetForegroundWindow();
     if (!wnd)
 	wnd = GetDesktopWindow();
     if (FAILED(hr = m_ds->SetCooperativeLevel(wnd,s_primary ? DSSCL_WRITEPRIMARY : DSSCL_EXCLUSIVE))) {
-	Debug(DebugGoOn,"Could not set the DirectSound cooperative level, code 0x%X",hr);
+	Debug(DebugCrit,"Could not set the DirectSound cooperative level, code 0x%X",hr);
 	return false;
     }
 
@@ -234,23 +234,23 @@ bool DSoundPlay::init()
 	bdesc.lpwfxFormat = &fmt;
     }
     if (FAILED(hr = m_ds->CreateSoundBuffer(&bdesc, &m_dsb, NULL)) || !m_dsb) {
-	Debug(DebugGoOn,"Could not create the DirectSound buffer, code 0x%X",hr);
+	Debug(DebugCrit,"Could not create the DirectSound buffer, code 0x%X",hr);
 	return false;
     }
     // format can be changed only for primary buffers
     if (s_primary && FAILED(hr = m_dsb->SetFormat(&fmt))) {
-	Debug(DebugGoOn,"Could not set the DirectSound buffer format, code 0x%X",hr);
+	Debug(DebugWarn,"Could not set the DirectSound buffer format, code 0x%X",hr);
 	return false;
     }
     if (FAILED(hr = m_dsb->GetFormat(&fmt,sizeof(fmt),0))) {
-	Debug(DebugGoOn,"Could not get the DirectSound buffer format, code 0x%X",hr);
+	Debug(DebugWarn,"Could not get the DirectSound buffer format, code 0x%X",hr);
 	return false;
     }
     if ((fmt.wFormatTag != WAVE_FORMAT_PCM) ||
 	(fmt.nChannels != nChannels) ||
 	(fmt.nSamplesPerSec != m_rate) ||
 	(fmt.wBitsPerSample != 16)) {
-	Debug(DebugGoOn,"DirectSound does not support %dHz 16bit %s PCM format, "
+	Debug(DebugWarn,"DirectSound does not support %dHz 16bit %s PCM format, "
 	    "got fmt=%u, chans=%d samp=%d size=%u",m_rate,nChannels == 1 ? "mono" : "stereo",
 	    fmt.wFormatTag,fmt.nChannels,fmt.nSamplesPerSec,fmt.wBitsPerSample);
 	return false;
@@ -258,14 +258,14 @@ bool DSoundPlay::init()
     DSBCAPS caps;
     caps.dwSize = sizeof(caps);
     if (FAILED(hr = m_dsb->GetCaps(&caps))) {
-	Debug(DebugGoOn,"Could not get the DirectSound buffer capabilities, code 0x%X",hr);
+	Debug(DebugCrit,"Could not get the DirectSound buffer capabilities, code 0x%X",hr);
 	return false;
     }
     m_buffSize = caps.dwBufferBytes;
     Debug(&__plugin,DebugInfo,"DirectSound buffer size %u",m_buffSize);
     if (FAILED(hr = m_dsb->Play(0,0,DSBPLAY_LOOPING))) {
 	if ((hr != DSERR_BUFFERLOST) || FAILED(hr = m_dsb->Restore())) {
-	    Debug(DebugGoOn,"Could not play the DirectSound buffer, code 0x%X",hr);
+	    Debug(DebugWarn,"Could not play the DirectSound buffer, code 0x%X",hr);
 	    return false;
 	}
 	m_dsb->Play(0,0,DSBPLAY_LOOPING);
@@ -449,16 +449,16 @@ bool DSoundRec::init()
 {
     HRESULT hr;
     if (FAILED(hr = ::CoInitializeEx(NULL,COINIT_MULTITHREADED))) {
-	Debug(DebugGoOn,"Could not initialize the COM library, code 0x%X",hr);
+	Debug(DebugCrit,"Could not initialize the COM library, code 0x%X",hr);
 	return false;
     }
     if (FAILED(hr = ::CoCreateInstance(CLSID_DirectSoundCapture, NULL, CLSCTX_INPROC_SERVER,
 	IID_IDirectSoundCapture, (void**)&m_ds)) || !m_ds) {
-	Debug(DebugGoOn,"Could not create the DirectSoundCapture object, code 0x%X",hr);
+	Debug(DebugCrit,"Could not create the DirectSoundCapture object, code 0x%X",hr);
 	return false;
     }
     if (FAILED(hr = m_ds->Initialize(m_device))) {
-	Debug(DebugGoOn,"Could not initialize the DirectSoundCapture object, code 0x%X",hr);
+	Debug(DebugWarn,"Could not initialize the DirectSoundCapture object, code 0x%X",hr);
 	return false;
     }
     WAVEFORMATEX fmt;
@@ -476,18 +476,18 @@ bool DSoundRec::init()
     bdesc.dwBufferBytes = 4 * m_rate / 25;
     bdesc.lpwfxFormat = &fmt;
     if (FAILED(hr = m_ds->CreateCaptureBuffer(&bdesc, &m_dsb, NULL)) || !m_dsb) {
-	Debug(DebugGoOn,"Could not create the DirectSoundCapture buffer, code 0x%X",hr);
+	Debug(DebugCrit,"Could not create the DirectSoundCapture buffer, code 0x%X",hr);
 	return false;
     }
     if (FAILED(hr = m_dsb->GetFormat(&fmt,sizeof(fmt),0))) {
-	Debug(DebugGoOn,"Could not get the DirectSoundCapture buffer format, code 0x%X",hr);
+	Debug(DebugCrit,"Could not get the DirectSoundCapture buffer format, code 0x%X",hr);
 	return false;
     }
     if ((fmt.wFormatTag != WAVE_FORMAT_PCM) ||
 	(fmt.nChannels != 1) ||
 	(fmt.nSamplesPerSec != m_rate) ||
 	(fmt.wBitsPerSample != 16)) {
-	Debug(DebugGoOn,"DirectSoundCapture does not support %dHz 16bit mono PCM format, "
+	Debug(DebugWarn,"DirectSoundCapture does not support %dHz 16bit mono PCM format, "
 	    "got fmt=%u, chans=%d samp=%d size=%u",m_rate,
 	    fmt.wFormatTag,fmt.nChannels,fmt.nSamplesPerSec,fmt.wBitsPerSample);
 	return false;
@@ -495,13 +495,13 @@ bool DSoundRec::init()
     DSCBCAPS caps;
     caps.dwSize = sizeof(caps);
     if (FAILED(hr = m_dsb->GetCaps(&caps))) {
-	Debug(DebugGoOn,"Could not get the DirectSoundCapture buffer capabilities, code 0x%X",hr);
+	Debug(DebugCrit,"Could not get the DirectSoundCapture buffer capabilities, code 0x%X",hr);
 	return false;
     }
     m_buffSize = caps.dwBufferBytes;
     Debug(&__plugin,DebugInfo,"DirectSoundCapture buffer size %u",m_buffSize);
     if (FAILED(hr = m_dsb->Start(DSCBSTART_LOOPING))) {
-	Debug(DebugGoOn,"Could not record to the DirectSoundCapture buffer, code 0x%X",hr);
+	Debug(DebugWarn,"Could not record to the DirectSoundCapture buffer, code 0x%X",hr);
 	return false;
     }
     return true;

@@ -1447,9 +1447,9 @@ SCCP::~SCCP()
     DDebug(this,DebugAll,"Destroying SCCP [%p]",this);
     // If we have undetached users scream as hard as we can
     if (m_users.skipNull())
-	Debug(this,DebugGoOn,"Destroying SCCP with %d undetached users!!!",m_users.count());
+	Debug(this,DebugCrit,"Destroying SCCP with %d undetached users!!!",m_users.count());
     if (m_translator)
-	Debug(this,DebugGoOn,"Destroying SCCP with an valid translator!!!");
+	Debug(this,DebugCrit,"Destroying SCCP with a valid translator!!!");
 }
 
 void SCCP::attach(SCCPUser* user)
@@ -2953,7 +2953,7 @@ int SS7SCCP::transmitMessage(SS7MsgSCCP* sccpMsg, bool local)
     if (!sccpMsg || !sccpMsg->getData())
 	return -1;
     if (unknownPointCodeType()) {
-	Debug(this,DebugGoOn,"SCCP unavailable!! Reason Unknown pointcode type %s",SS7PointCode::lookup(m_type));
+	Debug(this,DebugConf,"SCCP unavailable!! Reason Unknown pointcode type %s",SS7PointCode::lookup(m_type));
 	return -1;
     }
     Lock lock(this);
@@ -3147,7 +3147,7 @@ void SS7SCCP::checkSCLCOptParams(SS7MsgSCCP* msg)
 int SS7SCCP::sendMessage(DataBlock& data, const NamedList& params)
 {
     if (unknownPointCodeType()) {
-	Debug(this,DebugGoOn,"SCCP unavailable!! Reason Unknown pointcode type %s",SS7PointCode::lookup(m_type));
+	Debug(this,DebugConf,"SCCP unavailable!! Reason Unknown pointcode type %s",SS7PointCode::lookup(m_type));
 	return -1;
     }
 #ifdef XDEBUG
@@ -3234,7 +3234,7 @@ void SS7SCCP::getMaxDataLen(const SS7MsgSCCP* msg, const SS7Label& label,
 	unsigned int& udt, unsigned int& xudt, unsigned int& ludt)
 {
     if (!network()) {
-	Debug(this,DebugGoOn,"No Network Attached!!!");
+	Debug(this,DebugConf,"No Network Attached!!!");
 	return;
     }
 
@@ -3411,7 +3411,7 @@ int SS7SCCP::segmentMessage(SS7MsgSCCP* origMsg, const SS7Label& label, bool loc
 	ajustMessageParams(origMsg->params(),origMsg->type());
 	SS7MSU* msu = buildMSU(origMsg,label,false);
 	if (!msu) {
-	    Debug(this,DebugGoOn,"Failed to build msu from sccpMessage %s",
+	    Debug(this,DebugWarn,"Failed to build MSU from sccpMessage %s",
 		SS7MsgSCCP::lookup(origMsg->type()));
 	    return -1;
 	}
@@ -3475,7 +3475,7 @@ int SS7SCCP::segmentMessage(SS7MsgSCCP* origMsg, const SS7Label& label, bool loc
     msg->removeData();
     temp.clear(false);
     if (!msu) {
-	Debug(this,DebugGoOn,"Failed to build msu from sccpMessage %s",
+	Debug(this,DebugWarn,"Failed to build MSU from sccpMessage %s",
 		SS7MsgSCCP::lookup(msgType));
 	TelEngine::destruct(msg);
 	TelEngine::destruct(listSegments);
@@ -3518,7 +3518,7 @@ int SS7SCCP::segmentMessage(SS7MsgSCCP* origMsg, const SS7Label& label, bool loc
 	msg->removeData();
 	temp.clear(false);
 	if (!msu) {
-	    Debug(this,DebugGoOn,"Failed to build msu from sccpMessage %s",
+	    Debug(this,DebugWarn,"Failed to build MSU from sccpMessage %s",
 		    SS7MsgSCCP::lookup(msgType));
 	    TelEngine::destruct(msg);
 	    TelEngine::destruct(listSegments);
@@ -3610,11 +3610,11 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label, bool checkLeng
 	const SCCPParam* param = getParamDesc(ptype);
 	if (!param) {
 	    // this is fatal as we don't know the length
-	    Debug(this,DebugGoOn,"Missing description of fixed SCCP parameter 0x%02x [%p]",ptype,this);
+	    Debug(this,DebugCrit,"Missing description of fixed SCCP parameter 0x%02x [%p]",ptype,this);
 	    return 0;
 	}
 	if (!param->size) {
-	    Debug(this,DebugGoOn,"Invalid (variable) description of fixed SCCP parameter 0x%02x [%p]",ptype,this);
+	    Debug(this,DebugCrit,"Invalid (variable) description of fixed SCCP parameter 0x%02x [%p]",ptype,this);
 	    return 0;
 	}
 	len += param->size;
@@ -3628,7 +3628,7 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label, bool checkLeng
 	const SCCPParam* param = getParamDesc(ptype);
 	if (!param) {
 	    // this is fatal as we won't be able to populate later
-	    Debug(this,DebugGoOn,"Missing description of variable SCCP parameter 0x%02x [%p]",ptype,this);
+	    Debug(this,DebugCrit,"Missing description of variable SCCP parameter 0x%02x [%p]",ptype,this);
 	    return 0;
 	}
 	if (param->size)
@@ -3656,7 +3656,7 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label, bool checkLeng
 	    continue;
 	}
 	if (!encodeParam(this,*msu,param,&msg->params(),exclude,prefix,d))
-	    Debug(this,DebugGoOn,"Could not encode fixed SCCP parameter %s [%p]",param->name,this);
+	    Debug(this,DebugCrit,"Could not encode fixed SCCP parameter %s [%p]",param->name,this);
 	d += param->size;
     }
     // now populate with mandatory variable parameters
@@ -3688,11 +3688,11 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label, bool checkLeng
 	    size = encodeParam(this,*msu,param,&msg->params(),exclude,prefix);
 	d = msu->getData(0,len+1);
 	if (!(size && d)) {
-	    Debug(this,DebugGoOn,"Could not encode variable SCCP parameter %s [%p]",param->name,this);
+	    Debug(this,DebugCrit,"Could not encode variable SCCP parameter %s [%p]",param->name,this);
 	    continue;
 	}
 	if (ptype != SS7MsgSCCP::LongData && ((d[len] != size) || (msu->length() != (len + size + 1)))) {
-	    Debug(this,DebugGoOn,"Invalid encoding variable SCCP parameter %s (len=%u size=%u stor=%u msuLength = %u) [%p]",
+	    Debug(this,DebugCrit,"Invalid encoding variable SCCP parameter %s (len=%u size=%u stor=%u msuLength = %u) [%p]",
 		param->name,len,size,d[len],msu->length(),this);
 	    continue;
 	}
@@ -4217,11 +4217,11 @@ bool SS7SCCP::decodeMessage(SS7MsgSCCP* msg, SS7PointCode::Type pcType,
 	const SCCPParam* param = getParamDesc(ptype);
 	if (!param) {
 	    // this is fatal as we don't know the length
-	    Debug(this,DebugGoOn,"Missing description of fixed SCCP parameter 0x%02x [%p]",ptype,this);
+	    Debug(this,DebugCrit,"Missing description of fixed SCCP parameter 0x%02x [%p]",ptype,this);
 	    return false;
 	}
 	if (!param->size) {
-	    Debug(this,DebugGoOn,"Invalid (variable) description of fixed SCCP parameter %s [%p]",param->name,this);
+	    Debug(this,DebugCrit,"Invalid (variable) description of fixed SCCP parameter %s [%p]",param->name,this);
 	    return false;
 	}
 	if (paramLen < param->size) {
@@ -4245,13 +4245,13 @@ bool SS7SCCP::decodeMessage(SS7MsgSCCP* msg, SS7PointCode::Type pcType,
 	const SCCPParam* param = getParamDesc(ptype);
 	if (!param) {
 	    // we could skip over unknown mandatory variable length but it's still bad
-	    Debug(this,DebugGoOn,"Missing description of variable SCCP parameter 0x%02x [%p]",ptype,this);
+	    Debug(this,DebugCrit,"Missing description of variable SCCP parameter 0x%02x [%p]",ptype,this);
 	    return false;
 	}
 	if (param->size)
 	    Debug(this,DebugMild,"Invalid (fixed) description of variable SCCP parameter %s [%p]",param->name,this);
 	if (!paramPtr || paramLen <= 0) {
-	    Debug(this,DebugGoOn,
+	    Debug(this,DebugWarn,
 		  "Unexpected end of stream!! Expecting to decode variabile parameter %s but there is no data left!!!",
 		   param->name);
 	    return false;

@@ -2028,7 +2028,7 @@ bool Socket::select(bool* readok, bool* writeok, bool* except, struct timeval* t
     if (tmp >= (SOCKET)FD_SETSIZE) {
 	if (localFail) {
 	    localFail = false;
-	    Alarm("engine","socket",DebugGoOn,"Socket::select: handle %d larger than compiled in maximum %d",
+	    Alarm("engine","socket",DebugCrit,"Socket::select: handle %d larger than compiled in maximum %d",
 		tmp,FD_SETSIZE);
 	}
 	return false;

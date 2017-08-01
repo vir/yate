@@ -1694,7 +1694,7 @@ bool ExtModHandler::received(Message& msg)
     else if (t == "playrec")
 	typ = ExtModChan::DataBoth;
     else {
-	Debug(DebugGoOn,"Invalid ExtModule method '%s', use 'nochan', 'nodata', 'play', 'record' or 'playrec'",
+	Debug(DebugConf,"Invalid ExtModule method '%s', use 'nochan', 'nodata', 'play', 'record' or 'playrec'",
 	    t.c_str());
 	return false;
     }
@@ -1711,7 +1711,7 @@ bool ExtModHandler::received(Message& msg)
     ExtModChan *em = ExtModChan::build(dest.matchString(2).c_str(),
 				       dest.matchString(3).c_str(),typ);
     if (!em) {
-	Debug(DebugGoOn,"Failed to create ExtMod for '%s'",dest.matchString(2).c_str());
+	Debug(DebugCrit,"Failed to create ExtMod for '%s'",dest.matchString(2).c_str());
 	return false;
     }
     ExtModReceiver* recv = em->receiver();

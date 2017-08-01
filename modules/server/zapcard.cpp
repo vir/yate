@@ -2078,7 +2078,7 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
 	    continue;
 	}
 	TelEngine::destruct(cic);
-	Debug(m_group,DebugGoOn,
+	Debug(m_group,DebugConf,
 	    "ZapSpan('%s'). Duplicate circuit code=%u (channel=%u) [%p]",
 	    id().safe(),code,channel,this);
     }

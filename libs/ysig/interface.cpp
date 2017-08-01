@@ -45,7 +45,7 @@ const TokenDict SignallingInterface::s_notifName[] = {
 SignallingInterface::~SignallingInterface()
 {
     if (m_receiver)
-	Debug(this,DebugGoOn,"Destroyed with receiver (%p) attached",m_receiver);
+	Debug(this,DebugCrit,"Destroyed with receiver (%p) attached",m_receiver);
 }
 
 void SignallingInterface::attach(SignallingReceiver* receiver)
@@ -105,7 +105,7 @@ SignallingReceiver::SignallingReceiver(const char* name)
 SignallingReceiver::~SignallingReceiver()
 {
     if (m_interface)
-	Debug(this,DebugGoOn,"Destroyed with interface (%p) attached",m_interface);
+	Debug(this,DebugCrit,"Destroyed with interface (%p) attached",m_interface);
     TelEngine::destruct(attach(0));
 }
 

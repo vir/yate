@@ -500,17 +500,36 @@ bool LKSocket::alive() const
 	case SCTP_SHUTDOWN_ACK_SENT:
 	    localUp = false;
     }
-    localUp = localUp && status.sstat_primary.spinfo_state == SCTP_ACTIVE;
-    if (localUp)
+    if (localUp && (status.sstat_primary.spinfo_state == SCTP_ACTIVE
+#ifdef HAVE_SCTP_PF
+	|| status.sstat_primary.spinfo_state == SCTP_PF
+#endif
+#ifdef HAVE_SCTP_UNCONFIRMED
+	|| status.sstat_primary.spinfo_state == SCTP_UNCONFIRMED
+#endif
+	))
 	return true;
-#ifdef DEBUG
 #define MAKE_CASE(x,y) case SCTP_##x: \
-	    Debug(&plugin,DebugNote,"%s sctp status : SCTP_%s",#y,#x); \
+	    DDebug(&plugin,DebugNote,"%s sctp status : SCTP_%s",#y,#x); \
 	    break;
+    static int s_lastSpinfoState = SCTP_ACTIVE;
     switch (status.sstat_primary.spinfo_state) {
 	MAKE_CASE(ACTIVE,Remote);
 	MAKE_CASE(INACTIVE,Remote);
+#ifdef HAVE_SCTP_PF
+	MAKE_CASE(PF,Remote);
+#endif
+#ifdef HAVE_SCTP_UNCONFIRMED
+	MAKE_CASE(UNCONFIRMED,Remote);
+#endif
+	default:
+	    if (s_lastSpinfoState != status.sstat_primary.spinfo_state) {
+		s_lastSpinfoState = status.sstat_primary.spinfo_state;
+		Debug(&plugin,DebugNote,"Unknown SCTP remote state 0x0%x",
+		    status.sstat_primary.spinfo_state);
+	    }
     }
+    static int s_lastSstatState = SCTP_EMPTY;
     switch (status.sstat_state) {
 	MAKE_CASE(EMPTY,Local);
 	MAKE_CASE(CLOSED,Local);
@@ -522,10 +541,13 @@ bool LKSocket::alive() const
 	MAKE_CASE(SHUTDOWN_RECEIVED,Local);
 	MAKE_CASE(SHUTDOWN_ACK_SENT,Local);
 	default:
-	    Debug(&plugin,DebugNote,"Unknown SCTP local State : 0x0%x",status.sstat_state);
+	    if (s_lastSstatState != status.sstat_state) {
+		s_lastSstatState = status.sstat_state;
+		Debug(&plugin,DebugNote,"Unknown SCTP local state 0x0%x",
+		    status.sstat_state);
+	    }
     }
 #undef MAKE_CASE
-#endif
     return false;
 }
 

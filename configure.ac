@@ -502,6 +502,23 @@ if [[ "x$sctp_assoc_value" = "xyes" ]]; then
 SCTP_FLAGS="$SCTP_FLAGS -DHAVE_ASSOC_VALUE_STRUCT"
 fi
 fi
+# Check for SCTP_UNCONFIRMED enum value presence
+# Added in lksctp-tools 1.0.7
+sctp_have_unconfirmed=no
+AC_MSG_CHECKING([whether SCTP_UNCONFIRMED is present])
+AC_TRY_COMPILE([#include <netinet/sctp.h>],[int val = SCTP_UNCONFIRMED;],[sctp_have_unconfirmed=yes])
+AC_MSG_RESULT([$sctp_have_unconfirmed])
+if [[ "x$sctp_have_unconfirmed" = "xyes" ]]; then
+SCTP_FLAGS="$SCTP_FLAGS -DHAVE_SCTP_UNCONFIRMED"
+fi
+# Check for SCTP_PF enum value presence
+sctp_have_pf=no
+AC_MSG_CHECKING([whether SCTP_PF is present])
+AC_TRY_COMPILE([#include <netinet/sctp.h>],[int val = SCTP_PF;],[sctp_have_pf=yes])
+AC_MSG_RESULT([$sctp_have_unconfirmed])
+if [[ "x$sctp_have_pf" = "xyes" ]]; then
+SCTP_FLAGS="$SCTP_FLAGS -DHAVE_SCTP_PF"
+fi
 else
 if [[ "x$HAVE_SCTP" != "xno" ]]; then
 SCTP_FLAGS="-DHAVE_SCTP"

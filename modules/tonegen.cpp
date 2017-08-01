@@ -573,7 +573,7 @@ const short* ToneData::data()
 	}
 	short* dat = (short*)::malloc((len+1)*sizeof(short));
 	if (!dat) {
-	    Debug(&__plugin,DebugGoOn,"ToneData::data() cold not allocate memory for %d elements",len);
+	    Debug(&__plugin,DebugCrit,"ToneData::data() cold not allocate memory for %d elements",len);
 	    return 0;
 	}
 	short* tmp = dat;

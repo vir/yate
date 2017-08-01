@@ -299,7 +299,7 @@ SignallingEngine::SignallingEngine(const char* name)
 SignallingEngine::~SignallingEngine()
 {
     if (m_thread) {
-	Debug(this,DebugGoOn,
+	Debug(this,DebugCrit,
 	    "Engine destroyed with worker thread still running [%p]",this);
 	stop();
     }
@@ -469,7 +469,7 @@ bool SignallingEngine::start(const char* name, Thread::Priority prio, unsigned l
 	return true;
     }
     delete tmp;
-    Debug(this,DebugGoOn,"Engine failed to start worker thread [%p]",this);
+    Debug(this,DebugCrit,"Engine failed to start worker thread [%p]",this);
     return false;
 }
 

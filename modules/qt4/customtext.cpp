@@ -221,13 +221,13 @@ CustomTextEdit::CustomTextEdit(const char* name, const NamedList& params, QWidge
 	m_items.addParam(new CustomTextFormat(String(-1),"white"));       // Output() or client set status
 	m_items.addParam(new CustomTextFormat(String(0),"yellow","red")); // DebugFail - blinking yellow on red
 	m_items.addParam(new CustomTextFormat(String(1),"yellow","red")); // Unnamed   - yellow on red
-	m_items.addParam(new CustomTextFormat(String(2),"white","red"));  // DebugGoOn - white on red
+	m_items.addParam(new CustomTextFormat(String(2),"white","red"));  // DebugCrit - white on red
 	m_items.addParam(new CustomTextFormat(String(3),"lightgrey","red")); // DebugConf - gray on red
 	m_items.addParam(new CustomTextFormat(String(4),"red"));          // DebugStub - red on black
 	m_items.addParam(new CustomTextFormat(String(5),"orangered"));    // DebugWarn - light red on black
 	m_items.addParam(new CustomTextFormat(String(6),"yellow"));       // DebugMild - yellow on black
-	m_items.addParam(new CustomTextFormat(String(7),"white"));        // DebugCall - white on black
-	m_items.addParam(new CustomTextFormat(String(8),"lightgreen"));   // DebugNote - light green on black
+	m_items.addParam(new CustomTextFormat(String(7),"lightgreen"));   // DebugNote - light green on black
+	m_items.addParam(new CustomTextFormat(String(8),"white"));        // DebugCall - white on black
 	m_items.addParam(new CustomTextFormat(String(9),"cyan"));         // DebugInfo - light cyan on black
 	m_items.addParam(new CustomTextFormat(String(10),"teal"));        // DebugAll  - cyan on black
     }

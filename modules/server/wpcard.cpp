@@ -1773,7 +1773,7 @@ int WpSpan::readData()
     if (r == -1)
 	return -1;
     if (r < WP_HEADER) {
-	Debug(m_group,DebugGoOn,"WpSpan('%s'). Short read %u byte(s) [%p]",
+	Debug(m_group,DebugCrit,"WpSpan('%s'). Short read %u byte(s) [%p]",
 	    id().safe(),r,this);
 	return -1;
     }
@@ -1783,9 +1783,8 @@ int WpSpan::readData()
     unsigned char err = m_buffer[WP_RD_ERROR];
 #endif
     if (err) {
-	m_readErrors++;
-	if (m_readErrors == MAX_READ_ERRORS) {
-	    Debug(m_group,DebugGoOn,"WpSpan('%s'). Read error 0x%02X [%p]",
+	if (++m_readErrors >= MAX_READ_ERRORS) {
+	    Debug(m_group,DebugCrit,"WpSpan('%s'). Read error 0x%02X [%p]",
 		id().safe(),err,this);
 	    m_readErrors = 0;
 	}

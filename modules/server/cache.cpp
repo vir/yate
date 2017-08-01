@@ -1069,7 +1069,7 @@ void Cache::adjustToLimit(CacheItem* skipAdded)
 	    m_count--;
 	    continue;
 	}
-	Debug(&__plugin,DebugGoOn,
+	Debug(&__plugin,DebugCrit,
 	    "Cache(%s) can't find the oldest item count=%u limit=%u [%p]",
 	    m_name.c_str(),m_count,m_limit,this);
 	m_count = m_list.count();

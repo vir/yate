@@ -136,7 +136,7 @@ public:
     virtual bool received(Message& msg) {
 	    Client::s_engineStarted = true;
 	    if (!(Client::self() && Client::self()->postpone(msg,Client::EngineStart)))
-		Debug(DebugGoOn,"Failed to postpone %s in client",msg.c_str());
+		Debug(DebugCrit,"Failed to postpone %s in client",msg.c_str());
 	    return false;
 	}
 };
@@ -2859,7 +2859,7 @@ bool Client::addLogic(ClientLogic* logic)
     if (logic->priority() < 0)
 	logic->m_prio = -logic->priority();
     bool dup = (0 != s_logics.find(logic->toString()));
-    Debug(dup ? DebugGoOn : DebugInfo,"Adding client logic%s %p name=%s prio=%d",
+    Debug(dup ? DebugCrit : DebugInfo,"Adding client logic%s %p name=%s prio=%d",
 	dup ? " [DUPLICATE]" : "",logic,logic->toString().c_str(),logic->priority());
 
     for (ObjList* l = s_logics.skipNull(); l; l = l->skipNext()) {

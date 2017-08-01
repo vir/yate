@@ -356,7 +356,7 @@ void FaxWrapper::debugName(const char* name)
 	    level |= SPAN_LOG_PROTOCOL_ERROR;
 	else if (debugAt(DebugWarn))
 	    level |= SPAN_LOG_WARNING;
-	else if (debugAt(DebugGoOn))
+	else if (debugAt(DebugCrit))
 	    level |= SPAN_LOG_ERROR;
 	span_log_set_tag(&m_t30->logging,m_name);
 	span_log_set_level(&m_t30->logging,level);

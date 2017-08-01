@@ -209,7 +209,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!getParty()) {
 	engine->buildParty(this);
 	if (!getParty()) {
-	    Debug(engine,DebugGoOn,"Could not complete party-less SIP message [%p]",this);
+	    Debug(engine,DebugCrit,"Could not complete party-less SIP message [%p]",this);
 	    return;
 	}
     }

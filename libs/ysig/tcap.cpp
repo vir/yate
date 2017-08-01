@@ -277,7 +277,7 @@ SS7TCAP::~SS7TCAP()
 {
     Debug(this,DebugAll,"SS7TCAP::~SS7TCAP() [%p] destroyed, refCount=%d, usersCount=%d",this,refcount(),m_users.count());
     if (m_users.count()) {
-	Debug(this,DebugGoOn,"SS7TCAP destroyed while having %d user(s) still attached [%p]",m_users.count(),this);
+	Debug(this,DebugCrit,"SS7TCAP destroyed while having %d user(s) still attached [%p]",m_users.count(),this);
 	ListIterator iter(m_users);
 	for (;;) {
 	    TCAPUser* user = static_cast<TCAPUser*>(iter.get());

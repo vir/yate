@@ -676,13 +676,13 @@ void CallGenPlugin::initialize()
 
 	CleanThread* cln = new CleanThread;
 	if (!cln->startup()) {
-	    Debug(DebugGoOn,"Failed to start call generator cleaner thread");
+	    Debug(DebugCrit,"Failed to start call generator cleaner thread");
 	    delete cln;
 	    return;
 	}
 	GenThread* gen = new GenThread;
 	if (!gen->startup()) {
-	    Debug(DebugGoOn,"Failed to start call generator thread");
+	    Debug(DebugCrit,"Failed to start call generator thread");
 	    delete gen;
 	}
     }

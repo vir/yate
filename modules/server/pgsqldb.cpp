@@ -214,7 +214,7 @@ bool PgConn::initDbInternal(int retry)
     u_int64_t timeout = Time::now() + m_account->m_timeout;
     m_conn = PQconnectStart(m_account->m_connection.c_str());
     if (!m_conn) {
-	Debug(&module,DebugGoOn,"Could not start connection for '%s' [%p]",c_str(),m_account);
+	Debug(&module,DebugCrit,"Could not start connection for '%s' [%p]",c_str(),m_account);
 	return false;
     }
     PQsetnonblocking(m_conn,1);
@@ -351,7 +351,7 @@ int PgConn::queryDbInternal(const char* query, Message* dest)
 				if (column)
 				    column->set(new String(PQfname(res,k)));
 				else {
-				    Debug(&module,DebugGoOn,
+				    Debug(&module,DebugCrit,
 					"Query '%s' for '%s': No array column for %d [%p]",
 					query,c_str(),k,m_account);
 				    continue;
@@ -360,7 +360,7 @@ int PgConn::queryDbInternal(const char* query, Message* dest)
 				    column = column->next();
 				    if (!column) {
 					// Stop now: we won't get the next row
-					Debug(&module,DebugGoOn,
+					Debug(&module,DebugCrit,
 					    "Query '%s' for '%s': No array row %d in column %d [%p]",
 					    query,c_str(),j + 1,k,m_account);
 					break;

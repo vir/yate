@@ -1751,7 +1751,7 @@ ISDNLayer2::ISDNLayer2(const NamedList& params, const char* name, u_int8_t tei)
 ISDNLayer2::~ISDNLayer2()
 {
     if (m_layer3)
-	Debug(this,DebugGoOn,"Destroyed with Layer 3 (%p) attached",m_layer3);
+	Debug(this,DebugCrit,"Destroyed with Layer 3 (%p) attached",m_layer3);
     attach(0);
     XDebug(this,DebugAll,"~ISDNLayer2");
 }

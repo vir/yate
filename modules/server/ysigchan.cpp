@@ -2514,7 +2514,7 @@ void SigDriver::handleEvent(SignallingEvent* event)
 	return;
     }
     if (!event->message() && event->type() != SignallingEvent::Circuit) {
-	Debug(this,DebugGoOn,"Received event (%p,'%s') without message",event,event->name());
+	Debug(this,DebugCrit,"Received event (%p,'%s') without message",event,event->name());
 	return;
     }
     // Ok. Send the message to the channel if we have one
@@ -2820,7 +2820,7 @@ bool SigDriver::appendOnDemand(SignallingComponent* cmp, int type)
 	return false;
     Lock lock(m_onDemandMutex);
     if (m_onDemand.find(sccp->toString())) {
-	Debug(this,DebugGoOn,"Request to append duplicat of on demand component (%p): '%s'.",
+	Debug(this,DebugCrit,"Request to append duplicate of on demand component (%p): '%s'.",
 	    cmp,cmp->toString().c_str());
 	return false;
     }

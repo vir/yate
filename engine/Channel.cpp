@@ -269,7 +269,7 @@ void CallEndpoint::setLastPeerId()
 	return;
     Lock lock(s_mutex,5000000);
     if (!checkRetry(lock)) {
-	Alarm("engine","bug",DebugGoOn,"Set last peer ID failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
+	Alarm("engine","bug",DebugCrit,"Set last peer ID failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
 	return;
     }
     if (m_peer) {
@@ -475,7 +475,7 @@ void Channel::initChan()
     Lock mylock(m_driver);
 #ifndef NDEBUG
     if (m_driver->channels().find(this)) {
-	Debug(DebugGoOn,"Channel '%s' already in list of '%s' driver [%p]",
+	Debug(DebugCrit,"Channel '%s' already in list of '%s' driver [%p]",
 	    id().c_str(),m_driver->name().c_str(),this);
 	return;
     }

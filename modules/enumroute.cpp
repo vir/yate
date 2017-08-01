@@ -325,7 +325,7 @@ void EnumModule::initialize()
     if (Resolver::available(Resolver::Naptr))
 	Engine::install(new EnumHandler(cfg.getIntValue("general","priority",prio)));
     else
-	Debug(&emodule,DebugGoOn,"NAPTR resolver is not available on this platform");
+	Debug(&emodule,DebugCrit,"NAPTR resolver is not available on this platform");
 }
 
 }; // anonymous namespace

@@ -598,7 +598,7 @@ void MGCPEngine::cleanup(bool gracefully, const char* text)
     while (m_threads.skipNull()) {
 	mylock.drop();
 	if (Time::now() > maxWait) {
-	    Debug(this,DebugGoOn,"Private threads did not terminate!");
+	    Debug(this,DebugCrit,"Private threads did not terminate!");
 	    return;
 	}
 	Thread::idle();

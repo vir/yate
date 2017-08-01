@@ -1010,7 +1010,7 @@ bool YStunSocketFilter::install(Socket* sock, const Message* msg)
     m_userId = msg->getValue("userid");
     // Install
     if (!sock->installFilter(this)) {
-	Debug(&iplugin,DebugGoOn,
+	Debug(&iplugin,DebugCrit,
 	    "Error installing filter for '%s'. [%p]",
 	    m_userId.c_str(),this);
 	return false;
@@ -1195,7 +1195,7 @@ bool StunHandler::received(Message& msg)
 {
     Socket* socket = static_cast<Socket*>(msg.userObject(YATOM("Socket")));
     if (!socket) {
-	Debug(&iplugin,DebugGoOn,"StunHandler: No socket to install filter for.");
+	Debug(&iplugin,DebugWarn,"StunHandler: No socket to install filter for.");
 	return true;
     }
     YStunSocketFilter* filter = new YStunSocketFilter();

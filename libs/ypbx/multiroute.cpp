@@ -132,7 +132,7 @@ bool MultiRouter::received(Message& msg, int id)
 	info = m_list.find(call);
     if (info) {
 	if (*info != chanid) {
-	    Debug(DebugGoOn,"Channel mismatch! call=%p id='%s' stored='%s'",
+	    Debug(DebugCrit,"Channel mismatch! call=%p id='%s' stored='%s'",
 		call,chanid.c_str(),info->c_str());
 	    return false;
 	}
@@ -145,7 +145,7 @@ bool MultiRouter::received(Message& msg, int id)
 	else if (!info->call())
 	    info->setCall(call);
 	else if (info->call() != call) {
-	    Debug(DebugGoOn,"Channel mismatch! id='%s' call=%p stored=%p",
+	    Debug(DebugCrit,"Channel mismatch! id='%s' call=%p stored=%p",
 		chanid.c_str(),call,info->call());
 	    return false;
 	}

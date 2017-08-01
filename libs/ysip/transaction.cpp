@@ -183,7 +183,7 @@ bool SIPTransaction::changeState(int newstate)
     if ((newstate < 0) || (newstate == m_state))
 	return false;
     if (m_state == Invalid) {
-	Debug(getEngine(),DebugGoOn,"SIPTransaction is already invalid [%p]",this);
+	Debug(getEngine(),DebugWarn,"SIPTransaction is already invalid [%p]",this);
 	return false;
     }
     DDebug(getEngine(),DebugAll,"SIPTransaction state changed from %s to %s [%p]",

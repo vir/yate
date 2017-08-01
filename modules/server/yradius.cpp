@@ -633,7 +633,7 @@ RadAttrib::RadAttrib(const char* name, const char* value)
 	return;
     m_type = find(name,&m_vendor);
     if (!m_type) {
-	Debug(&__plugin,DebugGoOn,"Failed to find item %s in dictionary",name);
+	Debug(&__plugin,DebugWarn,"Failed to find item %s in dictionary",name);
 	return;
     }
     assign(value);
@@ -647,7 +647,7 @@ RadAttrib::RadAttrib(const char* name, int value)
 	return;
     m_type = find(name,&m_vendor);
     if (!m_type) {
-	Debug(&__plugin,DebugGoOn,"Failed to find item %s in dictionary",name);
+	Debug(&__plugin,DebugWarn,"Failed to find item %s in dictionary",name);
 	return;
     }
     assign(value);
@@ -660,7 +660,7 @@ RadAttrib::RadAttrib(const char* name, unsigned char subType, const char* value)
 	return;
     m_type = find(name,&m_vendor);
     if (!m_type) {
-	Debug(&__plugin,DebugGoOn,"Failed to find item %s in dictionary",name);
+	Debug(&__plugin,DebugWarn,"Failed to find item %s in dictionary",name);
 	return;
     }
     assign(subType,value);
@@ -699,7 +699,7 @@ bool RadAttrib::assign(const char* value)
 	    }
 	    break;
 	default:
-	    Debug(&__plugin,DebugGoOn,"Ignoring unknown attribute of type %d",m_type->type);
+	    Debug(&__plugin,DebugWarn,"Ignoring unknown attribute of type %d",m_type->type);
 	    return false;
     }
     return true;
@@ -729,7 +729,7 @@ bool RadAttrib::assign(int value)
 	    }
 	    break;
 	default:
-	    Debug(&__plugin,DebugGoOn,"Ignoring unknown attribute of type %d",m_type->type);
+	    Debug(&__plugin,DebugWarn,"Ignoring unknown attribute of type %d",m_type->type);
 	    return false;
     }
     return true;
@@ -965,7 +965,7 @@ int RadiusClient::makeRequest(int port, unsigned char request, unsigned char* re
     }
     int datalen = 20 + attrdata.length();
     if (datalen > RADIUS_MAXLEN) {
-	Debug(&__plugin,DebugGoOn,"Packet of %u bytes exceeds RADIUS maximum",datalen);
+	Debug(&__plugin,DebugWarn,"Packet of %u bytes exceeds RADIUS maximum %u",datalen,RADIUS_MAXLEN);
 	return UnknownErr;
     }
 
@@ -1009,7 +1009,7 @@ int RadiusClient::makeRequest(int port, unsigned char request, unsigned char* re
     // we have the data ready, send it and wait for an answer
     for (int r = m_retries; r > 0; r--) {
 	if (socket()->sendTo(radpckt.data(),radpckt.length(),sockAddr) == Socket::socketError()) {
-	    Alarm(&__plugin,"socket",DebugGoOn,"Packet sending error %d to %s:%d",
+	    Alarm(&__plugin,"socket",DebugCrit,"Packet sending error %d to %s:%d",
 		socket()->error(),sockAddr.host().c_str(),sockAddr.port());
 		return UnknownErr;
 	}
@@ -1692,11 +1692,11 @@ void RadiusModule::initialize()
 
     // we only have UDP support
     if (!s_localSock.create(PF_INET,SOCK_DGRAM,IPPROTO_IP)) {
-	Alarm(this,"socket",DebugGoOn,"Error creating socket. Radius functions unavailable");
+	Alarm(this,"socket",DebugCrit,"Error creating socket. Radius functions unavailable");
 	return;
     }
     if (!s_localSock.bind(s_localAddr)) {
-	Alarm(this,"socket",DebugWarn,"Error %d binding to %s:%d. Radius functions unavailable",
+	Alarm(this,"socket",DebugCrit,"Error %d binding to %s:%d. Radius functions unavailable",
 	    s_localSock.error(),s_localAddr.host().c_str(),s_localAddr.port());
 	return;
     }

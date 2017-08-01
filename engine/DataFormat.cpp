@@ -609,7 +609,7 @@ bool DataSource::attach(DataConsumer* consumer, bool override)
 	    src2->detach(consumer);
 	    s_consSrcMutex.lock();
 	    if (src) {
-		Debug(DebugGoOn,"DataSource %p raced us attaching consumer %p [%p]",
+		Debug(DebugCrit,"DataSource %p raced us attaching consumer %p [%p]",
 		    src,consumer,this);
 		s_consSrcMutex.unlock();
 		consumer->deref();

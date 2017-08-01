@@ -8966,7 +8966,7 @@ bool SIPDriver::received(Message& msg, int id)
 	m_endpoint->m_mutex.lock();
 	n = m_endpoint->m_transports.count();
 	if (n)
-	    Debug(this,DebugGoOn,"Exiting with %u transports in queue",n);
+	    Debug(this,DebugCrit,"Exiting with %u transports in queue",n);
 	m_endpoint->m_mutex.unlock();
 	m_endpoint->cancel();
     }

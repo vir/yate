@@ -366,7 +366,7 @@ int MyConn::queryDbInternal(DbQuery* query)
 		    if (columns[c])
 			columns[c]->set(new String(fields[c].name));
 		    else
-			Debug(&module,DebugGoOn,"No array for column %u",c);
+			Debug(&module,DebugCrit,"No array for column %u",c);
 		}
 		// and now data row by row
 		for (unsigned int r = 1; r <= rows; r++) {
@@ -480,7 +480,7 @@ int MyAcct::initConns()
 
 	mySqlConn->m_conn = mysql_init(mySqlConn->m_conn);
 	if (!mySqlConn->m_conn) {
-	    Debug(&module,DebugGoOn,"Could not start connection %d for '%s'",i,c_str());
+	    Debug(&module,DebugCrit,"Could not start connection %d for '%s'",i,c_str());
 	    return i;
 	}
 	DDebug(&module,DebugAll,"Connection '%s' for account '%s' was created",mySqlConn->c_str(),c_str());

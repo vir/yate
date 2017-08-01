@@ -501,7 +501,7 @@ bool ListenerThread::addAddress(const NamedList &param)
     }
     SctpSocket* s = static_cast<SctpSocket*>(m_socket);
     if (!s) {
-	Debug("ListenerThread",DebugGoOn,"Failed to cast socket");
+	Debug("ListenerThread",DebugCrit,"Failed to cast socket");
 	return false;
     }
     if (!s->bindx(o)) {
@@ -884,7 +884,7 @@ bool Transport::addAddress(const NamedList &param, Socket* socket)
     }
     SctpSocket* s = static_cast<SctpSocket*>(socket);
     if (!s) {
-	Debug(this,DebugGoOn,"Failed to cast socket");
+	Debug(this,DebugCrit,"Failed to cast socket");
 	return false;
     }
     if (!s->bindx(o)) {
@@ -992,7 +992,7 @@ bool Transport::connectSocket()
 	}
 	SctpSocket* s = static_cast<SctpSocket*>(sock);
 	if (!s) {
-	    Debug(this,DebugGoOn,"Failed to cast socket");
+	    Debug(this,DebugCrit,"Failed to cast socket");
 	    return false;
 	}
 	if (!s->connectx(o)) {
@@ -1228,7 +1228,7 @@ bool StreamReader::sendBuffer(int streamId)
     if (m_transport->transType() == Transport::Sctp) {
 	SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	if (!s) {
-	    Debug(m_transport,DebugGoOn,"Sctp conversion failed");
+	    Debug(m_transport,DebugCrit,"Sctp conversion failed");
 	    return false;
 	}
 	if (m_transport->status() == Transport::Up)
@@ -1310,7 +1310,7 @@ bool StreamReader::readData()
 	if (m_transport->transType() == Transport::Sctp) {
 	    SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	    if (!s) {
-		Debug(m_transport,DebugGoOn,"Sctp conversion failed");
+		Debug(m_transport,DebugCrit,"Sctp conversion failed");
 		return false;
 	    }
 	    len = s->recvMsg((void*)buf,m_headerLen,addr,stream,flags);
@@ -1369,7 +1369,7 @@ bool StreamReader::readData()
 	if (m_transport->transType() == Transport::Sctp) {
 	    SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	    if (!s) {
-		Debug(m_transport,DebugGoOn,"Sctp conversion failed");
+		Debug(m_transport,DebugCrit,"Sctp conversion failed");
 		return false;
 	    }
 	    len = s->recvMsg((void*)buf1,m_totalPacketLen,addr,stream,flags);
@@ -1548,7 +1548,7 @@ bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int s
 	if (m_transport->transType() == Transport::Sctp) {
 	    SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	    if (!s) {
-		Debug(m_transport,DebugGoOn,"Sctp conversion failed");
+		Debug(m_transport,DebugCrit,"Sctp conversion failed");
 		break;
 	    }
 	    int flags = 0;
@@ -1617,7 +1617,7 @@ bool MessageReader::readData()
 	int flags = 0;
 	SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	if (!s) {
-	    Debug(m_transport,DebugGoOn,"Sctp conversion failed");
+	    Debug(m_transport,DebugCrit,"Sctp conversion failed");
 	    return false;
 	}
 	SocketAddr addr;

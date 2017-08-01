@@ -2002,7 +2002,7 @@ JBStreamSet::JBStreamSet(JBStreamSetList* owner)
 JBStreamSet::~JBStreamSet()
 {
     if (m_clients.skipNull())
-	Debug(m_owner->engine(),DebugGoOn,
+	Debug(m_owner->engine(),DebugCrit,
 	    "JBStreamSet(%s) destroyed while owning %u streams [%p]",
 	    m_owner->toString().c_str(),m_clients.count(),this);
     m_owner->remove(this);

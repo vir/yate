@@ -1138,7 +1138,7 @@ u_int8_t IAXFrame::packSubclass(u_int32_t value)
 	    return i | 0x80;
 	v <<= 1;
     }
-    Debug(DebugGoOn,"IAXFrame could not pack subclass %u (0x%x)",value,value);
+    Debug(DebugCrit,"IAXFrame could not pack subclass %u (0x%x)",value,value);
     return 0;
 }
 
@@ -1525,7 +1525,7 @@ unsigned int IAXMetaTrunkFrame::add(u_int16_t sCallNo, const DataBlock& data, u_
 	return 0;
     // Avoid buffer overflow
     if (data.length() > m_maxDataLen) {
-	Debug(m_engine,DebugGoOn,
+	Debug(m_engine,DebugWarn,
 	    "Trunk frame '%s:%d' can't add %u bytes (max=%u) for call %u [%p]",
 	    m_addr.host().c_str(),m_addr.port(),data.length(),m_maxDataLen,sCallNo,this);
 	return 0;

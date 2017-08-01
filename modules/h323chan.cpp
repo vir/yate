@@ -981,7 +981,7 @@ BOOL YateGatekeeperServer::Init()
 	if (AddListener(new H323GatekeeperListener(m_endpoint,*this,name,trans)))
 	    Debug(&hplugin,DebugAll,"Started Gk listener on %s:%d",addr,port);
 	else
-	    Alarm(&hplugin,"config",DebugGoOn,"Can't start the Gk listener for address: %s",addr);
+	    Alarm(&hplugin,"config",DebugCrit,"Can't start the Gk listener for address: %s",addr);
     }
     i = s_cfg.getIntValue("gk","ttl",600);
     if (i > 0) {
@@ -1356,7 +1356,7 @@ bool YateH323EndPoint::startGkClient(int mode, int retry, const char* name)
     while (m_thread) {
 	hplugin.unlock();
 	if (!--retries) {
-	    Debug(&hplugin,DebugGoOn,
+	    Debug(&hplugin,DebugCrit,
 		"Endpoint(%s) old Gk client thread not finished [%p]",safe(),this);
 	    return false;
 	}
@@ -1394,7 +1394,7 @@ void YateH323EndPoint::stopGkClient(bool notify, const char* reason, bool waitGk
 	    }
 	}
 	if (m_thread) {
-	    Debug(&hplugin,DebugGoOn,"Endpoint(%s) abandoning old Gk client thread (%p) [%p]",
+	    Debug(&hplugin,DebugCrit,"Endpoint(%s) abandoning old Gk client thread (%p) [%p]",
 		safe(),m_thread,this);
 	    m_thread->setOrphan();
 	    m_thread = 0;
@@ -1598,7 +1598,7 @@ bool YateH323EndPoint::checkListener(const NamedList* params, bool& changed)
 		retries = 1;
 	    }
 	}
-	int level = DebugGoOn;
+	int level = DebugCrit;
 	String extra;
 	if (retries) {
 	    level = DebugWarn;
@@ -1625,7 +1625,7 @@ bool YateH323EndPoint::checkListener(const NamedList* params, bool& changed)
 	return true;
     }
     if (retries)
-	Alarm(&hplugin,"config",DebugGoOn,"Endpoint(%s) unable to start H323 Listener on %s [%p]",
+	Alarm(&hplugin,"config",DebugCrit,"Endpoint(%s) unable to start H323 Listener on %s [%p]",
 	    safe(),(const char*)addr.AsString(),this);
     String reason = "Cannot listen on ";
     reason << m_listenAddr << ":" << m_listenPort;
@@ -1700,7 +1700,7 @@ void YateGkRegThread::Main()
 	m_ep->m_retry = false;
     }
     hplugin.unlock();
-    Debug(&hplugin,ok ? DebugAll : DebugGoOn,
+    Debug(&hplugin,ok ? DebugAll : DebugCrit,
 	"Endpoint(%s) client thread (%p) finished [%p]",
 	epName.safe(),this,m_ep);
     m_ep = 0;
@@ -2196,7 +2196,7 @@ BOOL YateH323Connection::OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
 {
     Debug(this,DebugInfo,"YateH323Connection::OpenAudioChannel chan=%p [%p]",m_chan,this);
     if (!m_nativeRtp) {
-	Debug(DebugGoOn,"YateH323Connection::OpenAudioChannel for non-native RTP in [%p]",this);
+	Debug(DebugCrit,"YateH323Connection::OpenAudioChannel for non-native RTP in [%p]",this);
 	if (m_needMedia)
 	    ClearCall(EndedByCapabilityExchange);
 	return FALSE;

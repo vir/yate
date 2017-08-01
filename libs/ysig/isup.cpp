@@ -4270,11 +4270,11 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
 	const IsupParam* param = getParamDesc(ptype);
 	if (!param) {
 	    // this is fatal as we don't know the length
-	    Debug(this,DebugGoOn,"Missing description of fixed ISUP parameter 0x%02x [%p]",ptype,this);
+	    Debug(this,DebugCrit,"Missing description of fixed ISUP parameter 0x%02x [%p]",ptype,this);
 	    return 0;
 	}
 	if (!param->size) {
-	    Debug(this,DebugGoOn,"Invalid (variable) description of fixed ISUP parameter 0x%02x [%p]",ptype,this);
+	    Debug(this,DebugCrit,"Invalid (variable) description of fixed ISUP parameter 0x%02x [%p]",ptype,this);
 	    return 0;
 	}
 	len += param->size;
@@ -4286,7 +4286,7 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
 	const IsupParam* param = getParamDesc(ptype);
 	if (!param) {
 	    // this is fatal as we won't be able to populate later
-	    Debug(this,DebugGoOn,"Missing description of variable ISUP parameter 0x%02x [%p]",ptype,this);
+	    Debug(this,DebugCrit,"Missing description of variable ISUP parameter 0x%02x [%p]",ptype,this);
 	    return 0;
 	}
 	if (param->size)
@@ -4327,7 +4327,7 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
 	    continue;
 	}
 	if (!encodeParam(this,*msu,param,params,exclude,prefix,d))
-	    Debug(this,DebugGoOn,"Could not encode fixed ISUP parameter %s [%p]",param->name,this);
+	    Debug(this,DebugCrit,"Could not encode fixed ISUP parameter %s [%p]",param->name,this);
 	d += param->size;
     }
     // now populate with mandatory variable parameters
@@ -4346,11 +4346,11 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
 	unsigned char size = encodeParam(this,*msu,param,params,exclude,prefix);
 	d = msu->getData(0,len+1);
 	if (!(size && d)) {
-	    Debug(this,DebugGoOn,"Could not encode variable ISUP parameter %s [%p]",param->name,this);
+	    Debug(this,DebugCrit,"Could not encode variable ISUP parameter %s [%p]",param->name,this);
 	    continue;
 	}
 	if ((d[len] != size) || (msu->length() != (len+1+size))) {
-	    Debug(this,DebugGoOn,"Invalid encoding variable ISUP parameter %s (len=%u size=%u stor=%u) [%p]",
+	    Debug(this,DebugCrit,"Invalid encoding variable ISUP parameter %s (len=%u size=%u stor=%u) [%p]",
 		param->name,len,size,d[len],this);
 	    continue;
 	}
@@ -4513,11 +4513,11 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	const IsupParam* param = getParamDesc(ptype);
 	if (!param) {
 	    // this is fatal as we don't know the length
-	    Debug(this,DebugGoOn,"Missing description of fixed ISUP parameter 0x%02x [%p]",ptype,this);
+	    Debug(this,DebugCrit,"Missing description of fixed ISUP parameter 0x%02x [%p]",ptype,this);
 	    return false;
 	}
 	if (!param->size) {
-	    Debug(this,DebugGoOn,"Invalid (variable) description of fixed ISUP parameter %s [%p]",param->name,this);
+	    Debug(this,DebugCrit,"Invalid (variable) description of fixed ISUP parameter %s [%p]",param->name,this);
 	    return false;
 	}
 	if (paramLen < param->size) {
@@ -4539,7 +4539,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	const IsupParam* param = getParamDesc(ptype);
 	if (!param) {
 	    // we could skip over unknown mandatory variable length but it's still bad
-	    Debug(this,DebugGoOn,"Missing description of variable ISUP parameter 0x%02x [%p]",ptype,this);
+	    Debug(this,DebugCrit,"Missing description of variable ISUP parameter 0x%02x [%p]",ptype,this);
 	    return false;
 	}
 	if (param->size)

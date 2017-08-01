@@ -458,11 +458,11 @@ YRTPWrapper::~YRTPWrapper()
 	TelEngine::destruct(m_udptl);
     }
     if (m_source) {
-	Debug(&splugin,DebugGoOn,"There is still a RTP source %p [%p]",m_source,this);
+	Debug(&splugin,DebugCrit,"There is still a RTP source %p [%p]",m_source,this);
 	TelEngine::destruct(m_source);
     }
     if (m_consumer) {
-	Debug(&splugin,DebugGoOn,"There is still a RTP consumer %p [%p]",m_consumer,this);
+	Debug(&splugin,DebugCrit,"There is still a RTP consumer %p [%p]",m_consumer,this);
 	TelEngine::destruct(m_consumer);
     }
     splugin.changed();
@@ -1158,7 +1158,7 @@ YRTPSource::~YRTPSource()
 	tmp->m_source = 0;
 	s_srcMutex.unlock();
 	if (s != this)
-	    Debug(&splugin,DebugGoOn,"Wrapper %p held source %p not [%p]",tmp,s,this);
+	    Debug(&splugin,DebugCrit,"Wrapper %p held source %p not [%p]",tmp,s,this);
 	// we have just to wait for any YRTPSession::rtpRecvData() to finish
 	while (m_busy)
 	    Thread::yield();
@@ -1192,7 +1192,7 @@ YRTPConsumer::~YRTPConsumer()
 	tmp->m_consumer = 0;
 	tmp->deref();
 	if (c != this)
-	    Debug(&splugin,DebugGoOn,"Wrapper %p held consumer %p not [%p]",tmp,c,this);
+	    Debug(&splugin,DebugCrit,"Wrapper %p held consumer %p not [%p]",tmp,c,this);
     }
 }
 

@@ -227,7 +227,7 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority
     ::pthread_attr_destroy(&attr);
 #endif
     if (e) {
-	Alarm("engine","system",DebugGoOn,"Error %d while creating pthread in '%s' [%p]",e,name,p);
+	Alarm("engine","system",DebugCrit,"Error %d while creating pthread in '%s' [%p]",e,name,p);
 	p->m_thread = 0;
 	p->destroy();
 	return 0;
@@ -373,7 +373,7 @@ bool ThreadPrivate::cancel(bool hard)
 	    }
 	    m_running = false;
 #ifdef _WINDOWS
-	    Debug(DebugGoOn,"ThreadPrivate '%s' terminating win32 thread %lu [%p]",
+	    Debug(DebugCrit,"ThreadPrivate '%s' terminating win32 thread %lu [%p]",
 		m_name,thread,this);
 	    ret = ::TerminateThread(reinterpret_cast<HANDLE>(thread),0) != 0;
 #else
@@ -382,7 +382,7 @@ bool ThreadPrivate::cancel(bool hard)
 		m_name,&thread,this);
 	    ret = !::pthread_cancel(thread);
 #else
-	    Debug(DebugGoOn,"ThreadPrivate '%s' cannot terminate %p on this platform [%p]",
+	    Debug(DebugCrit,"ThreadPrivate '%s' cannot terminate %p on this platform [%p]",
 		m_name,&thread,this);
 #endif
 #endif /* _WINDOWS */
@@ -487,14 +487,14 @@ void ThreadPrivate::killall()
 	else {
 	    if (ok) {
 #ifdef _WINDOWS
-		Debug(DebugGoOn,"Could not kill %p but seems OK to delete it (library bug?)",t);
+		Debug(DebugWarn,"Could not kill %p but seems OK to delete it (library bug?)",t);
 		s_tmutex.unlock();
 		t->destroy();
 		s_tmutex.lock();
 		if (t != l->get())
 		    c = 1;
 #else
-		Debug(DebugGoOn,"Could not kill cancelled %p so we'll abandon it (library bug?)",t);
+		Debug(DebugCrit,"Could not kill cancelled %p so we'll abandon it (library bug?)",t);
 		l->remove(t,false);
 		c = 1;
 #endif
@@ -502,7 +502,7 @@ void ThreadPrivate::killall()
 	    }
 	    Thread::msleep(1);
 	    if (++c >= HARD_KILLS) {
-		Debug(DebugGoOn,"Could not kill %p, will use sledgehammer later.",t);
+		Debug(DebugWarn,"Could not kill %p, will use sledgehammer later.",t);
 		sledgehammer = true;
 		t->m_thread = 0;
 		l = l->next();
@@ -515,10 +515,10 @@ void ThreadPrivate::killall()
     // usually too big since many libraries have threads of their own...
     if (sledgehammer) {
 #ifdef THREAD_KILL
-	Debug(DebugGoOn,"Brutally killing remaining threads!");
+	Debug(DebugCrit,"Brutally killing remaining threads!");
 	::pthread_kill_other_threads_np();
 #else
-	Debug(DebugGoOn,"Aargh! I cannot kill remaining threads on this platform!");
+	Debug(DebugCrit,"Cannot kill remaining threads on this platform!");
 #endif
     }
 }

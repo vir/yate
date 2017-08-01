@@ -187,7 +187,7 @@ RTPTransport::~RTPTransport()
     DDebug(DebugAll,"RTPTransport::~RTPTransport() [%p]",this);
     RTPGroup* g = group();
     if (g)
-	Debug(DebugGoOn,"RTPTransport destroyed while in RTPGroup %p [%p]",g,this);
+	Debug(DebugCrit,"RTPTransport destroyed while in RTPGroup %p [%p]",g,this);
     group(0);
     setProcessor();
     setMonitor();

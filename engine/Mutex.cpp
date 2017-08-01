@@ -235,7 +235,7 @@ MutexPrivate::~MutexPrivate()
 	Debug(DebugFail,"MutexPrivate '%s' owned by '%s' destroyed with %u locks, %u waiting [%p]",
 	    m_name,m_owner,m_locked,m_waiting,this);
     else if (warn)
-	Debug(DebugGoOn,"MutexPrivate '%s' owned by '%s' unlocked in destructor [%p]",
+	Debug(DebugCrit,"MutexPrivate '%s' owned by '%s' unlocked in destructor [%p]",
 	    m_name,m_owner,this);
 }
 

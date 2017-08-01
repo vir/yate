@@ -1249,7 +1249,7 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 	    continue;
 	SS7Route* r = l3->findRoute(type,packedPC);
 	if (!r) {
-	    Debug(this,DebugGoOn,"Route to %u not found in network '%s'",packedPC,l3->toString().c_str());
+	    Debug(this,DebugWarn,"Route to %u not found in network '%s'",packedPC,l3->toString().c_str());
 	    continue;
 	}
 	ok = true;

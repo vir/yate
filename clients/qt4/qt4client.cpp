@@ -511,7 +511,7 @@ static void qtMsgHandler(QtMsgType type, const char* text)
 	    dbg = DebugWarn;
 	    break;
 	case QtCriticalMsg:
-	    dbg = DebugGoOn;
+	    dbg = DebugCrit;
 	    break;
 	case QtFatalMsg:
 	    dbg = DebugFail;
@@ -3502,7 +3502,7 @@ bool QtClient::createWindow(const String& name, const String& alias)
 	return true;
     }
     else
-	Debug(QtDriver::self(),DebugGoOn,"Could not create window name=%s alias=%s",
+	Debug(QtDriver::self(),DebugCrit,"Could not create window name=%s alias=%s",
 	    name.c_str(),alias.c_str());
     return false;
 }

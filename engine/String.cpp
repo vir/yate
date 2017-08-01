@@ -1051,21 +1051,21 @@ static char* string_printf(unsigned int& length, const char* format, va_list& va
     if (len < 0) {
 #ifdef _WINDOWS
 	if (errno == ERANGE) {
-	    XDebug("String",DebugGoOn,"string_printf() incomplete write");
+	    XDebug("String",DebugCrit,"string_printf() incomplete write");
 	    buf[length] = 0;
 	    length = 0;
 	    return buf;
 	}
 #endif
 	::free(buf);
-	Debug("String",DebugGoOn,"string_printf(): vsnprintf() failed!");
+	Debug("String",DebugCrit,"string_printf(): vsnprintf() failed!");
 	return 0;
     }
     if (len < (int)length)
 	length = len;
 #ifdef XDEBUG
     else if (len > (int)length || buf[len])
-	Debug("String",DebugGoOn,"string_printf() incomplete write");
+	Debug("String",DebugCrit,"string_printf() incomplete write");
 #endif
     buf[length] = 0;
     return buf;

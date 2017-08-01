@@ -269,13 +269,14 @@ public:
 	    debugChain(&__plugin);
 	    MKDEBUG(Fail);
 	    MKDEBUG(Test);
+	    MKDEBUG(Crit);
 	    MKDEBUG(GoOn);
 	    MKDEBUG(Conf);
 	    MKDEBUG(Stub);
 	    MKDEBUG(Warn);
 	    MKDEBUG(Mild);
-	    MKDEBUG(Call);
 	    MKDEBUG(Note);
+	    MKDEBUG(Call);
 	    MKDEBUG(Info);
 	    MKDEBUG(All);
 	    MKTIME(Wall);

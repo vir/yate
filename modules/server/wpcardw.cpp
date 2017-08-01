@@ -1230,14 +1230,13 @@ int WpSpan::readData()
     if (r == -1)
 	return -1;
     if (r < WP_HEADER) {
-	Debug(m_group,DebugGoOn,"WpSpan('%s'). Short read %u byte(s) [%p]",
+	Debug(m_group,DebugCrit,"WpSpan('%s'). Short read %u byte(s) [%p]",
 	    id().safe(),r,this);
 	return -1;
     }
     if (SANG_STATUS_SUCCESS != m_buffer.api_header.operation_status) {
-	m_readErrors++;
-	if (m_readErrors == MAX_READ_ERRORS) {
-	    Debug(m_group,DebugGoOn,"WpSpan('%s'). Read error %u (%s) [%p]",
+	if (++m_readErrors >= MAX_READ_ERRORS) {
+	    Debug(m_group,DebugCrit,"WpSpan('%s'). Read error %u (%s) [%p]",
 		id().safe(),m_buffer.api_header.operation_status,
 		SDLA_DECODE_SANG_STATUS(m_buffer.api_header.operation_status),this);
 	    m_readErrors = 0;

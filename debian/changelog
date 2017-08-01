@@ -1,3 +1,17 @@
+yate (5.5.1~svn6250) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6250:
+  * Added support for Semaphore in JS.
+  * Added handling of SCTP states PF and UNCONFIRMED if supported by the
+    library.
+  * Modified a few inadequate uses of DebugCrit.
+  * Changed default debug level to DebugNote.
+  * Swapped order of DebugCall and DebugNote so DebugCall is less
+    visible.
+  * Renamed DebugGoOn to DebugCrit so it better matches its purpose.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 02 Aug 2017 02:19:17 +0300
+
 yate (5.5.1~svn6247) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6247:

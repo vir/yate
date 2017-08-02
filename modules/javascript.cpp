@@ -217,17 +217,17 @@ public:
 	: JsObject("Semaphore",mtx,true), m_constructor(0), m_exit(false)
 	{
 	    XDebug(DebugAll,"JsSemaphore::JsSemaphore() [%p]",this);
+	    params().addParam(new ExpFunction("wait"));
+	    params().addParam(new ExpFunction("signal"));
 	}
 
     inline JsSemaphore(JsSemaphore* constructor, Mutex* mtx, unsigned int maxCount, unsigned int initialCount,
 	    const char* name)
-	: JsObject("Semaphore",mtx,true), m_name(name),
+	: JsObject(mtx,"[object Semaphore]",false), m_name(name),
 	  m_semaphore(maxCount,m_name.c_str(),initialCount), m_constructor(constructor), m_exit(false)
 	{
 	    XDebug(DebugAll,"JsSemaphore::JsSemaphore(%u,'%s',%u) [%p]",maxCount, 
 		   name,initialCount,this);
-	    params().addParam(new ExpFunction("wait"));
-	    params().addParam(new ExpFunction("signal"));
 	}
     virtual ~JsSemaphore()
 	{
@@ -2776,6 +2776,23 @@ JsObject* JsSemaphore::runConstructor(ObjList& stack, const ExpOperation& oper, 
     mutex()->lock();
     m_semaphores.append(sem);
     mutex()->unlock();
+    // Set the object prototype.
+    // Custom because the Constructor is part of Engine object.
+    ScriptContext* ctxt = YOBJECT(ScriptContext,context);
+    if (!ctxt) {
+	ScriptRun* sr = YOBJECT(ScriptRun,context);
+	if (!(sr && (ctxt = YOBJECT(ScriptContext,sr->context()))))
+	    return sem;
+    }
+    JsObject* engine = YOBJECT(JsObject,ctxt->params().getParam(YSTRING("Engine")));
+    if (!engine)
+	return sem;
+    JsObject* semCtr = YOBJECT(JsObject,engine->params().getParam(YSTRING("Semaphore")));
+    if (semCtr) {
+	JsObject* proto = YOBJECT(JsObject,semCtr->params().getParam(YSTRING("prototype")));
+	if (proto && proto->ref())
+	    sem->params().addParam(new ExpWrapper(proto,protoName()));
+    }
     return sem;
 }
 

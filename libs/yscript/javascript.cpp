@@ -42,6 +42,7 @@ public:
 	    params().addParam(new ExpFunction("parseInt"));
 	    params().addParam(new ExpOperation(ExpOperation::nonInteger(),"NaN"));
 	}
+    virtual void destroyed();
     virtual bool runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
@@ -552,6 +553,12 @@ static const TokenDict s_internals[] =
 static const ExpNull s_null;
 static const String s_noFile = "[no file]";
 static const NativeFields s_nativeFields;
+
+void JsContext::destroyed()
+{
+    params().clearParams();
+    JsObject::destroyed();
+}
 
 GenObject* JsContext::resolveTop(ObjList& stack, const String& name, GenObject* context)
 {

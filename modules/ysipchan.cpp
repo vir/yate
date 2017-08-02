@@ -1135,6 +1135,7 @@ public:
 	{ return m_endpoint; }
     inline SDPParser& parser()
         { return m_parser; }
+    void epTerminated(YateSIPEndPoint* ep);
     YateSIPConnection* findCall(const String& callid, bool incRef = false);
     YateSIPConnection* findDialog(const SIPDialog& dialog, bool incRef = false);
     YateSIPConnection* findDialog(const String& dialog, const String& fromTag,
@@ -4795,6 +4796,7 @@ YateSIPEndPoint::~YateSIPEndPoint()
 	m_engine = 0;
     }
     m_defTransport = 0;
+    plugin.epTerminated(this);
 }
 
 bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port, const YateSIPLine* line)
@@ -5295,11 +5297,14 @@ void YateSIPEndPoint::run()
 		break;
 	    }
 	}
-	if (s_evCount || s_engineHalt)
-	    Thread::check();
+	if (s_evCount || s_engineHalt) {
+	    if (Thread::check(false))
+		break;
+	}
 	else
 	    Thread::usleep(Thread::idleUsec());
     }
+    plugin.epTerminated(this);
 }
 
 bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
@@ -8804,6 +8809,14 @@ bool SipHandler::received(Message &msg)
     return method && plugin.sendMethod(msg,method);
 }
 
+
+void SIPDriver::epTerminated(YateSIPEndPoint* ep)
+{
+    if (!(ep && ep == m_endpoint))
+	return;
+    Debug(this,s_engineHalt ? DebugAll : DebugWarn,"Endpoint stopped");
+    m_endpoint = 0;
+}
 
 YateSIPConnection* SIPDriver::findCall(const String& callid, bool incRef)
 {

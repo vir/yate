@@ -1,3 +1,18 @@
+yate (5.5.1~svn6252) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6252:
+  * Changed default debug level to DebugNote.
+  * Swapped order of DebugCall and DebugNote so DebugCall is less
+    visible.
+  * Renamed DebugGoOn to DebugCrit so it better matches its purpose.
+  * Reset endpoint pointer when terminated to avoid using it.
+  * Fixed JsSemaphore prototype.
+  * Clear ScriptRun stack and async tasks, before destroying the script
+    context.
+  * BugFix. Clear JsContext parameters before destructor is reached.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 03 Aug 2017 02:19:16 +0300
+
 yate (5.5.1~svn6250) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6250:

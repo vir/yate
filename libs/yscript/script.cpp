@@ -242,6 +242,8 @@ ScriptRun::ScriptRun(ScriptCode* code, ScriptContext* context)
 ScriptRun::~ScriptRun()
 {
     XDebug(DebugAll,"ScriptRun::~ScriptRun [%p]",this);
+    m_stack.clear();
+    m_async.clear();
     lock();
     m_state = Invalid;
     TelEngine::destruct(m_code);

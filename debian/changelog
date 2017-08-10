@@ -1,3 +1,13 @@
+yate (5.5.1~svn6253) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6253:
+  * Clear ScriptRun stack and async tasks, before destroying the script
+    context.
+  * BugFix. Clear JsContext parameters before destructor is reached.
+  * Removed useless undefined method.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 11 Aug 2017 02:19:17 +0300
+
 yate (5.5.1~svn6252) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6252:

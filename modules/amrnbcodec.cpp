@@ -93,7 +93,6 @@ public:
 protected:
     void filterBias(short* buf, unsigned int len);
     bool dataError(const char* text = 0);
-    void setMode(Mode mode);
     virtual bool pushData(unsigned long& tStamp, unsigned long& flags) = 0;
     void* m_amrState;
     DataBlock m_data;

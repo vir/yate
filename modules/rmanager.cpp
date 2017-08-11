@@ -500,9 +500,9 @@ void Connection::run()
     }
     else {
 	m_auth = cfg().getValue("password") ? User : Admin;
-	m_output = cfg().getBoolValue("output",false);
 	if (Admin == m_auth)
 	    m_debug = cfg().getBoolValue("debug",false);
+	m_output = cfg().getBoolValue("output",m_debug);
     }
     m_histLen = cfg().getIntValue("maxhistory",DEF_HISTORY);
     if (m_histLen > MAX_HISTORY)
@@ -798,13 +798,14 @@ bool Connection::processChar(unsigned char c)
 		errorBeep();
 		return false;
 	    }
-	    // cycle [no output] -> [output] -> [debug (only if admin)]
+	    // cycle [no output] -> [output] -> [output+debug (only if admin)]
 	    if (m_debug)
 		m_output = m_debug = false;
 	    else if (m_output) {
-		m_output = false;
 		if ((m_debug = (m_auth >= Admin)))
 		    Debugger::enableOutput(true);
+		else
+		    m_output = false;
 	    }
 	    else
 		m_output = true;
@@ -1848,7 +1849,7 @@ void Connection::writeStr(const Message &msg, bool received)
 // write debugging messages to the remote console
 void Connection::writeDebug(const char *str, int level)
 {
-    if ((m_debug && (m_threshold >= level)) || (m_output && (level < 0)))
+    if ((level < 0) ? m_output : (m_debug && (m_threshold >= level)))
 	writeEvent(str,level);
 }
 

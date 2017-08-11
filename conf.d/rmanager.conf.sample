@@ -39,7 +39,7 @@
 
 ; output: bool: Enable output as soon as connecting
 ;  This setting is ignored if an userpass is set
-;output=no
+;output=no (yes if local debug is enabled, see below)
 
 ; debug: bool: Enable local debug as soon as connecting
 ;  This setting is ignored if any password is set

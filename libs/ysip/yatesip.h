@@ -159,6 +159,7 @@ public:
 	NotSetRport       = 0x0010,
 	NotSetReceived    = 0x0020,
 	NoConnReuse       = 0x0040,      // Don't add 'alias' parameter to Via header (reliable only)
+	NoTagFailure      = 0x0080,      // Don't add a To tag for 3xx/4xx/5xx/6xx answers
     };
 
     /**

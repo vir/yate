@@ -216,7 +216,8 @@ void SIPTransaction::setLatestMessage(SIPMessage* message)
 	m_lastMessage->ref();
 	if (message->isAnswer()) {
 	    m_response = message->code;
-	    if ((m_response > 100) && (m_response < 300))
+	    if ((m_response > 100) && ((m_response < 300)
+		    || !(m_engine->flags() & SIPMessage::NoTagFailure)))
 		setDialogTag();
 	}
 	message->complete(m_engine,0,0,m_tag);

@@ -557,7 +557,7 @@ void MessageDispatcher::dequeue()
 unsigned int MessageDispatcher::messageCount()
 {
     Lock lock(this);
-    return m_enqueueCount - m_dequeueCount;
+    return (unsigned int)(m_enqueueCount - m_dequeueCount);
 }
 
 unsigned int MessageDispatcher::handlerCount()

@@ -1525,7 +1525,7 @@ void ExpEvaluator::dump(const ExpOperation& oper, String& res, bool lineNo) cons
     }
     if (lineNo && oper.lineNumber()) {
 	char buf[24];
-	::sprintf(buf," (@0x%X)",oper.lineNumber());
+	::snprintf(buf,sizeof(buf)," (@0x%X)",oper.lineNumber());
 	res << buf;
     }
 }

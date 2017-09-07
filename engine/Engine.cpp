@@ -1696,7 +1696,7 @@ int Engine::run()
 	    s_restarts = Time::now() + 10000000;
 	}
 	uint64_t disp = m_dispatcher.dispatchCount();
-	m_messageRate = disp - m_dispatchedLast;
+	m_messageRate = (unsigned int)(disp - m_dispatchedLast);
 	m_dispatchedLast = disp;
 	if (m_maxMsgRate < m_messageRate)
 	    m_maxMsgRate = m_messageRate;

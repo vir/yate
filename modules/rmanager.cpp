@@ -535,7 +535,7 @@ void Connection::run()
 	Thread::check();
 	bool readok = false;
 	bool error = false;
-	HANDLE sh = m_socket->handle();
+	SOCKET sh = m_socket->handle();
 	if (m_socket->select(&readok,0,&error,10000)) {
 	    // rearm the error beep
 	    m_beeping = false;
@@ -1888,7 +1888,7 @@ void Connection::writeStr(const char *str, int len)
 	return;
     if (!(m_socket && m_socket->valid()))
 	return;
-    HANDLE sh = m_socket->handle();
+    SOCKET sh = m_socket->handle();
     if (int written = m_socket->writeData(str,len) != len) {
 	disconnect();
 	Debug("RManager",DebugInfo,"Socket %d wrote only %d out of %d bytes",sh,written,len);

@@ -627,11 +627,11 @@ JsObject* JsArray::runConstructor(ObjList& stack, const ExpOperation& oper, GenO
     if (!ref())
 	return 0;
     JsArray* obj = static_cast<JsArray*>(clone("[object " + oper.name() + "]"));
-    unsigned int len = oper.number();
+    unsigned int len = (unsigned int)oper.number();
     for (unsigned int i = len; i;  i--) {
 	ExpOperation* op = obj->popValue(stack,context);
 	if ((len == 1) && op->isInteger() && (op->number() >= 0) && (op->number() <= 0xffffffff)) {
-	    len = op->number();
+	    len = (unsigned int)op->number();
 	    TelEngine::destruct(op);
 	    break;
 	}
@@ -651,7 +651,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	// Static function that checks if the argument is an Array
 	ObjList args;
 	extractArgs(this,stack,oper,context,args);
-	ExpEvaluator::pushOne(stack,new ExpOperation(YOBJECT(JsArray,args[0])));
+	ExpEvaluator::pushOne(stack,new ExpOperation(!!YOBJECT(JsArray,args[0])));
     }
     else if (oper.name() == YSTRING("push")) {
 	// Adds one or more elements to the end of an array and returns the new length of the array.

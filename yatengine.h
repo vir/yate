@@ -1559,7 +1559,7 @@ public:
      * @return Average age of dequeued messages
      */
     unsigned int messageAge(bool usec = false) const
-	{ return m_dispatcher.messageAge(usec); }
+	{ return (unsigned int)m_dispatcher.messageAge(usec); }
 
     /**
      * Retrieve dispatcher's statistics counters

@@ -1,5 +1,5 @@
 # Process this file with autoconf to produce a configure script.
-AC_INIT(Yate, 5.5.1)
+AC_INIT(Yate, 6.0.1)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
 
@@ -1755,7 +1755,7 @@ test "x$ac_cv_use_kdoc" = "xyes" && ac_cv_use_kdoc=`(which kdoc) 2>/dev/null`
 AC_MSG_CHECKING([for kdoc version])
 if [[ "x$ac_cv_use_kdoc" != "x" -a -x "$ac_cv_use_kdoc" ]]; then
 KDOC_BIN="$ac_cv_use_kdoc"
-ac_cv_use_kdoc=`($KDOC_BIN --version) 2>&1 | awk '{ print $2 }'`
+ac_cv_use_kdoc=`($KDOC_BIN --version) 2>&1 | awk '/^kdoc/ { print $2 }'`
 else
 ac_cv_use_kdoc="no"
 fi

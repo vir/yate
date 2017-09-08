@@ -16,7 +16,11 @@
 %{!?systemd:%define systemd %(test -x /usr/bin/systemd && echo 1 || echo 0)}
 %{!?_unitdir:%define _unitdir /usr/lib/systemd/system}
 %{!?dist:%define dist %{nil}}
+%if "@PACKAGE_STATUS@" == ""
+%{!?status:%define status %{nil}}
+%else
 %{!?status:%define status @PACKAGE_STATUS@}
+%endif
 %{!?revision:%define revision %{nil}}
 %{?nodeps:%define no_auto_deps 1}
 %{?nopstn:%define no_pstn 1}

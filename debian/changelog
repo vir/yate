@@ -1,3 +1,12 @@
+yate (6.0.1~svn6263) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6263:
+  * Take SVN revision from the product directory, not entire repository.
+  * Workaround for a race to watch a message result while its
+    ExtModReceiver is being destroyed.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 14 Sep 2017 02:19:16 +0300
+
 yate (6.0.1~svn6261) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6261:

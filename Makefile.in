@@ -330,7 +330,7 @@ srpm: tarball
 	rpmbuild -ta $(RPMOPT) packing/tarballs/@PACKAGE_TARNAME@-@PACKAGE_VERSION@-@PACKAGE_STATUS@@PACKAGE_RELEASE@.tar.gz
 
 revision: check-topdir
-	@-rev=`svn info 2>/dev/null | sed -n 's,^Revision: *,,p'`; \
+	@-rev=`LANG=C LC_MESSAGES=C svn info 2>/dev/null | sed -n 's,^Last Changed Rev: *,,p'`; \
 	test -z "$$rev" || echo "$$rev" > packing/revision.txt
 
 %.o: @srcdir@/%.cpp $(MKDEPS) @srcdir@/yatengine.h

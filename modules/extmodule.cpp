@@ -654,7 +654,8 @@ void MsgWatcher::dispatched(const Message& msg, bool handled)
     ExtModReceiver* recv = m_receiver;
     if (!recv || recv->dead() || (recv->m_watcher != this) || !recv->useUnlocked())
 	return;
-    if (!lock.acquire(recv)) {
+    if (!lock.acquire(recv) || !m_receiver || recv->dead()) {
+	lock.drop();
 	recv->unuse();
 	return;
     }
@@ -774,7 +775,9 @@ bool ExtModReceiver::use()
 bool ExtModReceiver::unuse()
 {
     s_uses.lock();
-    int u = --m_use;
+    int u = m_use - 1;
+    if (u >= 0)
+	m_use = u;
     s_uses.unlock();
     if (!u)
 	destruct();
@@ -840,6 +843,7 @@ void ExtModReceiver::destruct()
     m_out = 0;
     delete tmp;
     unlock();
+    Thread::yield();
     GenObject::destruct();
 }
 

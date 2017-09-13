@@ -9,7 +9,7 @@ fi
 
 PACKAGE_RELEASE="1"
 PACKAGE_STATUS="devel"
-PACKAGE_REVISION=`svn info 2>/dev/null | sed -n 's,^Revision: *,,p'`
+PACKAGE_REVISION=`cd "$srcdir"; LANG=C LC_MESSAGES=C svn info 2>/dev/null | sed -n 's,^Last Changed Rev: *,,p'`
 test -z "$PACKAGE_REVISION" && PACKAGE_REVISION=`cat "$srcdir/packing/revision.txt" 2>/dev/null`
 AC_ARG_WITH(status,AC_HELP_STRING([--with-status=NAME],[use NAME as package status]),[PACKAGE_STATUS=$withval])
 

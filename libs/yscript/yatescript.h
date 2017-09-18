@@ -1469,9 +1469,17 @@ public:
      * Fill a list with the unique names of all fields
      * @param names List to which key names must be added
      * @param list List of parameters whose names to be added
+     * @param checkDupl True to ignore duplicates from the given list
      * @param skip Parameters starting with this prefix will not be added
      */
-    static void fillFieldNames(ObjList& names, const NamedList& list, const char* skip = 0);
+    static void fillFieldNames(ObjList& names, const NamedList& list, bool checkDupl = true, const char* skip = 0);
+
+    /**
+     * Fill a list with the unique names from a Hash list
+     * @param names List to which key names must be added
+     * @param list Hash list whose names are to be added
+     */
+    static void fillFieldNames(ObjList& names, const HashList& list);
 
     /**
      * Try to evaluate a single function in the context
@@ -2049,6 +2057,13 @@ public:
      * @return Value removed from stack, NULL if stack underflow or field not evaluable
      */
     virtual ExpOperation* popValue(ObjList& stack, GenObject* context = 0);
+
+    /**
+     * Delete a field of the object
+     * @param name Name of field to remove
+     */
+    virtual void clearField(const String& name)
+	{ params().clearParam(name); }
 
     /**
      * Retrieve the object frozen status (cannot modify attributes or methods)

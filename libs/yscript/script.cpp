@@ -184,7 +184,8 @@ bool ScriptContext::copyFields(ObjList& stack, const ScriptContext& original, Ge
 
 void ScriptContext::fillFieldNames(ObjList& names)
 {
-    fillFieldNames(names,params());
+    bool checkDupl = !(YOBJECT(JsObject,this));
+    fillFieldNames(names,params(),checkDupl);
     const NamedList* native = nativeParams();
     if (native)
 	fillFieldNames(names,*native);
@@ -195,7 +196,7 @@ void ScriptContext::fillFieldNames(ObjList& names)
 #endif
 }
 
-void ScriptContext::fillFieldNames(ObjList& names, const NamedList& list, const char* skip)
+void ScriptContext::fillFieldNames(ObjList& names, const NamedList& list, bool checkDupl, const char* skip)
 {
     ObjList* tail = &names;
     for (const ObjList* l = list.paramList()->skipNull(); l; l = l->skipNext()) {
@@ -204,12 +205,25 @@ void ScriptContext::fillFieldNames(ObjList& names, const NamedList& list, const 
 	    continue;
 	if (skip && s->name().startsWith(skip))
 	    continue;
-	if (names.find(s->name()))
+	if (checkDupl && names.find(s->name()))
 	    continue;
 	tail = tail->append(new String(s->name()));
     }
 }
 
+void ScriptContext::fillFieldNames(ObjList& names, const HashList& list)
+{
+    ObjList* tail = &names;
+    for (unsigned int i = 0; i < list.length(); i++) {
+	ObjList* o = list.getList(i);
+	for (o = o ? o->skipNull() : 0;o;o = o->skipNext()) {
+	    GenObject* obj = o->get();
+	    if (obj->toString().null())
+		continue;
+	    tail = tail->append(new String(obj->toString()));
+	}
+    }
+}
 
 #define MAKE_NAME(x) { #x, ScriptRun::x }
 static const TokenDict s_states[] = {

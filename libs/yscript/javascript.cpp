@@ -2570,7 +2570,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		bool ret = false;
 		if (obj && (!obj->frozen() || !obj->hasField(stack,name,context))
 			&& obj->toString() != YSTRING("()")) {
-		    obj->params().clearParam(name);
+		    obj->clearField(name);
 		    ret = true;
 		}
 		DDebug(DebugAll,"Deleted '%s' : %s",name.c_str(),String::boolText(ret));

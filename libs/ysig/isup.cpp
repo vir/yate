@@ -1939,6 +1939,9 @@ static const MsgParams* getIsupParams(SS7PointCode::Type type, SS7MsgISUP::Type 
     const MsgParams* params = 0;
     switch (type) {
 	case SS7PointCode::ITU:
+	case SS7PointCode::China:
+	case SS7PointCode::Japan:
+	case SS7PointCode::Japan5:
 	    params = s_itu_params;
 	    break;
 	case SS7PointCode::ANSI:
@@ -4483,6 +4486,15 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	    case SS7PointCode::ANSI:
 	    case SS7PointCode::ANSI8:
 		msg.setParam(prefix+"protocol-type","ansi");
+		break;
+	    case SS7PointCode::China:
+		msg.setParam(prefix+"protocol-type","chn");
+		msg.setParam(prefix+"protocol-basetype","chn");
+		break;
+	    case SS7PointCode::Japan:
+	    case SS7PointCode::Japan5:
+		msg.setParam(prefix+"protocol-type","ttc");
+		msg.setParam(prefix+"protocol-basetype","ttc93+");
 		break;
 	    default: ;
 	}

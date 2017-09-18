@@ -1469,9 +1469,17 @@ public:
      * Fill a list with the unique names of all fields
      * @param names List to which key names must be added
      * @param list List of parameters whose names to be added
+     * @param checkDupl True to ignore duplicates from the given list
      * @param skip Parameters starting with this prefix will not be added
      */
-    static void fillFieldNames(ObjList& names, const NamedList& list, const char* skip = 0);
+    static void fillFieldNames(ObjList& names, const NamedList& list, bool checkDupl = true, const char* skip = 0);
+
+    /**
+     * Fill a list with the unique names from a Hash list
+     * @param names List to which key names must be added
+     * @param list Hash list whose names are to be added
+     */
+    static void fillFieldNames(ObjList& names, const HashList& list);
 
     /**
      * Try to evaluate a single function in the context
@@ -2049,6 +2057,13 @@ public:
      * @return Value removed from stack, NULL if stack underflow or field not evaluable
      */
     virtual ExpOperation* popValue(ObjList& stack, GenObject* context = 0);
+
+    /**
+     * Delete a field of the object
+     * @param name Name of field to remove
+     */
+    virtual void clearField(const String& name)
+	{ params().clearParam(name); }
 
     /**
      * Retrieve the object frozen status (cannot modify attributes or methods)
@@ -2655,6 +2670,61 @@ public:
      * @return True if the operation holds an undefined value
      */
     static bool isUndefined(const ExpOperation& oper);
+
+    /**
+     * Check if an operation is null or undefined
+     * @return True if the operation holds an undefined value or a null object
+     */
+    static bool isMissing(const ExpOperation& oper);
+
+    /**
+     * Check if an operation is missing, holds a null or undefined
+     * @return True if the operation is null or holds an undefined value or a null object
+     */
+    inline static bool isMissing(const ExpOperation* oper)
+	{ return !oper || isMissing(*oper); }
+
+    /**
+     * Check if an operation is not null or undefined
+     * @return True if the operation holds a value or non-null object
+     */
+    inline static bool isPresent(const ExpOperation& oper)
+	{ return !isMissing(oper); }
+
+    /**
+     * Check if an operation is present and not null or undefined
+     * @return True if the operation holds a value or non-null object
+     */
+    inline static bool isPresent(const ExpOperation* oper)
+	{ return oper && !isMissing(*oper); }
+
+    /**
+     * Check if an operation holds a null or undefined value or empty string
+     * @return True if the operation is an undefined value or a null object or empty string
+     */
+    inline static bool isEmpty(const ExpOperation& oper)
+	{ return oper.null() || isMissing(oper); }
+
+    /**
+     * Check if an operation is missing, holds a null or undefined value or empty string
+     * @return True if the operation is an undefined value or a null object or empty string
+     */
+    inline static bool isEmpty(const ExpOperation* oper)
+	{ return TelEngine::null(oper) || isMissing(*oper); }
+
+    /**
+     * Check if an operation is not null or undefined or empty string
+     * @return True if the operation holds a non-empty value or non-null object
+     */
+    inline static bool isFilled(const ExpOperation& oper)
+	{ return oper && !isMissing(oper); }
+
+    /**
+     * Check if an operation is not null or undefined or empty string
+     * @return True if the operation holds a non-empty value or non-null object
+     */
+    inline static bool isFilled(const ExpOperation* oper)
+	{ return !isEmpty(oper); }
 
 private:
     String m_basePath;

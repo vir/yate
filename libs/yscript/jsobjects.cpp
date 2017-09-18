@@ -271,7 +271,7 @@ JsObject* JsObject::buildCallContext(Mutex* mtx, JsObject* thisObj)
 
 void JsObject::fillFieldNames(ObjList& names)
 {
-    ScriptContext::fillFieldNames(names,params(),"__");
+    ScriptContext::fillFieldNames(names,params(),false,"__");
     const NamedList* native = nativeParams();
     if (native)
 	ScriptContext::fillFieldNames(names,*native);

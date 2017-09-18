@@ -2570,7 +2570,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		bool ret = false;
 		if (obj && (!obj->frozen() || !obj->hasField(stack,name,context))
 			&& obj->toString() != YSTRING("()")) {
-		    obj->params().clearParam(name);
+		    obj->clearField(name);
 		    ret = true;
 		}
 		DDebug(DebugAll,"Deleted '%s' : %s",name.c_str(),String::boolText(ret));
@@ -3687,6 +3687,13 @@ bool JsParser::isUndefined(const ExpOperation& oper)
 {
     ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
     return w && !w->object();
+}
+
+// Check if an operation is null or undefined
+bool JsParser::isMissing(const ExpOperation& oper)
+{
+    ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
+    return w && (!w->object() || (w->object() == s_null.object()));
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

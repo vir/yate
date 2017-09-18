@@ -255,6 +255,37 @@ private:
     bool m_exit;
 };
 
+class JsHashList : public JsObject
+{
+public:
+    inline JsHashList(Mutex* mtx)
+	: JsObject("HashList",mtx,true),
+	  m_list()
+	{
+	    XDebug(DebugAll,"JsHashList::JsHashList() [%p]",this);
+	}
+    inline JsHashList(unsigned int size, Mutex* mtx)
+	: JsObject(mtx,"[object HashList]",false),
+	  m_list(size)
+	{
+	    XDebug(DebugAll,"JsHashList::JsHashList(%u) [%p]",size,this);
+	}
+    virtual ~JsHashList()
+	{
+	    XDebug(DebugAll,"~JsHashList() [%p]",this);
+	    m_list.clear();
+	}
+    virtual void* getObject(const String& name) const;
+    virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    virtual void fillFieldNames(ObjList& names);
+    virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    virtual void clearField(const String& name)
+	{ m_list.remove(name); }
+private:
+    HashList m_list;
+};
+
 #define MKDEBUG(lvl) params().addParam(new ExpOperation((int64_t)Debug ## lvl,"Debug" # lvl))
 #define MKTIME(typ) params().addParam(new ExpOperation((int64_t)SysUsage:: typ ## Time,# typ "Time"))
 class JsEngine : public JsObject, public DebugEnabler
@@ -322,6 +353,7 @@ public:
 	    params().addParam(new ExpFunction("btoh"));
 	    params().addParam(new ExpFunction("htob"));
 	    addConstructor(params(), "Semaphore", new JsSemaphore(mtx));
+	    addConstructor(params(),"HashList",new JsHashList(mtx));
 	}
     static void initialize(ScriptContext* context, const char* name = 0);
     inline void resetWorker()
@@ -3663,6 +3695,100 @@ void JsXML::initialize(ScriptContext* context)
 	addConstructor(params,"XML",new JsXML(mtx));
 }
 
+void* JsHashList::getObject(const String& name) const
+{
+    void* obj = (name == YATOM("JsHashList")) ? const_cast<JsHashList*>(this) : JsObject::getObject(name);
+    if (!obj)
+	obj = m_list.getObject(name);
+    return obj;
+}
+
+JsObject* JsHashList::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsHashList::runConstructor '%s'(" FMT64 ")",oper.name().c_str(),oper.number());
+    ObjList args;
+    unsigned int cnt = 17; // default value for HashList
+    switch (extractArgs(stack,oper,context,args)) {
+	case 1:
+	{
+	    ExpOperation* op = static_cast<ExpOperation*>(args[0]);
+	    if (!op || !op->isInteger() || op->toNumber() <= 0)
+		return 0;
+	    cnt = op->toNumber();
+	    break;
+	}
+	case 0:
+	    break;
+	default:
+	    return 0;
+    }
+
+    JsHashList* obj = new JsHashList(cnt,mutex());
+    if (!ref()) {
+	TelEngine::destruct(obj);
+	return 0;
+    }
+    obj->params().addParam(new ExpWrapper(this,protoName()));
+    return obj;
+}
+
+void JsHashList::fillFieldNames(ObjList& names)
+{
+    JsObject::fillFieldNames(names);
+    ScriptContext::fillFieldNames(names,m_list);
+#ifdef XDEBUG
+    String tmp;
+    tmp.append(names,",");
+    Debug(DebugInfo,"JsHashList::fillFieldNames: %s",tmp.c_str());
+#endif
+}
+
+bool JsHashList::runField(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsHashList::runField() '%s' in '%s' [%p]",
+	oper.name().c_str(),toString().c_str(),this);
+    ExpOperation* obj = static_cast<ExpOperation*>(m_list[oper.name()]);
+    if (obj) {
+	ExpWrapper* wrp = YOBJECT(ExpWrapper,obj);
+	if (wrp)
+	    ExpEvaluator::pushOne(stack,wrp->clone(oper.name()));
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(*obj,oper.name()));
+	return true;
+    }
+    return JsObject::runField(stack,oper,context);
+}
+
+bool JsHashList::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsHashList::runAssign() '%s'='%s' (%s) in '%s' [%p]",
+	oper.name().c_str(),oper.c_str(),oper.typeOf(),toString().c_str(),this);
+    if (frozen()) {
+	Debug(DebugWarn,"Object '%s' is frozen",toString().c_str());
+	return false;
+    }
+    ObjList* obj = m_list.find(oper.name());
+    ExpOperation* cln = 0;
+    ExpFunction* ef = YOBJECT(ExpFunction,&oper);
+    if (ef)
+	cln = ef->ExpOperation::clone();
+    else {
+	ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
+	if (w) {
+	    JsFunction* jsf = YOBJECT(JsFunction,w->object());
+	    if (jsf)
+		jsf->firstName(oper.name());
+	    cln = w->clone(oper.name());
+	}
+	else
+	    cln = oper.clone();
+    }
+    if (!obj)
+	m_list.append(cln);
+    else
+	obj->set(cln);
+    return true;
+}
 
 bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
@@ -3689,7 +3815,7 @@ bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	    return false;
 	ExpOperation* op = 0;
 	ExpOperation* file = static_cast<ExpOperation*>(args[0]);
-	if (!TelEngine::null(file)) {
+	if (JsParser::isFilled(file)) {
 	    File f;
 	    if (f.openPath(*file)) {
 		int64_t len = f.length();
@@ -3711,7 +3837,7 @@ bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	if (extractArgs(stack,oper,context,args) < 2)
 	    return false;
 	ExpOperation* file = static_cast<ExpOperation*>(args[0]);
-	bool ok = !TelEngine::null(file);
+	bool ok = JsParser::isFilled(file);
 	if (ok) {
 	    ok = false;
 	    int spaces = args[2] ? static_cast<ExpOperation*>(args[2])->number() : 0;
@@ -3904,7 +4030,7 @@ bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    return false;
 	type.toUpper();
 	int qType = lookup(type,Resolver::s_types,-1);
-	if ((qType < 0) || TelEngine::null(arg))
+	if ((qType < 0) || JsParser::isEmpty(arg))
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,"DNS"));
 	else {
 	    if (async && async->valBoolean()) {
@@ -3921,18 +4047,20 @@ bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
     else if ((oper.name() == YSTRING("resolve")) || (oper.name() == YSTRING("local"))) {
 	if (extractArgs(stack,oper,context,args) != 1)
 	    return false;
-	String tmp = static_cast<ExpOperation*>(args[0]);
-	if ((tmp[0] == '[') && (tmp[tmp.length() - 1] == ']'))
-	    tmp = tmp.substr(1,tmp.length() - 2);
-	SocketAddr rAddr;
 	ExpOperation* op = 0;
-	if (rAddr.host(tmp)) {
-	    if (oper.name() == YSTRING("resolve"))
-		op = new ExpOperation(rAddr.host(),"IP");
-	    else {
-		SocketAddr lAddr;
-		if (lAddr.local(rAddr))
-		    op = new ExpOperation(lAddr.host(),"IP");
+	if (JsParser::isFilled(static_cast<ExpOperation*>(args[0]))) {
+	    String tmp = static_cast<ExpOperation*>(args[0]);
+	    if ((tmp[0] == '[') && (tmp[tmp.length() - 1] == ']'))
+		tmp = tmp.substr(1,tmp.length() - 2);
+	    SocketAddr rAddr;
+	    if (rAddr.host(tmp)) {
+		if (oper.name() == YSTRING("resolve"))
+		    op = new ExpOperation(rAddr.host(),"IP");
+		else {
+		    SocketAddr lAddr;
+		    if (lAddr.local(rAddr))
+			op = new ExpOperation(lAddr.host(),"IP");
+		}
 	    }
 	}
 	if (!op)
@@ -3952,7 +4080,7 @@ bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 		// fall through
 	    case 1:
 		op = 0;
-		{
+		if (JsParser::isFilled(static_cast<ExpOperation*>(args[0]))) {
 		    String tmp = static_cast<ExpOperation*>(args[0]);
 		    if ((tmp[0] == '[') && (tmp[tmp.length() - 1] == ']'))
 			tmp = tmp.substr(1,tmp.length() - 2);

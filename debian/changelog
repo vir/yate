@@ -1,3 +1,18 @@
+yate (6.0.1~svn6266) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6266:
+  * When generating iterator for JsObjects avoid checking that were not
+    setting duplicates in the iterator. JsObject does not allow setting
+    duplicates.
+  * Added support for a native implementation of a Javascript HashList.
+  * National specific messages are not decoded, just ITU compatibility.
+  * Added support for basic processing of China and Japan ISUP versions
+    in SIP-T.
+  * Added helper functions to check if an operator is missing or empty.
+  * Don't attempt to DNS resolve empty, null or undefined names.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 19 Sep 2017 02:19:16 +0300
+
 yate (6.0.1~svn6263) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6263:

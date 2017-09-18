@@ -2671,6 +2671,61 @@ public:
      */
     static bool isUndefined(const ExpOperation& oper);
 
+    /**
+     * Check if an operation is null or undefined
+     * @return True if the operation holds an undefined value or a null object
+     */
+    static bool isMissing(const ExpOperation& oper);
+
+    /**
+     * Check if an operation is missing, holds a null or undefined
+     * @return True if the operation is null or holds an undefined value or a null object
+     */
+    inline static bool isMissing(const ExpOperation* oper)
+	{ return !oper || isMissing(*oper); }
+
+    /**
+     * Check if an operation is not null or undefined
+     * @return True if the operation holds a value or non-null object
+     */
+    inline static bool isPresent(const ExpOperation& oper)
+	{ return !isMissing(oper); }
+
+    /**
+     * Check if an operation is present and not null or undefined
+     * @return True if the operation holds a value or non-null object
+     */
+    inline static bool isPresent(const ExpOperation* oper)
+	{ return oper && !isMissing(*oper); }
+
+    /**
+     * Check if an operation holds a null or undefined value or empty string
+     * @return True if the operation is an undefined value or a null object or empty string
+     */
+    inline static bool isEmpty(const ExpOperation& oper)
+	{ return oper.null() || isMissing(oper); }
+
+    /**
+     * Check if an operation is missing, holds a null or undefined value or empty string
+     * @return True if the operation is an undefined value or a null object or empty string
+     */
+    inline static bool isEmpty(const ExpOperation* oper)
+	{ return TelEngine::null(oper) || isMissing(*oper); }
+
+    /**
+     * Check if an operation is not null or undefined or empty string
+     * @return True if the operation holds a non-empty value or non-null object
+     */
+    inline static bool isFilled(const ExpOperation& oper)
+	{ return oper && !isMissing(oper); }
+
+    /**
+     * Check if an operation is not null or undefined or empty string
+     * @return True if the operation holds a non-empty value or non-null object
+     */
+    inline static bool isFilled(const ExpOperation* oper)
+	{ return !isEmpty(oper); }
+
 private:
     String m_basePath;
     String m_includePath;

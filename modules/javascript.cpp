@@ -3815,7 +3815,7 @@ bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	    return false;
 	ExpOperation* op = 0;
 	ExpOperation* file = static_cast<ExpOperation*>(args[0]);
-	if (!TelEngine::null(file)) {
+	if (JsParser::isFilled(file)) {
 	    File f;
 	    if (f.openPath(*file)) {
 		int64_t len = f.length();
@@ -3837,7 +3837,7 @@ bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	if (extractArgs(stack,oper,context,args) < 2)
 	    return false;
 	ExpOperation* file = static_cast<ExpOperation*>(args[0]);
-	bool ok = !TelEngine::null(file);
+	bool ok = JsParser::isFilled(file);
 	if (ok) {
 	    ok = false;
 	    int spaces = args[2] ? static_cast<ExpOperation*>(args[2])->number() : 0;
@@ -4030,7 +4030,7 @@ bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	    return false;
 	type.toUpper();
 	int qType = lookup(type,Resolver::s_types,-1);
-	if ((qType < 0) || TelEngine::null(arg))
+	if ((qType < 0) || JsParser::isEmpty(arg))
 	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,"DNS"));
 	else {
 	    if (async && async->valBoolean()) {
@@ -4047,18 +4047,20 @@ bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
     else if ((oper.name() == YSTRING("resolve")) || (oper.name() == YSTRING("local"))) {
 	if (extractArgs(stack,oper,context,args) != 1)
 	    return false;
-	String tmp = static_cast<ExpOperation*>(args[0]);
-	if ((tmp[0] == '[') && (tmp[tmp.length() - 1] == ']'))
-	    tmp = tmp.substr(1,tmp.length() - 2);
-	SocketAddr rAddr;
 	ExpOperation* op = 0;
-	if (rAddr.host(tmp)) {
-	    if (oper.name() == YSTRING("resolve"))
-		op = new ExpOperation(rAddr.host(),"IP");
-	    else {
-		SocketAddr lAddr;
-		if (lAddr.local(rAddr))
-		    op = new ExpOperation(lAddr.host(),"IP");
+	if (JsParser::isFilled(static_cast<ExpOperation*>(args[0]))) {
+	    String tmp = static_cast<ExpOperation*>(args[0]);
+	    if ((tmp[0] == '[') && (tmp[tmp.length() - 1] == ']'))
+		tmp = tmp.substr(1,tmp.length() - 2);
+	    SocketAddr rAddr;
+	    if (rAddr.host(tmp)) {
+		if (oper.name() == YSTRING("resolve"))
+		    op = new ExpOperation(rAddr.host(),"IP");
+		else {
+		    SocketAddr lAddr;
+		    if (lAddr.local(rAddr))
+			op = new ExpOperation(lAddr.host(),"IP");
+		}
 	    }
 	}
 	if (!op)
@@ -4078,7 +4080,7 @@ bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 		// fall through
 	    case 1:
 		op = 0;
-		{
+		if (JsParser::isFilled(static_cast<ExpOperation*>(args[0]))) {
 		    String tmp = static_cast<ExpOperation*>(args[0]);
 		    if ((tmp[0] == '[') && (tmp[tmp.length() - 1] == ']'))
 			tmp = tmp.substr(1,tmp.length() - 2);

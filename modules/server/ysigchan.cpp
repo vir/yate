@@ -4808,19 +4808,23 @@ bool IsupDecodeHandler::received(Message& msg)
 SS7PointCode::Type IsupDecodeHandler::getPCType(Message& msg, const String& prefix)
 {
     String proto = msg.getValue(prefix+"protocol-type");
-    if (proto == "itu-t")
+    if (proto == YSTRING("itu-t"))
 	return SS7PointCode::ITU;
-    else if (proto == "ansi")
+    else if (proto == YSTRING("ansi"))
 	return SS7PointCode::ANSI;
     // Check if protocol-basetype starts with known values
     // Use the protocol-type if base is missing
     const char* base = msg.getValue(prefix+"protocol-basetype");
     if (base)
 	proto = base;
-    if (proto.startsWith("itu-t"))
+    if (proto.startsWith("itu-t") || proto.startsWith("etsi"))
 	return SS7PointCode::ITU;
-    else if (proto.startsWith("ansi"))
+    else if (proto.startsWith("ansi") || (proto == YSTRING("gr317")))
 	return SS7PointCode::ANSI;
+    else if (proto.startsWith("chn"))
+	return SS7PointCode::China;
+    else if (proto.startsWith("ttc"))
+	return SS7PointCode::Japan;
     msg.setParam("error","Unknown protocol-type");
     return SS7PointCode::Other;
 }

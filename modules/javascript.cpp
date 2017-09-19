@@ -3860,7 +3860,7 @@ bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 
 ExpOperation* JsJSON::stringify(const ExpOperation* oper, int spaces)
 {
-    if (!oper || YOBJECT(JsFunction,oper) || JsParser::isUndefined(*oper))
+    if (!oper || YOBJECT(JsFunction,oper) || YOBJECT(ExpFunction,oper) || JsParser::isUndefined(*oper))
 	return 0;
     if (spaces < 0)
 	spaces = 0;
@@ -3881,7 +3881,8 @@ void JsJSON::stringify(const NamedString* ns, String& buf, int spaces, int inden
 	    buf << "null";
 	return;
     }
-    if (JsParser::isNull(*oper) || JsParser::isUndefined(*oper) || YOBJECT(JsFunction,oper)) {
+    if (JsParser::isNull(*oper) || JsParser::isUndefined(*oper) || YOBJECT(JsFunction,oper)
+	    || YOBJECT(ExpFunction,oper)) {
 	buf << "null";
 	return;
     }
@@ -3930,7 +3931,7 @@ void JsJSON::stringify(const NamedString* ns, String& buf, int spaces, int inden
 	while (l) {
 	    const NamedString* p = static_cast<const NamedString*>(l->get());
 	    l = l->skipNext();
-	    if (p->name() == protoName() || YOBJECT(JsFunction,p))
+	    if (p->name() == protoName() || YOBJECT(JsFunction,p) || YOBJECT(ExpFunction,p))
 		continue;
 	    const ExpOperation* op = YOBJECT(ExpOperation,p);
 	    if (op && JsParser::isUndefined(*op))
@@ -3940,7 +3941,8 @@ void JsJSON::stringify(const NamedString* ns, String& buf, int spaces, int inden
 	    for (; l; l = l->skipNext()) {
 		p = static_cast<const NamedString*>(l->get());
 		op = YOBJECT(ExpOperation,p);
-		if (!(p->name() == protoName() || YOBJECT(JsFunction,p) || (op && JsParser::isUndefined(*op))))
+		if (!(p->name() == protoName() || YOBJECT(JsFunction,p) || YOBJECT(ExpFunction,p)
+			|| (op && JsParser::isUndefined(*op))))
 		    break;
 	    }
 	    if (l)

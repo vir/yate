@@ -916,6 +916,13 @@ public:
 	{ m_list.clear(); }
 
     /**
+     * Copy other fragment into this one
+     * @param other Fragment to copy
+     * @param parent Optional parent to set in copied children
+     */
+    void copy(const XmlFragment& other, XmlParent* parent = 0);
+
+    /**
      * Build a String from this XmlFragment
      * @param dump The string where to append representation
      * @param escape True if the attributes values need to be escaped

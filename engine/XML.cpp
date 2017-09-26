@@ -1310,46 +1310,7 @@ XmlFragment::XmlFragment()
 // Copy Constructor
 XmlFragment::XmlFragment(const XmlFragment& orig)
 {
-    ObjList* ob = orig.getChildren().skipNull();
-    for (;ob;ob = ob->skipNext()) {
-	XmlChild* obj = static_cast<XmlChild*>(ob->get());
-	if (obj->xmlElement()) {
-	    XmlElement* el = obj->xmlElement();
-	    if (el)
-		addChild(new XmlElement(*el));
-	    continue;
-	}
-	else if (obj->xmlCData()) {
-	    XmlCData* cdata = obj->xmlCData();
-	    if (cdata)
-		addChild(new XmlCData(*cdata));
-	    continue;
-	}
-	else if (obj->xmlText()) {
-	    const XmlText* text = obj->xmlText();
-	    if (text)
-		addChild(new XmlText(*text));
-	    continue;
-	}
-	else if (obj->xmlComment()) {
-	    XmlComment* comm = obj->xmlComment();
-	    if (comm)
-		addChild(new XmlComment(*comm));
-	    continue;
-	}
-	else if (obj->xmlDeclaration()) {
-	    XmlDeclaration* decl = obj->xmlDeclaration();
-	    if (decl)
-		addChild(new XmlDeclaration(*decl));
-	    continue;
-	}
-	else if (obj->xmlDoctype()) {
-	    XmlDoctype* doctype = obj->xmlDoctype();
-	    if (doctype)
-		addChild(new XmlDoctype(*doctype));
-	    continue;
-	}
-    }
+    copy(orig);
 }
 
 // Destructor
@@ -1397,6 +1358,30 @@ XmlChild* XmlFragment::removeChild(XmlChild* child, bool delObj)
     if (ch && ch->xmlElement())
 	ch->xmlElement()->setParent(0);
     return ch;
+}
+
+// Copy other fragment into this one
+void XmlFragment::copy(const XmlFragment& other, XmlParent* parent)
+{
+    for (ObjList* o = other.getChildren().skipNull(); o; o = o->skipNext()) {
+	XmlChild* ch = static_cast<XmlChild*>(o->get());
+	if (ch->xmlElement())
+	    ch = new XmlElement(*(ch->xmlElement()));
+	else if (ch->xmlCData())
+	    ch = new XmlCData(*(ch->xmlCData()));
+	else if (ch->xmlText())
+	    ch = new XmlText(*(ch->xmlText()));
+	else if (ch->xmlComment())
+	    ch = new XmlComment(*(ch->xmlComment()));
+	else if (ch->xmlDeclaration())
+	    ch = new XmlDeclaration(*(ch->xmlDeclaration()));
+	else if (ch->xmlDoctype())
+	    ch = new XmlDoctype(*(ch->xmlDoctype()));
+	else
+	    continue;
+	ch->setParent(parent);
+	addChild(ch);
+    }
 }
 
 // Create a String from this XmlFragment
@@ -1703,13 +1688,13 @@ XmlElement::XmlElement(const NamedList& element, bool empty, XmlParent* parent)
 
 // Copy constructor
 XmlElement::XmlElement(const XmlElement& el)
-    : m_children(el.m_children),
-    m_element(el.getElement()), m_prefixed(0),
+    : m_element(el.getElement()), m_prefixed(0),
     m_parent(0), m_inheritedNs(0),
     m_empty(el.empty()), m_complete(el.completed())
 {
     setPrefixed();
     setInheritedNs(&el,true);
+    m_children.copy(el.m_children,this);
 }
 
 // Create an empty xml element

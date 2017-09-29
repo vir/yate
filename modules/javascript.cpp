@@ -263,6 +263,7 @@ public:
 	  m_list()
 	{
 	    XDebug(DebugAll,"JsHashList::JsHashList() [%p]",this);
+	    params().addParam(new ExpFunction("count"));
 	}
     inline JsHashList(unsigned int size, Mutex* mtx)
 	: JsObject(mtx,"[object HashList]",false),
@@ -282,6 +283,8 @@ public:
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual void clearField(const String& name)
 	{ m_list.remove(name); }
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 private:
     HashList m_list;
 };
@@ -3788,6 +3791,15 @@ bool JsHashList::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* 
     else
 	obj->set(cln);
     return true;
+}
+
+bool JsHashList::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    if (YSTRING("count") == oper.name()) {
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)m_list.count()));
+	return true;
+    }
+    return JsObject::runNative(stack,oper,context);
 }
 
 bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)

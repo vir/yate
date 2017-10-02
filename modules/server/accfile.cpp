@@ -5,7 +5,7 @@
  * Account provider for client registrations and settings.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004-2014 Null Team
+ * Copyright (C) 2004-2017 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -141,7 +141,7 @@ static void doCompletion(Message &msg, const String& partLine, const String& par
     else if ((partLine == "accounts login") || (partLine == "accounts logout")) {
 	for (unsigned int i=0;i<s_cfg.sections();i++) {
 	    NamedList* acc = s_cfg.getSection(i);
-	    if (acc && acc->getValue("username") && acc->getBoolValue("enabled",true))
+	    if (acc && acc->getBoolValue("enabled",(acc->getValue("username") != 0)))
 		Module::itemComplete(msg.retValue(),*acc,partWord);
 	}
     }
@@ -156,7 +156,7 @@ bool AccHandler::received(Message &msg)
     if (action == "list") {
 	for (unsigned int i=0;i<s_cfg.sections();i++) {
 	    NamedList* acc = s_cfg.getSection(i);
-	    if (!(acc && acc->getValue("username") && acc->getBoolValue("enabled",true)))
+	    if (!(acc && acc->getBoolValue("enabled",(acc->getValue("username") != 0))))
 		continue;
 	    msg.retValue().append(*acc,",");
 	}
@@ -230,6 +230,8 @@ bool StatusHandler::received(Message &msg)
 	    if (!acct)
 		continue;
 	    const char* user = acct->getValue("username");
+	    if (!acct->getBoolValue(YSTRING("enabled"),(0 != user)))
+		continue;
 	    if (first)
 		first = false;
 	    else

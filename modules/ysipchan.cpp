@@ -79,6 +79,7 @@ static const TokenDict dict_errors[] = {
     { "offline", 404 },
     { "congestion", 480 },
     { "unallocated", 410 },
+    { "moved", 410 },
     { "failure", 500 },
     { "pending", 491 },
     { "looping", 483 },

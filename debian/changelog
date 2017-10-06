@@ -1,3 +1,11 @@
+yate (6.0.1~svn6272) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6272:
+  * Fixed bug: update udp party local address when transport binds for
+    valid lines (transport was not valid when line was created).
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 07 Oct 2017 02:19:16 +0300
+
 yate (6.0.1~svn6271) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6271:

@@ -315,7 +315,7 @@ static bool decodeCause(const SS7SCCP* sccp, NamedList& list, const SCCPParam* p
 {
     if (len <  1)
 	return false;
-    unsigned char cause = *buffer++;
+    unsigned int cause = *buffer++;
     list.setParam(prefix + param->name,String(cause));
     return true;
 }

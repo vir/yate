@@ -5,7 +5,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2011-2014 Null Team
+ * Copyright (C) 2011-2017 Null Team
  *
  * This software is distributed under multiple licenses;
  * see the COPYING file in the main directory for licensing
@@ -31,7 +31,7 @@
   If you are using SIP proxies or clients with multiple subscriptions you will need to
    allow more failures for each since each separate transaction will fail once
 
-  This script requires Yate to run as root or have permissions to run iptables
+  This script requires Yate to run as root or have permissions to run iptables / ip6tables
  */
 
 // How many failures in a row cause a ban
@@ -40,10 +40,16 @@ $ban_failures = 10;
 $clear_gray = 10;
 // In how many seconds to clear a blacklisted host
 $clear_black = 600;
-// Command to ban an address
-$cmd_ban = "iptables -I INPUT -s \$addr -j DROP";
-// Command to unban an address
-$cmd_unban = "iptables -D INPUT -s \$addr -j DROP";
+// Path prefix for commands, if needed
+$cmd_path = ""; // "/usr/sbin/";
+// Command to ban an IPv4 address
+$cmd_ban4 = "${cmd_path}iptables -I INPUT -s \$addr -j DROP";
+// Command to unban an IPv4 address
+$cmd_unban4 = "${cmd_path}iptables -D INPUT -s \$addr -j DROP";
+// Command to ban an IPv6 address
+$cmd_ban6 = "${cmd_path}ip6tables -I INPUT -s \$addr -j DROP";
+// Command to unban an IPv6 address
+$cmd_unban6 = "${cmd_path}ip6tables -D INPUT -s \$addr -j DROP";
 
 
 require_once("libyate.php");
@@ -103,8 +109,14 @@ class Host
 function updateAuth($addr,$ok)
 {
     global $hosts;
-    global $cmd_ban;
-    global $cmd_unban;
+    global $cmd_ban4, $cmd_ban6;
+    switch ($addr) {
+	case null:
+	case "":
+	case "127.0.0.1":
+	case "::1":
+	    return;
+    }
     if ($ok) {
 	if (isset($hosts[$addr]))
 	    $hosts[$addr]->success();
@@ -112,7 +124,8 @@ function updateAuth($addr,$ok)
     }
     if (isset($hosts[$addr])) {
 	if ($hosts[$addr]->failed()) {
-	    $cmd = eval('return "'.$cmd_ban.'";');
+	    $cmd = strstr($addr,":") ? $cmd_ban6 : $cmd_ban4;
+	    $cmd = eval('return "' . $cmd . '";');
 	    Yate::Output("banbrutes: $cmd");
 	    shell_exec($cmd);
 	}
@@ -126,12 +139,13 @@ function updateAuth($addr,$ok)
 function onTimer()
 {
     global $hosts;
-    global $cmd_unban;
+    global $cmd_unban4, $cmd_unban6;
     $now = time();
     foreach ($hosts as $addr => &$host) {
 	if ($host->timer($now)) {
 	    if ($host->banned()) {
-		$cmd = eval('return "'.$cmd_unban.'";');
+		$cmd = strstr($addr,":") ? $cmd_unban6 : $cmd_unban4;
+		$cmd = eval('return "' . $cmd . '";');
 		Yate::Output("banbrutes: $cmd");
 		shell_exec($cmd);
 	    }
@@ -146,7 +160,7 @@ function onCommand($l,&$retval)
 {
     global $hosts;
     global $ban_failures;
-    global $cmd_unban;
+    global $cmd_unban4, $cmd_unban6;
     if ($l == "banbrutes") {
 	$gray = 0;
 	$banned = 0;
@@ -179,7 +193,8 @@ function onCommand($l,&$retval)
 	$addr = substr($l,16);
 	if (isset($hosts[$addr])) {
 	    if ($hosts[$addr]->banned()) {
-		$cmd = eval('return "'.$cmd_unban.'";');
+		$cmd = strstr($addr,":") ? $cmd_unban6 : $cmd_unban4;
+		$cmd = eval('return "' . $cmd . '";');
 		Yate::Output("banbrutes: $cmd");
 		shell_exec($cmd);
 		unset($hosts[$addr]);
@@ -308,14 +323,10 @@ for (;;) {
     if ($ev->type == "answer") {
 	switch ($ev->name) {
 	    case "user.auth":
-		$addr = $ev->GetValue("ip_host");
-		if ($addr != "")
-		    updateAuth($addr,$ev->handled && ($ev->retval != "-"));
+		updateAuth($ev->GetValue("ip_host"),$ev->handled && ($ev->retval != "-"));
 		break;
 	    case "user.authfail":
-		$addr = $ev->GetValue("ip_host");
-		if ($addr != "")
-		    updateAuth($addr,false);
+		updateAuth($ev->GetValue("ip_host"),false);
 		break;
 	    case "engine.timer":
 		onTimer();

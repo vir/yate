@@ -6079,6 +6079,13 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 		if (tmp.trimBlanks())
 		    m->addParam("divert_screen",tmp);
 	    }
+	    par = hl->getParam("counter");
+	    if (par) {
+		tmp = par->c_str();
+		MimeHeaderLine::delQuotes(tmp);
+		if (tmp.trimBlanks())
+		    m->addParam("divert_counter",tmp);
+	    }
 	}
     }
 
@@ -6301,6 +6308,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	    String* reason = msg.getParam(YSTRING("divert_reason"));
 	    String* privacy = msg.getParam(YSTRING("divert_privacy"));
 	    String* screen = msg.getParam(YSTRING("divert_screen"));
+	    int counter = msg.getIntValue(YSTRING("divert_counter"));
 	    bool divert = !(TelEngine::null(reason) && TelEngine::null(privacy) && TelEngine::null(screen));
 	    divert = msg.getBoolValue(YSTRING("diversion"),divert);
 	    MimeHeaderLine* hl = new MimeHeaderLine(divert ? "Diversion" : "Referred-By",d);
@@ -6311,6 +6319,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 		    hl->setParam("privacy",MimeHeaderLine::quote(*privacy));
 		if (!TelEngine::null(screen))
 		    hl->setParam("screen",MimeHeaderLine::quote(*screen));
+		if ((counter > 0) && (counter < 100))
+		    hl->setParam("counter",String(counter));
 	    }
 	    m->addHeader(hl);
 	}
@@ -6784,6 +6794,10 @@ bool YateSIPConnection::process(SIPEvent* ev)
 		    MimeHeaderLine::delQuotes(tmp);
 		    if (tmp.trimBlanks())
 			parameters().addParam("divert_screen",tmp);
+		    tmp = hl->getParam("counter");
+		    MimeHeaderLine::delQuotes(tmp);
+		    if (tmp.trimBlanks())
+			parameters().addParam("divert_counter",tmp);
 		}
 	    }
 	    else if (code != 387)
@@ -7964,6 +7978,9 @@ bool YateSIPConnection::callRouted(Message& msg)
 		    MimeHeaderLine::addQuotes(tmp);
 		    hl->setParam("screen",tmp);
 		}
+		int cnt = msg.getIntValue(YSTRING("divert_counter"));
+		if ((cnt > 0) && (cnt < 99))
+		    hl->setParam("counter",String(cnt));
 		m->addHeader(hl);
 	    }
 	    copySipHeaders(*m,msg);

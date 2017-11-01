@@ -377,7 +377,7 @@ public:
 
     inline JsMessage(Mutex* mtx)
 	: JsObject("Message",mtx,true),
-	  m_message(0), m_owned(false), m_trackPrio(true)
+	  m_message(0), m_dispatch(false), m_owned(false), m_trackPrio(true)
 	{
 	    XDebug(&__plugin,DebugAll,"JsMessage::JsMessage() [%p]",this);
 	    params().addParam(new ExpFunction("enqueue"));
@@ -394,9 +394,9 @@ public:
 	    params().addParam(new ExpFunction("getResult"));
 	    params().addParam(new ExpFunction("copyParams"));
 	}
-    inline JsMessage(Message* message, Mutex* mtx, bool owned)
+    inline JsMessage(Message* message, Mutex* mtx, bool disp, bool owned = false)
 	: JsObject(mtx,"[object Message]"),
-	  m_message(message), m_owned(owned), m_trackPrio(true)
+	  m_message(message), m_dispatch(disp), m_owned(owned), m_trackPrio(true)
 	{
 	    XDebug(&__plugin,DebugAll,"JsMessage::JsMessage(%p) [%p]",message,this);
 	}
@@ -430,11 +430,11 @@ public:
 	    construct->params().addParam(new ExpFunction("trackName"));
 	}
     inline void clearMsg()
-	{ m_message = 0; m_owned = false; }
-    inline void setMsg(Message* message, bool owned = false)
-	{ m_message = message; m_owned = owned; }
+	{ m_message = 0; m_owned = false; m_dispatch = false; }
+    inline void setMsg(Message* message)
+	{ m_message = message; m_owned = false; m_dispatch = false; }
     static void initialize(ScriptContext* context);
-    void runAsync(ObjList& stack, Message* msg);
+    void runAsync(ObjList& stack, Message* msg, bool owned);
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
     void getColumn(ObjList& stack, const ExpOperation* col, GenObject* context);
@@ -445,6 +445,7 @@ protected:
     ObjList m_hooks;
     String m_trackName;
     Message* m_message;
+    bool m_dispatch;
     bool m_owned;
     bool m_trackPrio;
 };
@@ -809,16 +810,17 @@ class JsMsgAsync : public ScriptAsync
 {
     YCLASS(JsMsgAsync,ScriptAsync)
 public:
-    inline JsMsgAsync(ScriptRun* runner, ObjList* stack, JsMessage* jsMsg, Message* msg)
+    inline JsMsgAsync(ScriptRun* runner, ObjList* stack, JsMessage* jsMsg, Message* msg, bool owned)
 	: ScriptAsync(runner),
-	  m_stack(stack), m_msg(jsMsg), m_message(msg)
+	  m_stack(stack), m_msg(jsMsg), m_message(msg), m_owned(owned)
 	{ XDebug(DebugAll,"JsMsgAsync"); }
     virtual bool run()
-	{ m_msg->runAsync(*m_stack,m_message); return true; }
+	{ m_msg->runAsync(*m_stack,m_message,m_owned); return true; }
 private:
     ObjList* m_stack;
     RefPointer<JsMessage> m_msg;
     Message* m_message;
+    bool m_owned;
 };
 
 class JsSemaphoreAsync : public ScriptAsync
@@ -1998,21 +2000,23 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	ObjList args;
 	extractArgs(stack,oper,context,args);
 	bool ok = false;
-	if (m_owned && m_message && !frozen()) {
+	if (m_dispatch && m_message && !frozen()) {
 	    Message* m = m_message;
+	    bool own = m_owned;
 	    clearMsg();
 	    ExpOperation* async = static_cast<ExpOperation*>(args[0]);
 	    if (async && async->valBoolean()) {
 		ScriptRun* runner = YOBJECT(ScriptRun,context);
 		if (!runner)
 		    return false;
-		runner->insertAsync(new JsMsgAsync(runner,&stack,this,m));
+		runner->insertAsync(new JsMsgAsync(runner,&stack,this,m,own));
 		runner->pause();
 		return true;
 	    }
 	    ok = Engine::dispatch(*m);
 	    m_message = m;
-	    m_owned = true;
+	    m_owned = own;
+	    m_dispatch = true;
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
@@ -2159,7 +2163,7 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	}
     }
     else if (oper.name() == YSTRING("copyParams")) {
-	if (!(m_message && m_owned))
+	if (!m_message)
 	    return true;
 	ObjList args;
 	bool skip = true;
@@ -2231,14 +2235,15 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
     return true;
 }
 
-void JsMessage::runAsync(ObjList& stack, Message* msg)
+void JsMessage::runAsync(ObjList& stack, Message* msg, bool owned)
 {
     bool ok = Engine::dispatch(*msg);
     if ((m_message || m_owned) && (msg != m_message))
 	Debug(&__plugin,DebugWarn,"Message replaced while async dispatching!");
     else {
 	m_message = msg;
-	m_owned = true;
+	m_owned = owned;
+	m_dispatch = true;
     }
     ExpEvaluator::pushOne(stack,new ExpOperation(ok));
 }
@@ -2496,7 +2501,7 @@ JsObject* JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, Ge
 	if (objParams->nativeParams())
 	    copyObjParams(*m,objParams->nativeParams());
     }
-    JsMessage* obj = new JsMessage(m,mutex(),true);
+    JsMessage* obj = new JsMessage(m,mutex(),true,true);
     obj->params().addParam(new ExpWrapper(this,protoName()));
     return obj;
 }
@@ -2529,7 +2534,7 @@ bool JsHandler::receivedInternal(Message& msg)
 	safeNowInternal();
 	return false;
     }
-    JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),false);
+    JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),true);
     jm->setPrototype(runner->context(),YSTRING("Message"));
     jm->ref();
     String name = m_function.name();
@@ -2568,7 +2573,7 @@ void JsMessageQueue::received(Message& msg)
     ScriptRun* runner = m_code->createRunner(m_context,NATIVE_TITLE);
     if (!runner)
 	return;
-    JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),false);
+    JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),true);
     jm->setPrototype(runner->context(),YSTRING("Message"));
     jm->ref();
     ObjList args;
@@ -4683,7 +4688,7 @@ bool JsAssist::setMsg(Message* msg)
 	return false;
     JsMessage* jsm = YOBJECT(JsMessage,chan->getField(stack,YSTRING("message"),m_runner));
     if (jsm)
-	jsm->setMsg(msg,false);
+	jsm->setMsg(msg);
     else
 	return false;
     m_message = jsm;

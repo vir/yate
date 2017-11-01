@@ -639,20 +639,34 @@ static DataBlock* setDigits(const char* val)
 	unsigned char n = 0;
 	if (('0' <= c) && (c <= '9'))
 	    n = c - '0';
-	else if ('.' == c)
-	    n = 15;
-	else if ('A' == c)
-	    n = 10;
-	else if ('B' == c)
-	    n = 11;
-	else if ('C' == c)
-	    n = 12;
-	else if ('D' == c)
-	    n = 13;
-	else if ('E' == c)
-	    n = 14;
-	else
-	    continue;
+	else switch (c) {
+	    case 'A':
+	    case 'a':
+		n = 10;
+		break;
+	    case 'B':
+	    case 'b':
+		n = 11;
+		break;
+	    case 'C':
+	    case 'c':
+		n = 12;
+		break;
+	    case 'D':
+	    case 'd':
+		n = 13;
+		break;
+	    case 'E':
+	    case 'e':
+		n = 14;
+		break;
+	    case 'F':
+	    case 'f':
+		n = 15;
+		break;
+	    default:
+		continue;
+	}
 	odd = !odd;
 	if (odd)
 	    buf[len] = n;

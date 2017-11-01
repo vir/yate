@@ -1,3 +1,14 @@
+yate (6.0.1~svn6277) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6277:
+  * Added support for banning IPv6 addresses.
+  * Added support for recursively dispatching a handled message.
+  * Added parsing of diversion counter.
+  * Allow encoding all variation of A-F address digits in ISUP, SCCP,
+    MAP/CAMEL.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 02 Nov 2017 02:19:17 +0300
+
 yate (6.0.1~svn6274) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6274:

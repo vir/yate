@@ -1879,18 +1879,37 @@ static void setDigits(DataBlock& data, const char* val, unsigned char nai, int b
 	unsigned char n = 0;
 	if (('0' <= c) && (c <= '9'))
 	    n = c - '0';
-	else if ('.' == c)
-	    n = 15;
-	else if ('A' == c)
-	    n = 10;
-	else if ('B' == c)
-	    n = 11;
-	else if ('C' == c)
-	    n = 12;
-	else if ('D' == c)
-	    n = 13;
-	else
-	    continue;
+	else switch (c) {
+	    case 'A':
+	    case 'a':
+		n = 10;
+		break;
+	    case 'B':
+	    case 'b':
+	    case '*':
+		n = 11;
+		break;
+	    case 'C':
+	    case 'c':
+	    case '#':
+		n = 12;
+		break;
+	    case 'D':
+	    case 'd':
+		n = 13;
+		break;
+	    case 'E':
+	    case 'e':
+		n = 14;
+		break;
+	    case 'F':
+	    case 'f':
+	    case '.':
+		n = 15;
+		break;
+	    default:
+		continue;
+	}
 	odd = !odd;
 	if (odd)
 	    buf[len] = n;

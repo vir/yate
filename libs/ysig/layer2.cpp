@@ -77,7 +77,8 @@ SS7MSU::~SS7MSU()
 
 bool SS7MSU::valid() const
 {
-    return (3 < length()) && (length() < 273);
+    // Routing label + data without SIO is between 2 and 272 octets (Q.703 2.3.8)
+    return (3 <= length()) && (length() <= MAX_TDM_MSU_SIZE);
 }
 
 #define CASE_STR(x) case x: return #x

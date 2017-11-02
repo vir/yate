@@ -3905,6 +3905,9 @@ private:
  */
 YSIG_API String& operator<<(String& str, const SS7Label& label);
 
+// Maximum size of a MTP2 MSU including SIO + Routing Label + data (Q.703 2.3.8)
+#define MAX_TDM_MSU_SIZE 273
+
 /**
  * A raw data block with a little more understanding about MSU format
  * @short A block of data that holds a Message Signal Unit
@@ -5981,7 +5984,7 @@ public:
      */
     inline SS7Route(unsigned int packed, SS7PointCode::Type type,
 	    unsigned int priority = 0, unsigned int shift = 0,
-	    unsigned int maxDataLength = 272)
+	    unsigned int maxDataLength = MAX_TDM_MSU_SIZE)
 	: Mutex(true,"SS7Route"), m_packed(packed), m_type(type),
 	m_priority(priority), m_shift(shift),m_maxDataLength(maxDataLength),
 	m_state(Unknown),m_buffering(0), m_congCount(0),m_congBytes(0)
@@ -6413,7 +6416,7 @@ public:
      * This method is thread safe
      * @param type Destination point code type
      * @param packedPC The packed point code
-     * @return The maximum data length that can be transported on the route. Maximum msu size (272) if no route to the given point code
+     * @return The maximum data length that can be transported on the route. Maximum msu size (273) if no route to the given point code
      */
     unsigned int getRouteMaxLength(SS7PointCode::Type type, unsigned int packedPC);
 

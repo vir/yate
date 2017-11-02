@@ -3253,12 +3253,12 @@ void SS7SCCP::getMaxDataLen(const SS7MsgSCCP* msg, const SS7Label& label,
     }
 
     unsigned int maxLen = network()->getRouteMaxLength(m_type,label.dpc().pack(m_type));
-    if (maxLen < 272) {
+    if (maxLen < MAX_TDM_MSU_SIZE) {
 	DDebug(this,DebugInfo,"Received MSU size (%d) lower than maximum TDM!",
 	       maxLen);
-	maxLen = 272;
+	maxLen = MAX_TDM_MSU_SIZE;
     }
-    bool ludtSupport = maxLen > 272; // 272 maximum msu size
+    bool ludtSupport = maxLen > MAX_TDM_MSU_SIZE; // Maximum MSU size (SIO + Label + data)
     maxLen -= (label.length() + 1); // subtract label length and SIO octet
     // Now max length represents the maximum length of SCCP message
     // Adjust maxLen to represent maximum data in the message.

@@ -26,8 +26,6 @@
 
 using namespace TelEngine;
 
-#define MAX_TDM_DATA_SIZE 272
-
 static const TokenDict s_dict_control[] = {
     { "show",    SS7MTP3::Status },
     { "pause",   SS7MTP3::Pause },
@@ -180,7 +178,7 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 	    continue;
 	unsigned int prio = 0;
 	unsigned int shift = 0;
-	unsigned int maxLength = MAX_TDM_DATA_SIZE;
+	unsigned int maxLength = MAX_TDM_MSU_SIZE;
 	bool local = false;
 	if (ns->name() == YSTRING("local"))
 	    local = true;
@@ -211,10 +209,10 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 	    if (!(obj = obj->skipNext()) || local)
 		break;
 	    maxLength = obj->get()->toString().toInteger(maxLength);
-	    if (maxLength < MAX_TDM_DATA_SIZE) {
+	    if (maxLength < MAX_TDM_MSU_SIZE) {
 		Debug(this,DebugNote,"MaxDataLength is too small %d. Setting it to %d",
-			maxLength,MAX_TDM_DATA_SIZE);
-		maxLength = MAX_TDM_DATA_SIZE;
+			maxLength,MAX_TDM_MSU_SIZE);
+		maxLength = MAX_TDM_MSU_SIZE;
 	    }
 	} while (false);
 	TelEngine::destruct(route);
@@ -247,12 +245,12 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 unsigned int SS7Layer3::getRouteMaxLength(SS7PointCode::Type type, unsigned int packedPC)
 {
     if (type == SS7PointCode::Other || (unsigned int)type > YSS7_PCTYPE_COUNT || !packedPC)
-	return MAX_TDM_DATA_SIZE;
+	return MAX_TDM_MSU_SIZE;
     Lock lock(m_routeMutex);
     SS7Route* route = findRoute(type,packedPC);
     if (route)
 	return route->m_maxDataLength;
-    return MAX_TDM_DATA_SIZE;
+    return MAX_TDM_MSU_SIZE;
 }
 
 

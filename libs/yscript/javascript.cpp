@@ -787,7 +787,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	return true;
     }
     if (name == YSTRING("trim")) {
-	NO_PARAM_STRING_METHOD(trimBlanks);
+	NO_PARAM_STRING_METHOD(trimSpaces);
 	return true;
     }
     if (name == YSTRING("sqlEscape")) {

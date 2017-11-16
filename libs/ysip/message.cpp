@@ -144,7 +144,7 @@ SIPMessage::SIPMessage(const SIPMessage* original, const SIPMessage* answer)
 	hl = new MimeHeaderLine("Via",tmp);
 	header.append(hl);
     }
-    if (answer && (answer->code == 200) && (original->method &= "INVITE")) {
+    if (answer && ((answer->code / 100) == 2) && (original->method &= "INVITE")) {
 	String tmp("z9hG4bK");
 	tmp << (int)Random::random();
 	hl->setParam("branch",tmp);

@@ -941,6 +941,20 @@ public:
     void setTransCount(int count);
 
     /**
+     * Get the automatic UAC 2xx ACK generation flag
+     * @return True if an ACK will be generated automatically for 2xx answers
+     */
+    inline bool autoAck() const
+	{ return m_autoAck; }
+
+    /**
+     * Set the automatic UAC 2xx ACK generation flag
+     * @param setAuto True to automatically generate the ACK when receiving a 2xx answer
+     */
+    inline void autoAck(bool setAuto)
+	{ m_autoAck = setAuto; }
+
+    /**
      * Send back an authentication required response
      * @param realm Authentication realm to send in the answer
      * @param domain Domain for which it will authenticate
@@ -1012,6 +1026,13 @@ public:
      */
     inline int getResponseCode() const
 	{ return m_response; }
+
+    /**
+     * Transmit an ACK message in UAC mode
+     * @param ackBody Optional ACK message body, consumed by the method
+     * @return True if state was correct and the message was queued for transmission
+     */
+    bool setAcknowledge(MimeBody* ackBody = 0);
 
     /**
      * Message send failure notification
@@ -1137,6 +1158,7 @@ protected:
     String m_tag;
     void *m_private;
     bool m_autoChangeParty;
+    bool m_autoAck;
 };
 
 /**

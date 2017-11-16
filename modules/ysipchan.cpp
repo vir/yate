@@ -6150,6 +6150,11 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     }
     else if (ev->getMessage()->body)
 	m->addParam("media",String::boolText(false));
+    else {
+	tr->autoAck(false);
+	m_rtpForward = true;
+	m->addParam("rtp_forward","missing");
+    }
     DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
     if (reason)
 	m->addParam("reason",reason);
@@ -6347,8 +6352,15 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     }
 
     setRtpLocalAddr(m_rtpLocalAddr,&msg);
+    bool fwd = m_rtpForward;
     MimeSdpBody* sdp = createPasstroughSDP(msg);
-    if (!sdp)
+    if (msg.getBoolValue(YSTRING("sdp_ack"))) {
+	if (sdp) {
+	    TelEngine::destruct(sdp);
+	    m_rtpLocalAddr = msg.getValue("rtp_addr");
+	}
+    }
+    else if (!sdp)
 	sdp = createRtpSDP(m_host,msg);
     m->setBody(buildSIPBody(msg,sdp));
     int tries = msg.getIntValue(YSTRING("xsip_trans_count"),-1);
@@ -6357,6 +6369,12 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	m_tr->ref();
 	m_tr->setUserData(this);
 	m_tr->setTransCount(tries);
+	if (!sdp && msg.getBoolValue(YSTRING("sdp_ack"),fwd)) {
+	    m_tr->autoAck(false);
+	    msg.setParam("sdp_ack",String::boolText(true));
+	    if (fwd)
+		msg.setParam("rtp_forward","accepted");
+	}
     }
     m->deref();
     setMaxcall(msg);
@@ -6925,7 +6943,15 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	copySipBody(*m,msg->body);
 	addRtpParams(*m,natAddr,msg->body);
 	Engine::enqueue(m);
-	startPendingUpdate();
+	if (tr->autoAck())
+	    startPendingUpdate();
+	else if (!m_rtpForward) {
+	    MimeSdpBody* sdp = m_rtpMedia ? createRtpSDP(true) : 0;
+	    Debug(this,DebugNote,"Sending ACK %s SDP now since RTP is not forwarded [%p]",
+		(sdp ? "with" : "without"),this);
+	    tr->setAcknowledge(sdp);
+	    startPendingUpdate();
+	}
     }
     if (emitPRACK(msg)) {
 	if (s_multi_ringing || (m_state < Ringing)) {
@@ -6968,6 +6994,16 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	emitUpdate();
     if (msg->isACK()) {
 	DDebug(this,DebugInfo,"YateSIPConnection got ACK [%p]",this);
+	if (!tr->autoAck()) {
+	    Message* m = message("call.update");
+	    m->addParam("operation","notify");
+	    if (sdp)
+		addRtpParams(*m,natAddr,sdp);
+	    else
+		m->addParam("rtp_forward",String::boolText(m_rtpForward));
+	    Engine::enqueue(m);
+	    startPendingUpdate();
+	}
 	startRtp();
     }
     return false;
@@ -7793,6 +7829,18 @@ bool YateSIPConnection::msgUpdate(Message& msg)
     }
     if (!m_tr2) {
 	if (*oper == YSTRING("notify")) {
+	    if (m_tr && m_tr->isOutgoing() && !m_tr->autoAck()) {
+		// generate ACK explicitly and put the SDP in it
+		MimeSdpBody* sdp = createPasstroughSDP(msg);
+		if (m_rtpMedia && !sdp) {
+		    if (m_rtpForward && m_rtpLocalAddr)
+			sdp = createSDP(m_rtpLocalAddr,m_rtpMedia);
+		    if (!sdp)
+			sdp = createRtpSDP(true);
+		}
+		m_tr->setAcknowledge(sdp);
+		return true;
+	    }
 	    switch (m_reInviting) {
 		case ReinviteNone:
 		    if (!msg.getBoolValue(YSTRING("audio_changed")))
@@ -8010,6 +8058,8 @@ void YateSIPConnection::callAccept(Message& msg)
 	if (tmp != YSTRING("accepted"))
 	    m_rtpForward = false;
     }
+    if (m_tr && msg.getBoolValue("sdp_ack"))
+	m_tr->autoAck(false);
     m_secure = m_secure && msg.getBoolValue(YSTRING("secure"),true);
     // Update dtmf methods from message
     m_checkAllowInfo = msg.getBoolValue(YSTRING("icheck_allow_info"),m_checkAllowInfo);

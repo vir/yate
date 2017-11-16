@@ -32,7 +32,8 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
     : m_outgoing(outgoing), m_invite(false), m_transmit(false), m_state(Invalid),
       m_response(0), m_timeouts(0), m_timeout(0),
       m_firstMessage(message), m_lastMessage(0), m_pending(0), m_engine(engine), m_private(0),
-      m_autoChangeParty(autoChangeParty ? *autoChangeParty : engine->autoChangeParty())
+      m_autoChangeParty(autoChangeParty ? *autoChangeParty : engine->autoChangeParty()),
+      m_autoAck(true)
 {
     DDebug(getEngine(),DebugAll,"SIPTransaction::SIPTransaction(%p,%p,%d) [%p]",
 	message,engine,outgoing,this);
@@ -79,7 +80,8 @@ SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
       m_firstMessage(original.m_firstMessage), m_lastMessage(original.m_lastMessage),
       m_pending(0), m_engine(original.m_engine),
       m_branch(original.m_branch), m_callid(original.m_callid), m_tag(original.m_tag),
-      m_private(0), m_autoChangeParty(original.m_autoChangeParty)
+      m_private(0), m_autoChangeParty(original.m_autoChangeParty),
+      m_autoAck(original.m_autoAck)
 {
     DDebug(getEngine(),DebugAll,"SIPTransaction::SIPTransaction(&%p,%p) [%p]",
 	&original,answer,this);
@@ -124,7 +126,8 @@ SIPTransaction::SIPTransaction(const SIPTransaction& original, const String& tag
       m_firstMessage(original.m_firstMessage), m_lastMessage(0),
       m_pending(0), m_engine(original.m_engine),
       m_branch(original.m_branch), m_callid(original.m_callid), m_tag(tag),
-      m_private(0), m_autoChangeParty(original.m_autoChangeParty)
+      m_private(0), m_autoChangeParty(original.m_autoChangeParty),
+      m_autoAck(original.m_autoAck)
 {
     if (m_firstMessage)
 	m_firstMessage->ref();
@@ -384,6 +387,29 @@ bool SIPTransaction::setResponse(int code, const char* reason)
     return true;
 }
 
+bool SIPTransaction::setAcknowledge(MimeBody* ackBody)
+{
+    if (!(m_outgoing && m_lastMessage && m_lastMessage->isAnswer()
+	    && ((Process == m_state) || (Retrans == m_state)))) {
+	TelEngine::destruct(ackBody);
+	return false;
+    }
+    m_autoAck = true;
+    // build and send the ACK
+    SIPMessage* m = new SIPMessage(m_firstMessage,m_lastMessage);
+    if (m_autoChangeParty && m_lastMessage->getParty())
+	m->setParty(m_lastMessage->getParty());
+    m->setBody(ackBody);
+    setLatestMessage(m);
+    m_lastMessage->deref();
+    setTransmit();
+    if (changeState(Finish)) {
+	setTimeout(m_engine->getTimer('H'));
+	return true;
+    }
+    return false;
+}
+
 void SIPTransaction::requestAuth(const String& realm, const String& domain, bool stale, bool proxy)
 {
     if (m_outgoing) {
@@ -589,15 +615,12 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 	    if (final) {
 		setTimeout();
 		if (isInvite()) {
-		    // build the ACK
-		    SIPMessage* m = new SIPMessage(m_firstMessage,message);
-		    if (m_autoChangeParty && message->getParty())
-			m->setParty(message->getParty());
-		    setLatestMessage(m);
-		    m_lastMessage->deref();
-		    setTransmit();
-		    if (changeState(Finish))
-			setTimeout(m_engine->getTimer('H'));
+		    if ((message->code / 100) != 2)
+			m_autoAck = true;
+		    if (m_autoAck)
+			setAcknowledge();
+		    else
+			changeState(Retrans);
 		}
 		else
 		    changeState(Cleared);

@@ -752,6 +752,7 @@ public:
 	    params().addParam(new ExpFunction("local"));
 	    params().addParam(new ExpFunction("pack"));
 	    params().addParam(new ExpFunction("unpack"));
+	    params().addParam(new ExpFunction("dscp"));
 	}
     static void initialize(ScriptContext* context);
     void runQuery(ObjList& stack, const String& name, Resolver::Type type, GenObject* context);
@@ -4134,6 +4135,18 @@ bool JsDNS::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	if (!op)
 	    op = new ExpWrapper(0,"IP");
 	ExpEvaluator::pushOne(stack,op);
+    }
+    else if (oper.name().startsWith("dscp")) {
+	if (extractArgs(stack,oper,context,args) != 1)
+	    return false;
+	ExpOperation* op = static_cast<ExpOperation*>(args[0]);
+	if (!op)
+	    return false;
+	int val = op->toInteger(Socket::tosValues(),-1);
+	if (0 <= val && 0xfc >= val)
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)(val & 0xfc),"DSCP"));
+	else
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(0,"DSCP"));
     }
     else
 	return JsObject::runNative(stack,oper,context);

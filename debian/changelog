@@ -1,3 +1,10 @@
+yate (6.0.1~svn6281) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6281:
+  * Add DNS.dscp() method to validate given DSCP values from Javascript.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 18 Nov 2017 02:19:17 +0300
+
 yate (6.0.1~svn6280) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6280:

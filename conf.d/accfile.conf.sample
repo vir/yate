@@ -22,9 +22,6 @@
 ;     A port can be specified here (e.g. 1.2.3.4:7999)
 ;   ip_transport: Optional SIP transport to use (udp, tcp, tls).
 ;     Defaults to udp
-;   ip_transport_remoteip: IP address to connect to register the account.
-;     Defaults to outbound or registrar address
-;   ip_transport_remoteport: IP port to connect to register the account
 ;   ip_transport_localip:
 ;     UDP: Used in conjuction with ip_transport_localport to identify the listener to use
 ;     TCP/TLS: Optional local ip to use when connecting

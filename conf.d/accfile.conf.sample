@@ -25,11 +25,12 @@
 ;   ip_transport_remoteip: IP address to connect to register the account.
 ;     Defaults to outbound or registrar address
 ;   ip_transport_remoteport: IP port to connect to register the account
-;   ip_transport_localip: UDP: This parameter is used in conjuction ip_transport_localport
-;       to identify the transport to use
+;   ip_transport_localip:
+;     UDP: Used in conjuction with ip_transport_localport to identify the listener to use
 ;     TCP/TLS: Optional local ip to use when connecting
-;   ip_transport_localport: Local port.
-;     UDP only: This parameter is used to identify the transport to use
+;   ip_transport_localport:
+;     UDP: Used in conjuction with ip_transport_localip to identify the listener to use
+;     TCP/TLS: Optional local port to bind on when connecting
 ;   localaddress: Local address to set in sent messages
 ;     Set it to 'yes' to detect NAT and re-register with public ip when NAT is detected
 ;     Set it to 'no' or ipaddress (e.g. 1.2.3.4 or 1.2.3.4:5060) to disable NAT detection

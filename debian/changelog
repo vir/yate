@@ -1,3 +1,11 @@
+yate (6.0.1~svn6283) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6283:
+  * Clarified documentation.
+  * Removed unused parameters documentation.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 24 Nov 2017 02:19:17 +0300
+
 yate (6.0.1~svn6281) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6281:

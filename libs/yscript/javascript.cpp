@@ -460,6 +460,7 @@ public:
 	append(new String("toString"));
 	append(new String("isNaN"));
 	append(new String("parseInt"));
+	append(new String("hashCode"));
     }
 };
 
@@ -903,6 +904,10 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	    return true;
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(*str));
+	return true;
+    }
+    if (name == YSTRING("hashCode")) {
+	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)str->hash()));
 	return true;
     }
     return false;

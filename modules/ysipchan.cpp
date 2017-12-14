@@ -1216,6 +1216,7 @@ static String s_realm = "Yate";
 static int s_floodEvents = 100;
 static bool s_floodProtection = true;
 static int s_maxForwards = 20;
+static int s_congRetry = 30;
 static int s_nat_refresh = 25;
 static bool s_privacy = false;
 static bool s_auto_nat = true;
@@ -5645,6 +5646,13 @@ void YateSIPEndPoint::options(SIPEvent* e, SIPTransaction* t)
     }
     switch (Engine::accept()) {
 	case Engine::Congestion:
+	    if (t->setResponse()) {
+		SIPMessage* m = new SIPMessage(e->getMessage(),503);
+		m->addHeader("Retry-After",String(s_congRetry));
+		t->setResponse(m);
+		TelEngine::destruct(m);
+	    }
+	    break;
 	case Engine::Reject:
 	    t->setResponse(503);
 	    break;
@@ -9216,6 +9224,7 @@ void SIPDriver::initialize()
     s_missingAllowInfoDefVal = s_cfg.getBoolValue("general","missing_allow_info",true);
     s_honorDtmfDetect = s_cfg.getBoolValue("general","honor_dtmf_detect",true);
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
+    s_congRetry = s_cfg.getIntValue("general","congestion_retry",30,10,600);
     s_floodEvents = s_cfg.getIntValue("general","floodevents",100);
     s_floodProtection = s_cfg.getBoolValue("general","floodprotection",true);
     s_privacy = s_cfg.getBoolValue("general","privacy");

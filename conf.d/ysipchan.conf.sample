@@ -120,6 +120,10 @@
 ; NOTE! This mechanism is activated by default, to disable it configure this parameter to false.
 ;floodprotection=on
 
+; congestion_retry: int: Value of Retry-After header to set in case of engine congestion
+; Valid values 10 - 600, default 30 seconds
+;congestion_retry=30
+
 ; maxforwards: int: Default Max-Forwards header, used to avoid looping calls
 ;maxforwards=20
 

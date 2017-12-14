@@ -1,3 +1,13 @@
+yate (6.0.1~svn6286) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6286:
+  * Honor sdp_forward setting after receiving 18x/2xx with SDP for an
+    INVITE without SDP.
+  * Add a Retry-After header to the 503 generated in case of Engine
+    congestion.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 15 Dec 2017 02:20:17 +0300
+
 yate (6.0.1~svn6284) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6284:

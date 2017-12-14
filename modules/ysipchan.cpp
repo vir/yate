@@ -6895,6 +6895,8 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    m_rtpAddr = m_host;
 	}
 	DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
+	if (m_rtpForward && plugin.parser().sdpForward() && !(msg->isACK() || tr->autoAck()))
+	    m_sdpForward = true;
     }
     if ((!m_routes) && msg->isAnswer() && (msg->code > 100) && (msg->code < 300))
 	m_routes = msg->getRoutes();

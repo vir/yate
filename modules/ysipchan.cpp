@@ -1224,6 +1224,7 @@ static bool s_progress = false;
 static bool s_start_rtp = false;
 static bool s_ack_required = true;
 static bool s_1xx_formats = true;
+static bool s_sdp_implicit = true;
 static bool s_rtp_preserve = false;
 static bool s_enable_transfer = false;
 static bool s_enable_options = false;
@@ -1951,6 +1952,14 @@ static void copyPrivacy(SIPMessage& sip, const NamedList& msg)
     }
     if (rfc3323)
 	sip.addHeader("Privacy",rfc3323);
+}
+
+// Check if a SDP body is accepted by UAC
+static bool sdpAccept(const SIPMessage* sip, bool def)
+{
+    static const Regexp r("\\(^\\|,\\) *application/sdp *\\($\\|[,;]\\)",false,true);
+    const MimeHeaderLine* hl = sip ? sip->getHeader("Accept") : 0;
+    return hl ? r.matches(*hl) : def;
 }
 
 // Copy message body to yate message
@@ -5637,12 +5646,9 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 
 void YateSIPEndPoint::options(SIPEvent* e, SIPTransaction* t)
 {
-    const MimeHeaderLine* acpt = e->getMessage()->getHeader("Accept");
-    if (acpt) {
-	if (*acpt != YSTRING("application/sdp")) {
-	    t->setResponse(415);
-	    return;
-	}
+    if (!sdpAccept(e->getMessage(),true)) {
+	t->setResponse(415);
+	return;
     }
     switch (Engine::accept()) {
 	case Engine::Congestion:
@@ -6158,7 +6164,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     }
     else if (ev->getMessage()->body)
 	m->addParam("media",String::boolText(false));
-    else {
+    else if (sdpAccept(ev->getMessage(),s_sdp_implicit)) {
 	tr->autoAck(false);
 	m_rtpForward = true;
 	m->addParam("rtp_forward","missing");
@@ -6367,6 +6373,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	    TelEngine::destruct(sdp);
 	    m_rtpLocalAddr = msg.getValue("rtp_addr");
 	}
+	m->addHeader(new MimeHeaderLine("Accept","application/sdp"));
     }
     else if (!sdp)
 	sdp = createRtpSDP(m_host,msg);
@@ -6445,6 +6452,7 @@ void YateSIPConnection::clearTransaction()
     // cancel any pending reINVITE
     if (m_tr2) {
 	m_tr2->setUserData(0);
+	m_tr2->autoAck(true);
 	if (m_tr2->isIncoming())
 	    m_tr2->setResponse(487);
 	m_tr2->deref();
@@ -6456,6 +6464,7 @@ void YateSIPConnection::detachTransaction2()
 {
     Lock lock(driver());
     if (m_tr2) {
+	DDebug(this,DebugAll,"Detaching secondary transaction %p [%p]",m_tr2,this);
 	m_tr2->setUserData(0);
 	m_tr2->deref();
 	m_tr2 = 0;
@@ -6951,7 +6960,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	copySipHeaders(*m,*msg);
 	decodeIsupBody(*m,msg->body);
 	copySipBody(*m,msg->body);
-	addRtpParams(*m,natAddr,msg->body);
+	addRtpParams(*m,natAddr,msg->body,false,m_sdpForward);
 	Engine::enqueue(m);
 	if (tr->autoAck())
 	    startPendingUpdate();
@@ -6993,7 +7002,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 		copySipBody(*m,msg->body);
 		if (reason)
 		    m->addParam("reason",reason);
-		addRtpParams(*m,natAddr,msg->body);
+		addRtpParams(*m,natAddr,msg->body,false,m_sdpForward);
 		if (m_rtpAddr.null())
 		    m->addParam("earlymedia","false");
 		Engine::enqueue(m);
@@ -7008,7 +7017,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    Message* m = message("call.update");
 	    m->addParam("operation","notify");
 	    if (sdp)
-		addRtpParams(*m,natAddr,sdp);
+		addRtpParams(*m,natAddr,sdp,false,m_sdpForward);
 	    else
 		m->addParam("rtp_forward",String::boolText(m_rtpForward));
 	    Engine::enqueue(m);
@@ -7041,9 +7050,37 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	m_revert.clearParams();
 	return false;
     }
-    if (!msg || msg->isOutgoing() || !msg->isAnswer())
+    if (!msg || msg->isOutgoing())
 	return false;
-    if (code < 200)
+
+    if ((m_reInviting == ReinviteReceived) && msg->isACK() && m_tr2 && !m_tr2->autoAck()) {
+	String natAddr;
+	MimeSdpBody* sdp = getSdpBody(msg->body);
+	DDebug(this,DebugInfo,"YateSIPConnection got reINVITE ACK %s SDP [%p]",
+	    (sdp ? "with" : "without"), this);
+	if (sdp) {
+	    setMedia(plugin.parser().parse(sdp,m_rtpAddr,m_rtpMedia));
+	    // guess if the call comes from behind a NAT
+	    if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
+		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
+		    m_rtpAddr.c_str(),m_host.c_str());
+		natAddr = m_rtpAddr;
+		m_rtpAddr = m_host;
+	    }
+	    DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
+	}
+	detachTransaction2();
+
+	Message* m = message("call.update");
+	m->addParam("operation","notify");
+	if (sdp)
+	    addRtpParams(*m,natAddr,sdp,false,m_sdpForward);
+	else
+	    m->addParam("rtp_forward",String::boolText(m_rtpForward));
+	Engine::enqueue(m);
+    }
+
+    if ((code < 200) || !msg->isAnswer())
 	return false;
 
     if (m_reInviting == ReinviteRequest) {
@@ -7142,7 +7179,8 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	    }
 	}
     }
-    detachTransaction2();
+    if (!m_tr2 || m_tr2->autoAck())
+	detachTransaction2();
     m_revert.clearParams();
     mylock.drop();
     Engine::enqueue(m);
@@ -7173,7 +7211,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	setPartyChanged(t->initialMessage()->getParty());
 
     MimeSdpBody* sdp = getSdpBody(t->initialMessage()->body);
-    if (sdp) {
+    if (sdp || (m_rtpForward && sdpAccept(t->initialMessage(),true))) {
 	if (m_rtpForward ? reInviteForward(t,sdp,invite) : reInviteProxy(t,sdp,invite))
 	    return;
     }
@@ -7196,17 +7234,20 @@ bool YateSIPConnection::reInviteForward(SIPTransaction* t, MimeSdpBody* sdp, int
 {
     String addr;
     String natAddr;
-    ObjList* lst = plugin.parser().parse(sdp,addr,0,String::empty(),true);
-    if (!lst)
-	return false;
-    // guess if the call comes from behind a NAT
-    if (s_auto_nat && isNatBetween(addr,m_host)) {
-	Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
-	    addr.c_str(),m_host.c_str());
-	natAddr = addr;
-	addr = m_host;
+    ObjList* lst = 0;
+    if (sdp) {
+	lst = plugin.parser().parse(sdp,addr,0,String::empty(),true);
+	if (!lst)
+	    return false;
+	// guess if the call comes from behind a NAT
+	if (s_auto_nat && isNatBetween(addr,m_host)) {
+	    Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
+		addr.c_str(),m_host.c_str());
+	    natAddr = addr;
+	    addr = m_host;
+	}
+	Debug(this,DebugAll,"reINVITE RTP addr '%s'",addr.c_str());
     }
-    Debug(this,DebugAll,"reINVITE RTP addr '%s'",addr.c_str());
 
     // for pass-trough RTP we need support from our peer
     Message msg("call.update");
@@ -7245,7 +7286,12 @@ bool YateSIPConnection::reInviteForward(SIPTransaction* t, MimeSdpBody* sdp, int
 	msg.addParam("rtp_nat_addr",natAddr);
     putMedia(msg,lst);
     TelEngine::destruct(lst);
-    addSdpParams(msg,sdp);
+    if (sdp)
+	addSdpParams(msg,sdp);
+    else {
+	t->autoAck(false);
+	msg.addParam("sdp_ack",String::boolText(true));
+    }
     bool ok = Engine::dispatch(msg);
     Lock mylock(driver());
     // if peer doesn't support updates fail the reINVITE
@@ -7877,6 +7923,13 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	msg.setParam("error","nocall");
 	return false;
     }
+
+    if (m_rtpForward && m_tr2->isOutgoing() && !m_tr2->autoAck() && (m_tr2->getState() == SIPTransaction::Retrans)) {
+	m_tr2->setAcknowledge(createPasstroughSDP(msg,true,m_rtpForward));
+	detachTransaction2();
+	return true;
+    }
+
     if (!(m_tr2->isIncoming() && (m_tr2->getState() == SIPTransaction::Process))) {
 	msg.setParam("error","failure");
 	msg.setParam("reason","Incompatible Transaction State");
@@ -7900,7 +7953,8 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	SIPMessage* m = new SIPMessage(m1,200);
 	m->setBody(sdp);
 	m_tr2->setResponse(m);
-	detachTransaction2();
+	if (m_tr2->autoAck())
+	    detachTransaction2();
 	m->deref();
 	return true;
     }
@@ -8146,7 +8200,7 @@ bool YateSIPConnection::startClientReInvite(NamedList& msg, bool rtpForward)
 	updateSDP(msg);
 	sdp = createRtpSDP(true);
     }
-    if (!sdp) {
+    if (!(sdp || msg.getBoolValue(YSTRING("sdp_ack")))) {
 	msg.setParam("error","failure");
 	msg.setParam("reason","Could not build the SDP");
 	if (hadRtp) {
@@ -8161,11 +8215,16 @@ bool YateSIPConnection::startClientReInvite(NamedList& msg, bool rtpForward)
     copySipHeaders(*m,msg);
     if (s_privacy)
 	copyPrivacy(*m,msg);
-    m->setBody(sdp);
+    if (sdp)
+	m->setBody(sdp);
+    else
+	m->addHeader(new MimeHeaderLine("Accept","application/sdp"));
     m_tr2 = plugin.ep()->engine()->addMessage(m,&m_autoChangeParty);
     if (m_tr2) {
 	m_tr2->ref();
 	m_tr2->setUserData(this);
+	if (!sdp)
+	    m_tr2->autoAck(false);
     }
     m->deref();
     return true;
@@ -9264,6 +9323,7 @@ void SIPDriver::initialize()
     s_reg_async = s_cfg.getBoolValue("registrar","async_process",true);
     s_ack_required = !s_cfg.getBoolValue("hacks","ignore_missing_ack",false);
     s_1xx_formats = s_cfg.getBoolValue("hacks","1xx_change_formats",true);
+    s_sdp_implicit = s_cfg.getBoolValue("hacks","sdp_implicit",true);
     s_rtp_preserve = s_cfg.getBoolValue("hacks","ignore_sdp_addr",false);
     m_parser.initialize(s_cfg.getSection("codecs"),s_cfg.getSection("hacks"),s_cfg.getSection("general"));
     if (!m_endpoint) {

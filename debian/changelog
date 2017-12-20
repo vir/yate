@@ -1,3 +1,12 @@
+yate (6.0.1~svn6287) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6287:
+  * Allow SDP forwarding when the media address is 0.0.0.0 or ::
+    (muted).
+  * Added support for late SDP in ACK for reINVITE transactions.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 21 Dec 2017 02:20:17 +0300
+
 yate (6.0.1~svn6286) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6286:

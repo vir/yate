@@ -633,7 +633,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 	    BlockState blockThis = (blockDepth > 0) ? blockStack[blockDepth-1] : BlockRun;
 	    BlockState blockLast = BlockSkip;
 	    Regexp reg(n->name(),s_extended,s_insensitive);
-	    if (reg.startSkip("}")) {
+	    if (reg.startSkip("}",false)) {
 		if (!blockDepth) {
 		    Debug("RegexRoute",DebugWarn,"Got '}' outside block in line #%u in context '%s'",
 			i+1,context.c_str());

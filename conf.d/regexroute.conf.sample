@@ -73,6 +73,22 @@
 ; Note that functions ++, --, index and rotate will automatically update N
 ;  if it is a variable in the $varname format.
 
+; Simple conditional blocks have the following form:
+;  expr1 = {
+;    ; executed if expr1 matches
+;  }
+
+; Chained conditions:
+;  expr1 = {
+;    ; executed if expr1 matches
+;  } expr2 = {
+;    ; executed if expr2 matches but expr1 does not
+;  } expr3 = {
+;    ; executed if expr3 matches but expr1 or expr2 do not
+;  } = {
+;    ; executed if none of the exprX matched
+;  }
+
 
 [priorities]
 ; Set the priorities for the insertion of the regular expression module in the

@@ -1,3 +1,13 @@
+yate (6.0.1~svn6289) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6289:
+  * Added support for late SDP in ACK for reINVITE transactions.
+  * Added explanation for conditional blocks.
+  * Fixed new match after end of previous block with no spaces in
+    between.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 06 Jan 2018 02:20:19 +0300
+
 yate (6.0.1~svn6287) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6287:

@@ -1,3 +1,10 @@
+yate (6.0.1~svn6290) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6290:
+  * Fixed OpenSSL build on newer versions lacking AES_ctr128_encrypt.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 10 Jan 2018 02:20:17 +0300
+
 yate (6.0.1~svn6289) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6289:

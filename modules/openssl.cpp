@@ -30,6 +30,11 @@
 
 #ifndef OPENSSL_NO_AES
 #include <openssl/aes.h>
+#ifdef NO_AESCTR
+#include <openssl/modes.h>
+#define AES_ctr128_encrypt(in,out,len,key,ivec,ecount,num) \
+     CRYPTO_ctr128_encrypt(in,out,len,key,ivec,ecount,num,(block128_f)AES_encrypt)
+#endif
 #endif
 
 #ifndef OPENSSL_NO_DES

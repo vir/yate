@@ -1441,6 +1441,24 @@ elif [[ "x$ac_cv_use_openssl" != "xno" ]]; then
     fi
     AC_MSG_RESULT([$verssl])
 fi
+if [[ "x$HAVE_OPENSSL" != "xno" ]]; then
+    HAVE_AESCTR=no
+    SAVE_CFLAGS="$CFLAGS"
+    CFLAGS="$CFLAGS $OPENSSL_INC -Wall -Werror"
+    AC_MSG_CHECKING([for OpenSSL AES_ctr128_encrypt])
+    AC_TRY_COMPILE([
+#include <openssl/aes.h>
+    ],[
+unsigned char *data = 0;
+AES_KEY *key = 0;
+unsigned char ivec[AES_BLOCK_SIZE];
+unsigned char ecount[AES_BLOCK_SIZE];
+unsigned int num = 0;
+AES_ctr128_encrypt(data,data,AES_BLOCK_SIZE,key,ivec,ecount,&num);
+    ],HAVE_AESCTR="yes",OPENSSL_INC="-DNO_AESCTR $OPENSSL_INC")
+    AC_MSG_RESULT([$HAVE_AESCTR])
+    CFLAGS="$SAVE_CFLAGS"
+fi
 AC_SUBST(HAVE_OPENSSL)
 AC_SUBST(OPENSSL_INC)
 AC_SUBST(OPENSSL_LIB)

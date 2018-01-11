@@ -158,6 +158,14 @@ using namespace TelEngine;
 // Size of log relay buffer in bytes
 #define MAX_LOGBUFF 4096
 
+// Minimum and maximum settable time jump
+#ifndef MIN_TIME_JUMP
+#define MIN_TIME_JUMP (MAX_SANITY + 3)
+#endif
+#ifndef MAX_TIME_JUMP
+#define MAX_TIME_JUMP 120
+#endif
+
 #ifndef HOST_NAME_MAX
 #define HOST_NAME_MAX 255
 #endif
@@ -171,6 +179,7 @@ static u_int64_t s_restarts = 0;
 static bool s_makeworker = true;
 static bool s_keepclosing = false;
 static bool s_nounload = false;
+static long s_timejump = 0;
 static int s_super_handle = -1;
 static int s_run_attempt = 0;
 static int s_max_sanity = MAX_SANITY;
@@ -1493,6 +1502,10 @@ int Engine::engineInit()
     s_maxqueued = s_cfg.getIntValue("general","maxqueued",s_maxqueued,0,10000);
     s_maxevents = s_cfg.getIntValue("general","maxevents",s_maxevents,0,1000);
     s_restarts = s_cfg.getIntValue("general","restarts");
+    s_timejump = s_cfg.getIntValue("general","timejump",0,0,MAX_TIME_JUMP);
+    if (s_timejump && (s_timejump < MIN_TIME_JUMP))
+	s_timejump = MIN_TIME_JUMP;
+    s_timejump *= 1000;
     m_dispatcher.warnTime(1000*(u_int64_t)s_cfg.getIntValue("general","warntime"));
     extraPath(clientMode() ? "client" : "server");
     extraPath(s_cfg.getValue("general","extrapath"));
@@ -1600,6 +1613,7 @@ int Engine::run()
 {
     // engine loop
     long corr = 0;
+    uint64_t last = 0;
     int stops = MAX_STOP;
     while (s_haltcode == -1 || ((--stops >= 0) && dispatch("engine.stop",true))) {
 	if (s_cmds) {
@@ -1633,6 +1647,10 @@ int Engine::run()
 		= s_cfg.getIntValue("general","maxqueued",s_maxqueued,0,10000))));
 	    s_params.setParam("maxevents",String((s_maxevents
 		= s_cfg.getIntValue("general","maxevents",s_maxevents,0,1000))));
+	    s_timejump = s_cfg.getIntValue("general","timejump",s_timejump,0,MAX_TIME_JUMP);
+	    if (s_timejump && (s_timejump < MIN_TIME_JUMP))
+		s_timejump = MIN_TIME_JUMP;
+	    s_timejump *= 1000;
 	    initPlugins();
 	}
 
@@ -1686,15 +1704,28 @@ int Engine::run()
 	else
 	    s_makeworker = true;
 
-	if (s_restarts && (Time::now() >= s_restarts)) {
+	uint64_t now = Time::now();
+	if (last) {
+	    long diff = (long)((int64_t)(now - last) / 1000);
+	    if ((diff <= 0) || (s_timejump && (diff > s_timejump))) {
+		const char* rst = (s_timejump && (s_super_handle >= 0)) ? " Restarting!" : "";
+		Alarm("engine","system",DebugCrit,"System time advanced by %ld msec.%s",diff,rst);
+		if (s_timejump)
+		    restart(0,false);
+	    }
+	}
+	last = now;
+	if (s_restarts && (now >= s_restarts)) {
 	    if (!(usedPlugins() || dispatch("engine.busy"))) {
-		s_haltcode = 128;
+		s_restarts = 0;
+		restart(0,false);
 		break;
 	    }
 	    DDebug(DebugAll,"Engine busy - will try to restart later");
 	    // If we cannot restart now try again in 10s
-	    s_restarts = Time::now() + 10000000;
+	    s_restarts = now + 10000000;
 	}
+
 	uint64_t disp = m_dispatcher.dispatchCount();
 	m_messageRate = (unsigned int)(disp - m_dispatchedLast);
 	m_dispatchedLast = disp;

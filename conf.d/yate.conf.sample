@@ -64,6 +64,12 @@
 ;  restart every 10 seconds
 ;restarts=0
 
+; timejump: int: Forward system time jump in seconds accepted without restart
+; If non-zero and system time jumps backwards or too much forward
+;  an alert will be logged and if supervised the engine will restart
+; Valid range 8 to 120, 0 disables check (default)
+;timejump=0
+
 ; warntime: int: Warn time limit for message dispatch in milliseconds, a value
 ;  of zero disables such warnings
 ;warntime=0

@@ -3869,8 +3869,8 @@ void Monitor::sendCardNotifs(Message& msg)
 	String trap = lookup(type,s_cardNotifs,"");
 	if (!trap.null())
 	    sendTrap(notif,device);
-	    if (m_ifaceInfo)
-		m_ifaceInfo->updateAlarmCounter(device);
+	if (m_ifaceInfo)
+	    m_ifaceInfo->updateAlarmCounter(device);
     }
 }
 

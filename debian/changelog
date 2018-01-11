@@ -1,3 +1,11 @@
+yate (6.0.1~svn6292) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6292:
+  * Added option to restart engine if system time jumps around too much.
+  * Fixed misleading indentation.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 12 Jan 2018 02:20:17 +0300
+
 yate (6.0.1~svn6290) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6290:

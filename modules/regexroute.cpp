@@ -645,7 +645,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		blockLast = blockThis;
 		blockThis = (blockDepth > 0) ? blockStack[blockDepth-1] : BlockRun;
 	    }
-	    static Regexp s_blockStart("\\(=[[:space:]]*\\)\\?{$");
+	    static Regexp s_blockStart("^\\(.*=[[:space:]]*\\)\\?{$");
 	    if (s_blockStart.matches(*n)) {
 		// start of a new block
 		if (blockDepth >= BLOCK_STACK) {
@@ -656,7 +656,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		// assume block is done
 		BlockState blockEnter = BlockDone;
 		if (BlockRun == blockThis) {
-		    // if we returned from a false inner block to a true outer block
+		    // if we just returned from a false inner block to a true outer block
 		    if (BlockSkip == blockLast)
 			blockEnter = BlockSkip;
 		    else
@@ -664,6 +664,8 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		}
 		blockStack[blockDepth++] = blockEnter;
 	    }
+	    else if (BlockSkip != blockLast)
+		blockThis = BlockDone;
 	    XDebug("RegexRoute",DebugAll,"%s:%d(%u:%s) %s=%s",context.c_str(),i+1,
 		blockDepth,String::boolText(BlockRun == blockThis),
 		n->name().c_str(),n->c_str());

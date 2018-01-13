@@ -1,3 +1,11 @@
+yate (6.0.1~svn6293) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6293:
+  * Correctly handle a non-block rule on the same line as the closing
+    brace of a block.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 14 Jan 2018 02:20:17 +0300
+
 yate (6.0.1~svn6292) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6292:

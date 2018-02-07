@@ -1,3 +1,12 @@
+yate (6.0.1~svn6295) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6295:
+  * Fixed SCTP validity checks for association vs primary peer.
+  * Be more tolerant about presence of an underline at end of the "osdp-
+    prefix" parameter.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 08 Feb 2018 02:20:18 +0300
+
 yate (6.0.1~svn6293) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6293:

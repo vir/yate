@@ -339,10 +339,11 @@ static inline void setFmtpLine(String*& line, int payload, const char* param)
 MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 {
     DDebug(m_enabler,DebugAll,"SDPSession::createSDP('%s',%p) [%p]",addr,mediaList,m_ptr);
-    if (!mediaList)
-	mediaList = m_rtpMedia;
+    ObjList* mList = mediaList;
+    if (!mList)
+	mList = m_rtpMedia;
     // if we got no media descriptors we simply create no SDP
-    if (!mediaList)
+    if (!mList)
 	return 0;
     if (!m_sdpSession)
 	m_sdpVersion = m_sdpSession = Time::secNow();
@@ -368,7 +369,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 
     Lock lock(m_parser);
     bool defcodecs = m_parser->m_codecs.getBoolValue("default",true);
-    for (ObjList* ml = mediaList->skipNull(); ml; ml = ml->skipNext()) {
+    for (ObjList* ml = mList->skipNull(); ml; ml = ml->skipNext()) {
 	SDPMedia* m = static_cast<SDPMedia*>(ml->get());
 	int rfc2833 = 0;
 	if ((m_rfc2833 >= 0) && m->isAudio()) {
@@ -505,6 +506,15 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 			    setFmtpLine(temp,payload,*fmtp);
 			if (temp)
 			    dest = dest->append(temp);
+			if (mediaList) {
+			    // RTP forward propagates General Purpose Media Descriptor
+			    const String* gpmd = m->getParam("gpmd:" + *s);
+			    if (gpmd) {
+				temp = new String("gpmd:");
+				*temp << payload << " " << *gpmd;
+				dest = dest->append(temp);
+			    }
+			}
 		    }
 		}
 	    }

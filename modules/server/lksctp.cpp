@@ -491,59 +491,51 @@ bool LKSocket::alive() const
     int ret = sctp_opt_info(handle(),m_assocId,SCTP_STATUS, &status, &len);
     if (ret < 0)
 	return true;
-    bool localUp = true;
     switch (status.sstat_state) {
 	case SCTP_CLOSED:
 	case SCTP_SHUTDOWN_PENDING:
 	case SCTP_SHUTDOWN_SENT:
 	case SCTP_SHUTDOWN_RECEIVED:
 	case SCTP_SHUTDOWN_ACK_SENT:
-	    localUp = false;
+	    break;
+	default:
+	    return true;
     }
-    if (localUp && (status.sstat_primary.spinfo_state == SCTP_ACTIVE
-#ifdef HAVE_SCTP_PF
-	|| status.sstat_primary.spinfo_state == SCTP_PF
-#endif
-#ifdef HAVE_SCTP_UNCONFIRMED
-	|| status.sstat_primary.spinfo_state == SCTP_UNCONFIRMED
-#endif
-	))
-	return true;
 #define MAKE_CASE(x,y) case SCTP_##x: \
 	    DDebug(&plugin,DebugNote,"%s sctp status : SCTP_%s",#y,#x); \
 	    break;
     static int s_lastSpinfoState = SCTP_ACTIVE;
     switch (status.sstat_primary.spinfo_state) {
-	MAKE_CASE(ACTIVE,Remote);
-	MAKE_CASE(INACTIVE,Remote);
+	MAKE_CASE(ACTIVE,Primary);
+	MAKE_CASE(INACTIVE,Primary);
 #ifdef HAVE_SCTP_PF
-	MAKE_CASE(PF,Remote);
+	MAKE_CASE(PF,Primary);
 #endif
 #ifdef HAVE_SCTP_UNCONFIRMED
-	MAKE_CASE(UNCONFIRMED,Remote);
+	MAKE_CASE(UNCONFIRMED,Primary);
 #endif
 	default:
 	    if (s_lastSpinfoState != status.sstat_primary.spinfo_state) {
 		s_lastSpinfoState = status.sstat_primary.spinfo_state;
-		Debug(&plugin,DebugNote,"Unknown SCTP remote state 0x0%x",
+		Debug(&plugin,DebugNote,"Unknown SCTP primary state 0x0%x",
 		    status.sstat_primary.spinfo_state);
 	    }
     }
     static int s_lastSstatState = SCTP_EMPTY;
     switch (status.sstat_state) {
-	MAKE_CASE(EMPTY,Local);
-	MAKE_CASE(CLOSED,Local);
-	MAKE_CASE(COOKIE_WAIT,Local);
-	MAKE_CASE(COOKIE_ECHOED,Local);
-	MAKE_CASE(ESTABLISHED,Local);
-	MAKE_CASE(SHUTDOWN_PENDING,Local);
-	MAKE_CASE(SHUTDOWN_SENT,Local);
-	MAKE_CASE(SHUTDOWN_RECEIVED,Local);
-	MAKE_CASE(SHUTDOWN_ACK_SENT,Local);
+	MAKE_CASE(EMPTY,Association);
+	MAKE_CASE(CLOSED,Association);
+	MAKE_CASE(COOKIE_WAIT,Association);
+	MAKE_CASE(COOKIE_ECHOED,Association);
+	MAKE_CASE(ESTABLISHED,Associationl);
+	MAKE_CASE(SHUTDOWN_PENDING,Association);
+	MAKE_CASE(SHUTDOWN_SENT,Association);
+	MAKE_CASE(SHUTDOWN_RECEIVED,Association);
+	MAKE_CASE(SHUTDOWN_ACK_SENT,Association);
 	default:
 	    if (s_lastSstatState != status.sstat_state) {
 		s_lastSstatState = status.sstat_state;
-		Debug(&plugin,DebugNote,"Unknown SCTP local state 0x0%x",
+		Debug(&plugin,DebugNote,"Unknown SCTP association state 0x0%x",
 		    status.sstat_state);
 	    }
     }

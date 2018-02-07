@@ -130,15 +130,17 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
     m_rtpForward = false;
     m_rtpLocalAddr = m->getValue("localip",m_rtpLocalAddr);
     m_mediaStatus = m_rtpLocalAddr.null() ? MediaMuted : MediaStarted;
-    const char* sdpPrefix = m->getValue("osdp-prefix","osdp");
+    String sdpPrefix = m->getValue("osdp-prefix","osdp");
     if (sdpPrefix) {
+	if (!sdpPrefix.endsWith("_"))
+	    sdpPrefix += "_";
 	unsigned int n = m->length();
 	for (unsigned int j = 0; j < n; j++) {
 	    const NamedString* param = m->getParam(j);
 	    if (!param)
 		continue;
 	    String tmp = param->name();
-	    if (tmp.startSkip(sdpPrefix,false) && tmp.startSkip("_",false) && tmp)
+	    if (tmp.startSkip(sdpPrefix,false) && tmp)
 	        media->parameter(tmp,*param,false);
 	}
     }
@@ -705,7 +707,8 @@ void SDPSession::updateFormats(const NamedList& msg, bool changeMedia)
     String sdpPrefix = msg.getValue("osdp-prefix");
     if (!sdpPrefix)
 	return;
-    sdpPrefix += "_";
+    if (!sdpPrefix.endsWith("_"))
+	sdpPrefix += "_";
     for (i = 0; i < n; i++) {
 	const NamedString* param = msg.getParam(i);
 	if (!param)

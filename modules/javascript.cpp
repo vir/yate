@@ -1490,12 +1490,20 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    return false;
 	GenObject* arg0 = args[0];
 	ExpOperation* text = static_cast<ExpOperation*>(arg0);
-	NamedList* params = YOBJECT(NamedList,args[1]);
+	JsObject* obj = YOBJECT(JsObject,args[1]);
 	bool sqlEsc = (argc >= 3) && static_cast<ExpOperation*>(args[2])->valBoolean();
 	char extraEsc = 0;
 	if (argc >= 4)
 	    extraEsc = static_cast<ExpOperation*>(args[3])->at(0);
-	if (params) {
+	if (obj) {
+	    String str(*text);
+	    if (obj->nativeParams())
+		obj->nativeParams()->replaceParams(str,sqlEsc,extraEsc);
+	    else
+		obj->params().replaceParams(str,sqlEsc,extraEsc);
+	    ExpEvaluator::pushOne(stack,new ExpOperation(str,text->name()));
+	}
+	else if (NamedList* params = YOBJECT(NamedList,args[1])) {
 	    String str(*text);
 	    params->replaceParams(str,sqlEsc,extraEsc);
 	    ExpEvaluator::pushOne(stack,new ExpOperation(str,text->name()));

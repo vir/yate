@@ -1,3 +1,14 @@
+yate (6.0.1~svn6298) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6298:
+  * Avoid parsing unsupported duplicate codecs and mixing up their
+    parameters.
+  * Allow using JS Message object for Engine.replaceParams()
+    implementation.
+  * Add method to clear parameter(s) to JS Message API.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 14 Feb 2018 02:20:18 +0300
+
 yate (6.0.1~svn6296) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6296:

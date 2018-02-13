@@ -393,6 +393,7 @@ public:
 	    params().addParam(new ExpFunction("getRow"));
 	    params().addParam(new ExpFunction("getResult"));
 	    params().addParam(new ExpFunction("copyParams"));
+	    params().addParam(new ExpFunction("clearParam"));
 	}
     inline JsMessage(Message* message, Mutex* mtx, bool disp, bool owned = false)
 	: JsObject(mtx,"[object Message]"),
@@ -1490,12 +1491,20 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    return false;
 	GenObject* arg0 = args[0];
 	ExpOperation* text = static_cast<ExpOperation*>(arg0);
-	NamedList* params = YOBJECT(NamedList,args[1]);
+	JsObject* obj = YOBJECT(JsObject,args[1]);
 	bool sqlEsc = (argc >= 3) && static_cast<ExpOperation*>(args[2])->valBoolean();
 	char extraEsc = 0;
 	if (argc >= 4)
 	    extraEsc = static_cast<ExpOperation*>(args[3])->at(0);
-	if (params) {
+	if (obj) {
+	    String str(*text);
+	    if (obj->nativeParams())
+		obj->nativeParams()->replaceParams(str,sqlEsc,extraEsc);
+	    else
+		obj->params().replaceParams(str,sqlEsc,extraEsc);
+	    ExpEvaluator::pushOne(stack,new ExpOperation(str,text->name()));
+	}
+	else if (NamedList* params = YOBJECT(NamedList,args[1])) {
 	    String str(*text);
 	    params->replaceParams(str,sqlEsc,extraEsc);
 	    ExpEvaluator::pushOne(stack,new ExpOperation(str,text->name()));
@@ -2229,6 +2238,34 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 		copyObjParams(*m_message,from);
 	    if (fromNative)
 		copyObjParams(*m_message,fromNative);
+	}
+    }
+    else if (oper.name() == YSTRING("clearParam")) {
+	if (!m_message)
+	    return true;
+	ObjList args;
+	char sep = 0;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 2:
+	    {
+		ExpOperation* op = static_cast<ExpOperation*>(args[1]);
+		if (JsParser::isFilled(op)) {
+		    if (op->length() > 1)
+			return false;
+		    sep = (*op)[0];
+		}
+		// intentional
+	    }
+	    case 1:
+	    {
+		String* name = static_cast<String*>(args[0]);
+		if (TelEngine::null(name))
+		    return true;
+		m_message->clearParam(*name,sep);
+		break;
+	    }
+	    default:
+		return false;
 	}
     }
     else

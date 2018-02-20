@@ -1096,32 +1096,6 @@ private:
     int m_code;
 };
 
-// Proxy class used to transport a data buffer or a socket
-// The object doesn't own its data
-class RefObjectProxy : public RefObject
-{
-public:
-    inline RefObjectProxy()
-	: m_data(0), m_socket(0)
-	{}
-    inline RefObjectProxy(DataBlock* data)
-	: m_data(data), m_socket(0)
-	{}
-    inline RefObjectProxy(Socket** sock)
-	: m_data(0), m_socket(sock)
-	{}
-    virtual void* getObject(const String& name) const {
-	    if (name == YATOM("DataBlock"))
-		return m_data;
-	    if (name == YATOM("Socket*"))
-		return (void*)m_socket;
-	    return RefObject::getObject(name);
-	}
-private:
-    DataBlock* m_data;
-    Socket** m_socket;
-};
-
 class SIPDriver : public Driver
 {
 public:
@@ -9550,7 +9524,7 @@ bool SIPDriver::socketSsl(Socket** sock, bool server, const String& context)
 	m.addParam("key",s_sslKeyFile,false);
     }
     if (sock && *sock) {
-	RefObjectProxy* p = new RefObjectProxy(sock);
+	SocketRef* p = new SocketRef(sock);
 	m.userData(p);
 	TelEngine::destruct(p);
     }

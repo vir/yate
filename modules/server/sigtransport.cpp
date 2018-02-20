@@ -38,7 +38,6 @@ namespace { // anonymous
 class Transport;
 class TransportWorker;
 class TransportThread;
-class SockRef;
 class MessageReader;
 class TReader;
 class StreamReader;
@@ -76,22 +75,6 @@ protected:
 private:
     TransportThread* m_thread;
     Mutex m_threadMutex;
-};
-
-class SockRef : public RefObject
-{
-public:
-    inline SockRef(Socket** sock)
-	: m_sock(sock)
-	{ }
-    void* getObject(const String& name) const
-    {
-	if (name == "Socket*")
-	    return m_sock;
-	return RefObject::getObject(name);
-    }
-private:
-    Socket** m_sock;
 };
 
 class TransportThread : public Thread
@@ -396,7 +379,7 @@ bool ListenerThread::init(const NamedList& param)
 	{
 	    Socket* soc = 0;
 	    Message m("socket.sctp");
-	    SockRef* s = new SockRef(&soc);
+	    SocketRef* s = new SocketRef(soc);
 	    m.userData(s);
 	    TelEngine::destruct(s);
 	    if (!(Engine::dispatch(m) && soc)) {
@@ -780,7 +763,7 @@ bool Transport::bindSocket()
 	{
 	    Socket* soc = 0;
 	    Message m("socket.sctp");
-	    SockRef* s = new SockRef(&soc);
+	    SocketRef* s = new SocketRef(soc);
 	    m.userData(s);
 	    TelEngine::destruct(s);
 	    if (!(Engine::dispatch(m) && soc)) {
@@ -905,7 +888,7 @@ bool Transport::connectSocket()
 	case Sctp :
 	{
 	    Message m("socket.sctp");
-	    SockRef* s = new SockRef(&sock);
+	    SocketRef* s = new SocketRef(sock);
 	    m.userData(s);
 	    TelEngine::destruct(s);
 	    if (!(Engine::dispatch(m) && sock)) {
@@ -1088,7 +1071,7 @@ bool Transport::addSocket(Socket* socket,SocketAddr& socketAddress)
 	    Message m("socket.sctp");
 	    m.addParam("handle",String(socket->detach()));
 	    delete socket;
-	    SockRef* s = new SockRef(&sock);
+	    SocketRef* s = new SocketRef(sock);
 	    m.userData(s);
 	    TelEngine::destruct(s);
 	    if (!(Engine::dispatch(m) && sock)) {

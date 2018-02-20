@@ -7474,6 +7474,42 @@ public:
 };
 
 /**
+ * Helper class for insering a Socket pointer as a RefObject in a Message
+ * @short RefObject holding a Socket pointer
+ */
+class YATE_API SocketRef : public RefObject
+{
+public:
+    /**
+     * Constructor from pointer
+     * @param socket Pointer to the Socket* to hold
+     */
+    inline SocketRef(Socket** socket)
+	: m_socket(socket)
+	{ }
+
+    /**
+     * Constructor from reference
+     * @param socket Reference to the Socket* to hold
+     */
+    inline SocketRef(Socket*& socket)
+	: m_socket(&socket)
+	{ }
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const
+	{ return (name == YATOM("Socket*")) ? m_socket : RefObject::getObject(name); }
+
+private:
+    SocketRef();
+    void* m_socket;
+};
+
+/**
  * This class holds a DNS (resolver) record
  * @short A DNS record
  */

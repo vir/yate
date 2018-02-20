@@ -3881,23 +3881,6 @@ TcpListener::~TcpListener()
     __plugin.listener(this,false);
 }
 
-// Objects added to socket.ssl message when incoming connection is using SSL
-class RefSocket : public RefObject
-{
-public:
-    inline RefSocket(Socket** sock)
-	: m_socket(sock)
-	{}
-    virtual void* getObject(const String& name) const {
-	    if (name == YATOM("Socket*"))
-		return (void*)m_socket;
-	    return RefObject::getObject(name);
-	}
-    Socket** m_socket;
-private:
-    RefSocket() {}
-};
-
 // Bind and listen
 void TcpListener::run()
 {
@@ -3942,7 +3925,9 @@ void TcpListener::run()
 		processed = m_engine && m_engine->acceptConn(sock,addr,m_type);
 	    else {
 		Message m("socket.ssl");
-		m.userData(new RefSocket(&sock));
+		SocketRef* s = new SocketRef(sock);
+		m.userData(s);
+		TelEngine::destruct(s);
 		m.addParam("server",String::boolText(true));
 		m.addParam("context",m_sslContext);
 		if (Engine::dispatch(m))

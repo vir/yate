@@ -1,3 +1,12 @@
+yate (6.0.1~svn6299) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6299:
+  * Fixed a memory leak in Jabber SSL listeners.
+  * Added a helper class SocketRef and use it instead of all ad-hoc
+    similar classes.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 24 Feb 2018 02:20:18 +0300
+
 yate (6.0.1~svn6298) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6298:

@@ -161,22 +161,6 @@ static ObjList s_listeners;
 class Connection;
 class RManagerThread;
 
-class SockRef : public RefObject
-{
-public:
-    inline SockRef(Socket** sock)
-	: m_sock(sock)
-	{ }
-    void* getObject(const String& name) const
-    {
-	if (name == YATOM("Socket*"))
-	    return m_sock;
-	return RefObject::getObject(name);
-    }
-private:
-    Socket** m_sock;
-};
-
 class RManagerListener : public RefObject
 {
     friend class RManagerThread;
@@ -409,7 +393,7 @@ Connection* RManagerListener::checkCreate(Socket* sock, const char* addr)
 	m.addParam("server",String::boolText(true));
 	m.addParam(secure->name(),*secure);
 	m.copyParam(m_cfg,"verify");
-	SockRef* s = new SockRef(&sock);
+	SocketRef* s = new SocketRef(sock);
 	m.userData(s);
 	TelEngine::destruct(s);
 	if (!(Engine::dispatch(m) && sock)) {

@@ -324,6 +324,7 @@ public:
 	    params().addParam(new ExpFunction("yield"));
 	    params().addParam(new ExpFunction("idle"));
 	    params().addParam(new ExpFunction("restart"));
+	    params().addParam(new ExpFunction("init"));
 	    params().addParam(new ExpFunction("dump_r"));
 	    params().addParam(new ExpFunction("print_r"));
 	    params().addParam(new ExpFunction("dump_t"));
@@ -1532,6 +1533,21 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	}
 	else
 	    Debug(&__plugin,DebugNote,"Engine restart is disabled by allow_abort configuration");
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
+    else if (oper.name() == YSTRING("init")) {
+	bool ok = true;
+	if (!oper.number())
+	    Engine::init();
+	else if (oper.number() == 1) {
+	    ExpOperation* module = popValue(stack,context);
+	    if (!module)
+		return false;
+	    ok = Engine::init(*module);
+	    TelEngine::destruct(module);
+	}
+	else
+	    return false;
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
     else if (oper.name() == YSTRING("uptime")) {

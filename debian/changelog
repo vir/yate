@@ -1,3 +1,13 @@
+yate (6.0.1~svn6301) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6301:
+  * Added a helper class SocketRef and use it instead of all ad-hoc
+    similar classes.
+  * Engine::init() is now available in javascript.
+  * Added a PHP include file to easily retrieve RPM package version.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 14 Mar 2018 02:20:18 +0300
+
 yate (6.0.1~svn6299) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6299:

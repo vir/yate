@@ -705,6 +705,7 @@ cp -p %{_builddir}/%{name}/packing/rpm/yate.init %{buildroot}%{_initrddir}/yate
 %endif
 mkdir -p %{buildroot}%{_sysconfdir}/logrotate.d
 cp -p %{_builddir}/%{name}/packing/yate.logrotate %{buildroot}%{_sysconfdir}/logrotate.d/yate
+echo '<?php global $yate_version; $yate_version = "%{version}-%{release}"; ?>' > %{buildroot}%{_datadir}/yate/scripts/yateversn.php
 %if "%{?extra_inst}"
 export DESTDIR=%{buildroot}
 %{?extra_inst}

@@ -1,3 +1,11 @@
+yate (6.0.1~svn6302) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6302:
+  * Fixed vendor value build from individual octets: avoid generating
+    wrong values when octets are promoted to int.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 16 Mar 2018 02:20:19 +0300
+
 yate (6.0.1~svn6301) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6301:

@@ -582,7 +582,7 @@ bool RadAttrib::decode(void* buf, unsigned int len, ObjList& list)
 	}
 	if (attr->isVendor()) {
 	    unsigned int len2 = attr->data().length();
-	    char* ptr = (char*)attr->data().data();
+	    unsigned char* ptr = (unsigned char*)attr->data().data();
 	    if ((len2 < 4) || !ptr) {
 		DDebug(&__plugin,DebugMild,"Invalid vendor attribute %u len=%u",attr->code(),len2);
 		attr->destruct();

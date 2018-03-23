@@ -1404,8 +1404,8 @@ bool ExtModReceiver::processLine(const char* line)
 	static const Regexp r("^\\([^:]*\\):\\([^:]*\\):\\?\\(.*\\)");
 	if (id.matches(r)) {
 	    // a filter is specified
-	    fname = id.matchString(2);
-	    fvalue = id.matchString(3);
+	    fname = String::msgUnescape(id.matchString(2));
+	    fvalue = String::msgUnescape(id.matchString(3));
 	    id = id.matchString(1);
 	}
 	// sanity checks

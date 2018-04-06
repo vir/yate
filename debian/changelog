@@ -1,3 +1,12 @@
+yate (6.0.1~svn6304) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6304:
+  * This allows filter name or value to contain characters like : or %.
+  * Fixed unescaping of handler filter parameters.
+  * Added some larger client icon files.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 07 Apr 2018 02:20:18 +0300
+
 yate (6.0.1~svn6303) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6303:

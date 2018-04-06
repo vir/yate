@@ -36,7 +36,7 @@ SUBDIRS := $(SUBDIRS) qt4
 PROGS := $(PROGS) yate-qt4
 MENUFILES := $(MENUFILES) yate-qt4.menu
 DESKFILES := $(DESKFILES) yate-qt4.desktop
-ICONFILES := $(ICONFILES) null_team-16.png null_team-32.png null_team-48.png
+ICONFILES := $(ICONFILES) null_team-16.png null_team-32.png null_team-48.png null_team-64.png null_team-128.png
 
 ifneq (@QT4_STATIC_MODULES@,no)
 ifeq (@QT4_STATIC_MODULES@,yes)

@@ -777,6 +777,13 @@ public:
      */
     virtual XmlDoctype* xmlDoctype()
 	{ return 0; }
+
+    /**
+     * Replaces all ${paramname} with the corresponding parameters
+     * @param params List of parameters
+     */
+    virtual void replaceParams(const NamedList& params)
+	{}
 };
 
 
@@ -939,6 +946,12 @@ public:
 	const String* auth = 0, const XmlElement* parent = 0) const;
 
     /**
+     * Replaces all ${paramname} in fragment's children with the corresponding parameters
+     * @param params List of parameters
+     */
+    void replaceParams(const NamedList& params);
+
+    /**
      * Find a completed xml element in a list
      * @param list The list to search for the element
      * @param name Optional element tag to match
@@ -1085,6 +1098,12 @@ public:
      */
     void toString(String& dump, bool escape = true, const String& indent = String::empty(),
 	const String& origIndent = String::empty()) const;
+
+    /**
+     * Replaces all ${paramname} in document's components with the corresponding parameters
+     * @param params List of parameters
+     */
+    void replaceParams(const NamedList& params);
 
 private:
     XmlElement* m_root;                  // The root element
@@ -1538,6 +1557,13 @@ public:
 	const String& value = String::empty());
 
     /**
+     * Replaces all ${paramname} in element's attributes and children with the
+     *  corresponding parameters
+     * @param params List of parameters
+     */
+    virtual void replaceParams(const NamedList& params);
+
+    /**
      * Check if a string represents a namespace attribute name
      * @param str The string to check
      * @return True if the given string is the default namespace attribute name or
@@ -1782,6 +1808,13 @@ public:
      * @return False if the text contains non space characters.
      */
     bool onlySpaces();
+
+    /**
+     * Replaces all ${paramname} in text with the corresponding parameters
+     * @param params List of parameters
+     */
+    virtual void replaceParams(const NamedList& params);
+
 private:
     String m_text;                        // The text
 };

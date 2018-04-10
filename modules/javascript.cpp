@@ -729,12 +729,14 @@ public:
 	    params().addParam(new ExpFunction("stringify"));
 	    params().addParam(new ExpFunction("loadFile"));
 	    params().addParam(new ExpFunction("saveFile"));
+	    params().addParam(new ExpFunction("replaceParams"));
 	}
     static void initialize(ScriptContext* context);
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
     static ExpOperation* stringify(const ExpOperation* oper, int spaces);
     static void stringify(const NamedString* ns, String& buf, int spaces, int indent = 0);
+    void replaceParams(GenObject* obj, const NamedList& params, bool sqlEsc, char extraEsc);
     static String strEscape(const char* str);
 };
 
@@ -3936,6 +3938,20 @@ bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
+    else if (oper.name() == YSTRING("replaceParams")) {
+	ObjList args;
+	int argc = extractArgs(stack,oper,context,args);
+	if (argc < 2 || argc > 4)
+	    return false;
+	const NamedList* params = getReplaceParams(args[1]);
+	if (params) {
+	    bool sqlEsc = (argc >= 3) && static_cast<ExpOperation*>(args[2])->valBoolean();
+	    char extraEsc = 0;
+	    if (argc >= 4)
+		extraEsc = static_cast<ExpOperation*>(args[3])->at(0);
+	    replaceParams(args[0],*params,sqlEsc,extraEsc);
+	}
+    }
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
@@ -4045,6 +4061,35 @@ void JsJSON::stringify(const NamedString* ns, String& buf, int spaces, int inden
     }
     else
 	buf << strEscape(*oper);
+}
+
+void JsJSON::replaceParams(GenObject* obj, const NamedList& params, bool sqlEsc, char extraEsc)
+{
+    ExpOperation* oper = YOBJECT(ExpOperation,obj);
+    if (!oper || JsParser::isNull(*oper) || JsParser::isUndefined(*oper) ||
+	YOBJECT(JsFunction,oper) || YOBJECT(ExpFunction,oper))
+	return;
+    JsObject* jso = YOBJECT(JsObject,oper);
+    JsArray* jsa = YOBJECT(JsArray,jso);
+    if (jsa) {
+	if (jsa->length() <= 0)
+	    return;
+	for (int32_t i = 0; i < jsa->length(); i++) {
+	    NamedString* p = jsa->params().getParam(String(i));
+	    if (p)
+		replaceParams(p,params,sqlEsc,extraEsc);
+	}
+    }
+    else if (jso) {
+	NamedString* proto = jso->params().getParam(protoName());
+	for (ObjList* o = jso->params().paramList()->skipNull(); o; o = o->skipNext()) {
+	    NamedString* p = static_cast<NamedString*>(o->get());
+	    if (p != proto)
+		replaceParams(p,params,sqlEsc,extraEsc);
+	}
+    }
+    else if (!(oper->isBoolean() || oper->isNumber()))
+	params.replaceParams(*oper,sqlEsc,extraEsc);
 }
 
 String JsJSON::strEscape(const char* str)

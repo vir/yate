@@ -1455,6 +1455,13 @@ XmlElement* XmlFragment::findElement(ObjList* list, const String* name, const St
     return e;
 }
 
+// Replaces all ${paramname} in fragment's children with the corresponding parameters
+void XmlFragment::replaceParams(const NamedList& params)
+{
+    for (ObjList* o = m_list.skipNull(); o; o = o->skipNext())
+	static_cast<XmlChild*>(o->get())->replaceParams(params);
+}
+
 
 /*
  * XmlDocument
@@ -1661,6 +1668,15 @@ int XmlDocument::saveFile(const char* file, bool esc, const String& indent,
 	file,err,error.c_str(),this);
 #endif
     return f.error();
+}
+
+// Replaces all ${paramname} in document's components with the corresponding parameters
+void XmlDocument::replaceParams(const NamedList& params)
+{
+    if (m_root)
+        m_root->replaceParams(params);
+    m_beforeRoot.replaceParams(params);
+    m_afterRoot.replaceParams(params);
 }
 
 
@@ -1994,6 +2010,15 @@ bool XmlElement::setXmlns(const String& name, bool addAttr, const String& value)
     return true;
 }
 
+// Replaces all ${paramname} in element's attributes and children with the
+//  corresponding parameters
+void XmlElement::replaceParams(const NamedList& params)
+{
+    m_children.replaceParams(params);
+    for (ObjList* o = m_element.paramList()->skipNull(); o; o = o->skipNext())
+	params.replaceParams(*static_cast<String*>(o->get()));
+}
+
 // Build an XML element from a list parameter
 XmlElement* XmlElement::param2xml(NamedString* param, const String& tag, bool copyXml)
 {
@@ -2202,6 +2227,13 @@ bool XmlText::onlySpaces()
     }
     return true;
 }
+
+// Replaces all ${paramname} in text with the corresponding parameters
+void XmlText::replaceParams(const NamedList& params)
+{
+    params.replaceParams(m_text);
+}
+
 
 /*
  * XmlDoctype

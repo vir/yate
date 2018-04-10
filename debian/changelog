@@ -1,3 +1,12 @@
+yate (6.0.1~svn6307) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6307:
+  * Added replaceParams() to XML fragment, document, element and text.
+  * XML element replaceParams() is now available in javascript.
+  * Added replaceParams() function to JSON.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 11 Apr 2018 02:20:18 +0300
+
 yate (6.0.1~svn6304) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6304:

@@ -631,6 +631,7 @@ public:
 	    params().addParam(new ExpFunction("setText"));
 	    params().addParam(new ExpFunction("getChildText"));
 	    params().addParam(new ExpFunction("xmlText"));
+	    params().addParam(new ExpFunction("replaceParams"));
 	}
     inline JsXML(Mutex* mtx, XmlElement* xml, JsXML* owner = 0)
 	: JsObject("XML",mtx,false),
@@ -941,6 +942,18 @@ static void contextInit(ScriptRun* runner, const char* name = 0, JsAssist* assis
     JsDNS::initialize(ctx);
     if (s_autoExt)
 	contextLoad(ctx,name);
+}
+
+// Utility: return a list of parameters to be used for replaceParams
+static inline const NamedList* getReplaceParams(GenObject* gen)
+{
+    JsObject* obj = YOBJECT(JsObject,gen);
+    if (obj) {
+	if (obj->nativeParams())
+	    return obj->nativeParams();
+	return &obj->params();
+    }
+    return YOBJECT(NamedList,gen);
 }
 
 // Build a tabular dump of an Object or Array
@@ -1492,20 +1505,12 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    return false;
 	GenObject* arg0 = args[0];
 	ExpOperation* text = static_cast<ExpOperation*>(arg0);
-	JsObject* obj = YOBJECT(JsObject,args[1]);
 	bool sqlEsc = (argc >= 3) && static_cast<ExpOperation*>(args[2])->valBoolean();
 	char extraEsc = 0;
 	if (argc >= 4)
 	    extraEsc = static_cast<ExpOperation*>(args[3])->at(0);
-	if (obj) {
-	    String str(*text);
-	    if (obj->nativeParams())
-		obj->nativeParams()->replaceParams(str,sqlEsc,extraEsc);
-	    else
-		obj->params().replaceParams(str,sqlEsc,extraEsc);
-	    ExpEvaluator::pushOne(stack,new ExpOperation(str,text->name()));
-	}
-	else if (NamedList* params = YOBJECT(NamedList,args[1])) {
+	const NamedList* params = getReplaceParams(args[1]);
+	if (params) {
 	    String str(*text);
 	    params->replaceParams(str,sqlEsc,extraEsc);
 	    ExpEvaluator::pushOne(stack,new ExpOperation(str,text->name()));
@@ -3644,6 +3649,13 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	}
 	else
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+    }
+    else if (oper.name() == YSTRING("replaceParams")) {
+	if (!m_xml || extractArgs(stack,oper,context,args) != 1)
+	    return false;
+	const NamedList* params = getReplaceParams(args[0]);
+	if (params)
+	    m_xml->replaceParams(*params);
     }
     else
 	return JsObject::runNative(stack,oper,context);

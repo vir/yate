@@ -3997,11 +3997,12 @@ void JsJSON::stringify(const NamedString* ns, String& buf, int spaces, int inden
 	String ci(' ',indent + spaces);
 	buf << "[" << nl;
 	for (int32_t i = 0; ; ) {
-	    const NamedString* p = jsa->params().getParam(String(i));
-	    if (!p)
-		continue;
 	    buf << ci;
-	    stringify(p,buf,spaces,indent + spaces);
+	    const NamedString* p = jsa->params().getParam(String(i));
+	    if (p)
+		stringify(p,buf,spaces,indent + spaces);
+	    else
+		buf << "null";
 	    if (++i < jsa->length())
 		buf << "," << nl;
 	    else {

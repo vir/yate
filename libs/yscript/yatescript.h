@@ -1518,6 +1518,13 @@ public:
     virtual bool copyFields(ObjList& stack, const ScriptContext& original, GenObject* context);
 
     /**
+     * Add string parameters from list
+     * @param list Parameters list
+     * @param skipPrefix Skip parameters whose name start with specified prefix
+     */
+    virtual void addFields(const NamedList& list, const char* skipPrefix = "__");
+
+    /**
      * Try to evaluate a single field searching for a matching context
      * @param stack Evaluation stack in use, field value must be pushed on it
      * @param oper Field to evaluate

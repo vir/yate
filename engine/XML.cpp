@@ -1639,7 +1639,7 @@ XmlSaxParser::Error XmlDocument::loadFile(const char* file, int* error)
 
 // Save this xml document in a file
 int XmlDocument::saveFile(const char* file, bool esc, const String& indent,
-    bool completeOnly) const
+    bool completeOnly, const char* eoln) const
 {
     if (!file)
 	file = m_file;
@@ -1648,11 +1648,13 @@ int XmlDocument::saveFile(const char* file, bool esc, const String& indent,
     File f;
     int err = 0;
     if (f.openPath(file,true,false,true,false)) {
-	String eol("\r\n");
+	String eol(eoln);
+	if (eoln && !eol)
+	    eol = "\r\n";
 	write(f,esc,eol,indent,completeOnly);
 	err = f.error();
 	// Add an empty line
-	if (err >= 0)
+	if (err >= 0 && eol)
 	    f.writeData((void*)eol.c_str(),eol.length());
     }
     else

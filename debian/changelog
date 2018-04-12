@@ -1,3 +1,16 @@
+yate (6.0.1~svn6311) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6311:
+  * Fixed bug: avoid infinite loop when stringifying an array with holes
+    (index is missing). Put null for missing indexes.
+  * Added utility to ScriptContext used to add string fields from a
+    NamedList.
+  * Added extra parameter to XmlDocument::saveFile to allow saving flat
+    documents.
+  * Added saveFile() and loadFile() to javascript XML.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 13 Apr 2018 02:20:18 +0300
+
 yate (6.0.1~svn6307) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6307:

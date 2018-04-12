@@ -550,12 +550,16 @@ public:
     /**
      * Append a new child of this XmlParent, release the object on failure
      * @param child The child to append
+     * @param code Optional pointr to error code to be filled on failure
      * @return The child on success, 0 on failure
      */
-    inline XmlChild* addChildSafe(XmlChild* child) {
+    inline XmlChild* addChildSafe(XmlChild* child, XmlSaxParser::Error* code = 0) {
 	    XmlSaxParser::Error err = addChild(child);
-	    if (err != XmlSaxParser::NoError)
+	    if (err != XmlSaxParser::NoError) {
 		TelEngine::destruct(child);
+		if (code)
+		    *code = err;
+	    }
 	    return child;
 	}
 
@@ -1011,6 +1015,15 @@ public:
     XmlDeclaration* declaration() const;
 
     /**
+     * Retrieve XML fragment outside the root element
+     * @param before True to retrieve the fragment holding children before root element,
+     *  false to retrieve children after root
+     * @return Requested fragment's reference
+     */
+    inline const XmlFragment& getFragment(bool before) const
+	{ return before ? m_beforeRoot : m_afterRoot; }
+
+    /**
      * Retrieve the root element
      * @param completed True to retrieve the root element if is not completed
      * @return Root pointer or 0 if not found or is not completed
@@ -1084,10 +1097,12 @@ public:
      * @param escape True if the attributes values need to be escaped
      * @param indent Spaces for output
      * @param completeOnly True to build only if complete
+     * @param eoln End of line chars. Set it to NULL to ignore it. Empty string will be replaced by CR/LF
      * @return 0 on success, error code on failure
      */
     int saveFile(const char* file = 0, bool escape = true,
-	const String& indent = String::empty(), bool completeOnly = true) const;
+	const String& indent = String::empty(), bool completeOnly = true,
+	const char* eoln = "\r\n") const;
 
     /**
      * Build a String from this XmlDocument

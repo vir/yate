@@ -632,6 +632,7 @@ public:
 	    params().addParam(new ExpFunction("getChildText"));
 	    params().addParam(new ExpFunction("xmlText"));
 	    params().addParam(new ExpFunction("replaceParams"));
+	    params().addParam(new ExpFunction("saveFile"));
 	}
     inline JsXML(Mutex* mtx, XmlElement* xml, JsXML* owner = 0)
 	: JsObject("XML",mtx,false),
@@ -660,6 +661,7 @@ public:
 	    construct->params().addParam(new ExpOperation((int64_t)0,"PutObject"));
 	    construct->params().addParam(new ExpOperation((int64_t)1,"PutText"));
 	    construct->params().addParam(new ExpOperation((int64_t)2,"PutBoth"));
+	    construct->params().addParam(new ExpFunction("loadFile"));
 	}
     inline JsXML* owner()
 	{ return m_owner ? (JsXML*)m_owner : this; }
@@ -1111,10 +1113,9 @@ static void copyObjParams(NamedList& dest, const NamedList* src)
 {
     if (!src)
 	return;
-    unsigned int n = src->length();
-    for (unsigned int i = 0; i < n; i++) {
-	const NamedString* p = src->getParam(i);
-	if (p && !p->name().startsWith("__") && !p->getObject(YATOM("ExpWrapper")))
+    for (const ObjList* o = src->paramList()->skipNull(); o; o = o->skipNext()) {
+	const NamedString* p = static_cast<const NamedString*>(o->get());
+	if (!(p->name().startsWith("__") || YOBJECT(ExpWrapper,p)))
 	    dest.setParam(p->name(),*p);
     }
 }
@@ -3659,6 +3660,80 @@ bool JsXML::runNative(ObjList& stack, const ExpOperation& oper, GenObject* conte
 	if (params)
 	    m_xml->replaceParams(*params);
     }
+    else if (oper.name() == YSTRING("saveFile")) {
+	ExpOperation* file = 0;
+	ExpOperation* spaces = 0;
+	if (!(m_xml && extractStackArgs(1,this,stack,oper,context,args,&file,&spaces)))
+	    return false;
+	XmlSaxParser::Error code = XmlSaxParser::Unknown;
+	XmlDocument doc;
+	while (JsParser::isFilled(file)) {
+	    code = XmlSaxParser::NoError;
+	    NamedString* ns = getField(stack,YSTRING("declaration"),context);
+	    if (ns) {
+		XmlDeclaration* decl = 0;
+		if (const NamedList* params = getReplaceParams(ns)) {
+		    NamedList tmp("");
+		    // version is required. It will be overridden if present
+		    tmp.addParam("version","1.0");
+		    copyObjParams(tmp,params);
+		    decl = new XmlDeclaration(tmp);
+		}
+		else {
+		    ExpOperation* oper = YOBJECT(ExpOperation,ns);
+		    if (oper && oper->isBoolean() && oper->toBoolean())
+			decl = new XmlDeclaration;
+		}
+		if (decl && !doc.addChildSafe(decl,&code))
+		    break;
+	    }
+	    // TODO: Other children present before root (Comment(s), DOCTYPE, CDATA)
+	    code = doc.addChild(m_xml);
+	    if (code != XmlSaxParser::NoError)
+		break;
+	    // TODO: Other children present after root (Comment(s))
+	    int sp = spaces ? spaces->number() : 0;
+	    int error = 0;
+	    if (sp > 0)
+		error = doc.saveFile(*file,true,String(' ',sp));
+	    else
+		error = doc.saveFile(*file,true,String::empty(),true,0);
+	    if (error)
+		code = XmlSaxParser::IOError;
+	    break;
+	}
+	// Remove root from doc to avoid object delete
+	doc.takeRoot();
+	ExpEvaluator::pushOne(stack,new ExpOperation(code == XmlSaxParser::NoError));
+    }
+    else if (oper.name() == YSTRING("loadFile")) {
+	ExpOperation* file = 0;
+	if (!extractStackArgs(1,this,stack,oper,context,args,&file,0))
+	    return false;
+	XmlDocument doc;
+	if (JsParser::isFilled(file) &&
+	    (doc.loadFile(*file) == XmlSaxParser::NoError) && doc.root(true) &&
+	    ref()) {
+	    JsXML* xml = new JsXML(mutex(),doc.takeRoot(true));
+	    xml->params().addParam(new ExpWrapper(this,protoName()));
+	    const XmlFragment& before = doc.getFragment(true);
+	    for (const ObjList* b = before.getChildren().skipNull(); b; b = b->skipNext()) {
+		XmlChild* ch = static_cast<XmlChild*>(b->get());
+		XmlDeclaration* decl = ch->xmlDeclaration();
+		if (decl) {
+		    JsObject* jso = new JsObject(context,mutex());
+		    jso->addFields(decl->getDec());
+		    xml->params().addParam(new ExpWrapper(jso,"declaration"));
+		    continue;
+		}
+		// TODO: Other children present before root (Comment(s), DOCTYPE, CDATA)
+	    }
+	    // TODO: Other children present after root (Comment(s))
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(xml));
+	}
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+    }
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
@@ -3745,9 +3820,9 @@ XmlElement* JsXML::getXml(const String* obj, bool take)
     XmlDomParser parser;
     if (!(parser.parse(obj->c_str()) || parser.completeText()))
 	return 0;
-    if (!(parser.document() && parser.document()->root(true)))
-	return 0;
-    return new XmlElement(*parser.document()->root());
+    if (parser.document())
+	return parser.document()->takeRoot(true);
+    return 0;
 }
 
 XmlElement* JsXML::buildXml(const String* name, const String* text)

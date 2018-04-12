@@ -182,6 +182,18 @@ bool ScriptContext::copyFields(ObjList& stack, const ScriptContext& original, Ge
     return ok;
 }
 
+// Add string parameters from list
+void ScriptContext::addFields(const NamedList& list, const char* skipPrefix)
+{
+    if (TelEngine::null(skipPrefix))
+	skipPrefix = 0;
+    for (const ObjList* o = list.paramList()->skipNull(); o; o = o->skipNext()) {
+	const NamedString* p = static_cast<const NamedString*>(o->get());
+	if (!(skipPrefix && p->name().startsWith(skipPrefix)))
+	    m_params.addParam(new ExpOperation(p->c_str(),p->name()));
+    }
+}
+
 void ScriptContext::fillFieldNames(ObjList& names)
 {
     bool checkDupl = !(YOBJECT(JsObject,this));

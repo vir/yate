@@ -4966,10 +4966,8 @@ bool YateSIPEndPoint::setupUdpTransport(const String& name, bool enabled,
 	    reason = "Disabled";
 	if (!reason)
 	    rd->init(params,defs,false);
-	else {
+	else
 	    removeUdpTransport(name,reason);
-	    rd->deref();
-	}
 	TelEngine::destruct(rd);
 	if (!(enabled && reason))
 	    return true;
@@ -5020,6 +5018,7 @@ bool YateSIPEndPoint::removeUdpTransport(const String& name, const char* reason)
 		name.c_str());
     }
     rd->terminate(reason);
+    rd->deref();
     TelEngine::destruct(rd);
     return true;
 }

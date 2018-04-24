@@ -1,3 +1,11 @@
+yate (6.0.1~svn6312) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6312:
+  * Fixed bug: properly destroy (deref) udp listener when removed from
+    config file.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 25 Apr 2018 02:19:18 +0300
+
 yate (6.0.1~svn6311) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6311:

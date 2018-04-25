@@ -25,6 +25,15 @@
 #include <stdio.h>
 #include <regex.h>
 
+#if (defined(WORDS_BIGENDIAN) || defined(BIGENDIAN))
+#define ENDIANNESS_NATIVE (UChar::BE)
+#define ENDIANNESS_OPPOSITE (UChar::LE)
+#else
+#define ENDIANNESS_NATIVE (UChar::LE)
+#define ENDIANNESS_OPPOSITE (UChar::BE)
+#endif
+
+
 namespace TelEngine {
 
 // String to regular integer conversion, takes into account overflows
@@ -248,6 +257,145 @@ bool UChar::decode(const char*& str, uint32_t maxChar, bool overlong)
 	return false;
     if (val < min && !overlong)
 	return false;
+    return true;
+}
+
+static inline uint16_t swap_u16(uint16_t val, UChar::Endianness order)
+{
+    if (order < UChar::Native && ENDIANNESS_OPPOSITE == order)
+	val = ((val & 0xff00) >> 8) | ((val & 0x00ff) << 8);
+    return val;
+}
+
+bool UChar::decode(uint16_t*& buff, unsigned int& len, Endianness order, uint32_t maxChar)
+{
+    operator=('\0');
+    if (!(buff && len))
+	return false;
+    if (maxChar < 128)
+	maxChar = 0x10ffff; // RFC 3629 default limit
+    uint32_t val = swap_u16(*buff,order);
+    buff++;
+    len--;
+    if (val >= 0xD800 && val < 0xDC00 && len) { // High surrogate
+	uint16_t low = swap_u16(*buff,order);
+	if (low >= 0xDC00 && low <= 0xDFFF) {
+	    buff++;
+	    len--;
+	    val = (low - 0xDC00) + (val - 0xD800) * 0x400 + 0x10000;
+	}
+    }
+    operator=(val);
+    if (code() > maxChar)
+	return false;
+    return true;
+}
+
+bool UChar::decode(DataBlock& buff, Endianness order, uint32_t maxChar)
+{
+    operator=('\0');
+    unsigned int len = buff.length();
+    uint16_t* in = (uint16_t*) buff.data();
+    if (!len || (len & 1))
+	return false;
+    len = len >> 1;
+    if (!decode(in,len,order,maxChar))
+	return false;
+    buff.cut(-(buff.length() - len * 2));
+    return true;
+}
+
+bool UChar::encode(uint16_t*& buff, unsigned int& len, Endianness order)
+{
+    if (!(buff && len && code() <= 0x10ffff))
+	return false;
+    XDebug(DebugAll,"UChar::encode() UTF-16, char=%s (%x), order=%u",c_str(),m_chr,order);
+    if (m_chr >= 0x10000) { // encode to surrogate pairs
+	if (len < 2)
+	    return false; // not enough space to encode
+	*buff = swap_u16(((m_chr - 0x10000) >> 10) + 0xD800,order);
+	*(buff + 1) = swap_u16(((m_chr - 0x10000) & 0x3ff) + 0xDC00,order);
+	buff += 2;
+	len -=2;
+    }
+    else {
+	*buff = swap_u16(m_chr,order);
+	buff++;
+	len--;
+    }
+    return true;
+}
+
+bool UChar::encode(DataBlock& buff, Endianness order)
+{
+    uint16_t b[2] = {0};
+    uint16_t* out = b;
+    unsigned int len = 2;
+    if (!encode(out,len,order))
+	return false;
+    buff.append(b,sizeof(uint16_t) * (2 - len));
+    return true;
+}
+
+bool UChar::decode(String& out, uint16_t*& buff, unsigned int& len, Endianness order, bool checkBOM, uint32_t maxChar)
+{
+    if (!(buff && len))
+	return false;
+    XDebug(DebugAll,"UChar::decode() UTF-16, out=%s, buff=%p, len=%u, order=%u, maxChar=%x",
+	    out.c_str(),buff,len,order,maxChar);
+    if (checkBOM && (*buff == 0xfeff || *buff == 0xfffe)) {
+	if (*buff == 0xfeff)  // same endianness
+	    order = ENDIANNESS_NATIVE;
+	else
+	    order = ENDIANNESS_OPPOSITE;
+	buff++;
+	len--;
+    }
+    while (buff && len) {
+	UChar c;
+	if (!c.decode(buff,len,(Endianness)order,maxChar))
+	    return false;
+	out << c;
+    }
+    return true;
+}
+
+bool UChar::encode(DataBlock& out, const char*& str, Endianness order, bool addBOM)
+{
+    XDebug(DebugAll,"UChar::encode() UTF-16, str=%s, order=%u, addBOM=%s",str,order,String::boolText(addBOM));
+    if (TelEngine::null(str))
+	return false;
+    if (addBOM) {
+	uint16_t bom = swap_u16(0xfeff,order);
+	out.append(&bom,2);
+    }
+    UChar c;
+    while (*str && c.decode(str)) {
+	if (!c.encode(out,order))
+	    return false;
+    }
+    return true;
+}
+
+bool UChar::encode(uint16_t*& buff, unsigned int& len, const char*& str, Endianness order, bool addBOM)
+{
+    if (TelEngine::null(str))
+	return false;
+    if (!(buff && len))
+	return false;
+    XDebug(DebugAll,"UChar::encode() UTF-16, buff=%p, len=%u, str=%s, order=%u, addBOM=%s",
+	  buff,len,str,order,String::boolText(addBOM));
+    if (addBOM) {
+	uint16_t bom = swap_u16(0xfeff,order);
+	*buff = bom;
+	++buff;
+	len--;
+    }
+    UChar c;
+    while (*str && c.decode(str)) {
+	if (!c.encode(buff,len,order))
+	    return false;
+    }
     return true;
 }
 

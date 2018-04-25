@@ -693,6 +693,7 @@ struct TokenDict {
 };
 
 class String;
+class DataBlock;
 class Mutex;
 class ObjList;
 class NamedCounter;
@@ -1738,6 +1739,11 @@ class StringMatchPrivate;
 class YATE_API UChar
 {
 public:
+    enum Endianness {
+	LE = 0,
+	BE = 1,
+	Native = 2,
+    };
     /**
      * Constructor from unsigned numeric code
      * @param code Code of the Unicode character
@@ -1815,6 +1821,75 @@ public:
      * @return True if an Unicode character was decoded from string
      */
     bool decode(const char*& str, uint32_t maxChar = 0x10ffff, bool overlong = false);
+
+    /**
+     * Decode the first Unicode character from an UTF-16 string
+     * @param buff Input buffer, advanced if decoding succeeds
+     * @param len Length of input buffer, updated if decoding succeeds
+     * @param order Endianness to use for decoding the character
+     * @param maxChar Maximum accepted Unicode character code
+     * @return True if decoding succeeded, false otherwise
+     */
+    bool decode(uint16_t*& buff, unsigned int& len, Endianness order, uint32_t maxChar = 0x10ffff);
+
+    /**
+     * Decode the first Unicode character from an UTF-16 string
+     * @param buff Input buffer from which to decode the character
+     * @param order Endianness to use for decoding the character
+     * @param maxChar Maximum accepted Unicode character code
+     * @return True if decoding succeeded, false otherwise
+     */
+    bool decode(DataBlock& buff, Endianness order, uint32_t maxChar = 0x10ffff);
+
+    /**
+     * Encode the Unicode character to UTF-16 into a given buffer
+     * @param buff Buffer where to put encoded character, advanced after encoding
+     * @param len Available space in given buffer, updated after encoding
+     * @param order Endianness to use for encoding the character
+     * @return True if decoding succeeded, false otherwise
+     */
+    bool encode(uint16_t*& buff, unsigned int& len, Endianness order);
+
+    /**
+     * Encode the Unicode character to UTF-16 into a DataBlock
+     * @param buff DataBlock to which the encoded character is to be appended
+     * @param order Endianness to use for encoding the character
+     * @return True if decoding succeeded, false otherwise
+     */
+    bool encode(DataBlock& buff, Endianness order);
+
+    /**
+     * Decode a UTF-16 encoded string
+     * @param out String to append the decoded characters to
+     * @param buff Input buffer to decode, advanced as decoding occurs
+     * @param len Length of input buffer, decremented as decoding occurs
+     * @param order Endianness to use for decoding
+     * @param checkBOM Check for presence of BOM and interpret accordingly if present
+     * @param maxChar Maximum accepted Unicode character code
+     * @return True if decoding succeeded, false otherwise
+     */
+    static bool decode(String& out, uint16_t*& buff, unsigned int& len, Endianness order, bool checkBOM = false, uint32_t maxChar = 0x10ffff);
+
+    /**
+     * Encode a string to UTF-16
+     * @param out DataBlock to which encoded data is to be appended
+     * @param str String to be encoded
+     * @param order Endianness to use for encoding the character
+     * @param addBOM True to add BOM to the resulting encoding
+     * @return True if encoding succeeded, false otherwise
+     */
+    static bool encode(DataBlock& out, const char*& str, Endianness order, bool addBOM = false);
+
+    /**
+     * Encode a string to UTF-16 into a given buffer
+     * @param buff Buffer where to put encoded character, advanced after encoding
+     * @param len Available space in given buffer, updated after encoding
+     * @param str String to be encoded
+     * @param order Endianness to use for encoding the character
+     * @param addBOM True to add BOM to the resulting encoding
+     * @return True if encoding succeeded, false otherwise
+     */
+    static bool encode(uint16_t*& buff, unsigned int& len, const char*& str, Endianness order, bool addBOM = false);
 
 private:
     void encode();

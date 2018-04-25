@@ -1,3 +1,10 @@
+yate (6.0.1~svn6313) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6313:
+  * Add UTF-16 encoding support to UChar class.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 26 Apr 2018 02:19:19 +0300
+
 yate (6.0.1~svn6312) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6312:

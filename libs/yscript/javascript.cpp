@@ -448,6 +448,7 @@ public:
 	append(new String("charAt"));
 	append(new String("charCodeAt"));
 	append(new String("indexOf"));
+	append(new String("includes"));
 	append(new String("substr"));
 	append(new String("match"));
 	append(new String("toLowerCase"));
@@ -709,7 +710,7 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)(uint8_t)str->at(idx)));
 	return true;
     }
-    if (name == YSTRING("indexOf")) {
+    if ((name == YSTRING("indexOf")) || (name == YSTRING("includes"))) {
 	int idx = -1;
 	ObjList args;
 	if (extractArgs(stack,oper,context,args)) {
@@ -722,7 +723,10 @@ bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& s
 		idx = str->find(*what,offs);
 	    }
 	}
-	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)idx));
+	if (name.length() == 7)
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)idx));
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation(idx >= 0));
 	return true;
     }
     if (name == YSTRING("substr")) {

@@ -1,3 +1,10 @@
+yate (6.0.1~svn6314) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6314:
+  * Added String method includes().
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 05 May 2018 02:19:17 +0300
+
 yate (6.0.1~svn6313) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6313:

@@ -1,3 +1,10 @@
+yate (6.0.1~svn6315) UNRELEASED; urgency=medium
+
+  * Updated to SVN revision 6315:
+  * Added JS Array method includes().
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 11 May 2018 02:19:18 +0300
+
 yate (6.0.1~svn6314) UNRELEASED; urgency=medium
 
   * Updated to SVN revision 6314:

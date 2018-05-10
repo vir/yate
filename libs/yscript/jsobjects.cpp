@@ -553,6 +553,7 @@ JsArray::JsArray(Mutex* mtx)
     params().addParam(new ExpFunction("slice"));
     params().addParam(new ExpFunction("splice"));
     params().addParam(new ExpFunction("sort"));
+    params().addParam(new ExpFunction("includes"));
     params().addParam(new ExpFunction("indexOf"));
     params().addParam(new ExpFunction("lastIndexOf"));
     params().addParam("length","0");
@@ -853,7 +854,9 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	for (int32_t i = 0; i < length(); i++)
 	    result.append(params()[String(i)],separator);
 	ExpEvaluator::pushOne(stack,new ExpOperation(result));
-    } else if (oper.name() == YSTRING("indexOf") || oper.name() == YSTRING("lastIndexOf")) {
+    } else if (oper.name() == YSTRING("includes") || oper.name() == YSTRING("indexOf")
+	    || oper.name() == YSTRING("lastIndexOf")) {
+	// arr.includes(searchElement[,startIndex = 0[,"fieldName"]])
 	// arr.indexOf(searchElement[,startIndex = 0[,"fieldName"]])
 	// arr.lastIndexOf(searchElement[,startIndex = arr.length-1[,"fieldName"]])
 	ObjList args;
@@ -918,7 +921,10 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	}
 	TelEngine::destruct(op1);
 	TelEngine::destruct(fld);
-	ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)index));
+	if (oper.name().length() == 8)
+	    ExpEvaluator::pushOne(stack,new ExpOperation(index >= 0));
+	else
+	    ExpEvaluator::pushOne(stack,new ExpOperation((int64_t)index));
 	return true;
     }
     else

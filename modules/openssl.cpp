@@ -41,6 +41,12 @@
 #include <openssl/des.h>
 #endif
 
+#ifdef USE_TLS_METHOD
+#define CTX_METHOD ::TLS_method()
+#else
+#define CTX_METHOD ::SSLv23_method()
+#endif
+
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -291,7 +297,7 @@ SslContext::SslContext(const char* name)
     : String(name),
     m_context(0)
 {
-    m_context = ::SSL_CTX_new(::SSLv23_method());
+    m_context = ::SSL_CTX_new(CTX_METHOD);
     SSL_CTX_set_info_callback(m_context,infoCallback);
 #ifdef DEBUG
     SSL_CTX_set_msg_callback(m_context,msgCallback);
@@ -906,11 +912,13 @@ void OpenSSL::initialize()
     Configuration cfg(Engine::configFile("openssl"));
     if (!m_handler) {
 	setup();
+#ifndef NO_LOAD_ERR
 	::SSL_load_error_strings();
 	::SSL_library_init();
+#endif
 	addRand(Time::now());
 	s_index = ::SSL_get_ex_new_index(0,const_cast<char*>("TelEngine::SslSocket"),0,0,0);
-	s_context = ::SSL_CTX_new(::SSLv23_method());
+	s_context = ::SSL_CTX_new(CTX_METHOD);
 	SSL_CTX_set_info_callback(s_context,infoCallback); // macro - no ::
 	m_handler = new SslHandler;
 	Engine::install(m_handler);

@@ -1442,9 +1442,9 @@ elif [[ "x$ac_cv_use_openssl" != "xno" ]]; then
     AC_MSG_RESULT([$verssl])
 fi
 if [[ "x$HAVE_OPENSSL" != "xno" ]]; then
-    HAVE_AESCTR=no
     SAVE_CFLAGS="$CFLAGS"
     CFLAGS="$CFLAGS $OPENSSL_INC -Wall -Werror"
+    HAVE_OPT=no
     AC_MSG_CHECKING([for OpenSSL AES_ctr128_encrypt])
     AC_TRY_COMPILE([
 #include <openssl/aes.h>
@@ -1455,8 +1455,28 @@ unsigned char ivec[AES_BLOCK_SIZE];
 unsigned char ecount[AES_BLOCK_SIZE];
 unsigned int num = 0;
 AES_ctr128_encrypt(data,data,AES_BLOCK_SIZE,key,ivec,ecount,&num);
-    ],HAVE_AESCTR="yes",OPENSSL_INC="-DNO_AESCTR $OPENSSL_INC")
-    AC_MSG_RESULT([$HAVE_AESCTR])
+    ],HAVE_OPT="yes",OPENSSL_INC="-DNO_AESCTR $OPENSSL_INC")
+    AC_MSG_RESULT([$HAVE_OPT])
+    HAVE_OPT=no
+    AC_MSG_CHECKING([for OpenSSL TLS_method])
+    AC_TRY_COMPILE([
+#include <openssl/ssl.h>
+    ],[
+SSL_CTX_new(TLS_method());
+    ],HAVE_OPT="yes")
+    AC_MSG_RESULT([$HAVE_OPT])
+    if [[ "x$HAVE_OPT" = "xyes" ]]; then
+	OPENSSL_INC="-DUSE_TLS_METHOD $OPENSSL_INC"
+    fi
+    HAVE_OPT=no
+    AC_MSG_CHECKING([for OpenSSL SSL_load_error_strings])
+    AC_TRY_COMPILE([
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+    ],[
+SSL_load_error_strings();
+    ],HAVE_OPT="yes",OPENSSL_INC="-DNO_LOAD_ERR $OPENSSL_INC")
+    AC_MSG_RESULT([$HAVE_OPT])
     CFLAGS="$SAVE_CFLAGS"
 fi
 AC_SUBST(HAVE_OPENSSL)

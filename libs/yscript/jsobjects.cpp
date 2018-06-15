@@ -245,6 +245,148 @@ void JsObject::printRecursive(const GenObject* obj)
     Output("%s",buf.c_str());
 }
 
+String JsObject::strEscape(const char* str)
+{
+    String s("\"");
+    char c;
+    while (str && (c = *str++)) {
+	switch (c) {
+	    case '\"':
+	    case '\\':
+		s += "\\";
+		break;
+	    case '\b':
+		s += "\\b";
+		continue;
+	    case '\f':
+		s += "\\f";
+		continue;
+	    case '\n':
+		s += "\\n";
+		continue;
+	    case '\r':
+		s += "\\r";
+		continue;
+	    case '\t':
+		s += "\\t";
+		continue;
+	    case '\v':
+		s += "\\v";
+		continue;
+	}
+	s += c;
+    }
+    s += "\"";
+    return s;
+}
+
+ExpOperation* JsObject::toJSON(const ExpOperation* oper, int spaces)
+{
+    if (!oper || YOBJECT(JsFunction,oper) || YOBJECT(ExpFunction,oper) || JsParser::isUndefined(*oper))
+	return 0;
+    if (spaces < 0)
+	spaces = 0;
+    else if (spaces > 10)
+	spaces = 10;
+    ExpOperation* ret = new ExpOperation("","JSON");
+    toJSON(oper,*ret,spaces);
+    return ret;
+}
+
+void JsObject::toJSON(const NamedString* ns, String& buf, int spaces, int indent)
+{
+    const ExpOperation* oper = YOBJECT(ExpOperation,ns);
+    if (!oper) {
+	if (ns)
+	    buf << strEscape(*ns);
+	else
+	    buf << "null";
+	return;
+    }
+    if (JsParser::isNull(*oper) || JsParser::isUndefined(*oper) || YOBJECT(JsFunction,oper)
+	    || YOBJECT(ExpFunction,oper)) {
+	buf << "null";
+	return;
+    }
+    const char* nl = spaces ? "\r\n" : "";
+    JsObject* jso = YOBJECT(JsObject,oper);
+    JsArray* jsa = YOBJECT(JsArray,jso);
+    if (jsa) {
+	if (jsa->length() <= 0) {
+	    buf << "[]";
+	    return;
+	}
+	String li(' ',indent);
+	String ci(' ',indent + spaces);
+	buf << "[" << nl;
+	for (int32_t i = 0; ; ) {
+	    buf << ci;
+	    const NamedString* p = jsa->params().getParam(String(i));
+	    if (p)
+		toJSON(p,buf,spaces,indent + spaces);
+	    else
+		buf << "null";
+	    if (++i < jsa->length())
+		buf << "," << nl;
+	    else {
+		buf << nl;
+		break;
+	    }
+	}
+	buf << li << "]";
+	return;
+    }
+    if (jso) {
+	switch (jso->params().count()) {
+	    case 1:
+		if (!jso->params().getParam(protoName()))
+		    break;
+		// fall through
+	    case 0:
+		buf << "{}";
+		return;
+	}
+	ObjList* l = jso->params().paramList()->skipNull();
+	String li(' ',indent);
+	String ci(' ',indent + spaces);
+	const char* sep = spaces ? ": " : ":";
+	buf << "{" << nl;
+	while (l) {
+	    const NamedString* p = static_cast<const NamedString*>(l->get());
+	    l = l->skipNext();
+	    if (p->name() == protoName() || YOBJECT(JsFunction,p) || YOBJECT(ExpFunction,p))
+		continue;
+	    const ExpOperation* op = YOBJECT(ExpOperation,p);
+	    if (op && JsParser::isUndefined(*op))
+		continue;
+	    buf << ci << strEscape(p->name()) << sep;
+	    toJSON(p,buf,spaces,indent + spaces);
+	    for (; l; l = l->skipNext()) {
+		p = static_cast<const NamedString*>(l->get());
+		op = YOBJECT(ExpOperation,p);
+		if (!(p->name() == protoName() || YOBJECT(JsFunction,p) || YOBJECT(ExpFunction,p)
+			|| (op && JsParser::isUndefined(*op))))
+		    break;
+	    }
+	    if (l)
+		buf << ",";
+	    buf << nl;
+	}
+	buf << li << "}";
+	return;
+    }
+    if (oper->isBoolean())
+	buf << String::boolText(oper->valBoolean());
+    else if (oper->isNumber()) {
+	if (oper->isInteger())
+	    buf << oper->number();
+	else
+	    buf << "null";
+    }
+    else
+	buf << strEscape(*oper);
+}
+
 void JsObject::setPrototype(GenObject* context, const String& objName)
 {
     ScriptContext* ctxt = YOBJECT(ScriptContext,context);

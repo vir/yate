@@ -736,10 +736,7 @@ public:
     static void initialize(ScriptContext* context);
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
-    static ExpOperation* stringify(const ExpOperation* oper, int spaces);
-    static void stringify(const NamedString* ns, String& buf, int spaces, int indent = 0);
     void replaceParams(GenObject* obj, const NamedList& params, bool sqlEsc, char extraEsc);
-    static String strEscape(const char* str);
 };
 
 class JsDNS : public JsObject
@@ -3965,7 +3962,7 @@ bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	if (extractArgs(stack,oper,context,args) < 1)
 	    return false;
 	int spaces = args[2] ? static_cast<ExpOperation*>(args[2])->number() : 0;
-	ExpOperation* op = stringify(static_cast<ExpOperation*>(args[0]),spaces);
+	ExpOperation* op = JsObject::toJSON(static_cast<ExpOperation*>(args[0]),spaces);
 	if (!op)
 	    op = new ExpWrapper(0,"JSON");
 	ExpEvaluator::pushOne(stack,op);
@@ -4001,7 +3998,7 @@ bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	if (ok) {
 	    ok = false;
 	    int spaces = args[2] ? static_cast<ExpOperation*>(args[2])->number() : 0;
-	    ExpOperation* op = stringify(static_cast<ExpOperation*>(args[1]),spaces);
+	    ExpOperation* op = JsObject::toJSON(static_cast<ExpOperation*>(args[1]),spaces);
 	    if (op) {
 		File f;
 		if (f.openPath(*file,true,false,true)) {
@@ -4032,113 +4029,6 @@ bool JsJSON::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
     return true;
 }
 
-ExpOperation* JsJSON::stringify(const ExpOperation* oper, int spaces)
-{
-    if (!oper || YOBJECT(JsFunction,oper) || YOBJECT(ExpFunction,oper) || JsParser::isUndefined(*oper))
-	return 0;
-    if (spaces < 0)
-	spaces = 0;
-    else if (spaces > 10)
-	spaces = 10;
-    ExpOperation* ret = new ExpOperation("","JSON");
-    stringify(oper,*ret,spaces);
-    return ret;
-}
-
-void JsJSON::stringify(const NamedString* ns, String& buf, int spaces, int indent)
-{
-    const ExpOperation* oper = YOBJECT(ExpOperation,ns);
-    if (!oper) {
-	if (ns)
-	    buf << strEscape(*ns);
-	else
-	    buf << "null";
-	return;
-    }
-    if (JsParser::isNull(*oper) || JsParser::isUndefined(*oper) || YOBJECT(JsFunction,oper)
-	    || YOBJECT(ExpFunction,oper)) {
-	buf << "null";
-	return;
-    }
-    const char* nl = spaces ? "\r\n" : "";
-    JsObject* jso = YOBJECT(JsObject,oper);
-    JsArray* jsa = YOBJECT(JsArray,jso);
-    if (jsa) {
-	if (jsa->length() <= 0) {
-	    buf << "[]";
-	    return;
-	}
-	String li(' ',indent);
-	String ci(' ',indent + spaces);
-	buf << "[" << nl;
-	for (int32_t i = 0; ; ) {
-	    buf << ci;
-	    const NamedString* p = jsa->params().getParam(String(i));
-	    if (p)
-		stringify(p,buf,spaces,indent + spaces);
-	    else
-		buf << "null";
-	    if (++i < jsa->length())
-		buf << "," << nl;
-	    else {
-		buf << nl;
-		break;
-	    }
-	}
-	buf << li << "]";
-	return;
-    }
-    if (jso) {
-	switch (jso->params().count()) {
-	    case 1:
-		if (!jso->params().getParam(protoName()))
-		    break;
-		// fall through
-	    case 0:
-		buf << "{}";
-		return;
-	}
-	ObjList* l = jso->params().paramList()->skipNull();
-	String li(' ',indent);
-	String ci(' ',indent + spaces);
-	const char* sep = spaces ? ": " : ":";
-	buf << "{" << nl;
-	while (l) {
-	    const NamedString* p = static_cast<const NamedString*>(l->get());
-	    l = l->skipNext();
-	    if (p->name() == protoName() || YOBJECT(JsFunction,p) || YOBJECT(ExpFunction,p))
-		continue;
-	    const ExpOperation* op = YOBJECT(ExpOperation,p);
-	    if (op && JsParser::isUndefined(*op))
-		continue;
-	    buf << ci << strEscape(p->name()) << sep;
-	    stringify(p,buf,spaces,indent + spaces);
-	    for (; l; l = l->skipNext()) {
-		p = static_cast<const NamedString*>(l->get());
-		op = YOBJECT(ExpOperation,p);
-		if (!(p->name() == protoName() || YOBJECT(JsFunction,p) || YOBJECT(ExpFunction,p)
-			|| (op && JsParser::isUndefined(*op))))
-		    break;
-	    }
-	    if (l)
-		buf << ",";
-	    buf << nl;
-	}
-	buf << li << "}";
-	return;
-    }
-    if (oper->isBoolean())
-	buf << String::boolText(oper->valBoolean());
-    else if (oper->isNumber()) {
-	if (oper->isInteger())
-	    buf << oper->number();
-	else
-	    buf << "null";
-    }
-    else
-	buf << strEscape(*oper);
-}
-
 void JsJSON::replaceParams(GenObject* obj, const NamedList& params, bool sqlEsc, char extraEsc)
 {
     ExpOperation* oper = YOBJECT(ExpOperation,obj);
@@ -4166,41 +4056,6 @@ void JsJSON::replaceParams(GenObject* obj, const NamedList& params, bool sqlEsc,
     }
     else if (!(oper->isBoolean() || oper->isNumber()))
 	params.replaceParams(*oper,sqlEsc,extraEsc);
-}
-
-String JsJSON::strEscape(const char* str)
-{
-    String s("\"");
-    char c;
-    while (str && (c = *str++)) {
-	switch (c) {
-	    case '\"':
-	    case '\\':
-		s += "\\";
-		break;
-	    case '\b':
-		s += "\\b";
-		continue;
-	    case '\f':
-		s += "\\f";
-		continue;
-	    case '\n':
-		s += "\\n";
-		continue;
-	    case '\r':
-		s += "\\r";
-		continue;
-	    case '\t':
-		s += "\\t";
-		continue;
-	    case '\v':
-		s += "\\v";
-		continue;
-	}
-	s += c;
-    }
-    s += "\"";
-    return s;
 }
 
 void JsJSON::initialize(ScriptContext* context)

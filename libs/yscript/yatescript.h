@@ -2166,6 +2166,14 @@ public:
      */
     static void printRecursive(const GenObject* obj);
 
+    /**
+     * Static method to obtain a JSON representation of the given object
+     * @param oper Object to represent in JSON format
+     * @param spaces Number of spaces used for one indentation level
+     * @return String represention of the object
+     */
+    static ExpOperation* toJSON(const ExpOperation* oper, int spaces);
+
 protected:
     /**
      * Try to evaluate a single native method
@@ -2183,6 +2191,22 @@ protected:
      */
     inline Mutex* mutex() const
 	{ return m_mutex; }
+
+    /**
+     * Static method to obtain a JSON representation of the given object
+     * @param ns Object to represent in JSON format
+     * @param buf String used as output for the JSON represantion
+     * @param spaces Number of spaces used for one indentation level
+     * @param indent Current number of spaces used for indentation
+     */
+    static void toJSON(const NamedString* ns, String& buf, int spaces, int indent = 0);    
+
+    /**
+     * Static helper method for escaping special characters when JSON stringifying
+     * @param str String to escape
+     * @return Escaped string
+     */
+    static String strEscape(const char* str);
 
 private:
     static const String s_protoName;

@@ -154,6 +154,11 @@
 ; This parameter is applied on reload
 ;fork=enable
 
+; fork_early: bool: Also follow forked 1xx on early dialogs
+; Ignored if fork following on 2xx is disabled
+; This parameter is applied on reload
+;fork_early=disable
+
 ; progress: bool: Send an "183 Session Progress" just after successfull routing
 ;progress=disable
 

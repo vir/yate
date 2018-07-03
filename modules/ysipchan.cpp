@@ -672,6 +672,7 @@ private:
     bool m_prack;
     bool m_info;
     bool m_fork;
+    bool m_forkEarly;
     bool m_foreignAuth;
 };
 
@@ -4555,6 +4556,7 @@ void YateSIPEngine::initialize(NamedList* params)
 	params = &dummy;
     lazyTrying(params->getBoolValue("lazy100",false));
     m_fork = params->getBoolValue("fork",true);
+    m_forkEarly = params->getBoolValue("fork_early",false);
     m_flags = params->getIntValue("flags",m_flags);
     m_foreignAuth = params->getBoolValue("auth_foreign",false);
     m_reqTransCount = params->getIntValue("sip_req_trans_count",4,2,10,false);
@@ -4572,12 +4574,18 @@ void YateSIPEngine::initialize(NamedList* params)
 
 SIPTransaction* YateSIPEngine::forkInvite(SIPMessage* answer, SIPTransaction* trans)
 {
-    if (m_fork && trans->isActive() && (answer->code/100) == 2)
-    {
-	Debug(this,DebugNote,"Changing early dialog tag because of forked 2xx");
-	trans->setDialogTag(answer->getParamValue("To","tag"));
-	trans->processMessage(answer);
-	return trans;
+    if (m_fork && (answer->code > 100) && trans->isActive()) {
+	switch (answer->code / 100) {
+	    case 1:
+		if (!m_forkEarly)
+		    break;
+		// fall through
+	    case 2:
+		Debug(this,DebugNote,"Changing early dialog tag because of forked %d",answer->code);
+		trans->setDialogTag(answer->getParamValue("To","tag"));
+		trans->processMessage(answer);
+		return trans;
+	}
     }
     return SIPEngine::forkInvite(answer,trans);
 }

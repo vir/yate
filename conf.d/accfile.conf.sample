@@ -37,6 +37,7 @@
 ;     Default true
 ;   match_user: Match the URI user for inbound calls from a Registrar
 ;     Default true
+;   sips: Boolean. Use SIPS URI for register/contact. Transport defaults to TLS if enabled
 ;
 ;   NOTE: Default port is 5060 for udp/tcp and 5061 for tls
 ;

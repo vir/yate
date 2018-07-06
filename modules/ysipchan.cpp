@@ -206,7 +206,7 @@ class YateSIPPartyHolder : public ProtocolHolder
 public:
     inline YateSIPPartyHolder(DebugEnabler* enabler, Mutex* mutex = 0)
 	: ProtocolHolder(Udp),
-	m_party(0), m_partyMutex(mutex), m_transLocalPort(0), m_transRemotePort(0),
+	m_party(0), m_partyMutex(mutex), m_sips(false),	m_transLocalPort(0), m_transRemotePort(0),
 	m_enabler(enabler)
 	{}
     virtual ~YateSIPPartyHolder()
@@ -238,12 +238,26 @@ public:
 	const String& prefix = String::empty(),
 	const String& defRemoteAddr = String::empty(), int defRemotePort = 0,
 	bool isTemp = false);
+    // SIPS URI usage
+    inline bool sips() const
+	{ return m_sips; }
+    inline bool sips(bool on)
+	{ return change(m_sips,on); }
     // Transport status changed notification
     virtual void transportChangedStatus(int stat, const String& reason);
+    // Check if transport config params are present in parameters list
+    static inline bool haveTransParams(const NamedList& params,
+	const String& prefix = String::empty()) {
+	    return params[prefix + "connection_id"] ||
+		params.getParam(prefix + "ip_transport") ||
+		params.getBoolValue(prefix + "ip_transport_tcp");
+	}
+
 protected:
     // Change a parameter, notify descendents
     bool change(String& dest, const String& src);
     bool change(int& dest, int src);
+    bool change(bool& dest, bool src);
     // Changing notification for descendents
     virtual void changing();
     // Update transport type. Return true if changed
@@ -258,12 +272,15 @@ protected:
 
     SIPParty* m_party;                   // Held party
     Mutex* m_partyMutex;                 // Mutex protecting the party pointer
+    bool m_sips;                         // SIPS URI is used
     // Data used to (re)build the transport
     String m_transId;
     String m_transLocalAddr;
     int m_transLocalPort;
     String m_transRemoteAddr;
     int m_transRemotePort;
+    // Failure
+    String m_partyInvalidRemote;
 
 private:
     DebugEnabler* m_enabler;
@@ -1901,10 +1918,16 @@ static void copyPrivacy(SIPMessage& sip, const NamedList& msg)
 		sip.addHeader(new MimeHeaderLine("P-Asserted-Identity",tmp));
 		MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(sip.getHeader("From"));
 		if (hl) {
-		    static const Regexp r("\\(@[^>]\\+>\\)");
-		    tmp = *hl;
-		    if (tmp.matches(r))
-			*hl = "<sip:Anonymous" + tmp.matchString(1);
+		    URI uri(*hl);
+		    if (uri.getHost() &&
+			(uri.getProtocol() == YSTRING("sip") || uri.getProtocol() == YSTRING("sips"))) {
+			String tmp = "<" + uri.getProtocol() + ":Anonymous@";
+			if (uri.getPort())
+			    SocketAddr::appendTo(tmp,uri.getHost(),uri.getPort());
+			else
+			    SocketAddr::appendAddr(tmp,uri.getHost());
+			*hl = tmp + uri.getExtra() + ">";
+		    }
 		    else if (domain)
 			*hl = "<sip:Anonymous@" + String(domain) + ">";
 		    else
@@ -2345,6 +2368,15 @@ bool YateSIPPartyHolder::change(int& dest, int src)
     return true;
 }
 
+bool YateSIPPartyHolder::change(bool& dest, bool src)
+{
+    if (dest == src)
+	return false;
+    changing();
+    dest = src;
+    return true;
+}
+
 void YateSIPPartyHolder::changing()
 {
 }
@@ -2447,6 +2479,7 @@ bool YateSIPPartyHolder::buildParty(bool force, bool isTemp)
     XDebug(m_enabler,DebugAll,"YateSIPPartyHolder::buildParty(%s,%s,%d,%s,%d) force=%u [%p]",
 	protoName(),m_transLocalAddr.c_str(),m_transLocalPort,
 	m_transRemoteAddr.c_str(),m_transRemotePort,force,this);
+    m_partyInvalidRemote.clear();
     if (!force) {
 	Lock lock(m_partyMutex);
 	if (m_party)
@@ -2511,9 +2544,12 @@ bool YateSIPPartyHolder::buildParty(bool force, bool isTemp)
     }
     setParty(p);
     TelEngine::destruct(p);
-    if (!addrValid)
+    if (!addrValid) {
+	m_partyInvalidRemote = "";
+	SocketAddr::appendTo(m_partyInvalidRemote,m_transRemoteAddr,m_transRemotePort);
 	DDebug(m_enabler,DebugNote,"Failed to build %s transport with invalid remote addr=%s",
-	    protoName(),SocketAddr::appendTo(m_transRemoteAddr,m_transRemotePort).c_str());
+	    protoName(),m_partyInvalidRemote.c_str());
+    }
     if (tcpTrans && initTcp) {
 	// TODO: handle other params: maxpkt, thread prio
 	tcpTrans->init(NamedList::empty(),true);
@@ -2561,12 +2597,11 @@ void YateSIPPartyHolder::transportChangedStatus(int stat, const String& reason)
 bool YateSIPPartyHolder::setParty(const NamedList& params, bool force, const String& prefix,
     const String& defRemoteAddr, int defRemotePort, bool isTemp)
 {
-    const String& transId = params[prefix + "connection_id"];
-    if (!(force || transId || params.getParam(prefix + "ip_transport") ||
-	params.getBoolValue(prefix + "ip_transport_tcp"))) {
+    if (!(force || haveTransParams(params,prefix))) {
 	setParty();
 	return false;
     }
+    const String& transId = params[prefix + "connection_id"];
     if (change(m_transId,transId))
 	Debug(m_enabler,DebugAll,
 	    "YateSIPPartyHolder transport id changed to '%s' [%p]",
@@ -2583,13 +2618,17 @@ bool YateSIPPartyHolder::updateProto(const NamedList& params, const String& pref
     int proto = lookupProtoAny(params[prefix + "ip_transport"]);
     if (proto == Unknown) {
 	if (!params.getBoolValue(prefix + "ip_transport_tcp")) {
-	    // Check transport id prefix
-	    if (m_transId.startsWith("tcp:",false))
-		proto = Tcp;
-	    else if (m_transId.startsWith("tls:",false))
-		proto = Tls;
+	    if (m_transId) {
+		// Check transport id prefix
+		if (m_transId.startsWith("tcp:",false))
+		    proto = Tcp;
+		else if (m_transId.startsWith("tls:",false))
+		    proto = Tls;
+		else
+		    proto = Udp;
+	    }
 	    else
-		proto = Udp;
+		proto = sips() ? Tls : Udp;
 	}
 	else if (!params.getBoolValue(prefix + "ip_transport_tls"))
 	    proto = Tcp;
@@ -6211,39 +6250,47 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_rtpForward = msg.getBoolValue(YSTRING("rtp_forward"));
     m_user = msg.getValue(YSTRING("user"));
     String tmp;
+    bool genSips = sips(msg.getBoolValue(YSTRING("sips"),line && line->sips()));
     if (line) {
 	if (uri.find('@') < 0 && !uri.startsWith("tel:")) {
-	    if (!uri.startsWith("sip:"))
-		tmp = "sip:";
+	    if (!(uri.startsWith("sip:") || uri.startsWith("sips:")))
+		tmp = genSips ? "sips:" : "sip:";
 	    tmp << uri << "@";
 	    SocketAddr::appendAddr(tmp,line->domain());
 	}
 	m_externalAddr = line->getLocalAddr();
     }
     if (tmp.null()) {
-	if (!(uri.startsWith("tel:") || uri.startsWith("sip:"))) {
+	if (!(uri.startsWith("tel:") || uri.startsWith("sip:") || uri.startsWith("sips:"))) {
 	    int sep = uri.find(':');
 	    if ((sep < 0) || ((sep > 0) && (uri.substr(sep+1).toInteger(-1) > 0)))
-		tmp = "sip:";
+		tmp = genSips ? "sips:" : "sip:";
 	}
 	tmp << uri;
     }
     m_uri = tmp;
     m_uri.parse();
+    sips(m_uri.getProtocol() == YSTRING("sips"));
     if (!setParty(msg,false,"o",m_uri.getHost(),m_uri.getPort(),this) && line) {
 	SIPParty* party = line->party();
 	setParty(party);
 	TelEngine::destruct(party);
     }
+    // No party for SIPS and we don't have transport related params
+    // Force party creation: this will force used protocol to TLS
+    if (!m_party && sips() && !haveTransParams(msg,"o"))
+	setParty(msg,true,"o",m_uri.getHost(),m_uri.getPort(),this);
     SIPMessage* m = new SIPMessage("INVITE",m_uri);
     setSipParty(m,line,true,msg.getValue("host"),msg.getIntValue("port"));
     if (!m->getParty()) {
-	Debug(this,DebugWarn,"Could not create party for '%s' [%p]",m_uri.c_str(),this);
+	String tmp;
+	if (m_partyInvalidRemote)
+	    tmp << ": invalid remote addr '" << m_partyInvalidRemote << "'";
+	Debug(this,DebugWarn,"Could not create party for '%s'%s [%p]",m_uri.c_str(),tmp.safe(),this);
 	TelEngine::destruct(m);
-	tmp = "Invalid address: ";
-	tmp << m_uri;
-	msg.setParam("reason",tmp);
-	setReason(tmp,500);
+	setReason("Failed to create party",500);
+	msg.setParam("reason",m_reason);
+	msg.setParam("error","notransport");
 	return;
     }
     setParty(m->getParty());
@@ -8511,8 +8558,8 @@ void YateSIPLine::changing()
 SIPMessage* YateSIPLine::buildRegister(int expires)
 {
     String exp(expires);
-    String tmp;
-    tmp << "sip:";
+    const char* scheme = sips() ? "sips:" : "sip:";
+    String tmp = scheme;
     SocketAddr::appendAddr(tmp,m_registrar);
     SIPMessage* m = new SIPMessage("REGISTER",tmp);
     setSipParty(m,this);
@@ -8525,14 +8572,14 @@ SIPMessage* YateSIPLine::buildRegister(int expires)
     tmp.clear();
     if (m_display)
 	tmp = MimeHeaderLine::quote(m_display) + " ";
-    tmp << "<sip:";
+    tmp << "<" << scheme;
     tmp << m_username << "@";
     m->getParty()->appendAddr(tmp,true);
     tmp << ">";
     m->addHeader("Contact",tmp);
     m->addHeader("Expires",exp);
-    tmp = "<sip:";
-    tmp << m_username << "@";
+    tmp = "<";
+    tmp << scheme << m_username << "@";
     SocketAddr::appendAddr(tmp,domain()) << ">";
     m->addHeader("To",tmp);
     if (m_callid)
@@ -8813,9 +8860,10 @@ bool YateSIPLine::update(const Message& msg)
 	return true;
     }
     pickAccountParams(msg);
-    bool chg = updateProto(msg);
-    bool transChg = chg;
+    bool chg = sips(msg.getBoolValue(YSTRING("sips")));
+    bool transChg = updateProto(msg);
     transChg = updateLocalAddr(msg) || transChg;
+    chg = chg || transChg;
     chg = change(m_registrar,msg.getValue(YSTRING("registrar"),msg.getValue(YSTRING("server")))) || chg;
     chg = change(m_username,msg.getValue(s_username)) || chg;
     chg = change(m_authname,msg.getValue(YSTRING("authname"))) || chg;
@@ -9582,15 +9630,13 @@ bool SIPDriver::sendMethod(Message& msg, const char* method, bool msgExec,
     }
 
     SIPMessage* sip = 0;
-    YateSIPLine* line = 0;
     const char* domain = msg.getValue(YSTRING("domain"));
     if (conn) {
-	line = findLine(conn->getLine());
 	sip = conn->createDlgMsg(method,uri);
 	conn = 0;
     }
     else {
-	line = findLine(msg.getValue(YSTRING("line")));
+	YateSIPLine* line = findLine(msg.getValue(YSTRING("line")));
 	if (line && !line->valid()) {
 	    msg.setParam("error","offline");
 	    return false;
@@ -9598,9 +9644,11 @@ bool SIPDriver::sendMethod(Message& msg, const char* method, bool msgExec,
 	sip = new SIPMessage(method,uri);
 	YateSIPPartyHolder holder(this);
 	URI rUri(uri);
+	holder.sips(rUri.getProtocol() == YSTRING("sips"));
 	const char* host = msg.getValue("host",rUri.getHost());
 	int port = msg.getIntValue("port",rUri.getPort());
-	holder.setParty(msg,false,String::empty(),host,port,true);
+	// Force party creation for SIPS: it will force used protocol to TLS
+	holder.setParty(msg,holder.sips(),String::empty(),host,port,true);
 	holder.setSipParty(sip,line,true,host,port);
 	if (line)
 	    domain = line->domain(domain);

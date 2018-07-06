@@ -267,7 +267,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!isAnswer()) {
 	hl = const_cast<MimeHeaderLine*>(getHeader("From"));
 	if (!hl) {
-	    String tmp = "<sip:";
+	    String tmp = uri.startsWith("sips:") ? "<sips:" : "<sip:";
 	    if (user)
 		tmp << String::uriEscape(user,'@',"+?&") << "@";
 	    tmp << domain << ">";
@@ -345,7 +345,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	}
 	if (tmp)
 	    tmp = tmp.uriEscape('@',"+?&") + "@";
-	tmp = "<sip:" + tmp;
+	tmp = (uri.startsWith("sips:") ? "<sips:" : "<sip:") + tmp;
 	SocketAddr::appendTo(tmp,partyLAddr,partyLPort) << ">";
 	addHeader("Contact",tmp);
     }

@@ -1,5 +1,5 @@
 # Process this file with autoconf to produce a configure script.
-AC_INIT(Yate, 6.1.0)
+AC_INIT(Yate, 6.1.1)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
 
@@ -8,7 +8,7 @@ if echo "$ac_confdir/$ac_pwd" | grep -q '[[[:space:]\\\$\"'\'']]'; then
 fi
 
 PACKAGE_RELEASE="1"
-PACKAGE_STATUS=""
+PACKAGE_STATUS="devel"
 PACKAGE_REVISION=`cd "$srcdir"; LANG=C LC_MESSAGES=C svn info 2>/dev/null | sed -n 's,^Last Changed Rev: *,,p'`
 test -z "$PACKAGE_REVISION" && PACKAGE_REVISION=`cat "$srcdir/packing/revision.txt" 2>/dev/null`
 AC_ARG_WITH(status,AC_HELP_STRING([--with-status=NAME],[use NAME as package status]),[PACKAGE_STATUS=$withval])
